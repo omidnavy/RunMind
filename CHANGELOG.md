@@ -3,6 +3,97 @@
 ---
 
 # Version 1.3.0
+## 1.4.0-preview.8
+
+- Fixed two C# compile errors in the conversation-title WebView2 update path.
+- Await the WPF `DispatcherOperation<Task<string>>` directly, then await the returned WebView2 script task separately.
+- No behavior or public API changes beyond restoring compilation of the preview.7 title-update implementation.
+
+# Changelog
+
+## 1.4.0-preview.6
+
+- Fixed the Jina Reader endpoint and request shape. The default is now `https://r.jina.ai`; requests use the documented `GET https://r.jina.ai/{target-url}` format instead of the unavailable EU hostname plus a `?url=` query parameter.
+- Added a configurable Reader base URL, optional Jina Bearer API key, and a connection-test button in Agent settings. Anonymous Reader access remains supported; an API key raises the documented rate limits.
+- Added an optional custom Reader-compatible HTTP gateway with its own optional Bearer token and connection test. It is only attempted after Jina fails. No Cloudflare service or account is used or required.
+- Jina and custom gateway tokens are held in per-window `sessionStorage` only. They are not written to `localStorage`, exported conversation files, or task history.
+- Reader requests use the documented `/{target-url}` path and accept either a Jina JSON envelope (`data.content`) or readable plain-text/Markdown responses. Retrieval diagnostics now identify the provider and HTTP status/detail where available.
+- Updated Reader documentation and settings text. Public URLs may be sent to the selected Reader provider; private/local URLs, embedded credentials, and likely secret-bearing query parameters are blocked from remote forwarding.
+- Kept `Main.cs` byte-for-byte unchanged. The native window caption is still created by C# from the initial model name; changing or removing that caption dynamically requires a small C# host change and is not silently included under the no-C# constraint.
+- Embedded JavaScript syntax, DOM ID uniqueness/references, Reader URL construction and mock response parsing, project metadata, and ZIP integrity were checked. Live CORS behavior and the .NET build still require Windows/WebView2 testing.
+
+## 1.4.0-preview.5
+
+- Fixed Recent Agent Tasks leaking between independent chat windows. Task-history storage now uses a versioned key scoped to the unique top-level chat-window ID; the old shared v1 history is intentionally not migrated because its rows cannot be reliably attributed to one window.
+- Updated the Recent Agent Tasks help text to explain that each chat window has a separate task list. Clearing history now clears only the current window's list.
+- Added a configurable EU Reader fallback for `fetch_webpage`. Direct browser fetch remains first; if browser CORS, anti-bot, or HTTP access restrictions block it, the app can send a public URL to Jina AI's EU Reader and return its extracted page text.
+- The Reader fallback is enabled by default and can be disabled in Agent settings. The UI discloses that the public URL is sent to the remote reader. Local/private IPs, localhost, credential-bearing URLs, and URLs with likely secret-bearing query parameters are never forwarded to the remote reader.
+- Replaced the GitHub-specific API branch in `fetch_webpage` with one generic page reader path. GitHub and HAProxy are now ordinary URL targets; there is no special workflow for either task.
+- Improved Deep Research activity output to show fetched character count and the retrieval route. Error messages now preserve both the direct-fetch and Reader-fallback failures, and the research instructions tell the model to try an alternate official page rather than abandoning the task after one failed read.
+- `Main.cs` remains unchanged. Embedded JavaScript syntax, fetch-fallback mocks, private-URL blocking, opt-out, HTML IDs/selectors, and ZIP integrity were checked. Live WebView2/CORS behavior and .NET compilation still require Windows testing.
+
+## 1.4.0-preview.4
+
+- Replaced the full-width research section above the transcript with an optional right-side overlay drawer. It no longer pushes the conversation down or permanently occupies chat space.
+- Added a dedicated header toggle to open/reopen the research drawer and a visible close (×) control in its title bar. Escape also closes it.
+- Separated Deep Research mode from drawer visibility. Closing the drawer does not stop research, delete its checkpoint, or silently disable the mode; switching to ordinary chat/Agent Mode hides the drawer while preserving saved research results.
+- Scoped research checkpoint keys with a unique per-window identifier stored in `window.name`, while retaining sessionStorage for reload/resume in that same window. Newly created chat windows no longer read another window's checkpoint, even when WebView2 shares a browser profile.
+- Cleaned Recent Agent Tasks: only conversations with evidence of an actual tool invocation are retained. Ordinary chat and greetings (such as `hi`) are removed from the old history list. The history popup is now height-limited and scrollable.
+- Kept C# unchanged. The embedded JavaScript passes `node --check`; actual .NET compilation and live WebView2 behavior still require Windows testing.
+
+## 1.4.0-preview.3
+
+- Removed the request-specific GitHub URL → HTML → read-back → summary shortcut. Agent Mode now relies on its general tool loop to plan and execute user-requested multi-step tasks; GitHub is not a hardcoded task workflow.
+- Fixed cross-window research leakage: research checkpoints are stored in per-WebView `sessionStorage`, not shared profile `localStorage`. A new chat window starts with an empty research workspace; opening a different conversation clears the current workspace association.
+- Made Agent Mode and Deep Research mutually exclusive. Enabling one turns off the other; Deep Research still has access to the shared agent and enabled MCP tools.
+- Added compatibility parsing for a model that prints a complete function-style tool call as text (for example, `researchupdateplan(...)`) rather than returning native structured `tool_calls`. Only a response consisting of a recognized tool invocation is promoted to an action.
+- Added generic file-intent preflight and refreshes the tool registry after folder access changes, so file tools become available immediately after the user selects a folder.
+- Added one general completion-audit turn for sequential multi-step Agent requests after tool execution, to discourage stopping after the first convenient action.
+- Moved the clearly labeled Close workspace control into the visible research toolbar.
+- Canonicalizes tool-name aliases in native tool-call responses, including missing underscores.
+- `Main.cs` remains unchanged. JavaScript syntax, parser smoke tests, static HTML checks, and ZIP integrity checks were run; live Windows/WebView2 and .NET compilation tests remain unavailable here.
+
+## 1.4.0-preview.2
+
+- Fixed the Deep Research workspace visibility bug: Close/Escape hides the panel without cancelling or deleting the active/saved research task.
+- Added Copy plan and Copy results controls for live research work and partial/final reports.
+- Added persistent, explicitly opted-in per-tool “Always allow this tool” approvals, with a visible revocation list and clear-all control in Agent settings.
+- Improved GitHub repository fetching to return README text, repository metadata, and a bounded root-file listing in the readable content field.
+- Strengthened the Agent system instructions to complete dependent multi-step requests rather than stopping after the initial fetch.
+- Clarified that native WebView2/Windows file-access prompts are browser-controlled and cannot be restyled by the HTML application.
+- `Main.cs` remains unchanged. JavaScript syntax and static HTML checks were run; Windows/WebView2 and .NET runtime tests remain unavailable in this environment.
+
+## 1.4.0-preview.1
+
+- Added a standalone Deep Research mode while retaining existing chat and Agent Mode.
+- Added editable research plans with checkpoint-applied revisions, page/tool budgets, source collection, and Markdown report export.
+- Added pause/resume/cancel lifecycle controls and localStorage checkpoints.
+- Hardened transcript checkpointing so persisted conversations contain complete tool-call batches.
+- Added direct file downloads, bounded web extraction (links, metadata, tables, sitemap, RSS/Atom), and GitHub repository README retrieval.
+- Expanded selected-folder tools for editing, deleting, copying, moving, renaming, metadata, checksums, comparisons, project overview, and duplicate detection.
+- Added CSV analysis/transforms/comparison and JSON validation/formatting tools.
+- Added Markdown/HTML report creation, SVG chart/flow-diagram generation, and browser-canvas image operations.
+- Preserved C# source unchanged; only JavaScript, version metadata, and documentation were updated.
+- This remains a preview: full .NET compilation and live WebView2/provider/MCP testing were not possible in the build environment.
+
+## 1.4.0-preview.7
+
+- Added conversation-title generation only when the user explicitly opens the standalone Chat window. The request uses the same initial PowerToys Run provider/model and combines the initial prompt and response. The native caption starts as `LocalLLM`; a generated conversation title updates the native caption and in-app heading. A prompt-derived fallback is used on failure. Normal inline PowerToys Run invocations do not trigger title generation.
+- Added a unique native-generated window ID to the WebView bootstrap. Recent Agent Tasks and Deep Research checkpoints are now isolated using this ID before any history/checkpoint is loaded, avoiding reliance on `window.name` as the primary namespace.
+- Made model server API-key authentication persistent per connection, including a configurable authentication-header name. Saved keys are used for discovery, metadata, chat, and tool-call requests.
+- Made Jina Reader API key and custom gateway token persistent, along with endpoint configuration. Added/retained per-provider connection tests and explicit credential clearing.
+- Made MCP server URLs, enabled state, and bearer tokens persistent; enabled saved servers attempt reconnect at chat startup. Added individual saved-token clearing.
+- Kept direct website fetch as the first retrieval strategy. Jina Reader (`https://r.jina.ai`) remains the second fallback; an optional user-configured Reader-compatible gateway is the third. No Cloudflare dependency is included.
+- Improved general Agent and Deep Research evidence instructions: follow links from landing/index pages to actual version-matched manuals, release notes, and source-tree build instructions; do not treat navigation pages as substantive documentation or invent unverified build details.
+- Made saved workspace directory handles persistent in IndexedDB, rechecked permissions on new chats, reconnected an existing handle rather than repeatedly opening the folder picker, and notified other open windows after selection/reconnection/change/clear.
+- Kept Deep Research drawer visibility separate from Deep Research execution mode. Opening the drawer does not enable research; enabling the composer mode opens it.
+- Cleaned Agent settings prose and clarified persistent credential state.
+- Validation: embedded JavaScript syntax, HTML IDs/selectors, project metadata, static storage/title/tool-flow checks, and ZIP integrity. No .NET compile or live Windows/WebView2 test was possible in this environment.
+
+
+---
+
+# Version 1.3.0
 ## Starting point and preservation
 - Based on the user's 1.2.3 source and the 1.3.0-preview.4 development snapshot.
 - Preserves the existing compact PowerToys Run UI, inline provider settings, standalone WebView2 chat, exports, context manager, and normal streaming chat path.
