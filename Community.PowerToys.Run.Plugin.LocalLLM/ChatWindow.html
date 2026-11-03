@@ -927,7 +927,6 @@
         if (assistantIndex < 0) { showToast('Could not find the prompt for this response.'); return; }
         if (!selectedModel()) { showToast('Choose a model in the header before regenerating.'); return; }
         const userMessage = messages[assistantIndex];
-        const priorAssistant = messages[index];
         // Intentionally keep the current selector choice. This lets the user switch
         // providers/models in the header, then regenerate the same prompt with that model.
         const previousConversation = messages.slice();
@@ -937,7 +936,9 @@
         editingMessageIndex = null; draftBeforeEdit = null; editModeNotice.hidden = true; nextMessageIsContinuation = false;
         promptInput.value = userMessage.content || '';
         pendingAttachments = (userMessage.attachments || []).map(item => ({ ...item }));
-        thinkToggle.checked = !!priorAssistant.thinkRequested; syncThinkButton(); renderPendingAttachments(); autoResizePrompt();
+        // Preserve the current thinking toggle, which may have been changed for
+        // the newly selected model since the previous response was generated.
+        syncThinkButton(); renderPendingAttachments(); autoResizePrompt();
         renderMessages();
         const regenerated = await sendMessage();
         if (!regenerated) {

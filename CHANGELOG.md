@@ -1,3 +1,16 @@
+
+---
+
+# Version 1.2.3
+
+## Regenerate thinking-toggle fix
+
+- Regenerate no longer restores the previous assistant message's `thinkRequested` value.
+- It preserves the current thinking toggle, so enabling thinking before regenerating with a different model/provider is respected.
+- The standalone chat's existing provider/model selection behavior is unchanged.
+- `Main.cs` and the solution are unchanged; only `ChatWindow.html` and version metadata in the project and plugin manifests changed.
+
+---
 # Version 1.2.2
 
 ## Inline PowerToys Run provider selection
@@ -10,11 +23,6 @@
 - The standalone WebView2 chat keeps its own provider selector and behavior. The new PowerToys Run provider setting does not force the chat window to use the same provider.
 - `RequestTimeoutSeconds` continues to apply only to inline PowerToys Run generation, for either provider.
 - `KeepAliveSeconds` and `Thinking` are Ollama-specific settings; LM Studio requests do not receive those Ollama-only fields.
-
-## Validation
-
-- Checked C# source delimiter balance and reviewed provider routing, settings parsing, model discovery, and SSE/NDJSON parsing paths.
-- A .NET SDK/compiler and the PowerToys reference assemblies are not available in this environment, so a C# build and live Ollama/LM Studio requests could not be run here.
 
 ---
 
