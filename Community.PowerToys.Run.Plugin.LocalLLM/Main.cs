@@ -23,14 +23,14 @@ using Clipboard = System.Windows.Clipboard;
 namespace Community.PowerToys.Run.Plugin.LocalLLM;
 
 /// <summary>
-/// PowerToys Run plugin that sends the user's exact query to an Ollama-compatible
-/// /api/generate endpoint. No system prompt or sampling parameters are injected.
+/// PowerToys Run plugin that sends the user's exact query to the selected local LLM provider.
+/// No system prompt or sampling parameters are injected.
 /// </summary>
 public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, IContextMenu
 {
     public static string PluginID => "550A34D0CFA845449989D581149B3D9C";
     public string Name => "LocalLLM";
-    public string Description => "Query an Ollama-compatible local language model.";
+    public string Description => "Query a local language model using Ollama or LM Studio.";
 
     private const string DefaultEndpoint = "http://localhost:11434/api/generate";
     private const string DefaultLMStudioBaseUrl = "http://localhost:1234/v1";
@@ -61,11 +61,25 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private string _lmStudioBaseUrl = DefaultLMStudioBaseUrl;
     private string _defaultModel = DefaultModel;
     private string _thinking = DefaultThinking;
+    private int _provider;
     private int _keepAliveSeconds = DefaultKeepAliveSeconds;
     private int _requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
 
     public IEnumerable<PluginAdditionalOption> AdditionalOptions => new List<PluginAdditionalOption>
     {
+        new()
+        {
+            Key = "InlineProvider",
+            DisplayLabel = "PowerToys Run LLM provider",
+            DisplayDescription = "Provider used for inline PowerToys Run results. The standalone chat window has its own provider selector.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Combobox,
+            ComboBoxItems = new List<KeyValuePair<string, string>>
+            {
+                new("Ollama", "0"),
+                new("LM Studio", "1"),
+            },
+            ComboBoxValue = 0,
+        },
         new()
         {
             Key = "LLMEndpoint",
@@ -77,8 +91,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         new()
         {
             Key = "LMStudioBaseUrl",
-            DisplayLabel = "LM Studio base URL (chat window)",
-            DisplayDescription = "OpenAI-compatible LM Studio base URL used by the WebView2 chat window for model discovery and follow-up turns, for example http://localhost:1234/v1. Inline PowerToys Run queries still use the Ollama endpoint above.",
+            DisplayLabel = "LM Studio base URL",
+            DisplayDescription = "OpenAI-compatible LM Studio base URL used when LM Studio is selected for inline PowerToys Run, and by the WebView2 chat window, for example http://localhost:1234/v1.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
             TextValue = DefaultLMStudioBaseUrl,
         },
@@ -86,7 +100,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Key = "Model",
             DisplayLabel = "Default model",
-            DisplayDescription = "Model name as shown by Ollama (for example qwen3:14b). You can override it per query with > model > prompt.",
+            DisplayDescription = "Model identifier as shown by the selected provider (Ollama model name or LM Studio model ID). You can override it per query with > model > prompt.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
             TextValue = DefaultModel,
         },
@@ -94,7 +108,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Key = "Thinking",
             DisplayLabel = "Thinking / think",
-            DisplayDescription = "Use auto, true, false, or a model-specific value such as low. Auto uses low for gpt-oss, false for Qwen, and omits the field for other models.",
+            DisplayDescription = "Ollama only: use auto, true, false, or a model-specific value such as low. Auto uses low for gpt-oss, false for Qwen, and omits the field for other models.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
             TextValue = DefaultThinking,
         },
@@ -102,7 +116,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Key = "KeepAliveSeconds",
             DisplayLabel = "Keep model loaded (seconds)",
-            DisplayDescription = "Value sent as Ollama keep_alive. Use 0 to unload the model after the request. Range: 0–86400 seconds.",
+            DisplayDescription = "Ollama only: value sent as keep_alive. Use 0 to unload the model after the request. Range: 0–86400 seconds.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
             TextValue = DefaultKeepAliveSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
         },
@@ -129,6 +143,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         string lmStudioBaseUrl = DefaultLMStudioBaseUrl;
         string model = DefaultModel;
         string thinking = DefaultThinking;
+        int provider = 0;
         int keepAliveSeconds = DefaultKeepAliveSeconds;
         int requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
 
@@ -137,6 +152,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             var options = settings.AdditionalOptions;
             endpoint = GetTextOption(options, "LLMEndpoint", endpoint);
             lmStudioBaseUrl = GetTextOption(options, "LMStudioBaseUrl", lmStudioBaseUrl);
+            provider = options.FirstOrDefault(option => option.Key == "InlineProvider")?.ComboBoxValue == 1 ? 1 : 0;
             model = GetTextOption(options, "Model", model);
             thinking = GetTextOption(options, "Thinking", thinking);
 
@@ -156,6 +172,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         lock (_settingsLock)
         {
             _endpoint = string.IsNullOrWhiteSpace(endpoint) ? DefaultEndpoint : endpoint.Trim();
+            _provider = provider;
             _lmStudioBaseUrl = string.IsNullOrWhiteSpace(lmStudioBaseUrl) ? DefaultLMStudioBaseUrl : lmStudioBaseUrl.Trim().TrimEnd('/');
             _defaultModel = string.IsNullOrWhiteSpace(model) ? DefaultModel : model.Trim();
             _thinking = string.IsNullOrWhiteSpace(thinking) ? DefaultThinking : thinking.Trim();
@@ -195,7 +212,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             if (!models.Contains(model, StringComparer.OrdinalIgnoreCase))
             {
                 var available = models.Count == 0
-                    ? "Ollama returned an empty model list."
+                    ? $"{GetProviderName(settings)} returned an empty model list."
                     : $"Available models: {string.Join(", ", models)}";
 
                 return new List<Result>
@@ -227,7 +244,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     }
 
     /// <summary>
-    /// Sends the query unchanged to Ollama, using the configured default model.
+    /// Sends the query unchanged to the selected provider, using the configured default model.
     /// This overload is retained for callers that may use the original plugin method.
     /// </summary>
     public Task<string> QueryLLMStreamAsync(string input)
@@ -250,7 +267,17 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
     }
 
-    private async Task<string> QueryLLMStreamAsync(
+    private Task<string> QueryLLMStreamAsync(
+        string input,
+        string model,
+        SettingsSnapshot settings)
+    {
+        return settings.Provider == 1
+            ? QueryLMStudioStreamAsync(input, model, settings)
+            : QueryOllamaStreamAsync(input, model, settings);
+    }
+
+    private async Task<string> QueryOllamaStreamAsync(
         string input,
         string model,
         SettingsSnapshot settings)
@@ -275,143 +302,160 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
-            Content = new StringContent(
-                JsonSerializer.Serialize(requestBody),
-                Encoding.UTF8,
-                "application/json"),
+            Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
         };
 
-        using var response = await HttpClient.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            sendTimeout.Token).ConfigureAwait(false);
-        // Once headers arrive, stop the connection deadline. The overall generation
-        // deadline continues to cover response-body streaming through timeout.Token.
+        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, sendTimeout.Token).ConfigureAwait(false);
         connectionTimeout.CancelAfter(Timeout.InfiniteTimeSpan);
-
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
             var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
-            throw new HttpRequestException(
-                $"Ollama returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).{detail}",
-                null,
-                response.StatusCode);
+            throw new HttpRequestException($"Ollama returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).{detail}", null, response.StatusCode);
         }
 
         await using var responseStream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
         using var reader = new StreamReader(responseStream, Encoding.UTF8);
         var output = new StringBuilder();
         var recordNumber = 0;
-
         while (true)
         {
             var line = await reader.ReadLineAsync(timeout.Token).ConfigureAwait(false);
-            if (line is null)
-            {
-                break;
-            }
-
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
+            if (line is null) break;
+            if (string.IsNullOrWhiteSpace(line)) continue;
             recordNumber++;
             JsonDocument json;
-            try
-            {
-                json = JsonDocument.Parse(line);
-            }
-            catch (JsonException ex)
-            {
-                throw new InvalidDataException($"Ollama returned malformed NDJSON at record {recordNumber}: {ex.Message}", ex);
-            }
-
+            try { json = JsonDocument.Parse(line); }
+            catch (JsonException ex) { throw new InvalidDataException($"Ollama returned malformed NDJSON at record {recordNumber}: {ex.Message}", ex); }
             using (json)
             {
                 var root = json.RootElement;
-
-                if (root.TryGetProperty("error", out var errorElement)
-                    && errorElement.ValueKind == JsonValueKind.String
-                    && !string.IsNullOrWhiteSpace(errorElement.GetString()))
-                {
+                if (root.TryGetProperty("error", out var errorElement) && errorElement.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(errorElement.GetString()))
                     throw new InvalidOperationException($"Ollama: {errorElement.GetString()}");
-                }
-
-                if (root.TryGetProperty("response", out var chunk)
-                    && chunk.ValueKind == JsonValueKind.String)
-                {
+                if (root.TryGetProperty("response", out var chunk) && chunk.ValueKind == JsonValueKind.String)
                     output.Append(chunk.GetString());
-                }
-
-                if (root.TryGetProperty("done", out var doneElement)
-                    && doneElement.ValueKind == JsonValueKind.True)
-                {
+                if (root.TryGetProperty("done", out var doneElement) && doneElement.ValueKind == JsonValueKind.True)
                     break;
+            }
+        }
+        return output.ToString();
+    }
+
+    private async Task<string> QueryLMStudioStreamAsync(string input, string model, SettingsSnapshot settings)
+    {
+        var endpoint = BuildLMStudioUri(settings.LMStudioBaseUrl, "chat/completions");
+        var requestBody = new
+        {
+            model,
+            messages = new[] { new { role = "user", content = input } },
+            stream = true,
+        };
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
+        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, connectionTimeout.Token);
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
+        };
+        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, sendTimeout.Token).ConfigureAwait(false);
+        connectionTimeout.CancelAfter(Timeout.InfiniteTimeSpan);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+            var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
+            throw new HttpRequestException($"LM Studio returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).{detail}", null, response.StatusCode);
+        }
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+        using var reader = new StreamReader(responseStream, Encoding.UTF8);
+        var output = new StringBuilder();
+        var recordNumber = 0;
+        while (true)
+        {
+            var line = await reader.ReadLineAsync(timeout.Token).ConfigureAwait(false);
+            if (line is null) break;
+            if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+            var data = line[5..].Trim();
+            if (data.Length == 0) continue;
+            if (data.Equals("[DONE]", StringComparison.OrdinalIgnoreCase)) break;
+            recordNumber++;
+            JsonDocument json;
+            try { json = JsonDocument.Parse(data); }
+            catch (JsonException ex) { throw new InvalidDataException($"LM Studio returned malformed SSE JSON at event {recordNumber}: {ex.Message}", ex); }
+            using (json)
+            {
+                var root = json.RootElement;
+                if (root.TryGetProperty("error", out var errorElement))
+                    throw new InvalidOperationException($"LM Studio: {(errorElement.ValueKind == JsonValueKind.String ? errorElement.GetString() : errorElement.ToString())}");
+                if (root.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array && choices.GetArrayLength() > 0)
+                {
+                    var choice = choices[0];
+                    if (choice.TryGetProperty("delta", out var delta) && delta.ValueKind == JsonValueKind.Object
+                        && delta.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
+                        output.Append(content.GetString());
+                    else if (choice.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.Object
+                        && message.TryGetProperty("content", out content) && content.ValueKind == JsonValueKind.String)
+                        output.Append(content.GetString());
                 }
             }
         }
-
         return output.ToString();
     }
 
     private async Task<List<string>> FetchModelsFromEndpointAsync(SettingsSnapshot settings)
     {
-        var tagsEndpoint = BuildTagsUri(settings.Endpoint);
-        var cacheKey = tagsEndpoint.AbsoluteUri;
+        var modelsUri = settings.Provider == 1
+            ? BuildLMStudioUri(settings.LMStudioBaseUrl, "models")
+            : BuildTagsUri(settings.Endpoint);
+        var cacheKey = modelsUri.AbsoluteUri;
         lock (ModelCacheLock)
         {
             if (string.Equals(_modelCacheEndpoint, cacheKey, StringComparison.OrdinalIgnoreCase)
                 && DateTimeOffset.UtcNow - _modelCacheTimestamp < TimeSpan.FromSeconds(5))
-            {
                 return new List<string>(_modelCache);
-            }
         }
 
-        // Model discovery should fail quickly and must not inherit a potentially long
-        // generation timeout configured for slow local models.
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-        using var response = await HttpClient.GetAsync(tagsEndpoint, timeout.Token).ConfigureAwait(false);
-
+        using var response = await HttpClient.GetAsync(modelsUri, timeout.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
             var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
-            throw new HttpRequestException(
-                $"Could not query the Ollama model list (HTTP {(int)response.StatusCode} {response.ReasonPhrase}).{detail}",
-                null,
-                response.StatusCode);
+            throw new HttpRequestException($"Could not query the {GetProviderName(settings)} model list (HTTP {(int)response.StatusCode} {response.ReasonPhrase}).{detail}", null, response.StatusCode);
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
         using var json = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token).ConfigureAwait(false);
-
-        if (!json.RootElement.TryGetProperty("models", out var modelsElement)
-            || modelsElement.ValueKind != JsonValueKind.Array)
-        {
-            throw new InvalidDataException("The model-list response did not contain a 'models' array. Check that the endpoint is an Ollama API endpoint.");
-        }
-
         var modelNames = new List<string>();
+        var arrayName = settings.Provider == 1 ? "data" : "models";
+        if (!json.RootElement.TryGetProperty(arrayName, out var modelsElement) || modelsElement.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException($"The {GetProviderName(settings)} model-list response did not contain a '{arrayName}' array. Check the configured API URL.");
+
         foreach (var model in modelsElement.EnumerateArray())
         {
-            if (model.TryGetProperty("name", out var nameElement)
-                && nameElement.ValueKind == JsonValueKind.String
-                && !string.IsNullOrWhiteSpace(nameElement.GetString()))
-            {
+            var nameProperty = settings.Provider == 1 ? "id" : "name";
+            if (model.TryGetProperty(nameProperty, out var nameElement) && nameElement.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(nameElement.GetString()))
                 modelNames.Add(nameElement.GetString()!);
-            }
         }
-
         lock (ModelCacheLock)
         {
             _modelCacheEndpoint = cacheKey;
             _modelCacheTimestamp = DateTimeOffset.UtcNow;
             _modelCache = new List<string>(modelNames);
         }
-
         return modelNames;
+    }
+
+    private static string GetProviderName(SettingsSnapshot settings) => settings.Provider == 1 ? "LM Studio" : "Ollama";
+
+    private static Uri BuildLMStudioUri(string baseUrl, string relativePath)
+    {
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri)
+            || (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps)
+            || string.IsNullOrWhiteSpace(baseUri.Host))
+            throw new InvalidOperationException("The LM Studio base URL must be an absolute HTTP or HTTPS URL, for example http://localhost:1234/v1.");
+        return new Uri(baseUrl.TrimEnd('/') + "/" + relativePath.TrimStart('/'), UriKind.Absolute);
     }
 
     private static bool TryResolveThinkValue(string model, string? thinkingSetting, out object value)
@@ -684,6 +728,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             return new SettingsSnapshot(
                 _endpoint,
                 _lmStudioBaseUrl,
+                _provider,
                 _defaultModel,
                 _thinking,
                 _keepAliveSeconds,
@@ -797,7 +842,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         if (diagnosticText.Contains("actively refused", StringComparison.OrdinalIgnoreCase)
             || diagnosticText.Contains("connection refused", StringComparison.OrdinalIgnoreCase))
         {
-            return "The connection was refused. Check that Ollama is running and the endpoint URL is correct.";
+            return "The connection was refused. Check that the selected provider is running and its API URL is correct.";
         }
 
         return exceptionChain.LastOrDefault()?.Message ?? exception.Message;
@@ -1157,6 +1202,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private sealed record SettingsSnapshot(
         string Endpoint,
         string LMStudioBaseUrl,
+        int Provider,
         string DefaultModel,
         string Thinking,
         int KeepAliveSeconds,

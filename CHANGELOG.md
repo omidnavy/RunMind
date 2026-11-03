@@ -1,3 +1,20 @@
+# Version 1.2.2
+
+## Inline PowerToys Run provider selection
+
+- Added a `PowerToys Run LLM provider` setting with `Ollama` and `LM Studio` choices.
+- The selected provider controls inline PowerToys Run model discovery and generation.
+- Ollama uses the configured `/api/tags` and `/api/generate` endpoints, retaining its `keep_alive` and `think` request options.
+- LM Studio uses the configured OpenAI-compatible base URL, `GET /v1/models` for model discovery, and streaming `POST /v1/chat/completions` for generation.
+- The existing default-model field is shared; its description now says to use the model name/ID from the selected provider.
+- The standalone WebView2 chat keeps its own provider selector and behavior. The new PowerToys Run provider setting does not force the chat window to use the same provider.
+- `RequestTimeoutSeconds` continues to apply only to inline PowerToys Run generation, for either provider.
+- `KeepAliveSeconds` and `Thinking` are Ollama-specific settings; LM Studio requests do not receive those Ollama-only fields.
+
+## Validation
+
+- Checked C# source delimiter balance and reviewed provider routing, settings parsing, model discovery, and SSE/NDJSON parsing paths.
+- A .NET SDK/compiler and the PowerToys reference assemblies are not available in this environment, so a C# build and live Ollama/LM Studio requests could not be run here.
 
 ---
 
