@@ -3,6 +3,11 @@
 PowerToys Run plugin which will enable to use LLMs on Ollama endpoints locally.
 
 ![Screenshot](screenshots/screenshot1.png)
+
+## Note
+
+Ollama doesnt not have a release for ARM64 Windows yet. So this plugin does not have a ARM64 Release yet. It will be added once Ollama releases a stable ARM64 version.
+
 ## Ollama (Prerequisite)
 You need to install Ollama Locally.
 
@@ -56,10 +61,12 @@ You need to install Ollama Locally.
 ## Usage
 You need to have the Ollama endpoint running. You can check by going to [http://localhost:11434/](http://localhost:11434/). Depending on your GPU it might take some time for the LLM to generate a response as it uses your own resources.
 ```
-llm what is the capital of india
+llm what is the capital of iran
 ```
 
 ## Installation
 1. Download the latest release of the Local LLM from the releases page.
 2. Extract the zip file's contents to your PowerToys modules directory for the user (`%LOCALAPPDATA%\Microsoft\PowerToys\PowerToys Run\Plugins`).
 3. Restart PowerToys.
+
+ 
