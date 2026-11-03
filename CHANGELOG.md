@@ -1,4 +1,60 @@
 
+
+---
+
+# Version 1.3.0
+## Starting point and preservation
+- Based on the user's 1.2.3 source and the 1.3.0-preview.4 development snapshot.
+- Preserves the existing compact PowerToys Run UI, inline provider settings, standalone WebView2 chat, exports, context manager, and normal streaming chat path.
+- `Main.cs` is unchanged. No C# MCP bridge, native process launcher, or STDIO transport was added.
+- `RequestTimeoutSeconds` behavior for inline PowerToys Run results is unchanged; standalone chat remains governed by user cancellation and provider completion/errors.
+
+## Agent approvals and folder access
+- Replaced browser-native confirmation dialogs for Agent/MCP tool execution with an inline approval card styled with the existing chat theme.
+- Approval cards show the requested tool, server, path/URL, and arguments; potentially mutating actions receive a warning treatment.
+- Actions: Allow once, Deny, and (for read-only agent tools only) Allow for this task. The task-scoped read approvals reset when a new agent run starts. MCP tool calls/resources/prompts and file creation remain explicit per-call approvals.
+- Stop/cancel dismisses a pending approval.
+- A user-selected folder remains available across prompts and Agent Mode toggles for the current WebView session. The user can explicitly clear it from Agent settings. The model instructions now tell the model not to ask for the folder again when file tools are already available.
+- Folder access is not persisted across WebView restarts. File tools remain absent until a folder is selected.
+
+## Model server connections
+- Added a browser-side connection manager for multiple Ollama and OpenAI-compatible endpoints.
+- Enabled servers are discovered sequentially and their models are merged into a single dropdown, grouped by alias and endpoint host.
+- Connections can be added, disabled, enabled, and removed (the two built-in defaults can be disabled but not removed).
+- Selected connection determines the endpoint used for discovery, metadata, ordinary streaming chat, and Agent tool-call requests.
+- Conversation exports record the selected connection ID so duplicate model names can be restored to the same configured server when available.
+- Endpoints and aliases are stored in WebView localStorage.
+
+## Agent workflow
+- Agent Mode supports `update_plan` for concise multi-step plans, with pending/in-progress/completed statuses rendered in the assistant transcript.
+- Added local recent task history (up to 20 snapshots) for Agent Mode and MCP-enabled chats. History can reopen a snapshot or be cleared. Snapshots are stored in the WebView profile; attachment bytes are deliberately excluded.
+- Existing maximum tool-step setting remains the per-run tool-call limit. Read-only approvals can be allowed once or for the current run; the existing automatic read-only setting remains available.
+- Tool errors are returned to the model as tool results so it can attempt recovery within the configured step limit.
+
+## MCP client
+- Browser-only Streamable HTTP MCP client retained: initialize/initialized, tool discovery/calls, resource listing/reading, prompt listing/retrieval, pagination, session IDs, protocol-version headers, optional bearer authentication, disconnect, enable/disable, remove, and reconnect.
+- MCP access is available in Agent Mode and optionally in ordinary chat. MCP tool/resource/prompt actions use the inline approval card.
+- Server URLs are saved locally; bearer tokens are session-only. HTTP/HTTPS only. STDIO intentionally unsupported because no native process bridge is allowed.
+- MCP resources are discoverable/readable; this build does not create a persistent vector index or automatically embed/index all remote resources.
+
+## Search and file tools
+- Explicit URLs are routed to `fetch_webpage`; public GitHub repository URLs use GitHub's public API to retrieve metadata and README.
+- `web_search` is exposed only when a SearXNG URL is configured.
+- File tools: list, read UTF-8 text, create new file without overwrite, restricted to the selected folder. No edit/delete or shell/process execution.
+
+## Limitations and verification
+- Model server API-key authentication is not implemented for model endpoints. OpenAI-compatible endpoints that require bearer/API-key auth will not work in this build. MCP bearer auth is supported but session-only.
+- Remote model and MCP endpoints must allow WebView2 CORS/network access. Some browser-only MCP server implementations and auth flows may not work.
+- LM Studio Native REST mode does not support Agent tool calls; use OpenAI-compatible mode.
+- No persistent knowledge-base embedding/indexing, MCP STDIO, file edit/delete, task retry UI, or secure credential vault.
+- JavaScript syntax checked with Node.js; HTML IDs/selectors checked for duplicates/missing references; ZIP integrity checked. A full .NET build and live WebView2/provider/MCP tests could not be run because the .NET SDK and configured live test servers were unavailable in this environment.
+
+- `web_search` is only included in the model's Agent tool definitions when Agent settings contain a syntactically valid HTTP(S) SearXNG instance URL.
+- Saving a non-empty malformed URL is rejected with an explanatory toast; an empty URL saves normally and explicitly leaves web search disabled.
+- Tool execution independently rechecks the normalized configured endpoint and fails closed if the setting is missing or invalid. This protects against stale tool calls or settings changed after tool discovery.
+- The configured URL is normalized (trailing slash removed); credentials embedded in URLs are rejected.
+- `fetch_webpage` remains available independently, so direct URL fetching does not require a search engine.
+
 ---
 
 # Version 1.2.3
