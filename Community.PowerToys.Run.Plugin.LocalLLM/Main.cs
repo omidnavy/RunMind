@@ -44,6 +44,15 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     {
         Timeout = Timeout.InfiniteTimeSpan,
     };
+    private static readonly object ModelCacheLock = new();
+    private static string? _modelCacheEndpoint;
+    private static DateTimeOffset _modelCacheTimestamp;
+    private static List<string> _modelCache = new();
+
+    // Reuse WebView2 environments across chat windows to avoid profile/process races.
+    private static readonly SemaphoreSlim WebView2EnvironmentLock = new(1, 1);
+    private static CoreWebView2Environment? _localAppDataWebView2Environment;
+    private static CoreWebView2Environment? _temporaryWebView2Environment;
 
     private readonly object _settingsLock = new();
     private PluginInitContext? _context;
@@ -101,7 +110,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Key = "RequestTimeoutSeconds",
             DisplayLabel = "Request timeout (seconds)",
-            DisplayDescription = "Maximum time for model discovery or generation. Range: 30–3600 seconds.",
+            DisplayDescription = "Maximum time to wait for an inline PowerToys Run generation request (30–3600 seconds). Does not affect the standalone chat window.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
             TextValue = DefaultRequestTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
         },
@@ -262,6 +271,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
+        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = new StringContent(
@@ -273,7 +284,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         using var response = await HttpClient.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
-            timeout.Token).ConfigureAwait(false);
+            sendTimeout.Token).ConfigureAwait(false);
+        // Once headers arrive, stop the connection deadline. The overall generation
+        // deadline continues to cover response-body streaming through timeout.Token.
+        connectionTimeout.CancelAfter(Timeout.InfiniteTimeSpan);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -288,6 +302,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         await using var responseStream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
         using var reader = new StreamReader(responseStream, Encoding.UTF8);
         var output = new StringBuilder();
+        var recordNumber = 0;
 
         while (true)
         {
@@ -302,26 +317,39 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 continue;
             }
 
-            using var json = JsonDocument.Parse(line);
-            var root = json.RootElement;
-
-            if (root.TryGetProperty("error", out var errorElement)
-                && errorElement.ValueKind == JsonValueKind.String
-                && !string.IsNullOrWhiteSpace(errorElement.GetString()))
+            recordNumber++;
+            JsonDocument json;
+            try
             {
-                throw new InvalidOperationException($"Ollama: {errorElement.GetString()}");
+                json = JsonDocument.Parse(line);
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidDataException($"Ollama returned malformed NDJSON at record {recordNumber}: {ex.Message}", ex);
             }
 
-            if (root.TryGetProperty("response", out var chunk)
-                && chunk.ValueKind == JsonValueKind.String)
+            using (json)
             {
-                output.Append(chunk.GetString());
-            }
+                var root = json.RootElement;
 
-            if (root.TryGetProperty("done", out var doneElement)
-                && doneElement.ValueKind == JsonValueKind.True)
-            {
-                break;
+                if (root.TryGetProperty("error", out var errorElement)
+                    && errorElement.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(errorElement.GetString()))
+                {
+                    throw new InvalidOperationException($"Ollama: {errorElement.GetString()}");
+                }
+
+                if (root.TryGetProperty("response", out var chunk)
+                    && chunk.ValueKind == JsonValueKind.String)
+                {
+                    output.Append(chunk.GetString());
+                }
+
+                if (root.TryGetProperty("done", out var doneElement)
+                    && doneElement.ValueKind == JsonValueKind.True)
+                {
+                    break;
+                }
             }
         }
 
@@ -331,7 +359,19 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private async Task<List<string>> FetchModelsFromEndpointAsync(SettingsSnapshot settings)
     {
         var tagsEndpoint = BuildTagsUri(settings.Endpoint);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
+        var cacheKey = tagsEndpoint.AbsoluteUri;
+        lock (ModelCacheLock)
+        {
+            if (string.Equals(_modelCacheEndpoint, cacheKey, StringComparison.OrdinalIgnoreCase)
+                && DateTimeOffset.UtcNow - _modelCacheTimestamp < TimeSpan.FromSeconds(5))
+            {
+                return new List<string>(_modelCache);
+            }
+        }
+
+        // Model discovery should fail quickly and must not inherit a potentially long
+        // generation timeout configured for slow local models.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
         using var response = await HttpClient.GetAsync(tagsEndpoint, timeout.Token).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
@@ -362,6 +402,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 modelNames.Add(nameElement.GetString()!);
             }
+        }
+
+        lock (ModelCacheLock)
+        {
+            _modelCacheEndpoint = cacheKey;
+            _modelCacheTimestamp = DateTimeOffset.UtcNow;
+            _modelCache = new List<string>(modelNames);
         }
 
         return modelNames;
@@ -500,57 +547,46 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             return chunks;
         }
 
-        // Prefer paragraph boundaries. Long paragraphs/code blocks are split on word
-        // boundaries so a huge answer is represented by multiple independently scrollable
-        // launcher results instead of one enormous subtitle.
-        var paragraphs = response.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Split('\n')
-            .Select(line => line.TrimEnd())
-            .ToArray();
-
-        var current = new StringBuilder();
-        foreach (var paragraph in paragraphs)
+        // Preserve the user's existing compact multi-result UX. Split at natural line or
+        // word boundaries when possible, but never trim either side: concatenating the
+        // sections must reproduce the original response byte-for-byte at the string level.
+        maxChunkLength = Math.Max(80, maxChunkLength);
+        var start = 0;
+        while (start < response.Length)
         {
-            var addition = current.Length == 0 ? paragraph : "\n" + paragraph;
-            if (current.Length > 0 && current.Length + addition.Length > maxChunkLength)
+            var remaining = response.Length - start;
+            if (remaining <= maxChunkLength)
             {
-                chunks.Add(current.ToString());
-                current.Clear();
-                addition = paragraph;
+                chunks.Add(response[start..]);
+                break;
             }
 
-            while (addition.Length > maxChunkLength)
+            var hardEnd = start + maxChunkLength;
+            var newline = response.LastIndexOf('\n', hardEnd - 1, maxChunkLength);
+            var space = response.LastIndexOf(' ', hardEnd - 1, maxChunkLength);
+            var minimumUsefulBoundary = start + Math.Max(40, maxChunkLength / 3);
+            var end = newline >= minimumUsefulBoundary
+                ? newline + 1
+                : space >= minimumUsefulBoundary
+                    ? space + 1
+                    : hardEnd;
+
+            // Guard against a pathological boundary result; every iteration must advance.
+            if (end <= start || end > hardEnd)
             {
-                var cut = addition.LastIndexOf(' ', maxChunkLength - 1, maxChunkLength);
-                if (cut < Math.Max(80, maxChunkLength / 3))
-                {
-                    cut = maxChunkLength;
-                }
-
-                if (current.Length > 0)
-                {
-                    chunks.Add(current.ToString());
-                    current.Clear();
-                }
-
-                chunks.Add(addition[..cut].TrimEnd());
-                addition = addition[cut..].TrimStart();
+                end = hardEnd;
             }
 
-            if (addition.Length > 0)
+            // Avoid cutting a UTF-16 surrogate pair between adjacent sections.
+            if (end < response.Length && end > start
+                && char.IsHighSurrogate(response[end - 1])
+                && char.IsLowSurrogate(response[end]))
             {
-                if (current.Length > 0)
-                {
-                    current.Append('\n');
-                }
-
-                current.Append(addition);
+                end--;
             }
-        }
 
-        if (current.Length > 0)
-        {
-            chunks.Add(current.ToString());
+            chunks.Add(response[start..end]);
+            start = end;
         }
 
         return chunks;
@@ -774,15 +810,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return singleLine.Length <= maxLength ? singleLine : singleLine[..(maxLength - 1)] + "…";
     }
 
-    private void ShowNativeResponseWindow(string title, string model, string prompt, string response, bool isError)
+    private void ShowNativeResponseWindow(string title, string model, string? prompt, string response, bool isError)
     {
+        // Some PowerToys SDK versions annotate query text as nullable. Keep the original
+        // prompt whenever available, but never pass null into the bootstrap payload.
+        var safePrompt = prompt ?? string.Empty;
         var settings = GetSettingsSnapshot();
-        var navigation = BuildChatNavigation(title, model, prompt, response, isError, settings);
-        var webView = new WebView2
-        {
-            DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24),
-            AllowExternalDrop = false,
-        };
+        var navigation = BuildChatNavigation(title, model, safePrompt, response, isError, settings);
+        var webView = CreateChatWebView();
 
         var appWindow = new Window
         {
@@ -804,11 +839,20 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         Window appWindow,
         WebView2 webView,
         string appFolderPath,
-        string bootstrapJson)
+        string bootstrapJson,
+        bool useTemporaryUserDataFolder = false,
+        Exception? primaryInitializationException = null)
     {
+        string userDataFolder = "(not resolved)";
         try
         {
-            await webView.EnsureCoreWebView2Async();
+            // Never let WebView2 infer a profile next to the PowerToys host executable.
+            // PowerToys commonly runs from a protected install location, which can cause
+            // EnsureCoreWebView2Async() to fail with E_ACCESSDENIED.
+            userDataFolder = GetWebView2UserDataFolder(useTemporaryUserDataFolder);
+            var environment = await GetWebView2EnvironmentAsync(useTemporaryUserDataFolder, userDataFolder);
+            await webView.EnsureCoreWebView2Async(environment);
+
             var core = webView.CoreWebView2;
             // Give the static page a stable localhost origin so browser CORS policies can
             // recognize the page. API requests are still issued directly by JavaScript.
@@ -898,16 +942,114 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             };
             core.Navigate("https://localhost/ChatWindow.html");
         }
+        catch (Exception ex) when (!useTemporaryUserDataFolder && IsAccessDeniedException(ex))
+        {
+            // If the user's LocalAppData profile is redirected or restricted, retry using a
+            // fresh control and a per-user temporary directory. Retrying with a fresh control
+            // avoids reusing a WebView2 control whose initialization already failed.
+            var fallbackWebView = CreateChatWebView();
+            appWindow.Content = fallbackWebView;
+            await InitializeChatWebViewAsync(
+                appWindow,
+                fallbackWebView,
+                appFolderPath,
+                bootstrapJson,
+                useTemporaryUserDataFolder: true,
+                primaryInitializationException: ex);
+        }
         catch (Exception ex)
         {
+            var priorFailure = primaryInitializationException is null
+                ? string.Empty
+                : $"\nPrimary profile attempt also failed: {primaryInitializationException.Message}";
+            var message = "The LocalLLM chat window could not initialize WebView2. "
+                + ex.Message
+                + $"\nUser-data folder: {userDataFolder}"
+                + priorFailure
+                + "\nCheck that Microsoft Edge WebView2 Runtime is installed and that this folder is writable.";
             appWindow.Content = new TextBlock
             {
                 Margin = new Thickness(24),
                 TextWrapping = TextWrapping.Wrap,
-                Text = "The LocalLLM chat window could not initialize WebView2. " + ex.Message,
+                Text = message,
             };
-            _context?.API.ShowMsg("Could not initialize the LocalLLM chat window", ex.Message);
+            _context?.API.ShowMsg("Could not initialize the LocalLLM chat window", message);
         }
+    }
+
+    private static WebView2 CreateChatWebView() => new()
+    {
+        DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24),
+        AllowExternalDrop = false,
+    };
+
+    private static async Task<CoreWebView2Environment> GetWebView2EnvironmentAsync(
+        bool useTemporaryFolder,
+        string userDataFolder)
+    {
+        await WebView2EnvironmentLock.WaitAsync();
+        try
+        {
+            if (useTemporaryFolder && _temporaryWebView2Environment is not null)
+            {
+                return _temporaryWebView2Environment;
+            }
+
+            if (!useTemporaryFolder && _localAppDataWebView2Environment is not null)
+            {
+                return _localAppDataWebView2Environment;
+            }
+
+            Directory.CreateDirectory(userDataFolder);
+            var environment = await CoreWebView2Environment.CreateAsync(
+                browserExecutableFolder: null,
+                userDataFolder: userDataFolder);
+
+            if (useTemporaryFolder)
+            {
+                _temporaryWebView2Environment = environment;
+            }
+            else
+            {
+                _localAppDataWebView2Environment = environment;
+            }
+
+            return environment;
+        }
+        finally
+        {
+            WebView2EnvironmentLock.Release();
+        }
+    }
+
+    private static string GetWebView2UserDataFolder(bool useTemporaryFolder)
+    {
+        if (useTemporaryFolder)
+        {
+            return Path.Combine(Path.GetTempPath(), "PowerToys-Run-LocalLLM", "WebView2");
+        }
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localAppData))
+        {
+            throw new InvalidOperationException("Windows did not provide a Local AppData path for the current user.");
+        }
+
+        return Path.Combine(localAppData, "Microsoft", "PowerToys", "LocalLLM", "WebView2");
+    }
+
+    private static bool IsAccessDeniedException(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is UnauthorizedAccessException
+                || current.HResult == unchecked((int)0x80070005)) // E_ACCESSDENIED
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static (string FolderPath, string BootstrapJson) BuildChatNavigation(
@@ -942,7 +1084,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             ollamaBaseUrl = BuildOllamaBaseUrl(settings.Endpoint),
             lmStudioBaseUrl = RewriteLocalhostToLoopback(settings.LMStudioBaseUrl),
             keepAliveSeconds = settings.KeepAliveSeconds,
-            requestTimeoutSeconds = settings.RequestTimeoutSeconds,
             initialThink = thinkInitiallyEnabled,
         };
         var serializedBootstrap = JsonSerializer.Serialize(bootstrap);

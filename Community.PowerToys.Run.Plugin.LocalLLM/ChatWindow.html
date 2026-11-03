@@ -82,14 +82,32 @@
     button, input, select, textarea { font: inherit; }
     button, select { color: var(--color-text); }
     button { cursor: pointer; }
-    button:disabled, select:disabled, textarea:disabled { opacity: .55; cursor: not-allowed; }
+    button:disabled, select:disabled, textarea:disabled, input:disabled { opacity: .55; cursor: not-allowed; }
     .app { height: 100%; min-height: 0; display: flex; flex-direction: column; }
     .topbar { padding: 14px 20px 12px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); box-shadow: var(--shadow-float); z-index: 2; }
     .top-line { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
     .brand { min-width: 0; }
     .brand h1 { margin: 0; font-size: 17px; font-weight: 680; letter-spacing: .01em; line-height: 1.3; }
     .brand p { margin: 3px 0 0; color: var(--color-muted); font-size: 12px; }
-    .theme-wrap { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .top-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+    .theme-wrap { display: flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface-raised); white-space: nowrap; }
+    .theme-button { display: inline-grid; place-items: center; width: 31px; height: 31px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-muted); }
+    .theme-button:hover { color: var(--color-text); background: var(--color-surface-hover); }
+    .theme-button[aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-hover); box-shadow: inset 0 0 0 1px var(--color-border); }
+    .theme-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .export-menu { position: relative; }
+    .export-trigger { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); font-size: 12px; font-weight: 600; list-style: none; cursor: pointer; }
+    .export-trigger::-webkit-details-marker { display: none; }
+    .export-trigger:hover, .export-menu[open] .export-trigger { background: var(--color-surface-hover); }
+    .export-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .export-panel { position: absolute; z-index: 20; top: calc(100% + 9px); right: 0; width: min(310px, calc(100vw - 28px)); padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
+    .export-panel-title { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
+    .export-panel-note { margin: 0 0 12px; color: var(--color-muted); font-size: 11px; }
+    .export-panel select { display: block; width: 100%; margin-bottom: 10px; }
+    .session-file-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 12px; }
+    .session-file-actions .button { width: 100%; padding-inline: 8px; font-size: 11px; }
+    .session-file-divider { border-top: 1px solid var(--color-border); margin: 0 0 12px; }
+    .export-panel .button { width: 100%; }
     .toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 9px; margin-top: 13px; }
     .field { min-width: 0; display: flex; flex: 1 1 220px; flex-direction: column; gap: 4px; }
     .field label, .field-label { color: var(--color-muted); font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
@@ -102,12 +120,76 @@
     .button.primary:hover:not(:disabled) { filter: brightness(1.05); }
     .button.danger { color: var(--color-danger); }
     .icon-button { min-width: 36px; padding-inline: 10px; }
-    .statusline { min-height: 18px; margin-top: 8px; display: flex; gap: 8px; align-items: center; color: var(--color-muted); font-size: 12px; }
+    .toolbar { display: flex; align-items: center; justify-content: flex-start; gap: 9px; margin-top: 12px; width: 100%; }
+    .toolbar .field { display: flex; flex: 0 1 auto; align-items: center; gap: 8px; min-width: 0; }
+    .toolbar .field label { display: none; }
+    .toolbar-menu { position: relative; flex: 0 0 auto; }
+    .toolbar-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-surface); color: var(--color-muted); cursor: pointer; list-style: none; }
+    .toolbar-icon::-webkit-details-marker { display: none; }
+    .toolbar-icon:hover, .toolbar-menu[open] > .toolbar-icon { color: var(--color-text); background: var(--color-surface-hover); }
+    .toolbar-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .toolbar-panel { position: absolute; z-index: 25; top: calc(100% + 8px); left: 0; width: min(340px, calc(100vw - 28px)); padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
+    .toolbar-panel h2 { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
+    .toolbar-panel .panel-note { margin: 0 0 12px; font-size: 11px; line-height: 1.45; color: var(--color-muted); }
+    .toolbar-context-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 11px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-muted); cursor: pointer; list-style: none; font-size: 12px; font-weight: 650; white-space: nowrap; }
+    .toolbar-context-trigger::-webkit-details-marker { display: none; }
+    .toolbar-context-trigger:hover, .toolbar-menu[open] > .toolbar-context-trigger { color: var(--color-text); background: var(--color-surface-hover); }
+    .toolbar-context-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .context-trigger-state { padding: 2px 6px; border-radius: var(--radius-pill); background: var(--color-surface-raised); color: var(--color-muted); font-size: 10px; }
+    .context-manager-panel { width: min(440px, calc(100vw - 28px)); max-height: min(78vh, 720px); overflow: auto; }
+    .context-usage-card { margin: 12px 0; padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); }
+    .context-usage-heading, .context-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .context-usage-heading strong { font-size: 14px; font-weight: 700; }
+    .context-usage-heading span, .context-section-heading span { color: var(--color-muted); font-size: 11px; }
+    .context-meter { height: 8px; margin: 9px 0 7px; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-border); }
+    .context-meter-fill { height: 100%; width: 0; border-radius: inherit; background: var(--color-accent); transition: width .18s ease; }
+    .context-meter-fill.over { background: var(--color-danger); }
+    .context-usage-foot { display: flex; justify-content: space-between; gap: 12px; color: var(--color-muted); font-size: 10px; }
+    .context-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 10px 0 13px; }
+    .context-stat { padding: 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); min-width: 0; }
+    .context-stat strong { display: block; font-size: 16px; line-height: 1.2; }
+    .context-stat span { display: block; margin-top: 3px; color: var(--color-muted); font-size: 10px; }
+    .context-manager-panel .setting-grid { margin-top: 10px; }
+    .context-manager-panel .setting-field input { font-variant-numeric: tabular-nums; }
+    .context-summary-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+    .context-summary-editor { display: block; width: 100%; min-height: 105px; max-height: 220px; margin-top: 8px; padding: 9px; resize: vertical; font: 11px/1.5 var(--font-ui); }
+    .context-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+    .context-actions .button { min-height: 32px; padding: 5px 9px; font-size: 11px; }
+    .context-preview { margin-top: 14px; border-top: 1px solid var(--color-border); padding-top: 11px; }
+    .context-preview summary { color: var(--color-text); cursor: pointer; font-size: 11px; font-weight: 650; }
+    .context-preview-list { display: grid; gap: 6px; max-height: 240px; overflow: auto; margin-top: 9px; }
+    .context-preview-item { padding: 7px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); min-width: 0; }
+    .context-preview-item strong { display: block; margin-bottom: 3px; color: var(--color-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+    .context-preview-item p { margin: 0; color: var(--color-text); font-size: 10px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .setting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .setting-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .setting-field[hidden] { display: none !important; }
+    .setting-field label { font-size: 11px; color: var(--color-muted); font-weight: 600; }
+    .setting-field input { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-input); color: var(--color-text); }
+    .setting-field input:focus { outline: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent); outline-offset: 1px; }
+    .setting-note { margin: 10px 0 0; font-size: 11px; line-height: 1.45; color: var(--color-muted); }
+    .setting-footer { display: flex; justify-content: flex-end; margin-top: 11px; }
+    .setting-reset { padding: 5px 8px; border: 0; background: transparent; color: var(--color-muted); font-size: 11px; text-decoration: underline; text-underline-offset: 2px; }
+    .selected-model-health { display: inline-flex; align-items: center; gap: 6px; color: var(--color-muted); font-size: 11px; white-space: nowrap; }
+    .selected-model-health .status-dot { width: 6px; height: 6px; flex-basis: 6px; }
+    .model-info-panel { width: min(330px, calc(100vw - 28px)); }
+    .model-info-provider { color: var(--color-muted); font-size: 11px; margin-bottom: 10px; }
+    .capability-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .capability-badge { display: inline-flex; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface-raised); color: var(--color-text); font-size: 11px; }
+    .capability-empty { color: var(--color-muted); font-size: 12px; line-height: 1.5; }
+    #modelSelect { width: clamp(220px, 30vw, 390px); height: 36px; min-width: 0; max-width: min(52vw, 460px); padding: 0 34px 0 13px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 650; cursor: pointer; }
+    #refreshModels { display: inline-grid; place-items: center; width: 36px; height: 36px; min-width: 36px; padding: 0; border-radius: 50%; font-size: 0; }
+    #refreshModels svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .statusline { min-height: 14px; margin-top: 7px; display: flex; gap: 7px; align-items: center; color: var(--color-muted); font-size: 11px; opacity: .82; }
     .status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--color-muted); }
     .status-dot.good { background: var(--color-success); }
     .status-dot.bad { background: var(--color-danger); }
-    .transcript { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 22px clamp(14px, 4vw, 54px) 28px; scroll-behavior: smooth; }
-    .transcript-inner { width: 100%; max-width: 1000px; margin: 0 auto; }
+    .transcript-frame { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
+    .transcript { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 22px clamp(14px, 4vw, 54px) 28px; scroll-behavior: auto; }
+    .transcript-inner { width: 100%; margin: 0; }
+    .jump-to-latest { position: absolute; z-index: 4; right: 24px; bottom: 18px; display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-panel); font-size: 12px; font-weight: 650; }
+    .jump-to-latest[hidden] { display: none; }
+    .jump-to-latest svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .empty-state { margin: 12vh auto; max-width: 520px; text-align: center; color: var(--color-muted); }
     .empty-state strong { display: block; margin-bottom: 8px; color: var(--color-text); font-size: 17px; }
     .message { margin: 0 auto 18px; padding: 15px 17px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-assistant-bubble); box-shadow: var(--shadow-float); overflow-wrap: anywhere; }
@@ -117,6 +199,21 @@
     .message-meta .role { color: var(--color-text); }
     .message-meta .error-label { color: var(--color-danger); }
     .message-content { font-size: 14px; line-height: 1.72; overflow-wrap: anywhere; }
+    .message-actions { display: flex; align-items: center; gap: 4px; margin-top: 9px; opacity: .78; }
+    .message-actions.user-actions { justify-content: flex-start; }
+    .message-action { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--color-muted); font-size: 11px; cursor: pointer; }
+    .message-action:hover { border-color: var(--color-border); background: var(--color-surface-hover); color: var(--color-text); }
+    .message-action svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .message-actions:focus-within, .message:hover .message-actions { opacity: 1; }
+    .message-action.copy-success { color: var(--color-success); }
+    .message-action.copy-success svg { stroke: var(--color-success); }
+    .generation-metrics { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 8px; color: var(--color-muted); font-size: 11px; line-height: 1.3; opacity: .78; }
+    .generation-metrics span + span::before { content: '·'; margin-right: 7px; opacity: .65; }
+    .message-attachment { position: relative; transition: border-color .12s ease, background .12s ease; }
+    .message-attachment img { width: 42px; height: 42px; }
+    .attachment-remove { opacity: .25; transition: opacity .12s ease, background .12s ease; cursor: pointer; }
+    .attachment-chip:hover .attachment-remove, .attachment-chip:focus-within .attachment-remove { opacity: 1; }
+    @media (hover: none) { .attachment-remove { opacity: 1; } }
     .message-content > :first-child { margin-top: 0; }
     .message-content > :last-child { margin-bottom: 0; }
     .message-content p { margin: 0 0 12px; white-space: normal; }
@@ -132,39 +229,102 @@
     .message-content pre code { display: block; padding: 0; background: transparent; border-radius: 0; color: var(--color-text); white-space: pre; line-height: 1.55; }
     .copy-code { position: absolute; top: 6px; right: 7px; padding: 3px 8px; font-size: 11px; border: 1px solid var(--color-border); border-radius: var(--radius-xs); background: var(--color-surface-raised); color: var(--color-text); }
     .pending { color: var(--color-muted); }
-    .composer { flex: 0 0 auto; border-top: 1px solid var(--color-border); padding: 12px 20px 14px; background: var(--color-surface); }
-    .composer-inner { max-width: 1050px; margin: 0 auto; }
-    .composer textarea { display: block; width: 100%; resize: vertical; min-height: 68px; max-height: 200px; padding: 10px 12px; line-height: 1.5; }
-    .composer-bottom { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; justify-content: space-between; margin-top: 9px; }
-    .composer-left, .composer-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .think-label { display: inline-flex; align-items: center; gap: 7px; color: var(--color-muted); font-size: 12px; user-select: none; cursor: pointer; }
-    .think-label input { width: 15px; height: 15px; accent-color: var(--color-accent); }
-    .export-select { width: min(245px, 48vw); flex: 0 1 245px; }
-    .footer-note { color: var(--color-muted); font-size: 11px; margin-top: 6px; }
+    .message-thinking { margin: 0 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); overflow: hidden; }
+    .message-thinking summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; list-style: none; color: var(--color-muted); font-size: 12px; font-weight: 650; user-select: none; }
+    .message-thinking summary::-webkit-details-marker { display: none; }
+    .message-thinking summary::before { content: "›"; display: inline-block; font-size: 18px; line-height: 12px; transform: rotate(0deg); transition: transform .12s ease; }
+    .message-thinking[open] summary::before { transform: rotate(90deg); }
+    .thinking-state { margin-left: auto; font-size: 11px; font-weight: 400; }
+    .thinking-state.active { display: inline-flex; align-items: center; gap: 7px; }
+    .thinking-state.active::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 45%, transparent); animation: thinking-pulse 1.6s ease-out infinite; }
+    @keyframes thinking-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 45%, transparent); } 70%, 100% { box-shadow: 0 0 0 6px transparent; } }
+    .thinking-body { padding: 10px 12px 12px; border-top: 1px solid var(--color-border); color: var(--color-muted); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+    .thinking-body > :first-child { margin-top: 0; } .thinking-body > :last-child { margin-bottom: 0; }
+    .message-attachments { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .message-attachment { display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; padding: 6px 9px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-muted); font-size: 12px; }
+    .message-attachment img { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; }
+    .message-attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .composer { flex: 0 0 auto; border-top: 1px solid var(--color-border); padding: 13px 20px 14px; background: var(--color-surface); }
+    .composer-inner { width: 100%; margin: 0; }
+    .edit-mode-notice { display: flex; align-items: center; gap: 8px; margin: 10px 10px 0; padding: 8px 10px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface)); color: var(--color-muted); font-size: 11px; }
+    .edit-mode-notice[hidden] { display: none; }
+    .edit-mode-notice .edit-mode-label { flex: 1 1 auto; min-width: 0; }
+    .edit-mode-notice button { border: 0; background: transparent; color: var(--color-text); font-size: 11px; text-decoration: underline; text-underline-offset: 2px; }
+    .composer-box { border: 1px solid var(--color-border); border-radius: 24px; background: var(--color-input); box-shadow: var(--shadow-float); transition: border-color .15s ease, box-shadow .15s ease; }
+    .composer-box:focus-within { border-color: color-mix(in srgb, var(--color-accent) 65%, var(--color-border)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 13%, transparent), var(--shadow-float); }
+    .attachment-notice { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; margin: 10px 10px 0; border: 1px solid color-mix(in srgb, var(--color-danger) 42%, var(--color-border)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-danger) 7%, var(--color-surface)); color: var(--color-text); font-size: 12px; line-height: 1.45; }
+    .attachment-notice[hidden] { display: none; }
+    .attachment-notice-icon { color: var(--color-danger); flex: 0 0 auto; font-weight: 800; }
+    .attachment-notice-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+    .attachment-notice-dismiss { flex: 0 0 auto; padding: 2px 5px; border: 0; border-radius: 5px; background: transparent; color: var(--color-muted); font-size: 11px; }
+    .attachment-notice-dismiss:hover { background: var(--color-surface-hover); color: var(--color-text); }
+    .modal-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 20px; background: rgba(0,0,0,.48); }
+    .modal-backdrop[hidden] { display: none; }
+    .warning-dialog { width: min(450px, 100%); padding: 22px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-panel); }
+    .warning-dialog h2 { margin: 0 0 8px; font-size: 17px; }
+    .warning-dialog p { margin: 0 0 12px; color: var(--color-muted); font-size: 13px; line-height: 1.5; }
+    .warning-file-list { max-height: 120px; overflow: auto; margin: 0 0 18px; padding: 9px 11px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); font-size: 12px; }
+    .warning-file-list div { overflow-wrap: anywhere; }
+    .warning-file-list div + div { margin-top: 4px; }
+    .warning-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+    .composer textarea { display: block; width: 100%; resize: none; min-height: 52px; max-height: 220px; overflow-y: hidden; padding: 14px 17px 5px; line-height: 1.55; border: 0; border-radius: 24px; background: transparent; color: var(--color-text); outline: none; box-shadow: none; }
+    .composer textarea:focus { border: 0; box-shadow: none; }
+    .compose-attachments { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 10px 12px 0; }
+    .compose-attachments[hidden] { display: none; }
+    .attachment-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; border: 1px solid var(--color-border); background: var(--color-surface-raised); border-radius: 10px; padding: 6px 8px; font-size: 12px; color: var(--color-text); }
+    .attachment-chip .attachment-name { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .attachment-thumbnail { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; flex: 0 0 auto; }
+    .attachment-file-icon { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; background: var(--color-surface-hover); color: var(--color-muted); flex: 0 0 auto; }
+    .attachment-file-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .attachment-chip .attachment-size { color: var(--color-muted); font-size: 11px; white-space: nowrap; }
+    .attachment-remove { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: var(--color-muted); }
+    .attachment-remove:hover { background: var(--color-surface-hover); color: var(--color-text); }
+    .compose-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 9px 9px 11px; }
+    .compose-left, .compose-right { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .compose-icon { display: inline-grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-text); }
+    .compose-icon:hover:not(:disabled) { background: var(--color-surface-hover); }
+    .compose-icon:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+    .compose-icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .think-button { width: auto; border: 1px solid transparent; border-radius: var(--radius-pill); padding: 0 11px; gap: 7px; font-size: 12px; color: var(--color-muted); }
+    .think-button.active { background: color-mix(in srgb, var(--color-accent) 15%, var(--color-surface)); border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border)); color: var(--color-text); }
+    .think-button.active svg { color: var(--color-accent); }
+    .send-button { width: 38px; height: 38px; background: var(--color-text); color: var(--color-bg); }
+    .send-button:hover:not(:disabled) { filter: brightness(.9); }
+    .send-button:disabled { opacity: .45; }
+    .stop-button { border: 1px solid var(--color-border); border-radius: var(--radius-pill); padding: 8px 12px; background: var(--color-surface-raised); color: var(--color-danger); font-size: 12px; }
+    .file-input { display: none; }
+    .visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
     .toast { position: fixed; z-index: 10; right: 18px; bottom: 120px; max-width: min(440px, calc(100vw - 36px)); padding: 10px 13px; background: var(--color-surface-raised); color: var(--color-text); border: 1px solid var(--color-border); border-radius: var(--radius-sm); box-shadow: var(--shadow-panel); }
     .toast[hidden] { display: none; }
     @media (max-width: 620px) {
       .topbar { padding: 12px; }
       .brand p { max-width: 245px; }
-      .toolbar { align-items: stretch; }
-      .field { flex-basis: 100%; }
+      .toolbar { align-items: center; justify-content: flex-start; }
+      .toolbar .field { flex: 0 1 auto; flex-basis: auto; }
+      #modelSelect { width: min(390px, calc(100vw - 100px)); max-width: calc(100vw - 100px); }
       .transcript { padding: 14px 11px 20px; }
+      .jump-to-latest { right: 14px; bottom: 13px; }
+      .toolbar-panel { left: 0; }
+      .selected-model-health { display: none; }
       .message { padding: 12px; }
       .composer { padding: 10px 11px 12px; }
-      .composer-bottom { align-items: flex-start; }
-      .composer-left, .composer-right { width: 100%; }
-      .composer-right .button.primary { margin-left: auto; }
-      .export-select { flex: 1; width: auto; }
+      .top-line { align-items: flex-start; }
+      .top-actions { gap: 6px; }
+      .export-trigger .export-trigger-label { display: none; }
+      .export-trigger { width: 38px; padding: 0; justify-content: center; }
+      .attachment-chip .attachment-name { max-width: 155px; }
     }
     @media print {
       body { height: auto; overflow: visible; background: #fff !important; color: #111 !important; }
       .topbar, .composer, .toast, .copy-code { display: none !important; }
       .app, .transcript { height: auto; overflow: visible; display: block; padding: 0; background: #fff; }
-      .transcript-inner { max-width: none; }
+      
       .message { break-inside: avoid; color: #111 !important; background: #fff !important; border: 1px solid #ddd; box-shadow: none; }
       .message-content pre { white-space: pre-wrap; overflow: visible; }
       .message-content pre code { white-space: pre-wrap; }
       .message-content a { color: #174ea6; }
+      .message-thinking:not([open]) > .thinking-body { display: block !important; }
+      .message-thinking summary { color: #333 !important; }
     }
   </style>
 </head>
@@ -176,11 +336,42 @@
           <h1 id="conversationTitle">LocalLLM Chat</h1>
           <p>Private in-memory session · closing this window ends the session unless exported</p>
         </div>
-        <div class="theme-wrap">
-          <label class="field-label" for="themeSelect">Theme</label>
-          <select id="themeSelect" aria-label="Theme">
-            <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
-          </select>
+        <div class="top-actions">
+          <div class="theme-wrap" role="group" aria-label="Color theme">
+            <button type="button" class="theme-button" data-theme-choice="system" aria-label="Use system theme" title="System theme" aria-pressed="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            </button>
+            <button type="button" class="theme-button" data-theme-choice="light" aria-label="Use light theme" title="Light theme" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg>
+            </button>
+            <button type="button" class="theme-button" data-theme-choice="dark" aria-label="Use dark theme" title="Dark theme" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.7 8.7 0 1 0 20.5 14.2Z"/></svg>
+            </button>
+          </div>
+          <details class="export-menu" id="exportMenu">
+            <summary class="export-trigger" aria-label="Export conversation" title="Export conversation">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 17v3h16v-3"/></svg><span class="export-trigger-label">Export</span>
+            </summary>
+            <div class="export-panel">
+              <p class="export-panel-title">Export conversation</p>
+              <p class="export-panel-note">Save a resumable session, open one, or export a readable copy.</p>
+              <div class="session-file-actions"><button type="button" class="button" id="saveSessionButton">Save conversation</button><button type="button" class="button" id="openSessionButton">Open conversation</button><input id="sessionFileInput" type="file" accept=".llmchat,application/json,.json" hidden></div>
+              <div class="session-file-divider"></div>
+              <select id="exportFormat" aria-label="Export format">
+                <option value="">Choose a format…</option>
+                <option value="html">Standalone HTML</option>
+                <option value="openwebui">Open WebUI import JSON</option>
+                <option value="portable">Portable conversation JSON</option>
+                <option value="openai">OpenAI-compatible request JSON</option>
+                <option value="markdown">Markdown (.md)</option>
+                <option value="csv">CSV (UTF-8 with BOM)</option>
+                <option value="txt">Plain text (.txt)</option>
+                <option value="jsonl">JSONL (.jsonl)</option>
+                <option value="print">Print / Save as PDF</option>
+              </select>
+              <button type="button" class="button primary" id="exportButton">Export file</button>
+            </div>
+          </details>
         </div>
       </div>
       <div class="toolbar">
@@ -191,41 +382,117 @@
             <optgroup label="LM Studio" id="lmStudioModels"><option value="">Discovering models…</option></optgroup>
           </select>
         </div>
-        <button type="button" class="button icon-button" id="refreshModels" title="Refresh Ollama and LM Studio models" aria-label="Refresh models">↻ Refresh</button>
+        <button type="button" class="button icon-button" id="refreshModels" title="Refresh Ollama and LM Studio models" aria-label="Refresh models"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9a7 7 0 0 1 11.8-2L20 12M4 12l2.6 5a7 7 0 0 0 11.8-2"/></svg></button>
+        <details class="toolbar-menu" id="generationSettingsMenu">
+          <summary class="toolbar-icon" title="Generation settings" aria-label="Generation settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></summary>
+          <div class="toolbar-panel" role="group" aria-label="Advanced generation settings">
+            <h2>Generation settings</h2>
+            <p class="panel-note">Leave a field empty for the model default. Usually adjust Temperature or Top P, rather than both. Settings are remembered on this device.</p>
+            <div class="setting-grid">
+              <div class="setting-field"><label for="settingTemperature">Temperature</label><input id="settingTemperature" type="number" min="0" max="2" step="0.1" placeholder="Default"></div>
+              <div class="setting-field"><label for="settingTopP">Top P</label><input id="settingTopP" type="number" min="0" max="1" step="0.05" placeholder="Default"></div>
+              <div class="setting-field"><label for="settingMaxTokens">Max output tokens</label><input id="settingMaxTokens" type="number" min="1" max="1000000" step="1" placeholder="Default"></div>
+              <div class="setting-field"><label for="settingSeed">Seed</label><input id="settingSeed" type="number" min="0" max="2147483647" step="1" placeholder="Random / default"></div>
+              <div class="setting-field" id="lmStudioApiModeField"><label for="settingLmStudioApiMode">LM Studio API</label><select id="settingLmStudioApiMode"><option value="openai">OpenAI-compatible</option><option value="native">Native REST v1</option></select></div>
+            </div>
+            <div class="setting-footer"><button type="button" class="setting-reset" id="resetGenerationSettings">Reset generation settings</button></div>
+          </div>
+        </details>
+        <details class="toolbar-menu" id="contextManagerMenu">
+          <summary class="toolbar-context-trigger" title="Manage conversation context" aria-label="Manage conversation context">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 5.5v15M8 7h8M8 10.5h8M8 14h5"/></svg>
+            <span>Context</span><span class="context-trigger-state" id="contextTriggerState">Manage</span>
+          </summary>
+          <section class="toolbar-panel context-manager-panel" role="group" aria-label="Conversation context manager">
+            <h2>Conversation context</h2>
+            <p class="panel-note">Choose how much history is sent to the model. The full transcript stays in this chat and in conversation exports; these controls only affect future requests.</p>
+            <div class="context-usage-card">
+              <div class="context-usage-heading"><strong id="contextUsageValue">0 estimated tokens</strong><span id="contextUsageCapacity">Context limit not set</span></div>
+              <div class="context-meter" id="contextMeter" role="progressbar" aria-label="Estimated context utilization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="context-meter-fill" id="contextMeterFill"></div></div>
+              <div class="context-usage-foot"><span id="contextUsageMode">No messages yet</span><span id="contextUsagePercent">Estimate only</span></div>
+            </div>
+            <div class="context-stat-grid">
+              <div class="context-stat"><strong id="contextIncludedCount">0</strong><span>Messages included</span></div>
+              <div class="context-stat"><strong id="contextSummarizedCount">0</strong><span>Messages summarized</span></div>
+              <div class="context-stat"><strong id="contextOmittedCount">0</strong><span>Messages omitted</span></div>
+            </div>
+            <div class="setting-grid">
+              <div class="setting-field"><label for="settingHistoryTurns">Recent user turns</label><input id="settingHistoryTurns" type="number" min="2" max="200" step="1" placeholder="No limit"></div>
+              <div class="setting-field"><label for="settingHistoryTokenBudget">History token budget</label><input id="settingHistoryTokenBudget" type="number" min="256" max="1000000" step="256" placeholder="No extra limit"></div>
+              <div class="setting-field"><label for="settingContextLength">Model context length</label><input id="settingContextLength" type="number" min="256" max="1048576" step="256" placeholder="Model default"></div>
+            </div>
+            <p class="setting-note" id="contextSettingNote">Context length is sent through Ollama's options. LM Studio's OpenAI-compatible chat endpoint does not accept per-request context length.</p>
+            <p class="setting-note" id="historyContextNote">Estimates are approximate. Actual tokenization and image/attachment costs depend on the model and provider.</p>
+            <div class="context-summary-section">
+              <div class="context-section-heading"><strong>Older conversation summary</strong><span id="contextSummaryState">Not created</span></div>
+              <textarea class="context-summary-editor" id="contextSummaryEditor" rows="5" placeholder="Summarize older turns to retain important details without sending the entire transcript. You can review and edit the summary here."></textarea>
+              <div class="context-actions">
+                <button type="button" class="button primary" id="summarizeHistoryButton">Summarize omitted history</button>
+                <button type="button" class="button" id="saveContextSummaryButton">Save edits</button>
+                <button type="button" class="button danger" id="clearContextSummaryButton">Clear summary</button>
+              </div>
+            </div>
+            <details class="context-preview" id="contextPreviewDetails">
+              <summary>Preview what will be sent to the model</summary>
+              <div class="context-preview-list" id="contextPreviewList"></div>
+            </details>
+          </section>
+        </details>
+        <details class="toolbar-menu" id="modelInfoMenu">
+          <summary class="toolbar-icon" title="Selected model details" aria-label="Selected model details"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5h.01"/></svg></summary>
+          <div class="toolbar-panel model-info-panel">
+            <h2 id="modelInfoTitle">Selected model</h2>
+            <div class="model-info-provider" id="modelInfoProvider">Choose a model to see its connection and reported capabilities.</div>
+            <div class="capability-list" id="modelCapabilities"></div>
+            <p class="setting-note" id="modelInfoNote">Capability information is not always provided by the model endpoint.</p>
+          </div>
+        </details>
+        <span class="selected-model-health" id="selectedModelHealth"><span class="status-dot" id="selectedModelDot"></span><span id="selectedModelHealthText">Checking…</span></span>
       </div>
       <div class="statusline" aria-live="polite"><span class="status-dot" id="statusDot"></span><span id="statusText">Discovering Ollama and LM Studio models…</span></div>
     </header>
-    <main class="transcript" id="transcript" aria-label="Conversation">
-      <div class="transcript-inner" id="transcriptInner"></div>
-    </main>
+    <div class="transcript-frame">
+      <main class="transcript" id="transcript" aria-label="Conversation">
+        <div class="transcript-inner" id="transcriptInner"></div>
+      </main>
+      <button type="button" class="jump-to-latest" id="jumpToLatest" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M6 14l6 6 6-6"/></svg>Jump to latest</button>
+    </div>
     <footer class="composer">
       <div class="composer-inner">
-        <textarea id="promptInput" aria-label="Message" placeholder="Message the selected local model… (Ctrl+Enter to send)"></textarea>
-        <div class="composer-bottom">
-          <div class="composer-left">
-            <label class="think-label" title="Send the think flag to the selected model endpoint"><input type="checkbox" id="thinkToggle"> think</label>
-            <select class="export-select" id="exportFormat" aria-label="Export format">
-              <option value="">Export conversation…</option>
-              <option value="html">Standalone HTML</option>
-              <option value="openwebui">Open WebUI import JSON</option>
-              <option value="portable">Portable conversation JSON</option>
-              <option value="openai">OpenAI-compatible request JSON</option>
-              <option value="markdown">Markdown (.md)</option>
-              <option value="csv">CSV (UTF-8 with BOM)</option>
-              <option value="txt">Plain text (.txt)</option>
-              <option value="jsonl">JSONL (.jsonl)</option>
-              <option value="print">Print / Save as PDF</option>
-            </select>
-            <button type="button" class="button" id="exportButton">Export</button>
-          </div>
-          <div class="composer-right">
-            <button type="button" class="button danger" id="stopButton" hidden>Stop</button>
-            <button type="button" class="button primary" id="sendButton">Send ↵</button>
+        <div class="composer-box" id="composerBox">
+          <div class="attachment-notice" id="attachmentNotice" role="status" hidden><span class="attachment-notice-icon" aria-hidden="true">!</span><span class="attachment-notice-text" id="attachmentNoticeText"></span><button type="button" class="attachment-notice-dismiss" id="attachmentNoticeDismiss" aria-label="Dismiss attachment warning">Dismiss</button></div>
+          <div class="edit-mode-notice" id="editModeNotice" hidden><span class="edit-mode-label">Editing message · Sending replaces this message and later replies.</span><button type="button" id="cancelEditButton">Cancel edit</button></div>
+          <div class="compose-attachments" id="pendingAttachments" aria-live="polite" hidden></div>
+          <textarea id="promptInput" rows="1" aria-label="Message" placeholder="Message the selected local model…" autocomplete="off" spellcheck="true"></textarea>
+          <div class="compose-actions">
+            <div class="compose-left">
+              <input class="visually-hidden" type="checkbox" id="thinkToggle" aria-label="Enable thinking" tabindex="-1">
+              <button type="button" class="compose-icon" id="attachButton" title="Upload files" aria-label="Upload files">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5 19 13.5a5 5 0 0 0-7.1-7.1l-7.1 7.1a3.5 3.5 0 0 0 5 5l7.1-7.1a2 2 0 0 0-2.8-2.8L7 15.8"/></svg>
+              </button>
+              <input class="file-input" type="file" id="fileInput" multiple accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp,.txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.html,.htm,.css,.js,.mjs,.cjs,.ts,.tsx,.jsx,.py,.cs,.java,.c,.h,.cpp,.hpp,.rs,.go,.php,.sql,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.ps1,.bat,.cmd,.sh,.diff,.patch,.tex">
+              <button type="button" class="compose-icon think-button" id="thinkButton" aria-pressed="false" title="Toggle thinking output sent to the model">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M8.2 14.5a6.5 6.5 0 1 1 7.6 0c-.8.6-1.2 1.2-1.3 2H9.5c-.1-.8-.5-1.4-1.3-2Z"/><path d="M12 3.5v2M4.7 6.2l1.4 1.2M19.3 6.2l-1.4 1.2"/></svg>
+              </button>
+            </div>
+            <div class="compose-right">
+              <button type="button" class="stop-button" id="stopButton" hidden>Stop</button>
+              <button type="button" class="compose-icon send-button" id="sendButton" title="Send message" aria-label="Send message">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/></svg>
+              </button>
+            </div>
           </div>
         </div>
-        <div class="footer-note">Requests go directly from this WebView2 page to Ollama or LM Studio. No chat-turn bridge to the plugin is used.</div>
       </div>
     </footer>
+  </div>
+  <div class="modal-backdrop" id="attachmentWarningModal" hidden>
+    <section class="warning-dialog" role="dialog" aria-modal="true" aria-labelledby="attachmentWarningTitle" aria-describedby="attachmentWarningMessage" tabindex="-1">
+      <h2 id="attachmentWarningTitle">Large attachments</h2>
+      <p id="attachmentWarningMessage">These files are larger than the configured warning threshold.</p>
+      <div class="warning-file-list" id="attachmentWarningFiles"></div>
+      <div class="warning-actions"><button type="button" class="button" id="attachmentWarningCancel">Review attachments</button><button type="button" class="button primary" id="attachmentWarningConfirm">Send anyway</button></div>
+    </section>
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
   <script>
@@ -242,18 +509,106 @@
     const stopButton = $('#stopButton');
     const refreshButton = $('#refreshModels');
     const exportFormat = $('#exportFormat');
+    const sessionFileInput = $('#sessionFileInput');
     const thinkToggle = $('#thinkToggle');
     const statusText = $('#statusText');
     const statusDot = $('#statusDot');
     const toast = $('#toast');
-    const conversationStartedAt = Date.now();
+    const thinkButton = $('#thinkButton');
+    const attachButton = $('#attachButton');
+    const fileInput = $('#fileInput');
+    const pendingAttachmentsContainer = $('#pendingAttachments');
+    const attachmentNotice = $('#attachmentNotice');
+    const attachmentNoticeText = $('#attachmentNoticeText');
+    const attachmentWarningModal = $('#attachmentWarningModal');
+    const attachmentWarningMessage = $('#attachmentWarningMessage');
+    const attachmentWarningFiles = $('#attachmentWarningFiles');
+    const attachmentWarningCancel = $('#attachmentWarningCancel');
+    const attachmentWarningConfirm = $('#attachmentWarningConfirm');
+    const jumpToLatestButton = $('#jumpToLatest');
+    const editModeNotice = $('#editModeNotice');
+    const cancelEditButton = $('#cancelEditButton');
+    const settingTemperature = $('#settingTemperature');
+    const settingTopP = $('#settingTopP');
+    const settingMaxTokens = $('#settingMaxTokens');
+    const settingContextLength = $('#settingContextLength');
+    const settingSeed = $('#settingSeed');
+    const settingLmStudioApiMode = $('#settingLmStudioApiMode');
+    const lmStudioApiModeField = $('#lmStudioApiModeField');
+    const settingHistoryTurns = $('#settingHistoryTurns');
+    const settingHistoryTokenBudget = $('#settingHistoryTokenBudget');
+    const historyContextNote = $('#historyContextNote');
+    const summarizeHistoryButton = $('#summarizeHistoryButton');
+    const contextUsageValue = $('#contextUsageValue');
+    const contextUsageCapacity = $('#contextUsageCapacity');
+    const contextUsageMode = $('#contextUsageMode');
+    const contextUsagePercent = $('#contextUsagePercent');
+    const contextMeter = $('#contextMeter');
+    const contextMeterFill = $('#contextMeterFill');
+    const contextIncludedCount = $('#contextIncludedCount');
+    const contextSummarizedCount = $('#contextSummarizedCount');
+    const contextOmittedCount = $('#contextOmittedCount');
+    const contextTriggerState = $('#contextTriggerState');
+    const contextSummaryState = $('#contextSummaryState');
+    const contextSummaryEditor = $('#contextSummaryEditor');
+    const contextPreviewList = $('#contextPreviewList');
+    const saveContextSummaryButton = $('#saveContextSummaryButton');
+    const clearContextSummaryButton = $('#clearContextSummaryButton');
+    const generationSettingsMenu = $('#generationSettingsMenu');
+    const modelInfoMenu = $('#modelInfoMenu');
+    const modelInfoTitle = $('#modelInfoTitle');
+    const modelInfoProvider = $('#modelInfoProvider');
+    const modelCapabilities = $('#modelCapabilities');
+    const modelInfoNote = $('#modelInfoNote');
+    const selectedModelDot = $('#selectedModelDot');
+    const selectedModelHealthText = $('#selectedModelHealthText');
+    const contextSettingNote = $('#contextSettingNote');
+    const PREFERENCES_KEY = 'local-llm.chat-ui-preferences.v1';
+    function loadPreferences() {
+      try {
+        const raw = localStorage.getItem(PREFERENCES_KEY);
+        if (!raw) return {};
+        const saved = JSON.parse(raw);
+        return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+      } catch (_) { return {}; }
+    }
+    const initialPreferences = loadPreferences();
+    let preferredModelKey = String(initialPreferences.selectedModelKey || '');
+    let modelInfoRequestId = 0;
+    let editingMessageIndex = null;
+    let draftBeforeEdit = null;
+    let nextMessageIsContinuation = false;
+    let providerAvailability = { ollama: null, lmstudio: null };
+    const modelInfoCache = new Map();
+    let selectedContextMetadata = null;
+    let modelMetadata = { ollama: {}, lmstudio: {} };
+    // Developer-tunable upload policy. Adjust these values to change per-file, total,
+    // per-message, and pre-send warning thresholds without searching through handlers.
+    const ATTACHMENT_LIMITS = Object.freeze({
+      maxFilesPerMessage: 10,
+      maxImageBytes: 10 * 1024 * 1024,
+      maxTextBytes: 2 * 1024 * 1024,
+      maxTotalBytes: 25 * 1024 * 1024,
+      confirmBeforeSendBytes: 8 * 1024 * 1024
+    });
+    const SUPPORTED_TEXT_EXTENSIONS = new Set(['txt','md','markdown','csv','tsv','json','jsonl','xml','html','htm','css','js','mjs','cjs','ts','tsx','jsx','py','cs','java','c','h','cpp','hpp','rs','go','php','sql','yaml','yml','toml','ini','cfg','conf','log','ps1','bat','cmd','sh','diff','patch','tex']);
+    let conversationStartedAt = Date.now();
     const messages = [];
+    let contextSummary = '';
+    let contextSummaryThrough = 0;
+    let contextSummaryDirty = false;
+    // Thinking disclosure is a per-conversation preference for future assistant messages.
+    // First use defaults to expanded; changing one section affects only messages created later.
+    let defaultThinkingOpen = true;
+    let pendingAttachments = [];
     let activeController = null;
-    let activeTimeoutHandle = null;
-    let activeRequestTimedOut = false;
+    let activeMetricsHandle = null;
+    let activeAssistantMessage = null;
     let toastHandle = null;
+    let attachmentConfirmResolver = null;
+    let isConfirmingAttachments = false;
     let modelLists = { ollama: [], lmstudio: [] };
-    let fallbackTimeoutMs = 600000;
+    const DISCOVERY_TIMEOUT_MS = 8000;
 
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -335,7 +690,36 @@
       const content = message.pending && !message.content
         ? '<span class="pending">Generating response…</span>'
         : renderMarkdown(message.content || (message.pending ? ' ' : ''));
-      return `<article class="message ${role}${errorClass}" data-index="${index}"><div class="message-meta"><span class="role">${label}</span><span>${escapeHtml(dateLabel(message.timestamp))}</span><span>${provider}${model}</span>${errorLabel}</div><div class="message-content">${content}</div></article>`;
+      const hasThinking = role === 'assistant' && (String(message.thinking || '').trim() || (message.pending && message.thinkRequested));
+      const thinkingOpen = message.thinkingOpen ?? false;
+      const thinkingMarkup = hasThinking
+        ? `<details class="message-thinking" data-thinking-index="${index}"${thinkingOpen ? ' open' : ''}><summary><span class="thinking-label">${message.pending ? 'Thinking' : 'Thinking output'}</span><span class="thinking-state${message.pending ? ' active' : ''}">${message.pending ? (message.thinking ? 'Generating' : 'Thinking…') : 'Model reasoning output'}</span></summary><div class="thinking-body">${message.thinking ? renderMarkdown(message.thinking) : '<span class="pending">Waiting for thinking output…</span>'}</div></details>`
+        : '';
+      const attachments = Array.isArray(message.attachments) && message.attachments.length
+        ? `<div class="message-attachments">${message.attachments.map(file => `<div class="message-attachment">${file.dataUrl && String(file.type || '').startsWith('image/') ? `<img src="${escapeHtml(file.dataUrl)}" alt="">` : ''}<span class="message-attachment-name">${escapeHtml(file.name || 'Attachment')}</span><span>${escapeHtml(formatBytes(file.size || 0))}</span></div>`).join('')}</div>`
+        : '';
+      const latestAssistantIndex = messages.reduce((latest, item, i) => item.role === 'assistant' ? i : latest, -1);
+      const latestEditableUserIndex = messages.reduce((latest, item, i) => item.role === 'user' && !item.isContinuation ? i : latest, -1);
+      const hasCompletedContent = role === 'assistant' && !message.pending && String(message.content || '').trim().length > 0;
+      let actions = '';
+      if (hasCompletedContent) {
+        actions = `<div class="message-actions"><button type="button" class="message-action" data-message-action="copy" data-index="${index}" title="Copy response"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Copy</button>${index === latestAssistantIndex ? `<button type="button" class="message-action" data-message-action="regenerate" data-index="${index}" title="Regenerate using the currently selected model"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9a7 7 0 0 1 11.8-2L20 12M4 12l2.6 5a7 7 0 0 0 11.8-2"/></svg>Regenerate</button><button type="button" class="message-action" data-message-action="continue" data-index="${index}" title="Continue generating"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16l14-8Z"/></svg>Continue</button>` : ''}</div>`;
+      } else if (role === 'user' && index === latestEditableUserIndex && editingMessageIndex === null && !activeController && !messages.some(item => item.pending)) {
+        actions = `<div class="message-actions user-actions"><button type="button" class="message-action" data-message-action="edit" data-index="${index}" title="Edit and resubmit this prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>Edit prompt</button></div>`;
+      }
+      const metricMarkup = renderMetricMarkup(message);
+      return `<article class="message ${role}${errorClass}" data-index="${index}"><div class="message-meta"><span class="role">${label}</span><span>${escapeHtml(dateLabel(message.timestamp))}</span><span>${provider}${model}</span>${errorLabel}</div>${thinkingMarkup}<div class="message-content">${content}</div>${attachments}${metricMarkup}${actions}</article>`;
+    }
+    function renderMetricMarkup(message) {
+      const metric = message?.metrics;
+      const metricParts = [];
+      if (metric && Number.isFinite(metric.timeToFirstTokenMs)) metricParts.push(`${(Math.max(0, metric.timeToFirstTokenMs) / 1000).toFixed(2)} s to first token`);
+      if (metric && Number.isFinite(metric.modelLoadTimeMs)) metricParts.push(`${(Math.max(0, metric.modelLoadTimeMs) / 1000).toFixed(2)} s model load`);
+      if (metric && Number.isFinite(metric.elapsedMs)) metricParts.push(`${(Math.max(0, metric.elapsedMs) / 1000).toFixed(1)} s elapsed`);
+      if (metric && Number.isFinite(metric.tokenCount)) metricParts.push(`${Math.max(0, Math.round(metric.tokenCount)).toLocaleString()} tokens`);
+      if (metric && Number.isFinite(metric.tokensPerSecond) && metric.tokensPerSecond > 0) metricParts.push(`${metric.approximateRate ? '~' : ''}${metric.tokensPerSecond.toFixed(1)} tok/s`);
+      if (Array.isArray(message?.diagnostics)) metricParts.push(...message.diagnostics.map(item => `Diagnostic: ${item}`));
+      return metricParts.length ? `<div class="generation-metrics" aria-live="off">${metricParts.map(part => `<span>${escapeHtml(part)}</span>`).join('')}</div>` : '';
     }
     function copyText(text) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -360,13 +744,411 @@
         pre.appendChild(button);
       }
     }
+    function isTranscriptNearBottom() {
+      return transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 110;
+    }
+    function updateJumpToLatest() {
+      const nearBottom = isTranscriptNearBottom();
+      jumpToLatestButton.hidden = nearBottom || transcript.scrollHeight <= transcript.clientHeight + 20;
+    }
     function renderMessages(keepScroll = true) {
-      const wasNearBottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 110;
+      const wasNearBottom = isTranscriptNearBottom();
       transcriptInner.innerHTML = messages.length
         ? messages.map(renderMessageMarkup).join('')
         : '<div class="empty-state"><strong>Your conversation starts here</strong>Send a message to the selected local model.</div>';
       addCodeCopyButtons(transcriptInner);
       if (keepScroll && wasNearBottom) transcript.scrollTop = transcript.scrollHeight;
+      updateJumpToLatest();
+    }
+
+    // Streaming updates touch only the active message. Completed messages retain their
+    // existing DOM, code-copy controls, scroll position, and event handlers.
+    function renderMessageAt(index, keepScroll = true) {
+      const message = messages[index];
+      if (!message) return;
+      const wasNearBottom = isTranscriptNearBottom();
+      let article = transcriptInner.querySelector(`article.message[data-index="${index}"]`);
+
+      // Create the message shell once. During streaming, patch its content in
+      // place instead of replacing the whole article. In particular, preserve
+      // the live <details> element so users can open/collapse thinking while
+      // tokens are arriving without losing focus or the current disclosure state.
+      if (!article) {
+        const holder = document.createElement('div');
+        holder.innerHTML = renderMessageMarkup(message, index);
+        article = holder.firstElementChild;
+        const empty = transcriptInner.querySelector('.empty-state');
+        if (empty) empty.remove();
+        transcriptInner.appendChild(article);
+        addCodeCopyButtons(article);
+      } else {
+        const holder = document.createElement('div');
+        holder.innerHTML = renderMessageMarkup(message, index);
+        const fresh = holder.firstElementChild;
+        const freshThinking = fresh.querySelector('.message-thinking');
+        let currentThinking = article.querySelector('.message-thinking');
+
+        if (freshThinking) {
+          if (!currentThinking) {
+            const content = article.querySelector('.message-content');
+            if (content) content.before(freshThinking);
+            currentThinking = freshThinking;
+          } else {
+            // Keep the existing details node; only update its changing text.
+            const oldSummary = currentThinking.querySelector('summary');
+            const newSummary = freshThinking.querySelector('summary');
+            const oldBody = currentThinking.querySelector('.thinking-body');
+            const newBody = freshThinking.querySelector('.thinking-body');
+            if (oldSummary && newSummary) {
+              const oldLabel = oldSummary.querySelector('.thinking-label');
+              const newLabel = newSummary.querySelector('.thinking-label');
+              const oldState = oldSummary.querySelector('.thinking-state');
+              const newState = newSummary.querySelector('.thinking-state');
+              if (oldLabel && newLabel) oldLabel.textContent = newLabel.textContent;
+              if (oldState && newState) {
+                oldState.textContent = newState.textContent;
+                oldState.className = newState.className;
+              }
+            }
+            if (oldBody && newBody && oldBody.innerHTML !== newBody.innerHTML) {
+              oldBody.innerHTML = newBody.innerHTML;
+              addCodeCopyButtons(oldBody);
+            }
+          }
+        } else if (currentThinking && !message.pending) {
+          currentThinking.remove();
+        }
+
+        const oldContent = article.querySelector('.message-content');
+        const newContent = fresh.querySelector('.message-content');
+        if (oldContent && newContent && oldContent.innerHTML !== newContent.innerHTML) {
+          oldContent.innerHTML = newContent.innerHTML;
+          addCodeCopyButtons(oldContent);
+        }
+
+        // Update the message metadata and action area only when their contents
+        // actually change; these nodes are not recreated for each token.
+        const oldMeta = article.querySelector('.message-meta');
+        const newMeta = fresh.querySelector('.message-meta');
+        if (oldMeta && newMeta && oldMeta.innerHTML !== newMeta.innerHTML) oldMeta.innerHTML = newMeta.innerHTML;
+        const oldActions = article.querySelector('.message-actions');
+        const newActions = fresh.querySelector('.message-actions');
+        if (oldActions && newActions && oldActions.innerHTML !== newActions.innerHTML) oldActions.innerHTML = newActions.innerHTML;
+        else if (oldActions && !newActions) oldActions.remove();
+        else if (!oldActions && newActions) article.appendChild(newActions);
+
+        const oldMetrics = article.querySelector('.generation-metrics');
+        const newMetrics = fresh.querySelector('.generation-metrics');
+        if (oldMetrics && newMetrics && oldMetrics.innerHTML !== newMetrics.innerHTML) oldMetrics.innerHTML = newMetrics.innerHTML;
+        else if (oldMetrics && !newMetrics) oldMetrics.remove();
+        else if (!oldMetrics && newMetrics) article.querySelector('.message-content')?.after(newMetrics);
+      }
+
+      if (keepScroll && wasNearBottom) transcript.scrollTop = transcript.scrollHeight;
+      updateJumpToLatest();
+    }
+
+    let streamRenderQueued = false;
+    function scheduleActiveMessageRender() {
+      if (streamRenderQueued) return;
+      streamRenderQueued = true;
+      requestAnimationFrame(() => {
+        streamRenderQueued = false;
+        if (!activeAssistantMessage) return;
+        const index = messages.indexOf(activeAssistantMessage);
+        if (index >= 0) renderMessageAt(index);
+      });
+    }
+
+    function updateActiveMetricsOnly() {
+      if (!activeAssistantMessage) return;
+      const index = messages.indexOf(activeAssistantMessage);
+      if (index < 0) return;
+      const article = transcriptInner.querySelector(`article.message[data-index="${index}"]`);
+      if (!article) return;
+      const holder = document.createElement('div');
+      holder.innerHTML = renderMetricMarkup(activeAssistantMessage);
+      const freshMetrics = holder.firstElementChild;
+      const oldMetrics = article.querySelector('.generation-metrics');
+      if (freshMetrics && oldMetrics) oldMetrics.replaceWith(freshMetrics);
+      else if (freshMetrics) article.querySelector('.message-content')?.after(freshMetrics);
+      updateJumpToLatest();
+    }
+    async function handleMessageAction(action, index) {
+      // Copying an already-finished answer remains safe while a newer response streams.
+      // Editing, regeneration, and continuation would alter the active conversation, so
+      // those operations must wait until generation is idle.
+      if (activeController && action !== 'copy') { showToast('Wait for the current response to finish first.'); return; }
+      const message = messages[index];
+      if (!message) return;
+      if (action === 'edit') {
+        if (message.role !== 'user' || message.isContinuation) return;
+        editingMessageIndex = index;
+        draftBeforeEdit = { text: promptInput.value, attachments: pendingAttachments.map(item => ({ ...item })) };
+        promptInput.value = message.content || '';
+        pendingAttachments = (message.attachments || []).map(item => ({ ...item }));
+        const nextAssistant = messages.slice(index + 1).find(item => item.role === 'assistant');
+        if (nextAssistant && typeof nextAssistant.thinkRequested === 'boolean') thinkToggle.checked = nextAssistant.thinkRequested;
+        syncThinkButton(); renderPendingAttachments(); editModeNotice.hidden = false; autoResizePrompt(); renderMessages(); promptInput.focus();
+        return;
+      }
+      if (message.role !== 'assistant') return;
+      if (action === 'copy') {
+        const ok = await copyText(message.content || '');
+        if (!ok) { showToast('Could not copy response.'); return; }
+        const button = transcriptInner.querySelector(`.message-action[data-message-action="copy"][data-index="${index}"]`);
+        if (button) {
+          const originalTitle = 'Copy response';
+          button.classList.add('copy-success');
+          button.title = 'Copied';
+          button.setAttribute('aria-label', 'Response copied');
+          const icon = button.querySelector('svg');
+          if (icon) icon.innerHTML = '<path d="m5 12 4 4L19 6"/>';
+          setTimeout(() => {
+            if (!button.isConnected) return;
+            button.classList.remove('copy-success'); button.title = originalTitle; button.setAttribute('aria-label', originalTitle);
+            const restored = button.querySelector('svg');
+            if (restored) restored.innerHTML = '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>';
+          }, 1500);
+        }
+        return;
+      }
+      if (action === 'continue') {
+        editingMessageIndex = null; draftBeforeEdit = null; editModeNotice.hidden = true;
+        promptInput.value = 'Continue your previous answer from where you left off. Do not repeat the existing text unless necessary.';
+        autoResizePrompt(); promptInput.focus();
+        nextMessageIsContinuation = true;
+        try { await sendMessage(); } finally { nextMessageIsContinuation = false; }
+        return;
+      }
+      if (action === 'regenerate') {
+        let assistantIndex = index;
+        while (assistantIndex >= 0 && messages[assistantIndex].role !== 'user') assistantIndex--;
+        if (assistantIndex < 0) { showToast('Could not find the prompt for this response.'); return; }
+        if (!selectedModel()) { showToast('Choose a model in the header before regenerating.'); return; }
+        const userMessage = messages[assistantIndex];
+        const priorAssistant = messages[index];
+        // Intentionally keep the current selector choice. This lets the user switch
+        // providers/models in the header, then regenerate the same prompt with that model.
+        const previousConversation = messages.slice();
+        messages.splice(assistantIndex);
+        contextSummary = ''; contextSummaryThrough = 0; contextSummaryDirty = false;
+        lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
+        editingMessageIndex = null; draftBeforeEdit = null; editModeNotice.hidden = true; nextMessageIsContinuation = false;
+        promptInput.value = userMessage.content || '';
+        pendingAttachments = (userMessage.attachments || []).map(item => ({ ...item }));
+        thinkToggle.checked = !!priorAssistant.thinkRequested; syncThinkButton(); renderPendingAttachments(); autoResizePrompt();
+        renderMessages();
+        const regenerated = await sendMessage();
+        if (!regenerated) {
+          messages.splice(0, messages.length, ...previousConversation);
+          renderMessages();
+        }
+      }
+    }
+
+    function cancelEditing() {
+      if (editingMessageIndex !== null && draftBeforeEdit) {
+        promptInput.value = draftBeforeEdit.text;
+        pendingAttachments = draftBeforeEdit.attachments.map(item => ({ ...item }));
+        renderPendingAttachments();
+        autoResizePrompt();
+      }
+      editingMessageIndex = null;
+      draftBeforeEdit = null;
+      editModeNotice.hidden = true;
+    }
+    function setAttachmentNotice(text) {
+      attachmentNoticeText.textContent = String(text || '');
+      attachmentNotice.hidden = !text;
+    }
+    function requestAttachmentConfirmation(totalBytes, attachments) {
+      const names = attachments.map(file => `${file.name} — ${formatBytes(file.size || 0)}`);
+      attachmentWarningMessage.textContent = `You're about to send ${formatBytes(totalBytes)} of attachments, above the ${formatBytes(ATTACHMENT_LIMITS.confirmBeforeSendBytes)} warning threshold. Large files may use extra memory and slow down processing at the configured provider endpoint. Continue?`;
+      attachmentWarningFiles.replaceChildren();
+      names.forEach(name => { const row = document.createElement('div'); row.textContent = name; attachmentWarningFiles.appendChild(row); });
+      attachmentWarningModal.hidden = false;
+      const dialog = attachmentWarningModal.querySelector('.warning-dialog');
+      if (dialog) dialog.focus();
+      attachmentWarningCancel.focus();
+      return new Promise(resolve => { attachmentConfirmResolver = resolve; });
+    }
+    function finishAttachmentConfirmation(confirmed) {
+      if (attachmentWarningModal.hidden) return;
+      attachmentWarningModal.hidden = true;
+      const resolve = attachmentConfirmResolver;
+      attachmentConfirmResolver = null;
+      if (resolve) resolve(!!confirmed);
+      if (!activeController) promptInput.focus();
+    }
+    function readBoundedNumber(input, min, max, integer = false) {
+      const raw = String(input?.value || '').trim();
+      if (!raw) return null;
+      const number = Number(raw);
+      if (!Number.isFinite(number)) return null;
+      const bounded = Math.min(max, Math.max(min, number));
+      return integer ? Math.round(bounded) : bounded;
+    }
+    function generationSettings() {
+      return {
+        temperature: readBoundedNumber(settingTemperature, 0, 2),
+        top_p: readBoundedNumber(settingTopP, 0, 1),
+        max_tokens: readBoundedNumber(settingMaxTokens, 1, 1000000, true),
+        context_length: readBoundedNumber(settingContextLength, 256, 1048576, true),
+        seed: readBoundedNumber(settingSeed, 0, 2147483647, true)
+      };
+    }
+    function savePreferences() {
+      const settings = generationSettings();
+      const saved = {
+        theme: document.documentElement.dataset.theme || 'system',
+        selectedModelKey: currentModelKey() || preferredModelKey,
+        thinkEnabled: !!thinkToggle.checked,
+        lmStudioApiMode: settingLmStudioApiMode.value === 'native' ? 'native' : 'openai',
+        historyTurns: readBoundedNumber(settingHistoryTurns, 2, 200, true),
+        historyTokenBudget: readBoundedNumber(settingHistoryTokenBudget, 256, 1000000, true),
+        generation: settings
+      };
+      try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(saved)); } catch (_) { /* Storage may be unavailable in restricted WebView profiles. */ }
+    }
+    function applySavedPreferences() {
+      const saved = loadPreferences();
+      if (['system', 'light', 'dark'].includes(saved.theme)) {
+        document.documentElement.dataset.theme = saved.theme;
+        document.querySelectorAll('[data-theme-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.themeChoice === saved.theme)));
+      }
+      if (saved.selectedModelKey) preferredModelKey = String(saved.selectedModelKey);
+      const generation = saved.generation && typeof saved.generation === 'object' ? saved.generation : {};
+      const values = [
+        [settingTemperature, generation.temperature], [settingTopP, generation.top_p],
+        [settingMaxTokens, generation.max_tokens], [settingContextLength, generation.context_length], [settingSeed, generation.seed]
+      ];
+      for (const [input, value] of values) input.value = value === null || value === undefined || !Number.isFinite(Number(value)) ? '' : String(value);
+      thinkToggle.checked = typeof saved.thinkEnabled === 'boolean' ? saved.thinkEnabled : !!BOOT.initialThink;
+      settingLmStudioApiMode.value = saved.lmStudioApiMode === 'native' ? 'native' : 'openai';
+      // Older versions persisted the implicit default of 12. Migrate that legacy
+      // default to no hard turn cap; other saved values remain explicit preferences.
+      settingHistoryTurns.value = saved.historyTurns === null || saved.historyTurns === undefined || Number(saved.historyTurns) === 12
+        ? '' : String(Math.min(200, Math.max(2, Number(saved.historyTurns) || 2)));
+      settingHistoryTokenBudget.value = saved.historyTokenBudget === null || saved.historyTokenBudget === undefined || !Number.isFinite(Number(saved.historyTokenBudget)) ? '' : String(Math.min(1000000, Math.max(256, Number(saved.historyTokenBudget))));
+      syncThinkButton();
+    }
+    function updateContextSettingForProvider(provider) {
+      const isOllama = provider !== 'lmstudio';
+      // The API-mode selector only applies to LM Studio. Keeping it visible for
+      // Ollama suggests that the selected Ollama model can use an LM Studio API.
+      lmStudioApiModeField.hidden = isOllama;
+      const nativeLmStudio = provider === 'lmstudio' && settingLmStudioApiMode.value === 'native';
+      settingContextLength.disabled = !isOllama && !nativeLmStudio;
+      contextSettingNote.textContent = isOllama
+        ? 'Context length is sent through Ollama options. Leave it empty to use the model default.'
+        : nativeLmStudio
+          ? 'Native REST v1 supports per-request context length. Its conversation continuation uses LM Studio response IDs; edited or summarized history starts a new server-side chain.'
+          : 'OpenAI-compatible chat-completions does not accept a per-request context length. Active and model-maximum context metadata are still detected separately from LM Studio.';
+      if (contextUsageValue) updateContextManagerUI();
+    }
+    function formatBytes(bytes) {
+      const value = Number(bytes) || 0;
+      if (value < 1024) return `${value} B`;
+      if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+      return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    function renderPendingAttachments() {
+      pendingAttachmentsContainer.replaceChildren();
+      pendingAttachmentsContainer.hidden = pendingAttachments.length === 0;
+      pendingAttachments.forEach((file, index) => {
+        const chip = document.createElement('div'); chip.className = 'attachment-chip';
+        if (file.dataUrl && String(file.type || '').startsWith('image/')) {
+          const thumb = document.createElement('img'); thumb.className = 'attachment-thumbnail'; thumb.src = file.dataUrl; thumb.alt = ''; thumb.loading = 'lazy'; chip.appendChild(thumb);
+        } else {
+          const fileIcon = document.createElement('span'); fileIcon.className = 'attachment-file-icon'; fileIcon.setAttribute('aria-hidden', 'true'); fileIcon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg>'; chip.appendChild(fileIcon);
+        }
+        const name = document.createElement('span'); name.className = 'attachment-name'; name.textContent = file.name;
+        const size = document.createElement('span'); size.className = 'attachment-size'; size.textContent = formatBytes(file.size);
+        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'attachment-remove'; remove.textContent = '×';
+        remove.title = `Remove ${file.name}`; remove.setAttribute('aria-label', `Remove ${file.name}`);
+        remove.addEventListener('click', () => { pendingAttachments.splice(index, 1); renderPendingAttachments(); });
+        chip.append(name, size, remove); pendingAttachmentsContainer.appendChild(chip);
+      });
+    }
+    function autoResizePrompt() {
+      promptInput.style.height = 'auto';
+      const maxHeight = 220;
+      promptInput.style.height = `${Math.min(promptInput.scrollHeight, maxHeight)}px`;
+      promptInput.style.overflowY = promptInput.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    }
+    function syncThinkButton() {
+      const enabled = !!thinkToggle.checked;
+      thinkButton.classList.toggle('active', enabled);
+      thinkButton.setAttribute('aria-pressed', String(enabled));
+      thinkButton.title = enabled ? 'Thinking enabled for the selected model' : 'Enable thinking for the selected model';
+    }
+    async function readUploadedFile(file) {
+      const declaredType = String(file.type || '').toLowerCase();
+      const name = String(file.name || 'attachment');
+      const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+      const imageTypes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+      const image = declaredType.startsWith('image/') || Object.prototype.hasOwnProperty.call(imageTypes, extension);
+      const type = declaredType || (image ? imageTypes[extension] : '');
+      if (image) {
+        if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(type)) throw new Error(`${name}: use a PNG, JPEG, GIF, or WebP image.`);
+        if (file.size > ATTACHMENT_LIMITS.maxImageBytes) throw new Error(`${name}: images must be ${formatBytes(ATTACHMENT_LIMITS.maxImageBytes)} or smaller.`);
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error(`Could not read ${name}.`));
+          reader.onerror = () => reject(new Error(`Could not read ${name}.`));
+          reader.readAsDataURL(file);
+        });
+        return { name, type: type || 'image/png', size: file.size, dataUrl };
+      }
+      const textMime = declaredType.startsWith('text/') || ['application/json','application/xml','application/javascript','application/x-yaml','application/yaml','application/x-ndjson'].includes(declaredType);
+      if (!SUPPORTED_TEXT_EXTENSIONS.has(extension) && !(extension === '' && textMime)) throw new Error(`${name}: unsupported file type. Supported attachments are PNG/JPEG/GIF/WebP images and known text/source formats. This file was not attached.`);
+      if (file.size > ATTACHMENT_LIMITS.maxTextBytes) throw new Error(`${name}: text files must be ${formatBytes(ATTACHMENT_LIMITS.maxTextBytes)} or smaller.`);
+      return { name, type: declaredType || 'text/plain', size: file.size, text: await file.text() };
+    }
+    async function handleFilesSelected() {
+      const chosen = Array.from(fileInput.files || []);
+      fileInput.value = '';
+      const errors = [];
+      for (const file of chosen) {
+        try {
+          if (pendingAttachments.length >= ATTACHMENT_LIMITS.maxFilesPerMessage) throw new Error(`You can attach up to ${ATTACHMENT_LIMITS.maxFilesPerMessage} files per message.`);
+          const existingBytes = pendingAttachments.reduce((total, item) => total + Number(item.size || 0), 0);
+          if (existingBytes + Number(file.size || 0) > ATTACHMENT_LIMITS.maxTotalBytes) throw new Error(`Combined attachments must be ${formatBytes(ATTACHMENT_LIMITS.maxTotalBytes)} or smaller. ${file.name} was not attached.`);
+          const attachment = await readUploadedFile(file);
+          pendingAttachments.push(attachment);
+        } catch (error) { errors.push(error?.message || String(error)); }
+      }
+      setAttachmentNotice(errors.length ? errors.slice(0, 3).join(' ') + (errors.length > 3 ? ` And ${errors.length - 3} more file(s) were not attached.` : '') : '');
+      renderPendingAttachments();
+      promptInput.focus();
+    }
+    function messageContentWithTextAttachments(message) {
+      let content = String(message.content || '');
+      const textFiles = (Array.isArray(message.attachments) ? message.attachments : []).filter(file => typeof file.text === 'string');
+      if (textFiles.length) content += (content ? '\n\n' : '') + 'Attached text files:\n\n' + textFiles.map(file => `--- ${file.name} ---\n${file.text}`).join('\n\n');
+      return content;
+    }
+    function providerMessages(provider, sourceMessages) {
+      return sourceMessages.map(message => {
+        const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+        const content = messageContentWithTextAttachments(message);
+        const images = attachments.filter(file => typeof file.dataUrl === 'string' && String(file.type || '').startsWith('image/'));
+        if (provider === 'ollama') {
+          return { role: message.role, content, ...(images.length ? { images: images.map(file => file.dataUrl.replace(/^data:[^,]*;base64,/, '')) } : {}) };
+        }
+        if (images.length) {
+          const parts = [{ type: 'text', text: content }];
+          for (const file of images) parts.push({ type: 'image_url', image_url: { url: file.dataUrl } });
+          return { role: message.role, content: parts };
+        }
+        return { role: message.role, content };
+      });
+    }
+    function extractEmbeddedThinking(text) {
+      const thoughts = [];
+      const content = String(text || '').replace(/<think>([\s\S]*?)<\/think>/gi, (_, thought) => { thoughts.push(thought); return ''; }).trim();
+      return { content, thinking: thoughts.join('\n\n').trim() };
     }
     function setStatus(text, kind = 'neutral') {
       statusText.textContent = text;
@@ -376,22 +1158,45 @@
       toast.textContent = text; toast.hidden = false; clearTimeout(toastHandle);
       toastHandle = setTimeout(() => toast.hidden = true, 3400);
     }
-    function normalizeBase(url) { return String(url || '').trim().replace(/\/+$/, ''); }
-    function fetchWithTimeout(url, options = {}, timeoutMs = fallbackTimeoutMs) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-      const externalSignal = options.signal;
-      if (externalSignal) {
-        if (externalSignal.aborted) controller.abort();
-        else externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
-      }
-      return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
+    function normalizeBase(url) {
+      const value = String(url || '').trim().replace(/\/+$/, '');
+      let parsed;
+      try { parsed = new URL(value); } catch (_) { throw new Error('The provider endpoint must be a valid absolute URL.'); }
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('Provider endpoints must use HTTP or HTTPS, must not embed credentials, and must not contain query strings or fragments.');
+      return value;
     }
-    async function getJson(url, timeoutMs = Math.min(fallbackTimeoutMs, 8000)) {
-      // Discovery uses a short, separate timeout so one stalled provider cannot hide
-      // the models from the other provider for the full generation timeout.
+    // Short-deadline helper for model discovery and metadata only. Never use it for chat generation.
+    // Callers must use the returned cleanup function after consuming the response body.
+    async function fetchWithTimeout(url, options = {}, timeoutMs = DISCOVERY_TIMEOUT_MS) {
+      const controller = new AbortController();
+      const startedAt = Date.now();
+      let connectionTimer = null;
+      let bodyTimer = null;
+      const connectionTimeoutMs = Math.min(15000, Math.max(1, timeoutMs));
+      connectionTimer = setTimeout(() => controller.abort(new DOMException('Connection timed out before response headers arrived.', 'TimeoutError')), connectionTimeoutMs);
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(connectionTimer);
+        const remainingDeadlineMs = Math.max(1, timeoutMs - (Date.now() - startedAt));
+        bodyTimer = setTimeout(() => controller.abort(new DOMException('Response body exceeded the request deadline.', 'TimeoutError')), remainingDeadlineMs);
+        // The deadline covers the complete metadata response, including its body.
+        const cleanup = () => { clearTimeout(connectionTimer); clearTimeout(bodyTimer); };
+        Object.defineProperty(response, '__localLlmCleanup', { value: cleanup, configurable: true });
+        return response;
+      } catch (error) {
+        clearTimeout(connectionTimer);
+        clearTimeout(bodyTimer);
+        throw error;
+      }
+    }
+    async function readResponseText(response) {
+      try { return await response.text(); }
+      finally { response?.__localLlmCleanup?.(); }
+    }
+    async function getJson(url, timeoutMs = DISCOVERY_TIMEOUT_MS) {
+      // Model discovery has its own short deadline; chat generation has no deadline.
       const response = await fetchWithTimeout(url, { headers: { 'Accept': 'application/json' } }, timeoutMs);
-      const text = await response.text();
+      const text = await readResponseText(response);
       if (!response.ok) throw new Error(`HTTP ${response.status}${text ? `: ${text.slice(0, 350)}` : ''}`);
       try { return JSON.parse(text); } catch (_) { throw new Error('The endpoint returned invalid JSON.'); }
     }
@@ -407,23 +1212,168 @@
       }
     }
     function currentModelKey() { return modelSelect.selectedOptions[0]?.value || ''; }
+    function selectedProviderLabel(provider) { return provider === 'lmstudio' ? 'LM Studio' : 'Ollama'; }
+    function capabilityLabels(raw) {
+      const labels = { completion: 'Text', generate: 'Text', vision: 'Vision', tools: 'Tools', trained_for_tool_use: 'Tools', thinking: 'Thinking', reasoning: 'Thinking', embedding: 'Embeddings', embeddings: 'Embeddings', audio: 'Audio', video: 'Video' };
+      if (Array.isArray(raw)) return [...new Set(raw.map(value => String(value || '').trim()).filter(Boolean).map(value => labels[value.toLowerCase()] || value.charAt(0).toUpperCase() + value.slice(1)))];
+      if (!raw || typeof raw !== 'object') return [];
+      const result = [];
+      for (const [key, value] of Object.entries(raw)) {
+        const enabled = value === true || (key === 'reasoning' && value && typeof value === 'object');
+        if (enabled && labels[key.toLowerCase()]) result.push(labels[key.toLowerCase()]);
+      }
+      return [...new Set(result)];
+    }
+    function updateModelInfoMarkup(selection, details, capabilitySource, note) {
+      modelInfoTitle.textContent = selection?.model || 'No model selected';
+      const providerName = selection ? selectedProviderLabel(selection.provider) : 'No provider selected';
+      const available = selection ? providerAvailability[selection.provider] : null;
+      const connection = available === true ? 'Connected' : available === false ? 'Unavailable' : 'Checking connection';
+      modelInfoProvider.textContent = selection ? `${providerName} · ${connection}` : 'Choose a model to see its connection and reported capabilities.';
+      modelCapabilities.replaceChildren();
+      const capabilities = capabilityLabels(capabilitySource);
+      if (capabilities.length) {
+        for (const label of capabilities) { const badge = document.createElement('span'); badge.className = 'capability-badge'; badge.textContent = label; modelCapabilities.appendChild(badge); }
+      } else {
+        const empty = document.createElement('span'); empty.className = 'capability-empty';
+        empty.textContent = selection?.provider === 'lmstudio'
+          ? 'This OpenAI-compatible model list did not report capabilities. Vision, tools, and reasoning support depend on the loaded model and template.'
+          : 'The endpoint did not report capabilities for this model.';
+        modelCapabilities.appendChild(empty);
+      }
+      const metadata = [];
+      const size = details?.details?.parameter_size || details?.parameter_size || details?.params_string;
+      const quantization = details?.details?.quantization_level || details?.quantization_level || details?.quantization?.name;
+      const family = details?.details?.family || details?.details?.families?.join?.(', ') || details?.architecture;
+      if (size) metadata.push(String(size));
+      if (quantization) metadata.push(String(quantization));
+      if (family) metadata.push(String(family));
+      modelInfoNote.textContent = [metadata.join(' · '), note].filter(Boolean).join(' — ') || 'Capability metadata is not always available; reported capabilities may be incomplete.';
+    }
+    function positiveContextLength(value) {
+      const number = Number(value);
+      return Number.isSafeInteger(number) && number >= 256 && number <= 16777216 ? number : null;
+    }
+    function modelNameMatches(candidate, selected) {
+      const normalize = value => String(value || '').trim().toLowerCase().replace(/:latest$/, '');
+      return !!candidate && (normalize(candidate) === normalize(selected));
+    }
+    function contextLengthFromOllamaShow(details) {
+      const info = details?.model_info;
+      if (!info || typeof info !== 'object') return null;
+      const entry = Object.entries(info).find(([key]) => /(?:^|\.)context_length$/i.test(key));
+      return entry ? positiveContextLength(entry[1]) : null;
+    }
+    function lmStudioRestRoot() {
+      const parsed = new URL(normalizeBase(BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1'));
+      parsed.pathname = parsed.pathname.replace(/\/v1\/?$/i, '').replace(/\/$/, '');
+      parsed.search = ''; parsed.hash = '';
+      return parsed.toString().replace(/\/$/, '');
+    }
+    async function readOllamaContextMetadata(model, details) {
+      const cacheKey = `ollama::${model}`;
+      let activeContextLength = null;
+      let modelMaxContextLength = contextLengthFromOllamaShow(details);
+      try {
+        const running = await getJson(`${normalizeBase(BOOT.ollamaBaseUrl)}/api/ps`, Math.min(DISCOVERY_TIMEOUT_MS, 5000));
+        const active = (Array.isArray(running.models) ? running.models : []).find(item =>
+          modelNameMatches(item?.name || item?.model, model));
+        activeContextLength = positiveContextLength(active?.context_length);
+      } catch (_) { /* /api/ps may be unavailable on older servers; retain model metadata. */ }
+      if (modelMaxContextLength === null && !details) {
+        try {
+          const response = await fetchWithTimeout(`${normalizeBase(BOOT.ollamaBaseUrl)}/api/show`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ model, verbose: false })
+          }, Math.min(DISCOVERY_TIMEOUT_MS, 5000));
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          details = JSON.parse(await readResponseText(response));
+          modelInfoCache.set(cacheKey, details);
+          modelMaxContextLength = contextLengthFromOllamaShow(details);
+        } catch (_) { /* Context metadata is optional; the chat itself remains available. */ }
+      }
+      const result = { provider: 'ollama', model, activeContextLength, modelMaxContextLength };
+      return { details, context: result };
+    }
+    async function readLmStudioContextMetadata(model) {
+      const cacheKey = `lmstudio::${model}`;
+      let payload = null;
+      try {
+        payload = await getJson(`${lmStudioRestRoot()}/api/v1/models`, Math.min(DISCOVERY_TIMEOUT_MS, 5000));
+      } catch (_) {
+        // Compatibility fallback for older LM Studio installations.
+        try { payload = await getJson(`${lmStudioRestRoot()}/api/v0/models`, Math.min(DISCOVERY_TIMEOUT_MS, 5000)); }
+        catch (_) { payload = null; }
+      }
+      const list = Array.isArray(payload?.models) ? payload.models : Array.isArray(payload?.data) ? payload.data : [];
+      const item = list.find(entry => [entry?.key, entry?.id, entry?.display_name, entry?.name, entry?.path].some(name => modelNameMatches(name, model))) || null;
+      const loaded = Array.isArray(item?.loaded_instances) ? item.loaded_instances : [];
+      const activeContextLength = positiveContextLength(loaded.find(instance => positiveContextLength(instance?.config?.context_length))?.config?.context_length);
+      const modelMaxContextLength = positiveContextLength(item?.max_context_length);
+      if (item) modelMetadata.lmstudio[model] = { ...(modelMetadata.lmstudio[model] || {}), ...item };
+      const result = { provider: 'lmstudio', model, activeContextLength, modelMaxContextLength };
+      return { details: item || modelMetadata.lmstudio[model] || null, context: result };
+    }
+    async function updateSelectedModelInfo() {
+      const requestId = ++modelInfoRequestId;
+      const selection = selectedModel();
+      updateContextSettingForProvider(selection?.provider);
+      if (!selection) {
+        selectedModelDot.className = 'status-dot'; selectedModelHealthText.textContent = 'No model';
+        updateModelInfoMarkup(null, null, null, 'Refresh model lists and choose a model.');
+        updateContextManagerUI();
+        return;
+      }
+      const available = providerAvailability[selection.provider];
+      selectedModelDot.className = `status-dot${available === true ? ' good' : available === false ? ' bad' : ''}`;
+      selectedModelHealthText.textContent = available === true ? 'Ready' : available === false ? 'Offline' : 'Checking…';
+      const key = `${selection.provider}::${selection.model}`;
+      let details = modelInfoCache.get(key) || modelMetadata[selection.provider]?.[selection.model] || null;
+      let context = null;
+      if (available !== false) {
+        if (selection.provider === 'ollama') {
+          if (!details) {
+            try {
+              const response = await fetchWithTimeout(`${normalizeBase(BOOT.ollamaBaseUrl)}/api/show`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ model: selection.model, verbose: false })
+              }, Math.min(DISCOVERY_TIMEOUT_MS, 5000));
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              details = JSON.parse(await readResponseText(response)); modelInfoCache.set(key, details);
+            } catch (_) { details = null; }
+          }
+          const result = await readOllamaContextMetadata(selection.model, details);
+          details = result.details || details; context = result.context;
+        } else {
+          const result = await readLmStudioContextMetadata(selection.model);
+          details = result.details || details; context = result.context;
+        }
+      }
+      if (requestId !== modelInfoRequestId) return;
+      selectedContextMetadata = context;
+      const caps = details?.capabilities || details?.modalities || details?.metadata?.capabilities || null;
+      const note = selection.provider === 'lmstudio'
+        ? (context?.activeContextLength || context?.modelMaxContextLength
+          ? 'Context metadata reported by LM Studio’s native model-management API.'
+          : 'The OpenAI-compatible model list does not report context metadata; LM Studio native REST metadata was unavailable.')
+        : (details?.details?.parameter_size || details?.details?.quantization_level
+          ? 'Model metadata reported by Ollama.' : 'Ollama context metadata may be unavailable on older server versions.');
+      updateModelInfoMarkup(selection, details, caps, note);
+      updateContextManagerUI();
+    }
     async function refreshModels(announce = true) {
-      const prior = currentModelKey();
+      const prior = currentModelKey() || preferredModelKey;
+      modelInfoCache.clear();
       refreshButton.disabled = true;
       setStatus('Discovering Ollama and LM Studio models…');
-      const ollamaBase = normalizeBase(BOOT.ollamaBaseUrl);
-      const lmBase = normalizeBase(BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1');
-      const ollamaPromise = getJson(`${ollamaBase}/api/tags`).then(data => {
-        if (!Array.isArray(data.models)) throw new Error("Ollama response has no 'models' array.");
-        return data.models.map(m => typeof m === 'string' ? m : (m.name || m.model)).filter(Boolean);
-      });
-      const lmPromise = getJson(`${lmBase}/models`).then(data => {
-        if (!Array.isArray(data.data)) throw new Error("LM Studio response has no 'data' array.");
-        return data.data.map(m => typeof m === 'string' ? m : (m.id || m.name)).filter(Boolean);
-      });
+      const ollamaPromise = PROVIDERS.ollama.discoverModels();
+      const lmPromise = PROVIDERS.lmstudio.discoverModels();
       const settled = await Promise.allSettled([ollamaPromise, lmPromise]);
+      providerAvailability = { ollama: settled[0].status === 'fulfilled', lmstudio: settled[1].status === 'fulfilled' };
       modelLists.ollama = settled[0].status === 'fulfilled' ? settled[0].value : [];
       modelLists.lmstudio = settled[1].status === 'fulfilled' ? settled[1].value : [];
+      if (settled[0].status !== 'fulfilled') modelMetadata.ollama = {};
+      if (settled[1].status !== 'fulfilled') modelMetadata.lmstudio = {};
       if (BOOT.initialModel && !modelLists.ollama.some(m => m.toLowerCase() === String(BOOT.initialModel).toLowerCase())) modelLists.ollama.push(String(BOOT.initialModel));
       setGroupOptions(ollamaGroup, 'ollama', modelLists.ollama);
       setGroupOptions(lmStudioGroup, 'lmstudio', modelLists.lmstudio);
@@ -433,15 +1383,15 @@
       if (matchedPrior) modelSelect.value = prior;
       else if (seeded) modelSelect.value = seeded.value;
       else if (allOptions.length) modelSelect.value = allOptions[0].value;
+      preferredModelKey = currentModelKey();
+      savePreferences();
+      void updateSelectedModelInfo();
       const okOllama = settled[0].status === 'fulfilled'; const okLm = settled[1].status === 'fulfilled';
       refreshButton.disabled = false;
-      const parts = [];
-      if (okOllama) parts.push(`Ollama: ${modelLists.ollama.length} model${modelLists.ollama.length === 1 ? '' : 's'}`);
-      else parts.push('Ollama unavailable');
-      if (okLm) parts.push(`LM Studio: ${modelLists.lmstudio.length} model${modelLists.lmstudio.length === 1 ? '' : 's'}`);
-      else parts.push('LM Studio unavailable');
-      if (okOllama || okLm) setStatus(parts.join(' · ') + ((!okOllama || !okLm) ? ' · Check endpoint/CORS settings for the unavailable provider.' : ''), 'good');
-      else setStatus('Neither endpoint responded. Check that both local servers are running and allow browser requests (CORS).', 'bad');
+      if (okOllama && okLm) setStatus('Both providers connected', 'good');
+      else if (okOllama) setStatus('Ollama connected · LM Studio unavailable', 'good');
+      else if (okLm) setStatus('LM Studio connected · Ollama unavailable', 'good');
+      else setStatus('Providers unavailable · Check local servers and CORS', 'bad');
       if (announce) showToast('Model lists refreshed.');
     }
     function selectedModel() {
@@ -450,119 +1400,689 @@
       return { provider: option.dataset.provider, model: option.dataset.model };
     }
     async function readResponseError(response) {
-      const text = await response.text();
+      const text = await readResponseText(response);
       if (!text) return `HTTP ${response.status} ${response.statusText}`;
       try { const obj = JSON.parse(text); return obj.error?.message || obj.error || obj.message || text.slice(0, 800); }
       catch (_) { return text.slice(0, 800); }
     }
-    async function streamOllama(model, conversationMessages, controller, onToken) {
+    function createThinkTagRouter(onContent, onThinking) {
+      let buffer = '';
+      let inThinking = false;
+      let answer = '';
+      const openTag = '<think>';
+      const closeTag = '</think>';
+      const emit = (text) => {
+        if (!text) return;
+        if (inThinking) onThinking(text);
+        else { answer += text; onContent(text); }
+      };
+      const partialSuffixLength = (text, tag) => {
+        const lower = text.toLowerCase();
+        for (let size = Math.min(tag.length - 1, lower.length); size > 0; size--) {
+          if (lower.endsWith(tag.slice(0, size))) return size;
+        }
+        return 0;
+      };
+      const process = (final = false) => {
+        while (buffer.length) {
+          const lower = buffer.toLowerCase();
+          const tag = inThinking ? closeTag : openTag;
+          const index = lower.indexOf(tag);
+          if (index >= 0) {
+            const segment = buffer.slice(0, index);
+            emit(inThinking ? segment : segment.replace(/[ \\t]+$/, ''));
+            buffer = buffer.slice(index + tag.length);
+            inThinking = !inThinking;
+            continue;
+          }
+          if (final) {
+            emit(buffer);
+            buffer = '';
+            break;
+          }
+          let hold = partialSuffixLength(buffer, tag);
+          if (!inThinking && hold > 0) {
+            const prefix = buffer.slice(0, buffer.length - hold);
+            const trailingSpace = prefix.match(/[ \t]+$/);
+            if (trailingSpace) hold += trailingSpace[0].length;
+          }
+          const safeLength = buffer.length - hold;
+          if (safeLength > 0) {
+            emit(buffer.slice(0, safeLength));
+            buffer = buffer.slice(safeLength);
+          }
+          break;
+        }
+      };
+      return {
+        push(text) { buffer += String(text || ''); process(false); },
+        finish() { process(true); },
+        get answer() { return answer; }
+      };
+    }
+    async function streamOllama(model, conversationMessages, controller, onToken, onThinking, onMetrics, settings, thinkEnabled) {
       const base = normalizeBase(BOOT.ollamaBaseUrl);
-      const payload = { model, messages: conversationMessages, stream: true, think: !!thinkToggle.checked, keep_alive: Number(BOOT.keepAliveSeconds ?? 300) };
-      const response = await fetchWithTimeout(`${base}/api/chat`, {
+      const options = {};
+      if (settings.temperature !== null) options.temperature = settings.temperature;
+      if (settings.top_p !== null) options.top_p = settings.top_p;
+      if (settings.max_tokens !== null) options.num_predict = settings.max_tokens;
+      if (settings.context_length !== null) options.num_ctx = settings.context_length;
+      if (settings.seed !== null) options.seed = settings.seed;
+      const payload = { model, messages: conversationMessages, stream: true, think: !!thinkEnabled, keep_alive: Number(BOOT.keepAliveSeconds ?? 300), ...(Object.keys(options).length ? { options } : {}) };
+      const response = await fetch(`${base}/api/chat`, {
         method: 'POST', signal: controller.signal,
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson, application/json' },
         body: JSON.stringify(payload)
-      }, fallbackTimeoutMs);
+      });
       if (!response.ok) throw new Error(`Ollama /api/chat: ${await readResponseError(response)}`);
       if (!response.body) throw new Error('Ollama returned no response stream.');
-      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; let output = '';
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          let chunk; try { chunk = JSON.parse(line); } catch (_) { continue; }
-          if (chunk.error) throw new Error(typeof chunk.error === 'string' ? chunk.error : JSON.stringify(chunk.error));
-          const text = chunk.message?.content;
-          if (typeof text === 'string' && text) { output += text; onToken(text); }
-          if (chunk.done === true) return output;
-        }
-      }
-      buffer += decoder.decode();
-      if (buffer.trim()) {
-        const chunk = JSON.parse(buffer);
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+      const router = createThinkTagRouter(onToken, onThinking);
+      let malformedRecords = 0; let validRecords = 0; let streamEnded = false;
+      const consumeChunk = chunk => {
         if (chunk.error) throw new Error(typeof chunk.error === 'string' ? chunk.error : JSON.stringify(chunk.error));
+        const thought = chunk.message?.thinking;
+        if (typeof thought === 'string' && thought) onThinking(thought);
         const text = chunk.message?.content;
-        if (typeof text === 'string' && text) { output += text; onToken(text); }
+        if (typeof text === 'string' && text) router.push(text);
+        if (chunk.done === true && Number.isFinite(Number(chunk.eval_count))) {
+          const tokenCount = Number(chunk.eval_count);
+          const evalDurationNs = Number(chunk.eval_duration);
+          onMetrics({ tokenCount, tokensPerSecond: Number.isFinite(evalDurationNs) && evalDurationNs > 0 ? tokenCount / (evalDurationNs / 1e9) : null, approximateRate: false });
+        }
+        return chunk.done === true;
+      };
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) { streamEnded = true; break; }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            let chunk;
+            try { chunk = JSON.parse(line); }
+            catch (_) {
+              malformedRecords++;
+              if (malformedRecords >= 3) throw new Error(`Ollama stream contained ${malformedRecords} malformed complete records. The server may be returning an incompatible or truncated NDJSON stream.`);
+              continue;
+            }
+            validRecords++;
+            if (consumeChunk(chunk)) {
+              if (malformedRecords) onMetrics({ diagnostic: `Ignored ${malformedRecords} malformed Ollama stream record(s).` });
+              router.finish(); return router.answer;
+            }
+          }
+        }
+        buffer += decoder.decode();
+        if (buffer.trim()) {
+          try { const chunk = JSON.parse(buffer); validRecords++; consumeChunk(chunk); }
+          catch (error) { throw new Error(`Ollama stream ended with an invalid final record: ${error?.message || String(error)}`); }
+        }
+        if (!validRecords) throw new Error('Ollama closed the stream without sending any valid response records.');
+        if (malformedRecords) onMetrics({ diagnostic: `Ignored ${malformedRecords} malformed Ollama stream record(s).` });
+        router.finish();
+        return router.answer;
+      } finally {
+        if (!streamEnded) { try { await reader.cancel(); } catch (_) { /* Abort or parser failure already closed the stream. */ } }
+        try { reader.releaseLock(); } catch (_) { /* Stream already closed. */ }
       }
-      return output;
     }
     function extractOpenAIContent(delta) {
       if (typeof delta === 'string') return delta;
-      if (Array.isArray(delta)) return delta.map(p => typeof p === 'string' ? p : (p.text || '')).join('');
+      if (Array.isArray(delta)) return delta.map(p => typeof p === 'string' ? p : (p?.text || '')).join('');
       return '';
     }
-    async function streamLmStudio(model, conversationMessages, controller, onToken) {
+    async function streamLmStudio(model, conversationMessages, controller, onToken, onThinking, onMetrics, settings, thinkingEnabled) {
       const base = normalizeBase(BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1');
-      const payload = { model, messages: conversationMessages, stream: true, think: !!thinkToggle.checked };
-      const response = await fetchWithTimeout(`${base}/chat/completions`, {
+      // `think` is an Ollama-native field and is ignored by LM Studio's OpenAI-compatible API.
+      // Use the OpenAI-compatible reasoning control, plus the common chat-template override
+      // used by templates that expose an `enable_thinking` Jinja variable.
+      const compatibilityKey = `${base}::${model}`;
+      const unsupportedForModel = lmStudioUnsupportedParams.get(compatibilityKey) || new Set();
+      const payload = {
+        model,
+        messages: conversationMessages,
+        stream: true,
+        stream_options: { include_usage: true },
+        reasoning_effort: thinkingEnabled ? 'high' : 'none',
+        chat_template_kwargs: { enable_thinking: thinkingEnabled },
+        ...(settings.temperature !== null ? { temperature: settings.temperature } : {}),
+        ...(settings.top_p !== null ? { top_p: settings.top_p } : {}),
+        ...(settings.max_tokens !== null ? { max_tokens: settings.max_tokens } : {}),
+        ...(settings.seed !== null ? { seed: settings.seed } : {})
+      };
+      for (const key of unsupportedForModel) delete payload[key];
+      const makeRequest = () => fetch(`${base}/chat/completions`, {
         method: 'POST', signal: controller.signal,
         headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream, application/json' },
         body: JSON.stringify(payload)
-      }, fallbackTimeoutMs);
-      if (!response.ok) throw new Error(`LM Studio /v1/chat/completions: ${await readResponseError(response)}`);
+      });
+      let response = await makeRequest();
+      const fallbackNotes = [];
+      const unsupportedParameterPattern = name => new RegExp(`(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)[^\\n]{0,120}(?:${name})|(?:${name})[^\\n]{0,120}(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)`, 'i');
+      const optionalFallbacks = [
+        { key: 'stream_options', pattern: unsupportedParameterPattern('stream_options|include_usage') },
+        { key: 'reasoning_effort', pattern: unsupportedParameterPattern('reasoning_effort') },
+        { key: 'chat_template_kwargs', pattern: unsupportedParameterPattern('chat_template_kwargs|enable_thinking') },
+        { key: 'seed', pattern: unsupportedParameterPattern('seed') },
+        { key: 'max_tokens', pattern: unsupportedParameterPattern('max_tokens') }
+      ];
+      // Retry only explicit request-validation failures naming an optional field.
+      // Never retry a generic 5xx, model error, or connection failure.
+      for (let attempt = 0; !response.ok && attempt < optionalFallbacks.length; attempt++) {
+        if (![400, 422].includes(response.status)) break;
+        const errorPreview = await response.clone().text().catch(() => '');
+        const rejected = optionalFallbacks.find(item => Object.prototype.hasOwnProperty.call(payload, item.key) && !unsupportedForModel.has(item.key) && item.pattern.test(errorPreview));
+        if (!rejected) break;
+        fallbackNotes.push(`${rejected.key} was rejected by the server`);
+        unsupportedForModel.add(rejected.key);
+        lmStudioUnsupportedParams.set(compatibilityKey, unsupportedForModel);
+        try { await response.body?.cancel(); } catch (_) { /* Validation response already consumed. */ }
+        delete payload[rejected.key];
+        response = await makeRequest();
+      }
+      if (!response.ok) {
+        const detail = await readResponseError(response);
+        throw new Error(`LM Studio /v1/chat/completions: ${detail}${fallbackNotes.length ? ` (Compatibility fallback attempted: ${fallbackNotes.join(', ')}.)` : ''}`);
+      }
       if (!response.body) throw new Error('LM Studio returned no response stream.');
-      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; let output = '';
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+      const router = createThinkTagRouter(onToken, onThinking);
+      let malformedEvents = 0; let validEvents = 0; let streamEnded = false;
       const handleLine = line => {
         const trimmed = line.trim(); if (!trimmed || trimmed.startsWith(':') || !trimmed.startsWith('data:')) return false;
         const data = trimmed.slice(5).trim(); if (data === '[DONE]') return true;
-        let chunk; try { chunk = JSON.parse(data); } catch (_) { return false; }
+        let chunk;
+        try { chunk = JSON.parse(data); }
+        catch (_) {
+          malformedEvents++;
+          if (malformedEvents >= 3) throw new Error(`LM Studio sent ${malformedEvents} malformed SSE data events. Check server/API compatibility.`);
+          return false;
+        }
+        validEvents++;
         if (chunk.error) throw new Error(typeof chunk.error === 'string' ? chunk.error : (chunk.error.message || JSON.stringify(chunk.error)));
-        const delta = chunk.choices?.[0]?.delta?.content;
-        const text = extractOpenAIContent(delta);
-        if (text) { output += text; onToken(text); }
+        if (chunk.usage && Number.isFinite(Number(chunk.usage.completion_tokens))) {
+          onMetrics({ tokenCount: Number(chunk.usage.completion_tokens), tokensPerSecond: null, approximateRate: true });
+        }
+        const delta = chunk.choices?.[0]?.delta || {};
+        const thought = extractOpenAIContent(delta.reasoning_content ?? delta.reasoning ?? delta.thinking);
+        if (thought) onThinking(thought);
+        const text = extractOpenAIContent(delta.content);
+        if (text) router.push(text);
         return false;
       };
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
-        for (const line of lines) if (handleLine(line)) return output;
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) { streamEnded = true; break; }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
+          for (const line of lines) if (handleLine(line)) {
+            if (malformedEvents) onMetrics({ diagnostic: `Ignored ${malformedEvents} malformed LM Studio SSE event(s).` });
+            router.finish(); return router.answer;
+          }
+        }
+        buffer += decoder.decode();
+        if (buffer.trim()) handleLine(buffer);
+        if (!validEvents) throw new Error('LM Studio closed the stream without sending any valid SSE data events.');
+        if (malformedEvents) onMetrics({ diagnostic: `Ignored ${malformedEvents} malformed LM Studio SSE event(s).` });
+        router.finish();
+        return router.answer;
+      } finally {
+        if (!streamEnded) { try { await reader.cancel(); } catch (_) { /* Abort or parser failure already closed the stream. */ } }
+        try { reader.releaseLock(); } catch (_) { /* Stream already closed. */ }
       }
-      buffer += decoder.decode();
-      if (buffer.trim()) handleLine(buffer);
-      return output;
     }
-    async function sendMessage() {
-      if (activeController) { activeController.abort(); return; }
-      const content = promptInput.value.trim();
-      if (!content) return;
+    let lmStudioNativeResponseId = null;
+    let lmStudioNativeModelKey = null;
+    const lmStudioUnsupportedParams = new Map();
+    function nativeLmStudioBase() {
+      return normalizeBase(BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1').replace(/\/v1$/i, '');
+    }
+    function nativeSystemPrompt(conversationMessages, previousResponseId) {
+      if (previousResponseId) return '';
+      return conversationMessages.filter(message => message.role === 'system').map(message => String(message.content || '')).filter(Boolean).join('\n\n');
+    }
+    function nativeInputFromMessages(conversationMessages, previousResponseId) {
+      const lastUser = [...conversationMessages].reverse().find(message => message.role === 'user');
+      if (!lastUser) throw new Error('LM Studio native API requires a user message.');
+      const toNativeParts = content => {
+        if (typeof content === 'string') return content;
+        if (!Array.isArray(content)) return String(content ?? '');
+        return content.map(part => {
+          if (typeof part === 'string') return { type: 'text', content: part };
+          if (part?.type === 'text') return { type: 'text', content: String(part.text ?? part.content ?? '') };
+          const url = part?.image_url?.url || part?.image_url;
+          if (typeof url === 'string' && url.startsWith('data:image/')) return { type: 'image', data_url: url };
+          return null;
+        }).filter(Boolean);
+      };
+      if (previousResponseId) return toNativeParts(lastUser.content);
+      // Native v1 accepts one user input rather than an OpenAI-style messages array.
+      // Seed a new server-side thread with an explicit transcript so imported chats and
+      // conversations created through another provider retain their local context.
+      const transcript = conversationMessages.filter(message => message.role !== 'system').map(message => {
+        const role = message.role === 'assistant' ? 'Assistant' : 'User';
+        const parts = toNativeParts(message.content);
+        const text = typeof parts === 'string' ? parts : parts.filter(part => part.type === 'text').map(part => part.content).join('\n');
+        const imageCount = Array.isArray(parts) ? parts.filter(part => part.type === 'image').length : 0;
+        return `${role}:\n${text}${imageCount ? `\n[${imageCount} image attachment(s) follow]` : ''}`;
+      }).join('\n\n');
+      const images = conversationMessages.flatMap(message => {
+        const parts = toNativeParts(message.content);
+        return Array.isArray(parts) ? parts.filter(part => part.type === 'image') : [];
+      });
+      return images.length ? [{ type: 'text', content: transcript }, ...images] : transcript;
+    }
+    async function streamLmStudioNative(model, conversationMessages, controller, onToken, onThinking, onMetrics, settings, thinkingEnabled, previousResponseId, store = true) {
+      const base = nativeLmStudioBase();
+      const modelKey = `${base}::${model}`;
+      const nativeCompatibilityKey = `${base}::${model}::native`;
+      const nativeUnsupported = lmStudioUnsupportedParams.get(nativeCompatibilityKey) || new Set();
+      const chainId = previousResponseId && lmStudioNativeModelKey === modelKey ? previousResponseId : null;
+      const payload = {
+        model,
+        input: nativeInputFromMessages(conversationMessages, chainId),
+        ...(!chainId && nativeSystemPrompt(conversationMessages, chainId) ? { system_prompt: nativeSystemPrompt(conversationMessages, chainId) } : {}),
+        stream: true,
+        store: store !== false,
+        ...(chainId ? { previous_response_id: chainId } : {}),
+        ...(settings.temperature !== null ? { temperature: Math.min(1, settings.temperature) } : {}),
+        ...(settings.top_p !== null ? { top_p: settings.top_p } : {}),
+        ...(settings.max_tokens !== null ? { max_output_tokens: settings.max_tokens } : {}),
+        ...(settings.context_length !== null ? { context_length: settings.context_length } : {}),
+        ...(!nativeUnsupported.has('reasoning') ? { reasoning: thinkingEnabled ? 'high' : 'off' } : {})
+      };
+      const makeNativeRequest = () => fetch(`${base}/api/v1/chat`, {
+        method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream, application/json' },
+        body: JSON.stringify(payload)
+      });
+      let response = await makeNativeRequest();
+      if (!response.ok && [400, 422].includes(response.status) && payload.reasoning !== undefined) {
+        const preview = await response.clone().text().catch(() => '');
+        if (/reasoning/i.test(preview) && /(unsupported|unknown|invalid|not supported|does not support)/i.test(preview)) {
+          nativeUnsupported.add('reasoning');
+          lmStudioUnsupportedParams.set(nativeCompatibilityKey, nativeUnsupported);
+          delete payload.reasoning;
+          response = await makeNativeRequest();
+        }
+      }
+      if (!response.ok) throw new Error(`LM Studio native /api/v1/chat: ${await readResponseError(response)}`);
+      if (!response.body) throw new Error('LM Studio native API returned no response stream.');
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; let eventName = '';
+      const router = createThinkTagRouter(onToken, onThinking);
+      let responseId = null; let sawEvent = false; let streamEnded = false;
+      const processEvent = data => {
+        if (!data) return;
+        let event;
+        try { event = JSON.parse(data); } catch (_) { throw new Error('LM Studio native API emitted malformed SSE event data.'); }
+        sawEvent = true;
+        switch (event.type || eventName) {
+          case 'model_load.start': setStatus('LM Studio is loading the model…'); break;
+          case 'model_load.progress': if (Number.isFinite(Number(event.progress))) setStatus(`LM Studio loading model · ${Math.round(Number(event.progress) * 100)}%`); break;
+          case 'model_load.end': if (Number.isFinite(Number(event.load_time_seconds))) onMetrics({ modelLoadTimeMs: Number(event.load_time_seconds) * 1000 }); setStatus('Model loaded · processing prompt…'); break;
+          case 'prompt_processing.start': setStatus('LM Studio is processing the prompt…'); break;
+          case 'prompt_processing.progress': if (Number.isFinite(Number(event.progress))) setStatus(`LM Studio processing prompt · ${Math.round(Number(event.progress) * 100)}%`); break;
+          case 'reasoning.start': setStatus('LM Studio is reasoning…'); break;
+          case 'reasoning.delta': if (event.content) onThinking(event.content); break;
+          case 'message.start': setStatus('LM Studio is generating a response…'); break;
+          case 'message.delta': if (event.content) router.push(event.content); break;
+          case 'error': throw new Error(event.error?.message || 'LM Studio native API reported an error.');
+          case 'chat.end': {
+            const result = event.result || {};
+            responseId = result.response_id || responseId;
+            const stats = result.stats || {};
+            if (Number.isFinite(Number(stats.total_output_tokens))) onMetrics({ tokenCount: Number(stats.total_output_tokens), tokensPerSecond: Number(stats.tokens_per_second) || null, approximateRate: !Number.isFinite(Number(stats.tokens_per_second)) });
+            if (Number.isFinite(Number(stats.time_to_first_token_seconds))) onMetrics({ timeToFirstTokenMs: Number(stats.time_to_first_token_seconds) * 1000 });
+            if (Number.isFinite(Number(stats.model_load_time_seconds))) onMetrics({ modelLoadTimeMs: Number(stats.model_load_time_seconds) * 1000 });
+            break;
+          }
+        }
+      };
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) { streamEnded = true; break; }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (!line.trim()) { eventName = ''; continue; }
+            if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            else if (line.startsWith('data:')) processEvent(line.slice(5).trim());
+          }
+        }
+        buffer += decoder.decode();
+        if (buffer.trim().startsWith('data:')) processEvent(buffer.trim().slice(5).trim());
+        if (!sawEvent) throw new Error('LM Studio native API closed the stream without sending events.');
+        if (responseId) { lmStudioNativeResponseId = responseId; lmStudioNativeModelKey = modelKey; }
+        router.finish();
+        return { content: router.answer, responseId };
+      } finally {
+        if (!streamEnded) { try { await reader.cancel(); } catch (_) { /* Abort or parser failure already closed the stream. */ } }
+        try { reader.releaseLock(); } catch (_) { /* Stream already closed. */ }
+      }
+    }
+
+    function getContextLimitInfo() {
       const selection = selectedModel();
-      if (!selection) { showToast('No model is selected. Refresh model lists and choose a model.'); return; }
+      const provider = selection?.provider || 'ollama';
+      const manual = (provider !== 'lmstudio' || settingLmStudioApiMode.value === 'native')
+        ? readBoundedNumber(settingContextLength, 256, 1048576, true) : null;
+      if (manual !== null) return { limit: manual, adaptiveLimit: manual, source: 'manual request override' };
+      const detected = selectedContextMetadata;
+      if (!detected || detected.provider !== provider || detected.model !== selection?.model) return { limit: null, adaptiveLimit: null, source: 'unknown' };
+      if (detected.activeContextLength) return { limit: detected.activeContextLength, adaptiveLimit: detected.activeContextLength, source: 'active loaded context' };
+      if (detected.modelMaxContextLength) return { limit: detected.modelMaxContextLength, adaptiveLimit: null, source: 'model maximum (not currently loaded)' };
+      return { limit: null, adaptiveLimit: null, source: 'unknown' };
+    }
+    function contextCutoffIndex(sourceMessages = messages) {
+      const limit = readBoundedNumber(settingHistoryTurns, 2, 200, true);
+      if (limit === null) return 0;
+      const userIndexes = [];
+      sourceMessages.forEach((message, index) => { if (message.role === 'user') userIndexes.push(index); });
+      if (userIndexes.length <= limit) return 0;
+      return userIndexes[userIndexes.length - limit];
+    }
+    function contextUsageEstimate(sourceMessages) {
+      const serialized = JSON.stringify(sourceMessages.map(message => ({
+        role: message.role,
+        content: messageContentWithTextAttachments ? messageContentWithTextAttachments(message) : (message.content || '')
+      })));
+      return Math.max(0, Math.ceil(serialized.length / 4));
+    }
+    function getManagedContextPlan(sourceMessages = messages) {
+      const complete = sourceMessages.filter(message => !message.pending);
+      const turnCutoff = contextCutoffIndex(complete);
+      const summaryEnd = contextSummary ? Math.min(complete.length, contextSummaryThrough) : 0;
+      const baseStart = Math.max(turnCutoff, summaryEnd);
+      const candidates = complete.slice(baseStart);
+      const manualTokenBudget = readBoundedNumber(settingHistoryTokenBudget, 256, 1000000, true);
+      const contextInfo = getContextLimitInfo();
+      const adaptiveLimit = contextInfo.adaptiveLimit;
+      const outputReserve = adaptiveLimit
+        ? (readBoundedNumber(settingMaxTokens, 1, 1000000, true) ?? Math.min(4096, Math.max(512, Math.floor(adaptiveLimit * 0.2))))
+        : 0;
+      const safetyReserve = adaptiveLimit ? Math.max(256, Math.ceil(adaptiveLimit * 0.05)) : 0;
+      const automaticTokenBudget = adaptiveLimit ? Math.max(128, adaptiveLimit - outputReserve - safetyReserve) : null;
+      const tokenBudget = manualTokenBudget === null ? automaticTokenBudget
+        : automaticTokenBudget === null ? manualTokenBudget : Math.min(manualTokenBudget, automaticTokenBudget);
+      let selectedMessages = candidates;
+      if (tokenBudget !== null && candidates.length) {
+        const groups = [];
+        for (const message of candidates) {
+          if (message.role === 'user' || groups.length === 0) groups.push([]);
+          groups[groups.length - 1].push(message);
+        }
+        const summaryTokens = contextSummary ? contextUsageEstimate([{ role: 'system', content: contextSummary }]) : 0;
+        let used = summaryTokens;
+        const selectedGroups = [];
+        for (let index = groups.length - 1; index >= 0; index--) {
+          const group = groups[index];
+          const cost = contextUsageEstimate(group);
+          // Always retain the newest complete user turn, even when it alone exceeds the budget.
+          if (selectedGroups.length && used + cost > tokenBudget) break;
+          selectedGroups.unshift(group);
+          used += cost;
+        }
+        selectedMessages = selectedGroups.flat();
+      }
+      const recentStart = baseStart + candidates.length - selectedMessages.length;
+      const recent = selectedMessages;
+      const context = [];
+      if (contextSummary) context.push({ role: 'system', content: `Summary of earlier conversation (the original messages remain available in the local transcript):\n${contextSummary}` });
+      const omittedStart = summaryEnd;
+      const omittedCount = Math.max(0, recentStart - omittedStart);
+      if (omittedCount > 0) context.push({ role: 'system', content: `Additional older conversation messages were omitted to respect the configured recent-turn or history-token limit. They are not included in the summary. Do not assume you can see them.` });
+      else if (!contextSummary && recentStart > 0) context.push({ role: 'system', content: 'Earlier conversation turns have been omitted from this request. Do not assume you can see them.' });
+      context.push(...recent);
+      return {
+        complete, context, recent, recentStart, summaryEnd, omittedCount,
+        includedCount: recent.length,
+        summarizedCount: contextSummary ? summaryEnd : 0,
+        estimatedTokens: contextUsageEstimate(context),
+        tokenBudget, automaticTokenBudget,
+        turnCutoff
+      };
+    }
+    function updateContextManagerUI(plan = getManagedContextPlan()) {
+      const contextLimitInfo = getContextLimitInfo();
+      const usableLimit = contextLimitInfo.limit;
+      const percent = usableLimit ? Math.round(plan.estimatedTokens / usableLimit * 100) : null;
+      contextUsageValue.textContent = `${plan.estimatedTokens.toLocaleString()} estimated input tokens`;
+      contextUsageCapacity.textContent = usableLimit
+        ? `${usableLimit.toLocaleString()} tokens · ${contextLimitInfo.source}` : 'Provider context limit unknown';
+      contextMeterFill.style.width = usableLimit ? `${Math.min(100, Math.max(0, percent))}%` : '0%';
+      contextMeterFill.classList.toggle('over', !!usableLimit && percent > 100);
+      contextMeter.setAttribute('aria-valuenow', String(usableLimit ? Math.min(100, Math.max(0, percent)) : 0));
+      const historyBudgetPercent = plan.tokenBudget ? Math.round(plan.estimatedTokens / plan.tokenBudget * 100) : null;
+      contextUsagePercent.textContent = [
+        usableLimit ? `${percent}% of ${contextLimitInfo.source}` : 'Context utilization unavailable',
+        plan.tokenBudget ? `${historyBudgetPercent}% of adaptive history budget${plan.estimatedTokens > plan.tokenBudget ? ' · newest turn kept' : ''}` : 'No adaptive history budget'
+      ].join(' · ');
+      contextUsageMode.textContent = contextSummary
+        ? `Summary + ${plan.includedCount} recent messages${plan.omittedCount ? ` · ${plan.omittedCount} additional messages omitted` : ''}`
+        : plan.omittedCount > 0 ? `${plan.includedCount} recent messages · older history omitted` : 'Full available conversation included';
+      contextIncludedCount.textContent = plan.includedCount.toLocaleString();
+      contextSummarizedCount.textContent = plan.summarizedCount.toLocaleString();
+      contextOmittedCount.textContent = plan.omittedCount.toLocaleString();
+      contextTriggerState.textContent = contextSummary && plan.omittedCount > 0 ? 'Partial' : contextSummary ? 'Summary' : plan.omittedCount > 0 ? 'Limited' : 'Full';
+      contextSummaryState.textContent = contextSummaryDirty ? 'Unsaved edits' : contextSummary
+        ? `${plan.summarizedCount} messages covered${plan.omittedCount ? ` · ${plan.omittedCount} additional omitted` : ''}`
+        : 'Not created';
+      if (!contextSummaryDirty) contextSummaryEditor.value = contextSummary;
+      summarizeHistoryButton.disabled = plan.recentStart <= plan.summaryEnd || !!activeController;
+      settingHistoryTurns.disabled = !!activeController;
+      settingHistoryTokenBudget.disabled = !!activeController;
+      const provider = selectedModel()?.provider || 'ollama';
+      const contextLimitAvailable = provider !== 'lmstudio' || settingLmStudioApiMode.value === 'native';
+      settingContextLength.disabled = !contextLimitAvailable || !!activeController;
+      contextSummaryEditor.disabled = !!activeController;
+      clearContextSummaryButton.disabled = !contextSummary || !!activeController;
+      saveContextSummaryButton.disabled = !!activeController;
+      historyContextNote.textContent = `${plan.automaticTokenBudget ? `Adaptive history budget: ${plan.automaticTokenBudget.toLocaleString()} estimated tokens. ` : plan.tokenBudget ? `Manual history cap: ${plan.tokenBudget.toLocaleString()} estimated tokens. ` : contextLimitInfo.source === 'model maximum (not currently loaded)' ? 'Model maximum is known, but the active loaded context is not; automatic trimming waits until the provider reports the loaded context. ' : 'No automatic history budget because active context capacity is unknown. '}A reserve is kept for output and provider overhead. Estimates use text length, not the model tokenizer; image costs and system prompts may differ. The complete transcript remains local.`;
+      contextPreviewList.replaceChildren();
+      const appendPreview = (label, content) => {
+        const item = document.createElement('div'); item.className = 'context-preview-item';
+        const heading = document.createElement('strong'); heading.textContent = label;
+        const body = document.createElement('p'); body.textContent = content;
+        item.append(heading, body); contextPreviewList.append(item);
+      };
+      if (contextSummaryDirty) appendPreview('Unsaved summary edits', 'These edits are not included in the request preview or future requests until you select Save edits.');
+      if (contextSummary) appendPreview(`Summary · ${plan.summarizedCount} earlier messages`, contextSummary.length > 6000 ? `${contextSummary.slice(0, 6000)}\n… [summary preview truncated]` : contextSummary);
+      if (plan.omittedCount > 0) appendPreview('Omitted history', `${plan.omittedCount} messages are not sent or included in the current summary.`);
+      const previewMessages = plan.recent.slice(-30);
+      if (plan.recent.length > previewMessages.length) appendPreview('Preview limit', `Showing the most recent ${previewMessages.length} of ${plan.recent.length} included messages. The request still includes all selected messages.`);
+      for (const message of previewMessages) {
+        const role = message.role === 'assistant' ? 'Assistant' : 'You';
+        const text = messageContentWithTextAttachments(message) || (message.attachments?.length ? '[Attachments]' : '[Empty message]');
+        appendPreview(role, text.length > 1800 ? `${text.slice(0, 1800)}\n… [preview truncated]` : text);
+      }
+      if (!plan.context.length) appendPreview('Empty conversation', 'No messages will be sent until you start chatting.');
+    }
+    function buildManagedContext(provider) {
+      const plan = getManagedContextPlan();
+      updateContextManagerUI(plan);
+      return providerMessages(provider, plan.context);
+    }
+    async function summarizeOlderConversation() {
+      if (activeController) { showToast('Wait for the current generation to finish first.'); return; }
+      const plan = getManagedContextPlan();
+      const complete = plan.complete;
+      const cutoff = plan.recentStart;
+      if (cutoff <= plan.summaryEnd) { showToast('There is no unsummarized older history to summarize.'); return; }
+      const older = complete.slice(0, cutoff);
+      const transcriptText = older.map(message => `${message.role === 'assistant' ? 'Assistant' : 'User'}:\n${messageContentWithTextAttachments(message)}${message.thinking ? `\n[Thinking output omitted from summary source]` : ''}`).join('\n\n');
+      const selection = selectedModel();
+      if (!selection || !PROVIDERS[selection.provider]) { showToast('Select an available model before summarizing.'); return; }
+      const controller = new AbortController();
+      activeController = controller;
+      summarizeHistoryButton.disabled = true;
+      sendButton.disabled = true; promptInput.disabled = true; attachButton.disabled = true; thinkButton.disabled = true; refreshButton.disabled = true;
+      stopButton.hidden = false;
+      setStatus('Summarizing older conversation turns…');
+      const summaryParts = [];
+      try {
+        await PROVIDERS[selection.provider].generate({
+          model: selection.model,
+          messages: [{ role: 'system', content: 'Create a compact, factual memory for continuing this conversation. Preserve user goals, decisions, constraints, names, technical details, unresolved questions, and important context. Do not invent facts. Use concise structured prose.' }, { role: 'user', content: transcriptText }],
+          controller, onToken: text => summaryParts.push(text), onThinking: () => {}, onMetrics: () => {},
+          settings: { ...generationSettings(), max_tokens: 1800 }, thinkingEnabled: false, previousResponseId: null, store: false
+        });
+        const summary = summaryParts.join('').trim();
+        if (!summary) throw new Error('The selected model returned an empty summary.');
+        contextSummary = summary;
+        contextSummaryThrough = cutoff;
+        contextSummaryDirty = false;
+        // A native LM Studio response chain contains the pre-summary history. Start a
+        // fresh chain next time so the new summary and configured recent window take effect.
+        for (const message of messages) if (message.role === 'assistant') message.providerResponseId = null;
+        lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
+        savePreferences();
+        updateContextManagerUI();
+        showToast('Older conversation turns summarized for future requests.');
+      } catch (error) {
+        if (error?.name === 'AbortError') showToast('Conversation summarization stopped.');
+        else showToast(`Could not summarize conversation: ${error?.message || String(error)}`);
+      } finally {
+        activeController = null;
+        summarizeHistoryButton.disabled = false;
+        sendButton.disabled = false; promptInput.disabled = false; attachButton.disabled = false; thinkButton.disabled = false; refreshButton.disabled = false;
+        stopButton.hidden = true;
+        updateContextManagerUI();
+        setStatus(`Connected · ${selection.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'} · ${selection.model}`, 'good');
+      }
+    }
+
+    // Common provider boundary. Provider-specific payloads and stream protocols stay
+    // behind this registry; conversation/UI code consumes normalized callbacks.
+    const PROVIDERS = Object.freeze({
+      ollama: {
+        id: 'ollama',
+        discoverModels: async () => {
+          const data = await getJson(`${normalizeBase(BOOT.ollamaBaseUrl)}/api/tags`);
+          if (!Array.isArray(data.models)) throw new Error("Ollama response has no 'models' array.");
+          return data.models.map(model => typeof model === 'string' ? model : (model.name || model.model)).filter(Boolean);
+        },
+        generate: options => streamOllama(options.model, options.messages, options.controller, options.onToken, options.onThinking, options.onMetrics, options.settings, options.thinkingEnabled)
+      },
+      lmstudio: {
+        id: 'lmstudio',
+        discoverModels: async () => {
+          const data = await getJson(`${normalizeBase(BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1')}/models`);
+          if (!Array.isArray(data.data)) throw new Error("LM Studio response has no 'data' array.");
+          modelMetadata.lmstudio = {};
+          for (const item of data.data) {
+            if (item && typeof item === 'object') {
+              const name = item.id || item.name;
+              if (name) modelMetadata.lmstudio[name] = item;
+            }
+          }
+          return data.data.map(model => typeof model === 'string' ? model : (model.id || model.name)).filter(Boolean);
+        },
+        generate: options => settingLmStudioApiMode.value === 'native'
+          ? streamLmStudioNative(options.model, options.messages, options.controller, options.onToken, options.onThinking, options.onMetrics, options.settings, options.thinkingEnabled, options.previousResponseId, options.store)
+          : streamLmStudio(options.model, options.messages, options.controller, options.onToken, options.onThinking, options.onMetrics, options.settings, options.thinkingEnabled)
+      }
+    });
+
+    async function sendMessage() {
+      if (activeController || isConfirmingAttachments) return false;
+      const typedContent = promptInput.value.trim();
+      if (!typedContent && !pendingAttachments.length) return false;
+      const selection = selectedModel();
+      if (!selection) { showToast('No model is selected. Refresh model lists and choose a model.'); return false; }
+      const attachments = pendingAttachments.slice();
+      const totalAttachmentBytes = attachments.reduce((total, file) => total + Number(file.size || 0), 0);
+      if (attachments.length && totalAttachmentBytes >= ATTACHMENT_LIMITS.confirmBeforeSendBytes) {
+        isConfirmingAttachments = true;
+        sendButton.disabled = true;
+        let confirmed = false;
+        try { confirmed = await requestAttachmentConfirmation(totalAttachmentBytes, attachments); }
+        finally { isConfirmingAttachments = false; sendButton.disabled = false; }
+        if (!confirmed) return false;
+      }
+      const content = typedContent || 'Please analyze the attached file(s).';
+      const settingsForRequest = generationSettings();
+      const thinkForRequest = !!thinkToggle.checked;
+      const isContinuationRequest = nextMessageIsContinuation;
+      if (editingMessageIndex !== null) {
+        messages.splice(editingMessageIndex);
+        contextSummary = ''; contextSummaryThrough = 0; contextSummaryDirty = false;
+        lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
+        editingMessageIndex = null;
+        draftBeforeEdit = null;
+        editModeNotice.hidden = true;
+      }
       promptInput.value = '';
-      const userMessage = { role: 'user', content, timestamp: Date.now(), provider: selection.provider, model: selection.model };
+      autoResizePrompt();
+      pendingAttachments = [];
+      renderPendingAttachments();
+      const startedAt = Date.now();
+      const previousAssistant = [...messages].reverse().find(item => item.role === 'assistant');
+      const contextPlanForRequest = getManagedContextPlan(messages.filter(message => !message.pending));
+      const managedHistoryIsComplete = contextPlanForRequest.recentStart === 0 && contextPlanForRequest.omittedCount === 0 && !contextSummary;
+      const previousResponseId = selection.provider === 'lmstudio' && managedHistoryIsComplete && previousAssistant?.provider === 'lmstudio' && previousAssistant?.model === selection.model
+        ? previousAssistant.providerResponseId || null : null;
+      const userMessage = { role: 'user', content, attachments, timestamp: startedAt, provider: selection.provider, model: selection.model, isContinuation: isContinuationRequest };
+      nextMessageIsContinuation = false;
       messages.push(userMessage);
-      const assistantMessage = { role: 'assistant', content: '', timestamp: Date.now(), provider: selection.provider, model: selection.model, pending: true };
+      const assistantMessage = { role: 'assistant', content: '', thinking: '', thinkingOpen: defaultThinkingOpen, thinkRequested: thinkForRequest, generationSettings: settingsForRequest, timestamp: startedAt, provider: selection.provider, model: selection.model, pending: true, metrics: { startedAt, elapsedMs: 0, timeToFirstTokenMs: null, tokenCount: null, tokensPerSecond: null, approximateRate: false } };
       messages.push(assistantMessage);
       renderMessages();
+      activeAssistantMessage = assistantMessage;
       activeController = new AbortController();
-      activeRequestTimedOut = false;
-      activeTimeoutHandle = setTimeout(() => {
-        if (activeController) { activeRequestTimedOut = true; activeController.abort(); }
-      }, fallbackTimeoutMs);
-      sendButton.disabled = true; promptInput.disabled = true; refreshButton.disabled = true;
-      stopButton.hidden = false; sendButton.textContent = 'Sending…';
+      activeMetricsHandle = setInterval(() => {
+        if (activeAssistantMessage) {
+          updateGenerationMetrics(activeAssistantMessage);
+          updateActiveMetricsOnly();
+        }
+      }, 1000);
+      sendButton.disabled = true; promptInput.disabled = true; attachButton.disabled = true; thinkButton.disabled = true; refreshButton.disabled = true;
+      stopButton.hidden = false;
       setStatus(`Waiting for ${selection.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'} (${selection.model})…`);
-      const requestMessages = messages.filter(m => !m.pending).map(m => ({ role: m.role, content: m.content }));
+      const requestMessages = buildManagedContext(selection.provider);
+      const onMetrics = stats => {
+        if (stats.diagnostic) {
+          assistantMessage.diagnostics ||= [];
+          if (!assistantMessage.diagnostics.includes(String(stats.diagnostic))) assistantMessage.diagnostics.push(String(stats.diagnostic));
+        }
+        if (Number.isFinite(stats.timeToFirstTokenMs)) assistantMessage.metrics.timeToFirstTokenMs = stats.timeToFirstTokenMs;
+        if (Number.isFinite(stats.modelLoadTimeMs)) assistantMessage.metrics.modelLoadTimeMs = stats.modelLoadTimeMs;
+        if (Number.isFinite(stats.tokenCount)) assistantMessage.metrics.tokenCount = stats.tokenCount;
+        if (Number.isFinite(stats.tokensPerSecond) && stats.tokensPerSecond > 0) {
+          assistantMessage.metrics.tokensPerSecond = stats.tokensPerSecond;
+          assistantMessage.metrics.approximateRate = !!stats.approximateRate;
+        } else if (Number.isFinite(stats.tokenCount)) {
+          assistantMessage.metrics.approximateRate = true;
+          const elapsedSeconds = Math.max(.1, (Date.now() - assistantMessage.metrics.startedAt) / 1000);
+          assistantMessage.metrics.tokensPerSecond = stats.tokenCount / elapsedSeconds;
+        }
+        updateGenerationMetrics(assistantMessage);
+        scheduleActiveMessageRender();
+      };
       try {
-        const onToken = text => { assistantMessage.content += text; renderMessages(); };
-        const output = selection.provider === 'lmstudio'
-          ? await streamLmStudio(selection.model, requestMessages, activeController, onToken)
-          : await streamOllama(selection.model, requestMessages, activeController, onToken);
+        const onToken = text => {
+          if (assistantMessage.metrics.timeToFirstTokenMs === null) assistantMessage.metrics.timeToFirstTokenMs = Date.now() - startedAt;
+          assistantMessage.content += text; updateGenerationMetrics(assistantMessage); scheduleActiveMessageRender();
+        };
+        const onThinking = text => { if (assistantMessage.metrics.timeToFirstTokenMs === null) assistantMessage.metrics.timeToFirstTokenMs = Date.now() - startedAt; assistantMessage.thinking = (assistantMessage.thinking || '') + text; if (assistantMessage.thinkingOpen === undefined) assistantMessage.thinkingOpen = defaultThinkingOpen; updateGenerationMetrics(assistantMessage); scheduleActiveMessageRender(); };
+        const providerAdapter = PROVIDERS[selection.provider];
+        if (!providerAdapter) throw new Error(`Unsupported provider: ${selection.provider}`);
+        const output = await providerAdapter.generate({ model: selection.model, messages: requestMessages, controller: activeController, onToken, onThinking, onMetrics, settings: settingsForRequest, thinkingEnabled: thinkForRequest, previousResponseId });
+        if (output && typeof output === 'object') {
+          assistantMessage.providerResponseId = output.responseId || null;
+          if (Number.isFinite(output.timeToFirstTokenMs)) assistantMessage.metrics.timeToFirstTokenMs = output.timeToFirstTokenMs;
+        }
         assistantMessage.pending = false;
-        if (!assistantMessage.content && !output) assistantMessage.content = '(The model returned an empty response.)';
+        const outputText = typeof output === 'string' ? output : output?.content;
+        if (!assistantMessage.content && !outputText) assistantMessage.content = '(The model returned an empty response.)';
         setStatus(`Connected · ${selection.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'} · ${selection.model}`, 'good');
       } catch (error) {
         assistantMessage.pending = false;
-        if (error?.name === 'AbortError' && activeRequestTimedOut) {
-          assistantMessage.error = true;
-          assistantMessage.content = (assistantMessage.content ? assistantMessage.content + '\n\n' : '') + 'Request timed out. Increase Request timeout (seconds) in the plugin settings or use a smaller/faster model.';
-          setStatus('Request timed out.', 'bad');
-        } else if (error?.name === 'AbortError') {
-          if (!assistantMessage.content) assistantMessage.content = '[Generation stopped.]';
+        if (error?.name === 'AbortError') {
+          if (!assistantMessage.content && !assistantMessage.thinking) assistantMessage.content = '[Generation stopped.]';
           setStatus('Generation stopped.');
         } else {
           assistantMessage.error = true;
@@ -570,13 +2090,30 @@
           setStatus(`Request failed · ${selection.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'}`, 'bad');
         }
       } finally {
-        clearTimeout(activeTimeoutHandle);
-        activeTimeoutHandle = null;
-        activeController = null; assistantMessage.pending = false;
-        activeRequestTimedOut = false;
-        sendButton.disabled = false; promptInput.disabled = false; refreshButton.disabled = false;
-        stopButton.hidden = true; sendButton.textContent = 'Send ↵';
-        renderMessages(); promptInput.focus();
+        clearInterval(activeMetricsHandle);
+        activeMetricsHandle = null;
+        updateGenerationMetrics(assistantMessage);
+        const elapsedSeconds = Math.max(.1, assistantMessage.metrics.elapsedMs / 1000);
+        if (Number.isFinite(assistantMessage.metrics.tokenCount) && !Number.isFinite(assistantMessage.metrics.tokensPerSecond)) {
+          assistantMessage.metrics.tokensPerSecond = assistantMessage.metrics.tokenCount / elapsedSeconds;
+          assistantMessage.metrics.approximateRate = true;
+        }
+        activeController = null; activeAssistantMessage = null; assistantMessage.pending = false;
+        sendButton.disabled = false; promptInput.disabled = false; attachButton.disabled = false; thinkButton.disabled = false; refreshButton.disabled = false;
+        stopButton.hidden = true;
+        renderMessages(); promptInput.focus(); autoResizePrompt();
+        // Ollama reports the effective context length for a loaded model through /api/ps.
+        // Refresh after generation so subsequent turns can use that active value.
+        void updateSelectedModelInfo();
+      }
+      return true;
+    }
+    function updateGenerationMetrics(message) {
+      if (!message?.metrics) return;
+      message.metrics.elapsedMs = Math.max(0, Date.now() - Number(message.metrics.startedAt || Date.now()));
+      if (message.metrics.approximateRate && Number.isFinite(message.metrics.tokenCount)) {
+        const seconds = Math.max(.1, message.metrics.elapsedMs / 1000);
+        message.metrics.tokensPerSecond = message.metrics.tokenCount / seconds;
       }
     }
     function filenameSafe(value) { return String(value || 'conversation').replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'conversation'; }
@@ -592,13 +2129,120 @@
       return base.length > 72 ? base.slice(0, 69) + '…' : base;
     }
     function portableConversation() {
-      return { format: 'PowerToys-Run-LocalLLM-conversation', version: 1, title: conversationTitle(), createdAt: new Date(conversationStartedAt).toISOString(), updatedAt: new Date().toISOString(), messages: allMessages().map(m => ({ role: m.role, content: m.content, timestamp: new Date(m.timestamp || Date.now()).toISOString(), provider: m.provider || null, model: m.model || null, error: !!m.error })) };
+      return { format: 'PowerToys-Run-LocalLLM-conversation', version: 1, title: conversationTitle(), createdAt: new Date(conversationStartedAt).toISOString(), updatedAt: new Date().toISOString(), session: { provider: selectedModel()?.provider || null, model: selectedModel()?.model || null, thinkEnabled: !!thinkToggle.checked, defaultThinkingOpen, generationSettings: generationSettings(), lmStudioApiMode: settingLmStudioApiMode.value, contextSummary, contextSummaryThrough, historyTurns: readBoundedNumber(settingHistoryTurns, 2, 200, true), historyTokenBudget: readBoundedNumber(settingHistoryTokenBudget, 256, 1000000, true) }, messages: allMessages().map(m => ({ role: m.role, content: m.content, thinking: m.thinking || '', thinkingOpen: m.thinkingOpen ?? defaultThinkingOpen, thinkRequested: !!m.thinkRequested, generationSettings: m.generationSettings || null, isContinuation: !!m.isContinuation, attachments: (m.attachments || []).map(file => ({ name: file.name, type: file.type, size: file.size, text: file.text, dataUrl: file.dataUrl })), timestamp: new Date(m.timestamp || Date.now()).toISOString(), provider: m.provider || null, model: m.model || null, error: !!m.error })) };
+    }
+    function saveSessionFile() {
+      if (messages.some(message => message.pending)) { showToast('Stop or wait for the current response before saving.'); return; }
+      const payload = portableConversation();
+      downloadFile(`${filenameSafe(payload.title)}.llmchat`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
+      $('#exportMenu').open = false;
+      showToast('Conversation saved as a .llmchat file.');
+    }
+    function applyImportedGenerationSettings(settings) {
+      const source = settings && typeof settings === 'object' ? settings : {};
+      const pairs = [[settingTemperature, source.temperature], [settingTopP, source.top_p ?? source.topP], [settingMaxTokens, source.max_tokens ?? source.maxTokens], [settingContextLength, source.context_length ?? source.contextLength], [settingSeed, source.seed]];
+      for (const [input, value] of pairs) {
+        const number = value === null || value === undefined || value === '' ? null : Number(value);
+        input.value = number !== null && Number.isFinite(number) ? String(number) : '';
+      }
+    }
+    function validateSessionFile(data) {
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('The selected file is not a conversation object.');
+      if (!['PowerToys-Run-LocalLLM-conversation', 'llmchat'].includes(data.format)) throw new Error('This file is not a supported LocalLLM conversation.');
+      if (Number(data.version) !== 1) throw new Error(`Unsupported conversation format version: ${String(data.version)}.`);
+      if (!Array.isArray(data.messages) || data.messages.length > 10000) throw new Error('The file has an invalid or excessively large message list.');
+      const clean = data.messages.map((message, index) => {
+        if (!message || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') throw new Error(`Message ${index + 1} is invalid.`);
+        if (Array.isArray(message.attachments) && message.attachments.length > ATTACHMENT_LIMITS.maxFilesPerMessage) throw new Error(`Message ${index + 1} exceeds the ${ATTACHMENT_LIMITS.maxFilesPerMessage}-attachment limit.`);
+        const attachments = Array.isArray(message.attachments) ? message.attachments.map(file => {
+          if (!file || typeof file !== 'object' || Array.isArray(file)) throw new Error(`An attachment in message ${index + 1} is invalid.`);
+          const declaredType = String(file.type || '').slice(0, 200).toLowerCase();
+          const allowedImageTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+          let normalizedType = declaredType;
+          let decodedImageSize = 0;
+          let dataUrl = '';
+          if (typeof file.dataUrl === 'string' && file.dataUrl.length > 25 * 1024 * 1024) throw new Error(`Attachment in message ${index + 1} has an oversized data URL.`);
+          if (typeof file.dataUrl === 'string') {
+            const match = file.dataUrl.match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([a-z0-9+/]+=*)$/i);
+            if (!match || !allowedImageTypes.has(match[1].toLowerCase())) throw new Error(`Attachment in message ${index + 1} has an unsupported or malformed image data URL.`);
+            normalizedType = match[1].toLowerCase();
+            if (declaredType && declaredType !== normalizedType) throw new Error(`Attachment in message ${index + 1} has a MIME type that does not match its image data URL.`);
+            try {
+              const decoded = atob(match[2]);
+              decodedImageSize = decoded.length;
+              if (decodedImageSize > ATTACHMENT_LIMITS.maxImageBytes) throw new Error(`Attachment in message ${index + 1} exceeds the 10 MB decoded image limit.`);
+            } catch (error) {
+              if (error?.message?.includes('decoded image limit')) throw error;
+              throw new Error(`Attachment in message ${index + 1} contains invalid base64 data.`);
+            }
+            dataUrl = file.dataUrl;
+          }
+          if (declaredType.startsWith('image/') && !allowedImageTypes.has(declaredType)) throw new Error(`Attachment in message ${index + 1} uses an unsupported image type.`);
+          const size = Math.max(0, Number(file.size) || 0, decodedImageSize);
+          if (dataUrl && size > ATTACHMENT_LIMITS.maxImageBytes) throw new Error(`Attachment in message ${index + 1} exceeds the 10 MB per-image limit.`);
+          if (!dataUrl && size > ATTACHMENT_LIMITS.maxTextBytes) throw new Error(`Attachment in message ${index + 1} exceeds the 2 MB text-file limit.`);
+          return { name: String(file.name || 'Attachment').slice(0, 512), type: normalizedType, size, ...(typeof file.text === 'string' ? { text: file.text.slice(0, 2 * 1024 * 1024) } : {}), ...(dataUrl ? { dataUrl } : {}) };
+        }) : [];
+        if (attachments.reduce((total, file) => total + file.size, 0) > ATTACHMENT_LIMITS.maxTotalBytes) throw new Error(`Attachments in message ${index + 1} exceed the combined 25 MB limit.`);
+        const parsedTime = Date.parse(message.timestamp || '');
+        return { role: message.role, content: message.content.slice(0, 20 * 1024 * 1024), thinking: typeof message.thinking === 'string' ? message.thinking.slice(0, 20 * 1024 * 1024) : '', thinkingOpen: typeof message.thinkingOpen === 'boolean' ? message.thinkingOpen : (data.session?.defaultThinkingOpen ?? true), thinkRequested: !!message.thinkRequested, generationSettings: message.generationSettings && typeof message.generationSettings === 'object' ? message.generationSettings : null, isContinuation: !!message.isContinuation, attachments, timestamp: Number.isFinite(parsedTime) ? parsedTime : Date.now(), provider: ['ollama', 'lmstudio'].includes(message.provider) ? message.provider : null, model: typeof message.model === 'string' ? message.model.slice(0, 512) : null, error: !!message.error };
+      });
+      return { data, messages: clean };
+    }
+    async function openSessionFile(file) {
+      if (!file) return;
+      if (file.size > 50 * 1024 * 1024) { showToast('Conversation files must be 50 MB or smaller.'); return; }
+      if (activeController || messages.some(message => message.pending)) { showToast('Stop the current response before opening another conversation.'); return; }
+      try {
+        const parsed = JSON.parse(await file.text());
+        const { data, messages: restored } = validateSessionFile(parsed);
+        if (!restored.length) throw new Error('This conversation contains no messages.');
+        if (messages.length && !window.confirm('Open this conversation and replace the current chat? Any unsaved changes in the current chat will be lost.')) return;
+        messages.splice(0, messages.length, ...restored);
+        lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
+        const created = Date.parse(data.createdAt || '');
+        conversationStartedAt = Number.isFinite(created) ? created : (restored[0]?.timestamp || Date.now());
+        defaultThinkingOpen = typeof data.session?.defaultThinkingOpen === 'boolean' ? data.session.defaultThinkingOpen : (restored.at(-1)?.thinkingOpen ?? true);
+        const session = data.session && typeof data.session === 'object' ? data.session : {};
+        contextSummary = typeof session.contextSummary === 'string' ? session.contextSummary.slice(0, 200000) : '';
+        contextSummaryThrough = Math.max(0, Number(session.contextSummaryThrough) || 0);
+        contextSummaryDirty = false;
+        settingLmStudioApiMode.value = session.lmStudioApiMode === 'native' ? 'native' : 'openai';
+        settingHistoryTurns.value = Number.isFinite(Number(session.historyTurns)) && session.historyTurns !== null && Number(session.historyTurns) !== 12
+          ? String(Math.min(200, Math.max(2, Number(session.historyTurns)))) : '';
+        settingHistoryTokenBudget.value = session.historyTokenBudget === null || session.historyTokenBudget === undefined || !Number.isFinite(Number(session.historyTokenBudget)) ? '' : String(Math.min(1000000, Math.max(256, Number(session.historyTokenBudget))));
+        if (typeof session.thinkEnabled === 'boolean') thinkToggle.checked = session.thinkEnabled;
+        applyImportedGenerationSettings(session.generationSettings || restored.slice().reverse().find(m => m.generationSettings)?.generationSettings || {});
+        syncThinkButton();
+        const savedProvider = ['ollama', 'lmstudio'].includes(session.provider) ? session.provider : restored.slice().reverse().find(m => m.provider)?.provider;
+        const savedModel = typeof session.model === 'string' ? session.model : restored.slice().reverse().find(m => m.model)?.model;
+        let modelUnavailable = false;
+        if (savedProvider && savedModel) {
+          const savedKey = `${savedProvider}::${savedModel}`;
+          const option = [...modelSelect.options].find(item => item.dataset.provider === savedProvider && item.dataset.model === savedModel);
+          preferredModelKey = savedKey;
+          if (option) modelSelect.value = option.value;
+          else modelUnavailable = true;
+        }
+        promptInput.value = '';
+        pendingAttachments = [];
+        renderPendingAttachments();
+        renderMessages(false);
+        updateContextManagerUI();
+        autoResizePrompt();
+        savePreferences();
+        void updateSelectedModelInfo();
+        $('#exportMenu').open = false;
+        showToast(modelUnavailable ? `Conversation opened; model “${savedModel}” is unavailable. Choose a model to continue.` : `Opened “${filenameSafe(data.title || 'conversation')}”.`);
+      } catch (error) {
+        showToast(`Could not open conversation: ${error?.message || String(error)}`);
+      } finally { sessionFileInput.value = ''; }
     }
     function openWebUiExport() {
       const items = allMessages(); const ids = items.map((_, i) => `local-llm-${i + 1}-${Math.random().toString(36).slice(2, 9)}`); const tree = {};
       items.forEach((m, i) => {
         const timestamp = Math.floor(Number(m.timestamp || Date.now()) / 1000);
-        tree[ids[i]] = { id: ids[i], parentId: i === 0 ? null : ids[i - 1], childrenIds: i + 1 < ids.length ? [ids[i + 1]] : [], role: m.role, content: m.content, timestamp };
+        tree[ids[i]] = { id: ids[i], parentId: i === 0 ? null : ids[i - 1], childrenIds: i + 1 < ids.length ? [ids[i + 1]] : [], role: m.role, content: messageContentWithTextAttachments(m), timestamp, ...(m.thinking ? { reasoning_content: m.thinking } : {}) };
         if (m.role === 'assistant') { tree[ids[i]].model = m.model || selectedModel()?.model || BOOT.initialModel || 'local-model'; tree[ids[i]].done = !m.pending; }
       });
       const models = [...new Set(items.filter(m => m.role === 'assistant').map(m => m.model).filter(Boolean))];
@@ -607,13 +2251,28 @@
     }
     function openAiRequestExport() {
       const choice = selectedModel();
-      return { model: choice?.model || BOOT.initialModel || '', messages: allMessages().map(m => ({ role: m.role, content: m.content })), stream: true, think: !!thinkToggle.checked };
+      const thinkingEnabled = !!thinkToggle.checked;
+      const settings = generationSettings();
+      return {
+        model: choice?.model || BOOT.initialModel || '',
+        messages: providerMessages('lmstudio', allMessages()),
+        stream: true,
+        reasoning_effort: thinkingEnabled ? 'high' : 'none',
+        chat_template_kwargs: { enable_thinking: thinkingEnabled },
+        ...(settings.temperature !== null ? { temperature: settings.temperature } : {}),
+        ...(settings.top_p !== null ? { top_p: settings.top_p } : {}),
+        ...(settings.max_tokens !== null ? { max_tokens: settings.max_tokens } : {}),
+        ...(settings.seed !== null ? { seed: settings.seed } : {})
+      };
     }
     function markdownExport() {
       const rows = [`# ${conversationTitle()}`, '', `Exported: ${new Date().toLocaleString()}`, ''];
       for (const m of allMessages()) {
         const role = m.role === 'user' ? 'User' : 'Assistant';
-        rows.push(`## ${role}${m.model ? ` · ${m.model}` : ''}${m.error ? ' · Request error' : ''}`, '', m.content, '');
+        rows.push(`## ${role}${m.model ? ` · ${m.model}` : ''}${m.error ? ' · Request error' : ''}`, '');
+        if (m.attachments?.length) rows.push(`Attachments: ${m.attachments.map(file => `${file.name} (${formatBytes(file.size || 0)})`).join(', ')}`, '');
+        if (m.thinking) rows.push('<details><summary>Thinking</summary>', '', m.thinking, '', '</details>', '');
+        rows.push(m.content, '');
       }
       return rows.join('\n');
     }
@@ -623,15 +2282,16 @@
       return `"${text.replace(/"/g, '""')}"`;
     }
     function csvExport() {
-      const rows = [['timestamp', 'role', 'provider', 'model', 'error', 'content']];
-      for (const m of allMessages()) rows.push([dateLabel(m.timestamp), m.role, m.provider || '', m.model || '', m.error ? 'true' : 'false', m.content]);
+      const rows = [['timestamp', 'role', 'provider', 'model', 'error', 'thinking', 'attachments', 'content']];
+      for (const m of allMessages()) rows.push([dateLabel(m.timestamp), m.role, m.provider || '', m.model || '', m.error ? 'true' : 'false', m.thinking || '', (m.attachments || []).map(file => file.name).join('; '), m.content]);
       return '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
     }
     const standaloneCss = `
       :root{color-scheme:light dark;--bg:#101216;--surface:#171a21;--text:#e9edf5;--muted:#a0a8b7;--border:#323a49;--accent:#9aabff;--user:#232b42;--code:#11141a;--radius:12px;--font:Segoe UI,system-ui,sans-serif;--mono:Consolas,Cascadia Code,monospace}
       @media(prefers-color-scheme:light){:root{color-scheme:light;--bg:#f4f6fa;--surface:#fff;--text:#20232b;--muted:#616a7a;--border:#d7dce6;--accent:#3d55bf;--user:#e7ebff;--code:#f6f7fa}}
       *{box-sizing:border-box}body{margin:0;padding:28px;background:var(--bg);color:var(--text);font:15px/1.7 var(--font)}main{max-width:1000px;margin:0 auto}.export-title{font-size:24px;margin:0 0 6px}.export-note{color:var(--muted);font-size:12px;margin-bottom:22px}.message{margin:0 0 18px;padding:15px 17px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow-wrap:anywhere}.message.user{background:var(--user)}.message.error{border-color:#bd5860}.message-meta{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:8px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase}.message-meta .role{color:var(--text)}.message-meta .error-label{color:#ff858a}.message-content p{margin:0 0 12px}.message-content h1,.message-content h2,.message-content h3{line-height:1.35;margin:20px 0 9px}.message-content ul,.message-content ol{padding-left:24px}.message-content blockquote{margin:10px 0;padding:3px 13px;border-left:3px solid var(--accent);color:var(--muted)}.message-content a{color:var(--accent)}.message-content pre{position:relative;overflow:auto;padding:38px 14px 14px;background:var(--code);border:1px solid var(--border);border-radius:8px}.message-content code{font:.92em var(--mono);background:var(--code);padding:.13em .35em;border-radius:4px}.message-content pre code{display:block;background:transparent;padding:0;white-space:pre}.copy-code{position:absolute;right:7px;top:6px;padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);cursor:pointer}.message-content hr{border:0;border-top:1px solid var(--border)}
-      @media print{body{padding:0;background:#fff;color:#111}.message,.message.user{background:#fff;color:#111;break-inside:avoid;box-shadow:none}.message-content pre{white-space:pre-wrap;overflow:visible}.message-content pre code{white-space:pre-wrap}.copy-code{display:none}}
+      .message-thinking{margin:0 0 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden}.message-thinking summary{cursor:pointer;padding:9px 12px;color:var(--muted);font-size:12px;font-weight:700}.thinking-body{padding:10px 12px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}.message-attachments{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.message-attachment{display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted);font-size:12px}.message-attachment img{width:28px;height:28px;border-radius:6px;object-fit:cover}.message-attachment-name{overflow-wrap:anywhere}.generation-metrics{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:8px;color:var(--muted);font-size:11px;line-height:1.3;opacity:.78}.generation-metrics span+span:before{content:'·';margin-right:7px;opacity:.65}
+      @media print{body{padding:0;background:#fff;color:#111}.message,.message.user{background:#fff;color:#111;break-inside:avoid;box-shadow:none}.message-content pre{white-space:pre-wrap;overflow:visible}.message-content pre code{white-space:pre-wrap}.message-thinking:not([open])>.thinking-body{display:block!important}.copy-code{display:none}}
     `;
     function standaloneHtmlExport() {
       const body = allMessages().map(renderMessageMarkup).join('\n');
@@ -650,34 +2310,132 @@
         case 'openai': downloadFile(`${base}-openai-request.json`, JSON.stringify(openAiRequestExport(), null, 2), 'application/json;charset=utf-8'); break;
         case 'markdown': downloadFile(`${base}.md`, markdownExport(), 'text/markdown;charset=utf-8'); break;
         case 'csv': downloadFile(`${base}.csv`, csvExport(), 'text/csv;charset=utf-8'); break;
-        case 'txt': downloadFile(`${base}.txt`, allMessages().map(m => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}${m.model ? ` · ${m.model}` : ''}${m.error ? ' · REQUEST ERROR' : ''}\n${m.content}`).join('\n\n' + '─'.repeat(56) + '\n\n'), 'text/plain;charset=utf-8'); break;
-        case 'jsonl': downloadFile(`${base}.jsonl`, allMessages().map(m => JSON.stringify({ role: m.role, content: m.content, timestamp: new Date(m.timestamp || Date.now()).toISOString(), provider: m.provider || null, model: m.model || null, error: !!m.error })).join('\n') + '\n', 'application/x-ndjson;charset=utf-8'); break;
+        case 'txt': downloadFile(`${base}.txt`, allMessages().map(m => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}${m.model ? ` · ${m.model}` : ''}${m.error ? ' · REQUEST ERROR' : ''}${m.attachments?.length ? `\nATTACHMENTS: ${m.attachments.map(file => file.name).join(', ')}` : ''}${m.thinking ? `\n\nTHINKING OUTPUT:\n${m.thinking}` : ''}\n\n${m.content}`).join('\n\n' + '─'.repeat(56) + '\n\n'), 'text/plain;charset=utf-8'); break;
+        case 'jsonl': downloadFile(`${base}.jsonl`, allMessages().map(m => JSON.stringify({ role: m.role, content: m.content, thinking: m.thinking || '', attachments: (m.attachments || []).map(file => ({ name: file.name, type: file.type, size: file.size, text: file.text })), timestamp: new Date(m.timestamp || Date.now()).toISOString(), provider: m.provider || null, model: m.model || null, error: !!m.error })).join('\n') + '\n', 'application/x-ndjson;charset=utf-8'); break;
         case 'print': window.print(); break;
       }
     }
 
-    $('#themeSelect').addEventListener('change', event => { document.documentElement.dataset.theme = event.target.value; });
+    document.querySelectorAll('[data-theme-choice]').forEach(button => {
+      button.addEventListener('click', () => {
+        const theme = button.dataset.themeChoice;
+        document.documentElement.dataset.theme = theme;
+        document.querySelectorAll('[data-theme-choice]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+        savePreferences();
+      });
+    });
+    transcriptInner.addEventListener('click', event => { const button = event.target.closest('[data-message-action]'); if (button) void handleMessageAction(button.dataset.messageAction, Number(button.dataset.index)); });
+    transcriptInner.addEventListener('toggle', event => {
+      const details = event.target;
+      if (!(details instanceof HTMLDetailsElement) || !details.matches('details.message-thinking[data-thinking-index]')) return;
+      const message = messages[Number(details.dataset.thinkingIndex)];
+      if (message) { message.thinkingOpen = details.open; defaultThinkingOpen = details.open; }
+    }, true);
+    transcript.addEventListener('scroll', updateJumpToLatest, { passive: true });
+    jumpToLatestButton.addEventListener('click', () => { transcript.scrollTo({ top: transcript.scrollHeight, behavior: 'smooth' }); });
+    modelSelect.addEventListener('change', () => { preferredModelKey = currentModelKey(); savePreferences(); void updateSelectedModelInfo(); updateContextManagerUI(); });
+    settingLmStudioApiMode.addEventListener('change', () => {
+      lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
+      for (const message of messages) if (message.role === 'assistant') message.providerResponseId = null;
+      savePreferences(); updateContextSettingForProvider(selectedModel()?.provider || 'ollama'); updateContextManagerUI();
+    });
     refreshButton.addEventListener('click', () => refreshModels(true));
     sendButton.addEventListener('click', sendMessage);
     stopButton.addEventListener('click', () => activeController?.abort());
-    promptInput.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); sendMessage(); } });
+    thinkButton.addEventListener('click', () => { thinkToggle.checked = !thinkToggle.checked; syncThinkButton(); savePreferences(); });
+    thinkToggle.addEventListener('change', () => { syncThinkButton(); savePreferences(); });
+    for (const input of [settingTemperature, settingTopP, settingMaxTokens, settingSeed]) {
+      input.addEventListener('change', () => { savePreferences(); });
+    }
+    for (const input of [settingContextLength, settingHistoryTurns, settingHistoryTokenBudget]) {
+      input.addEventListener('change', () => {
+        if (input === settingHistoryTurns && settingHistoryTurns.value.trim()) settingHistoryTurns.value = String(Math.min(200, Math.max(2, Number(settingHistoryTurns.value) || 2)));
+        if (input === settingHistoryTokenBudget && settingHistoryTokenBudget.value.trim()) settingHistoryTokenBudget.value = String(Math.min(1000000, Math.max(256, Number(settingHistoryTokenBudget.value) || 256)));
+        for (const message of messages) if (message.role === 'assistant') message.providerResponseId = null;
+        lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
+        savePreferences(); updateContextManagerUI();
+      });
+    }
+    summarizeHistoryButton.addEventListener('click', () => void summarizeOlderConversation());
+    contextSummaryEditor.addEventListener('input', () => {
+      contextSummaryDirty = true;
+      contextSummaryState.textContent = 'Unsaved edits';
+    });
+    saveContextSummaryButton.addEventListener('click', () => {
+      const edited = contextSummaryEditor.value.trim();
+      if (edited && !contextSummary) contextSummaryThrough = getManagedContextPlan().recentStart;
+      contextSummary = edited;
+      contextSummaryDirty = false;
+      if (!contextSummary) contextSummaryThrough = 0;
+      for (const message of messages) if (message.role === 'assistant') message.providerResponseId = null;
+      lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
+      savePreferences(); updateContextManagerUI(); showToast(contextSummary ? 'Context summary saved.' : 'Context summary cleared.');
+    });
+    clearContextSummaryButton.addEventListener('click', () => {
+      if (!contextSummary) return;
+      if (!window.confirm('Clear the context summary? Your original messages will remain in the transcript, but older turns may be omitted from future model requests.')) return;
+      contextSummary = ''; contextSummaryThrough = 0; contextSummaryDirty = false;
+      for (const message of messages) if (message.role === 'assistant') message.providerResponseId = null;
+      lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
+      savePreferences(); updateContextManagerUI(); showToast('Context summary cleared.');
+    });
+    $('#resetGenerationSettings').addEventListener('click', () => {
+      settingTemperature.value = ''; settingTopP.value = ''; settingMaxTokens.value = ''; settingSeed.value = '';
+      savePreferences();
+    });
+    cancelEditButton.addEventListener('click', () => { cancelEditing(); promptInput.focus(); });
+    attachButton.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleFilesSelected);
+    promptInput.addEventListener('input', autoResizePrompt);
+    promptInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        void sendMessage();
+      }
+      // Shift+Enter deliberately keeps the browser's native newline behavior.
+    });
+    attachmentNoticeDismiss.addEventListener('click', () => setAttachmentNotice(''));
+    attachmentWarningCancel.addEventListener('click', () => finishAttachmentConfirmation(false));
+    attachmentWarningConfirm.addEventListener('click', () => finishAttachmentConfirmation(true));
+    attachmentWarningModal.addEventListener('click', event => { if (event.target === attachmentWarningModal) finishAttachmentConfirmation(false); });
     exportFormat.addEventListener('change', () => { if (exportFormat.value === 'print') { exportConversation(); exportFormat.value = ''; } });
-    $('#exportButton').addEventListener('click', exportConversation);
+    $('#exportButton').addEventListener('click', () => {
+      exportConversation();
+      if (exportFormat.value && exportFormat.value !== 'print') $('#exportMenu').open = false;
+    });
+    $('#saveSessionButton').addEventListener('click', saveSessionFile);
+    $('#openSessionButton').addEventListener('click', () => sessionFileInput.click());
+    sessionFileInput.addEventListener('change', () => { void openSessionFile(sessionFileInput.files?.[0]); });
+    document.addEventListener('click', event => {
+      for (const menu of [$('#exportMenu'), generationSettingsMenu, $('#contextManagerMenu'), modelInfoMenu]) {
+        if (menu.open && !menu.contains(event.target)) menu.open = false;
+      }
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      if (!attachmentWarningModal.hidden) { finishAttachmentConfirmation(false); return; }
+      if (editingMessageIndex !== null) cancelEditing();
+      $('#exportMenu').open = false; generationSettingsMenu.open = false; $('#contextManagerMenu').open = false; modelInfoMenu.open = false;
+    });
 
     let isInitialized = false;
     window.initializeLocalLLM = function (initialState) {
       if (isInitialized) return;
       isInitialized = true;
       BOOT = initialState && typeof initialState === 'object' ? initialState : {};
-      const configuredTimeout = Number(BOOT.requestTimeoutSeconds || 600) * 1000;
-      fallbackTimeoutMs = Math.max(30000, Math.min(configuredTimeout, 3600000));
+      applySavedPreferences();
+      updateContextSettingForProvider('ollama');
       if (BOOT.prompt) messages.push({ role: 'user', content: String(BOOT.prompt), timestamp: Date.now(), provider: 'ollama', model: BOOT.initialModel || '', initial: true });
       if (BOOT.response !== undefined && BOOT.response !== null) {
-        messages.push({ role: 'assistant', content: String(BOOT.response), timestamp: Date.now(), provider: 'ollama', model: BOOT.initialModel || '', error: !!BOOT.isError, initial: true });
+        const responseParts = extractEmbeddedThinking(String(BOOT.response));
+        messages.push({ role: 'assistant', content: responseParts.content, thinking: responseParts.thinking, thinkingOpen: true, thinkRequested: !!BOOT.initialThink, timestamp: Date.now(), provider: 'ollama', model: BOOT.initialModel || '', error: !!BOOT.isError, initial: true });
       }
       $('#conversationTitle').textContent = BOOT.title || 'LocalLLM Chat';
-      thinkToggle.checked = !!BOOT.initialThink;
+      if (!Object.prototype.hasOwnProperty.call(initialPreferences, 'thinkEnabled')) thinkToggle.checked = !!BOOT.initialThink;
+      syncThinkButton();
+      autoResizePrompt();
       renderMessages(false);
+      updateContextManagerUI();
       void refreshModels(false);
     };
   </script>
