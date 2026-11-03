@@ -202,7 +202,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 CreateResponseResult(
                     model,
                     "Enter a prompt after the LocalLLM keyword. To choose a model for one query, use: > model-name > your prompt.",
-                    isError: true),
+                    isError: true,
+                    prompt: string.Empty,
+                    settings: settings),
             };
         }
 
@@ -221,7 +223,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                         model,
                         $"Model '{model}' was not found. {available}",
                         isError: true,
-                        prompt: prompt),
+                        prompt: prompt,
+                        settings: settings),
                 };
             }
 
@@ -231,14 +234,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 response = "The model completed the request but returned no text.";
             }
 
-            return CreateResponseResults(model, response, isError: false, prompt: prompt);
+            return CreateResponseResults(model, response, isError: false, prompt: prompt, settings: settings);
         }
         catch (Exception ex)
         {
             var message = GetUsefulExceptionMessage(ex);
             return new List<Result>
             {
-                CreateResponseResult(model, $"Request failed: {message}", isError: true, prompt: prompt),
+                CreateResponseResult(model, $"Request failed: {message}", isError: true, prompt: prompt, settings: settings),
             };
         }
     }
@@ -490,7 +493,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return true;
     }
 
-    private List<Result> CreateResponseResults(string model, string response, bool isError, string prompt = "")
+    private List<Result> CreateResponseResults(string model, string response, bool isError, string prompt, SettingsSnapshot settings)
     {
         var results = new List<Result>();
         var fullResponse = response ?? string.Empty;
@@ -519,7 +522,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     try
                     {
                         ShowNativeResponseWindow(
-                            $"LocalLLM · {model}",
+                            settings,
                             model,
                             prompt,
                             fullResponse,
@@ -540,7 +543,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
             if (i == 0)
             {
-                result.Title = $"LocalLLM · {model}:";
+                result.Title = "LocalLLM:";
             }
 
             results.Add(result);
@@ -549,9 +552,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return results;
     }
 
-    private Result CreateResponseResult(string model, string response, bool isError, string prompt = "")
+    private Result CreateResponseResult(string model, string response, bool isError, string prompt, SettingsSnapshot settings)
     {
-        var title = isError ? $"LocalLLM · {model} · Request failed" : $"LocalLLM · {model}";
+        var title = isError ? "LocalLLM · Request failed" : "LocalLLM";
         var preview = CreatePreview(response);
 
         return new Result
@@ -570,7 +573,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 try
                 {
-                    ShowNativeResponseWindow(title, model, prompt, response, isError);
+                    ShowNativeResponseWindow(settings, model, prompt, response, isError);
                 }
                 catch (Exception ex)
                 {
@@ -855,18 +858,18 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return singleLine.Length <= maxLength ? singleLine : singleLine[..(maxLength - 1)] + "…";
     }
 
-    private void ShowNativeResponseWindow(string title, string model, string? prompt, string response, bool isError)
+    private void ShowNativeResponseWindow(SettingsSnapshot settings, string model, string? prompt, string response, bool isError)
     {
-        // Some PowerToys SDK versions annotate query text as nullable. Keep the original
-        // prompt whenever available, but never pass null into the bootstrap payload.
+        // Title generation is deliberately deferred until the user explicitly opens Chat.
+        // Inline PowerToys Run queries never make this additional model request.
         var safePrompt = prompt ?? string.Empty;
-        var settings = GetSettingsSnapshot();
-        var navigation = BuildChatNavigation(title, model, safePrompt, response, isError, settings);
+        var fallbackTitle = CreateFallbackConversationTitle(safePrompt);
+        var navigation = BuildChatNavigation(fallbackTitle, model, safePrompt, response, isError, settings);
         var webView = CreateChatWebView();
 
         var appWindow = new Window
         {
-            Title = title,
+            Title = "LocalLLM",
             Width = 1120,
             Height = 860,
             MinWidth = 680,
@@ -878,6 +881,151 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         appWindow.Show();
         appWindow.Activate();
         _ = InitializeChatWebViewAsync(appWindow, webView, navigation.FolderPath, navigation.BootstrapJson);
+        if (!isError)
+        {
+            _ = GenerateAndApplyConversationTitleAsync(appWindow, webView, model, safePrompt, response, settings, fallbackTitle);
+        }
+    }
+
+    private static string CreateFallbackConversationTitle(string prompt)
+    {
+        var value = string.Join(" ", (prompt ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (string.IsNullOrWhiteSpace(value)) return "LocalLLM Chat";
+        value = value.Trim().TrimEnd('.', '?', '!');
+        var words = value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(7);
+        var title = string.Join(" ", words);
+        if (title.Length > 58) title = title[..55].TrimEnd() + "…";
+        return char.ToUpperInvariant(title[0]) + title[1..];
+    }
+
+    private static string NormalizeGeneratedConversationTitle(string? value, string fallback)
+    {
+        var title = (value ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Trim();
+        title = title.Trim('"', '\'', '`', ' ', ':', '-', '—');
+        title = System.Text.RegularExpressions.Regex.Replace(
+            title,
+            @"^(?:title|conversation title)\s*:\s*",
+            string.Empty,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        title = string.Join(" ", title.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (string.IsNullOrWhiteSpace(title)) return fallback;
+        if (title.Length > 64) title = title[..61].TrimEnd() + "…";
+        return title;
+    }
+
+    private async Task GenerateAndApplyConversationTitleAsync(
+        Window appWindow,
+        WebView2 webView,
+        string model,
+        string prompt,
+        string responseText,
+        SettingsSnapshot settings,
+        string fallbackTitle)
+    {
+        string title;
+        try
+        {
+            title = await GenerateConversationTitleAsync(model, prompt, responseText, settings).ConfigureAwait(false);
+            title = NormalizeGeneratedConversationTitle(title, fallbackTitle);
+        }
+        catch
+        {
+            title = fallbackTitle;
+        }
+
+        try
+        {
+            // This method resumes on a worker thread after the HTTP request. All WPF
+            // Window/WebView2 access must therefore be marshalled back to the UI thread.
+            var dispatcher = appWindow.Dispatcher;
+            await dispatcher.InvokeAsync(() => appWindow.Title = $"LocalLLM — {title}");
+            var serializedTitle = JsonSerializer.Serialize(title);
+            // The document may still be loading. Retry briefly until its one-way title
+            // setter exists; no WebMessageReceived handler or host bridge is introduced.
+            for (var attempt = 0; attempt < 120; attempt++)
+            {
+                if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
+                try
+                {
+                    var readyScriptTask = await dispatcher.InvokeAsync(
+                        () => webView.CoreWebView2.ExecuteScriptAsync("typeof window.setConversationTitle === 'function'"));
+                    var ready = await readyScriptTask.ConfigureAwait(false);
+                    if (string.Equals(ready, "true", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var setTitleTask = await dispatcher.InvokeAsync(
+                            () => webView.CoreWebView2.ExecuteScriptAsync($"window.setConversationTitle({serializedTitle});"));
+                        await setTitleTask.ConfigureAwait(false);
+                        return;
+                    }
+                }
+                catch
+                {
+                    // Navigation or window closure can race with title generation.
+                }
+                await Task.Delay(250).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            // The static application title and prompt-derived in-app title remain usable.
+        }
+    }
+
+    private static async Task<string> GenerateConversationTitleAsync(
+        string model,
+        string prompt,
+        string responseText,
+        SettingsSnapshot settings)
+    {
+        var titlePrompt = "Create a concise chat title of 3 to 7 words. Use the user's request and the assistant's response to identify the actual topic. Return only the title, without quotes, markdown, or explanation.\n\nUSER REQUEST:\n"
+            + (prompt ?? string.Empty)[..Math.Min((prompt ?? string.Empty).Length, 1800)]
+            + "\n\nASSISTANT RESPONSE:\n"
+            + (responseText ?? string.Empty)[..Math.Min((responseText ?? string.Empty).Length, 1800)];
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        if (settings.Provider == 1)
+        {
+            var payload = new
+            {
+                model,
+                messages = new[]
+                {
+                    new { role = "system", content = "You generate short, accurate conversation titles. Return only a title." },
+                    new { role = "user", content = titlePrompt },
+                },
+                stream = false,
+                temperature = 0.2,
+                max_tokens = 32,
+            };
+            using var request = new HttpRequestMessage(HttpMethod.Post, BuildLMStudioUri(settings.LMStudioBaseUrl, "chat/completions"))
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
+            };
+            using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeout.Token).ConfigureAwait(false);
+            if (!result.IsSuccessStatusCode) throw new HttpRequestException($"LM Studio title request returned HTTP {(int)result.StatusCode}.");
+            using var document = JsonDocument.Parse(await result.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false));
+            return document.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
+        }
+        else
+        {
+            var payload = new
+            {
+                model,
+                prompt = titlePrompt,
+                stream = false,
+                think = false,
+                keep_alive = settings.KeepAliveSeconds,
+                options = new { temperature = 0.2, num_predict = 32 },
+            };
+            using var request = new HttpRequestMessage(HttpMethod.Post, ValidateGenerateEndpoint(settings.Endpoint))
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
+            };
+            using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeout.Token).ConfigureAwait(false);
+            if (!result.IsSuccessStatusCode) throw new HttpRequestException($"Ollama title request returned HTTP {(int)result.StatusCode}.");
+            using var document = JsonDocument.Parse(await result.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false));
+            return document.RootElement.TryGetProperty("response", out var response) ? response.GetString() ?? string.Empty : string.Empty;
+        }
     }
 
     private async Task InitializeChatWebViewAsync(
@@ -1122,7 +1270,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var bootstrap = new
         {
             title,
+            windowInstanceId = Guid.NewGuid().ToString("N"),
             initialModel = model,
+            initialProvider = settings.Provider == 1 ? "lmstudio" : "ollama",
             prompt = prompt ?? string.Empty,
             response = response ?? string.Empty,
             isError,
