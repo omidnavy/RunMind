@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -14,10 +13,10 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using HtmlAgilityPack;
 using ManagedCommon;
-using Markdig;
 using Microsoft.PowerToys.Settings.UI.Library;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 using Wox.Plugin;
 using Clipboard = System.Windows.Clipboard;
 
@@ -34,6 +33,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     public string Description => "Query an Ollama-compatible local language model.";
 
     private const string DefaultEndpoint = "http://localhost:11434/api/generate";
+    private const string DefaultLMStudioBaseUrl = "http://localhost:1234/v1";
     private const string DefaultModel = "qwen3:14b";
     private const string DefaultThinking = "auto";
     private const int DefaultKeepAliveSeconds = 300;
@@ -49,6 +49,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private PluginInitContext? _context;
     private string _iconPath = @"Images\icon.png";
     private string _endpoint = DefaultEndpoint;
+    private string _lmStudioBaseUrl = DefaultLMStudioBaseUrl;
     private string _defaultModel = DefaultModel;
     private string _thinking = DefaultThinking;
     private int _keepAliveSeconds = DefaultKeepAliveSeconds;
@@ -63,6 +64,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             DisplayDescription = "Full Ollama generate endpoint, for example http://localhost:11434/api/generate.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
             TextValue = DefaultEndpoint,
+        },
+        new()
+        {
+            Key = "LMStudioBaseUrl",
+            DisplayLabel = "LM Studio base URL (chat window)",
+            DisplayDescription = "OpenAI-compatible LM Studio base URL used by the WebView2 chat window for model discovery and follow-up turns, for example http://localhost:1234/v1. Inline PowerToys Run queries still use the Ollama endpoint above.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = DefaultLMStudioBaseUrl,
         },
         new()
         {
@@ -108,6 +117,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     public void UpdateSettings(PowerLauncherPluginSettings settings)
     {
         string endpoint = DefaultEndpoint;
+        string lmStudioBaseUrl = DefaultLMStudioBaseUrl;
         string model = DefaultModel;
         string thinking = DefaultThinking;
         int keepAliveSeconds = DefaultKeepAliveSeconds;
@@ -117,6 +127,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             var options = settings.AdditionalOptions;
             endpoint = GetTextOption(options, "LLMEndpoint", endpoint);
+            lmStudioBaseUrl = GetTextOption(options, "LMStudioBaseUrl", lmStudioBaseUrl);
             model = GetTextOption(options, "Model", model);
             thinking = GetTextOption(options, "Thinking", thinking);
 
@@ -136,6 +147,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         lock (_settingsLock)
         {
             _endpoint = string.IsNullOrWhiteSpace(endpoint) ? DefaultEndpoint : endpoint.Trim();
+            _lmStudioBaseUrl = string.IsNullOrWhiteSpace(lmStudioBaseUrl) ? DefaultLMStudioBaseUrl : lmStudioBaseUrl.Trim().TrimEnd('/');
             _defaultModel = string.IsNullOrWhiteSpace(model) ? DefaultModel : model.Trim();
             _thinking = string.IsNullOrWhiteSpace(thinking) ? DefaultThinking : thinking.Trim();
             _keepAliveSeconds = keepAliveSeconds;
@@ -182,7 +194,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     CreateResponseResult(
                         model,
                         $"Model '{model}' was not found. {available}",
-                        isError: true),
+                        isError: true,
+                        prompt: prompt),
                 };
             }
 
@@ -192,14 +205,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 response = "The model completed the request but returned no text.";
             }
 
-            return new List<Result> { CreateResponseResult(model, response, isError: false) };
+            return CreateResponseResults(model, response, isError: false, prompt: prompt);
         }
         catch (Exception ex)
         {
             var message = GetUsefulExceptionMessage(ex);
             return new List<Result>
             {
-                CreateResponseResult(model, $"Request failed: {message}", isError: true),
+                CreateResponseResult(model, $"Request failed: {message}", isError: true, prompt: prompt),
             };
         }
     }
@@ -386,33 +399,91 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return true;
     }
 
-    private Result CreateResponseResult(string model, string response, bool isError)
+    private List<Result> CreateResponseResults(string model, string response, bool isError, string prompt = "")
+    {
+        var results = new List<Result>();
+        var fullResponse = response ?? string.Empty;
+
+        // Inline launcher results keep their existing preview behavior. Selecting any
+        // section opens a new independent chat session seeded with the complete prompt
+        // and initial response.
+        var sections = SplitResponseForInlineReading(fullResponse, 420);
+        for (var i = 0; i < sections.Count; i++)
+        {
+            var section = sections[i];
+            var preview = CreatePreview(section);
+            var result = new Result
+            {
+                SubTitle = preview,
+                IcoPath = _iconPath,
+                ContextData = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["copy"] = fullResponse,
+                    ["model"] = model,
+                    ["prompt"] = prompt ?? string.Empty,
+                    ["isError"] = isError.ToString(),
+                },
+                Action = _ =>
+                {
+                    try
+                    {
+                        ShowNativeResponseWindow(
+                            $"LocalLLM · {model}",
+                            model,
+                            prompt,
+                            fullResponse,
+                            isError);
+                    }
+                    catch (Exception ex)
+                    {
+                        _context?.API.ShowMsg(
+                            "Could not display the LLM response",
+                            ex.Message);
+                    }
+
+                    return true;
+                },
+            };
+
+            // results.Add();
+
+            if (i == 0)
+            {
+                result.Title = $"LocalLLM · {model}:";
+            }
+
+            results.Add(result);
+        }
+
+        return results;
+    }
+
+    private Result CreateResponseResult(string model, string response, bool isError, string prompt = "")
     {
         var title = isError ? $"LocalLLM · {model} · Request failed" : $"LocalLLM · {model}";
         var preview = CreatePreview(response);
-        var subtitle = isError
-            ? preview
-            : $"{preview}  ·  Enter to read  ·  Right-click to copy";
 
         return new Result
         {
             Title = title,
-            SubTitle = subtitle,
+            SubTitle = preview,
             IcoPath = _iconPath,
             ContextData = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["copy"] = response,
                 ["model"] = model,
+                ["prompt"] = prompt ?? string.Empty,
+                ["isError"] = isError.ToString(),
             },
             Action = _ =>
             {
                 try
                 {
-                    OpenResponseInBrowser(title, model, response, isError);
+                    ShowNativeResponseWindow(title, model, prompt, response, isError);
                 }
                 catch (Exception ex)
                 {
-                    _context?.API.ShowMsg("Could not open the LLM response", ex.Message);
+                    _context?.API.ShowMsg("Could not display the LLM response", ex.Message);
                 }
 
                 return true;
@@ -420,19 +491,85 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         };
     }
 
+    private static List<string> SplitResponseForInlineReading(string response, int maxChunkLength)
+    {
+        var chunks = new List<string>();
+        if (string.IsNullOrEmpty(response))
+        {
+            chunks.Add("(The model returned an empty response.)");
+            return chunks;
+        }
+
+        // Prefer paragraph boundaries. Long paragraphs/code blocks are split on word
+        // boundaries so a huge answer is represented by multiple independently scrollable
+        // launcher results instead of one enormous subtitle.
+        var paragraphs = response.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n')
+            .Select(line => line.TrimEnd())
+            .ToArray();
+
+        var current = new StringBuilder();
+        foreach (var paragraph in paragraphs)
+        {
+            var addition = current.Length == 0 ? paragraph : "\n" + paragraph;
+            if (current.Length > 0 && current.Length + addition.Length > maxChunkLength)
+            {
+                chunks.Add(current.ToString());
+                current.Clear();
+                addition = paragraph;
+            }
+
+            while (addition.Length > maxChunkLength)
+            {
+                var cut = addition.LastIndexOf(' ', maxChunkLength - 1, maxChunkLength);
+                if (cut < Math.Max(80, maxChunkLength / 3))
+                {
+                    cut = maxChunkLength;
+                }
+
+                if (current.Length > 0)
+                {
+                    chunks.Add(current.ToString());
+                    current.Clear();
+                }
+
+                chunks.Add(addition[..cut].TrimEnd());
+                addition = addition[cut..].TrimStart();
+            }
+
+            if (addition.Length > 0)
+            {
+                if (current.Length > 0)
+                {
+                    current.Append('\n');
+                }
+
+                current.Append(addition);
+            }
+        }
+
+        if (current.Length > 0)
+        {
+            chunks.Add(current.ToString());
+        }
+
+        return chunks;
+    }
+
     public List<ContextMenuResult> LoadContextMenus(Result selectedResult)
     {
         var results = new List<ContextMenuResult>();
         if (selectedResult?.ContextData is not Dictionary<string, string> data
-            || !data.TryGetValue("copy", out var textToCopy))
+            || !data.TryGetValue("copy", out var fullResponse))
         {
             return results;
         }
 
+        var section = data.TryGetValue("copySection", out var sectionValue) ? sectionValue : null;
         results.Add(new ContextMenuResult
         {
             PluginName = Name,
-            Title = "Copy response (Markdown)",
+            Title = section is null ? "Copy response (Markdown)" : "Copy this section",
             FontFamily = "Segoe Fluent Icons,Segoe MDL2 Assets",
             Glyph = "\xE8C8",
             AcceleratorKey = Key.Enter,
@@ -440,7 +577,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 try
                 {
-                    Clipboard.SetText(textToCopy ?? string.Empty);
+                    Clipboard.SetText(section ?? fullResponse);
                 }
                 catch (Exception ex)
                 {
@@ -450,6 +587,30 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 return true;
             },
         });
+
+        if (section is not null)
+        {
+            results.Add(new ContextMenuResult
+            {
+                PluginName = Name,
+                Title = "Copy full response (Markdown)",
+                FontFamily = "Segoe Fluent Icons,Segoe MDL2 Assets",
+                Glyph = "\xE8C8",
+                Action = _ =>
+                {
+                    try
+                    {
+                        Clipboard.SetText(fullResponse);
+                    }
+                    catch (Exception ex)
+                    {
+                        _context?.API.ShowMsg("Could not copy response", ex.Message);
+                    }
+
+                    return true;
+                },
+            });
+        }
 
         return results;
     }
@@ -486,6 +647,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             return new SettingsSnapshot(
                 _endpoint,
+                _lmStudioBaseUrl,
                 _defaultModel,
                 _thinking,
                 _keepAliveSeconds,
@@ -563,14 +725,23 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     private static string CreatePreview(string text)
     {
-        var preview = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        const int maxLength = 155;
-        if (preview.Length > maxLength)
-        {
-            preview = preview[..(maxLength - 1)] + "…";
-        }
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
 
-        return preview;
+            return System.Text.RegularExpressions.Regex
+                .Replace(text.Trim(), @"\r?\n\s*\r?\n+", "\n");
+        // var preview = $"<html><head></head><body><p style=\"margin:0\">{text}</p></body></html>";
+
+        // return preview;
+        // var   preview = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        // const int maxLength = 155;
+        // if (preview.Length > maxLength)
+        // {
+        //     preview = preview[..(maxLength - 1)] + "…";
+        // }
+
+        // return preview;
     }
 
     private static string GetUsefulExceptionMessage(Exception exception)
@@ -603,318 +774,248 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return singleLine.Length <= maxLength ? singleLine : singleLine[..(maxLength - 1)] + "…";
     }
 
-    private static void OpenResponseInBrowser(string title, string model, string response, bool isError)
+    private void ShowNativeResponseWindow(string title, string model, string prompt, string response, bool isError)
     {
-        var markdownPipeline = new MarkdownPipelineBuilder()
-            .UseAdvancedExtensions()
-            .DisableHtml()
-            .Build();
-
-        var markdownHtml = Markdown.ToHtml(response ?? string.Empty, markdownPipeline);
-        var document = new HtmlDocument();
-        document.LoadHtml(markdownHtml);
-        SanitizeMarkdownHtml(document);
-        AddCodeCopyButtons(document);
-
-        var safeTitle = WebUtility.HtmlEncode(title);
-        var safeModel = WebUtility.HtmlEncode(model);
-        var safeRawResponse = WebUtility.HtmlEncode(response ?? string.Empty);
-        var safeBody = document.DocumentNode.InnerHtml;
-        var stateLabel = isError ? "REQUEST DETAILS" : "MODEL RESPONSE";
-        var html = $$"""
-            <!doctype html>
-            <html lang="en">
-            <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <meta name="color-scheme" content="light dark">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-                <title>{{safeTitle}}</title>
-                <style>
-                    :root {
-                        color-scheme: light dark;
-                        --page: #f5f6f8;
-                        --surface: #ffffff;
-                        --surface-soft: #f0f2f5;
-                        --text: #20242b;
-                        --muted: #687180;
-                        --border: #dce1e8;
-                        --accent: #4263eb;
-                        --accent-soft: #e8edff;
-                        --code: #171b24;
-                        --code-text: #e8edf5;
-                        --quote: #8995a7;
-                        --shadow: 0 12px 36px rgba(25, 35, 55, .07);
-                    }
-                    @media (prefers-color-scheme: dark) {
-                        :root {
-                            --page: #111318;
-                            --surface: #191c23;
-                            --surface-soft: #222630;
-                            --text: #e8eaf0;
-                            --muted: #a0a8b7;
-                            --border: #303542;
-                            --accent: #9aafff;
-                            --accent-soft: #252d49;
-                            --code: #0d0f14;
-                            --code-text: #e8edf5;
-                            --quote: #7a879b;
-                            --shadow: 0 12px 36px rgba(0, 0, 0, .18);
-                        }
-                    }
-                    * { box-sizing: border-box; }
-                    html { min-height: 100%; scroll-behavior: smooth; }
-                    body {
-                        margin: 0;
-                        min-height: 100vh;
-                        overflow-wrap: anywhere;
-                        background: var(--page);
-                        color: var(--text);
-                        font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-                        font-size: 16px;
-                        line-height: 1.72;
-                        -webkit-font-smoothing: antialiased;
-                    }
-                    .shell { width: min(100%, 980px); margin: 0 auto; padding: 28px clamp(16px, 4vw, 42px) 56px; }
-                    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 22px; border-bottom: 1px solid var(--border); }
-                    .identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
-                    .mark { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; border-radius: 13px; color: var(--accent); background: var(--accent-soft); font-size: 19px; font-weight: 750; }
-                    .brand { font-size: 13px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; line-height: 1.3; }
-                    .state { color: var(--muted); margin-top: 4px; font-size: 11px; letter-spacing: .12em; font-weight: 650; }
-                    .model { display: inline-flex; align-items: center; max-width: min(42vw, 420px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 7px 11px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); background: var(--surface); font-size: 12px; }
-                    button { font: inherit; cursor: pointer; }
-                    .copy-all { flex: 0 0 auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); padding: 9px 13px; font-size: 12px; font-weight: 650; transition: background .15s ease, border-color .15s ease; }
-                    .copy-all:hover, .copy-code:hover { border-color: var(--accent); background: var(--accent-soft); }
-                    .page-title { margin: 34px 0 23px; font-size: clamp(22px, 3vw, 31px); font-weight: 700; line-height: 1.28; letter-spacing: -.035em; }
-                    main { padding: clamp(20px, 4vw, 34px); border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); overflow-wrap: anywhere; }
-                    main > :first-child { margin-top: 0; }
-                    main > :last-child { margin-bottom: 0; }
-                    h1, h2, h3, h4, h5, h6 { line-height: 1.35; margin: 1.65em 0 .7em; letter-spacing: -.02em; }
-                    h1 { font-size: 1.65em; } h2 { font-size: 1.4em; } h3 { font-size: 1.17em; }
-                    p, ul, ol, blockquote, table, pre { margin: 1.05em 0; }
-                    li + li { margin-top: .32em; }
-                    a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-                    a:hover { text-decoration-thickness: 2px; }
-                    hr { margin: 2em 0; border: 0; border-top: 1px solid var(--border); }
-                    blockquote { margin-left: 0; padding: 2px 0 2px 18px; border-left: 3px solid var(--quote); color: var(--muted); }
-                    :not(pre) > code { padding: .16em .42em; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); font-size: .88em; font-family: Consolas, "Cascadia Code", monospace; }
-                    pre { position: relative; max-width: 100%; overflow: auto; padding: 42px 17px 17px; border: 1px solid #2a2f3b; border-radius: 12px; background: var(--code); color: var(--code-text); line-height: 1.55; tab-size: 4; }
-                    pre code { display: block; min-width: max-content; white-space: pre; font: 13px/1.6 Consolas, "Cascadia Code", monospace; }
-                    .copy-code { position: absolute; top: 8px; right: 8px; padding: 5px 9px; border: 1px solid #414959; border-radius: 7px; background: #262c38; color: #e8edf5; font-size: 11px; line-height: 1.4; }
-                    table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; border-spacing: 0; }
-                    th, td { padding: 9px 12px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
-                    th { background: var(--surface-soft); font-weight: 700; }
-                    tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-soft) 42%, transparent); }
-                    img { display: none; }
-                    .footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 18px; color: var(--muted); font-size: 11px; }
-                    #copy-status { min-height: 1.4em; color: var(--accent); }
-                    @media (max-width: 560px) {
-                        .shell { padding-top: 16px; }
-                        .topbar { align-items: flex-start; flex-wrap: wrap; }
-                        .model { max-width: 100%; }
-                        main { padding: 18px; border-radius: 13px; }
-                        .page-title { margin-top: 26px; }
-                    }
-                    @media print {
-                        body { background: #fff; color: #111; }
-                        .shell { width: 100%; padding: 0; }
-                        .topbar, .footer, .copy-code, .copy-all { display: none !important; }
-                        main { padding: 0; box-shadow: none; border: 0; }
-                        pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="shell">
-                    <header class="topbar">
-                        <div class="identity">
-                            <div class="mark" aria-hidden="true">L</div>
-                            <div>
-                                <div class="brand">LocalLLM</div>
-                                <div class="state">{{stateLabel}}</div>
-                            </div>
-                            <span class="model" title="{{safeModel}}">{{safeModel}}</span>
-                        </div>
-                        <button class="copy-all" id="copy-all" type="button">Copy Markdown</button>
-                    </header>
-                    <h1 class="page-title">{{safeTitle}}</h1>
-                    <main id="answer">{{safeBody}}</main>
-                    <footer class="footer">
-                        <span>Text is selectable · Links open in your browser</span>
-                        <span id="copy-status" role="status" aria-live="polite"></span>
-                    </footer>
-                    <textarea id="raw-response" hidden aria-hidden="true">{{safeRawResponse}}</textarea>
-                </div>
-                <script>
-                    async function copyText(text) {
-                        try {
-                            if (navigator.clipboard && window.isSecureContext) {
-                                await navigator.clipboard.writeText(text);
-                                return true;
-                            }
-                        } catch (_) { }
-                        const area = document.createElement('textarea');
-                        area.value = text;
-                        area.setAttribute('readonly', '');
-                        area.style.position = 'fixed';
-                        area.style.left = '-9999px';
-                        document.body.appendChild(area);
-                        area.select();
-                        let ok = false;
-                        try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
-                        area.remove();
-                        return ok;
-                    }
-                    function announce(message) {
-                        const status = document.getElementById('copy-status');
-                        status.textContent = message;
-                    }
-                    document.getElementById('copy-all').addEventListener('click', async () => {
-                        const raw = document.getElementById('raw-response').value;
-                        announce(await copyText(raw) ? 'Copied response.' : 'Copy was blocked by the browser. Select the text and press Ctrl+C.');
-                    });
-                    document.querySelectorAll('.copy-code').forEach(button => {
-                        button.addEventListener('click', async () => {
-                            const code = button.parentElement.querySelector('code');
-                            const ok = await copyText(code ? code.innerText : '');
-                            button.textContent = ok ? 'Copied' : 'Copy failed';
-                            announce(ok ? 'Code block copied.' : 'Copy was blocked by the browser.');
-                        });
-                    });
-                </script>
-            </body>
-            </html>
-            """;
-
-        var directory = Path.Combine(Path.GetTempPath(), "PowerToysRun-LocalLLM");
-        Directory.CreateDirectory(directory);
-        RemoveOldResponseFiles(directory);
-
-        var path = Path.Combine(directory, $"response-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}.html");
-        File.WriteAllText(path, html, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-
-        Process.Start(new ProcessStartInfo
+        var settings = GetSettingsSnapshot();
+        var navigation = BuildChatNavigation(title, model, prompt, response, isError, settings);
+        var webView = new WebView2
         {
-            FileName = path,
-            UseShellExecute = true,
-        });
+            DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24),
+            AllowExternalDrop = false,
+        };
+
+        var appWindow = new Window
+        {
+            Title = title,
+            Width = 1120,
+            Height = 860,
+            MinWidth = 680,
+            MinHeight = 520,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Content = webView,
+        };
+
+        appWindow.Show();
+        appWindow.Activate();
+        _ = InitializeChatWebViewAsync(appWindow, webView, navigation.FolderPath, navigation.BootstrapJson);
     }
 
-    private static void SanitizeMarkdownHtml(HtmlDocument document)
+    private async Task InitializeChatWebViewAsync(
+        Window appWindow,
+        WebView2 webView,
+        string appFolderPath,
+        string bootstrapJson)
     {
-        // Markdig's DisableHtml means model-supplied raw HTML is rendered as text. Keep
-        // a second defensive layer in case the pipeline or extensions change later.
-        var dangerousNodes = document.DocumentNode.SelectNodes(
-            "//script|//iframe|//object|//embed|//svg|//audio|//video|//source|//form|//img");
-        if (dangerousNodes is not null)
-        {
-            foreach (var node in dangerousNodes.ToList())
-            {
-                node.Remove();
-            }
-        }
-
-        var allNodes = document.DocumentNode.Descendants().ToList();
-        foreach (var node in allNodes)
-        {
-            foreach (var attribute in node.Attributes.ToList())
-            {
-                if (attribute.Name.StartsWith("on", StringComparison.OrdinalIgnoreCase)
-                    || attribute.Name.Equals("style", StringComparison.OrdinalIgnoreCase)
-                    || attribute.Name.Equals("src", StringComparison.OrdinalIgnoreCase)
-                    || attribute.Name.Equals("srcset", StringComparison.OrdinalIgnoreCase)
-                    || attribute.Name.Equals("formaction", StringComparison.OrdinalIgnoreCase)
-                    || attribute.Name.Equals("xlink:href", StringComparison.OrdinalIgnoreCase))
-                {
-                    node.Attributes.Remove(attribute);
-                }
-            }
-        }
-
-        var links = document.DocumentNode.SelectNodes("//a[@href]");
-        if (links is null)
-        {
-            return;
-        }
-
-        foreach (var link in links)
-        {
-            var href = link.GetAttributeValue("href", string.Empty).Trim();
-            var isLocalFragment = href.StartsWith("#", StringComparison.Ordinal) && href.Length > 1;
-            var isAllowedAbsoluteUrl = Uri.TryCreate(href, UriKind.Absolute, out var uri)
-                && (uri.Scheme == Uri.UriSchemeHttp
-                    || uri.Scheme == Uri.UriSchemeHttps
-                    || uri.Scheme == Uri.UriSchemeMailto);
-
-            if (!isLocalFragment && !isAllowedAbsoluteUrl)
-            {
-                link.Attributes.Remove("href");
-                link.Attributes.Remove("target");
-                link.Attributes.Remove("rel");
-                continue;
-            }
-
-            if (isAllowedAbsoluteUrl && uri is not null
-                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-            {
-                link.SetAttributeValue("target", "_blank");
-                link.SetAttributeValue("rel", "noopener noreferrer");
-            }
-        }
-    }
-
-    private static void AddCodeCopyButtons(HtmlDocument document)
-    {
-        var codeBlocks = document.DocumentNode.SelectNodes("//pre[code]");
-        if (codeBlocks is null)
-        {
-            return;
-        }
-
-        foreach (var codeBlock in codeBlocks.ToList())
-        {
-            var button = HtmlNode.CreateNode(
-                "<button type=\"button\" class=\"copy-code\" aria-label=\"Copy code block\">Copy code</button>");
-            codeBlock.AppendChild(button);
-        }
-    }
-
-    private static void RemoveOldResponseFiles(string directory)
-    {
-        var expiration = DateTime.UtcNow.AddDays(-7);
         try
         {
-            foreach (var file in Directory.EnumerateFiles(directory, "response-*.html"))
+            await webView.EnsureCoreWebView2Async();
+            var core = webView.CoreWebView2;
+            // Give the static page a stable localhost origin so browser CORS policies can
+            // recognize the page. API requests are still issued directly by JavaScript.
+            core.SetVirtualHostNameToFolderMapping(
+                "localhost",
+                appFolderPath,
+                CoreWebView2HostResourceAccessKind.DenyCors);
+
+            // The page is intentionally standalone: no WebMessageReceived handler, host object,
+            // or request/response bridge is registered with the plugin.
+            core.Settings.IsWebMessageEnabled = false;
+            core.Settings.AreHostObjectsAllowed = false;
+            core.NavigationStarting += (_, e) =>
             {
-                try
+                if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
                 {
-                    if (File.GetLastWriteTimeUtc(file) < expiration)
+                    return;
+                }
+
+                if (uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                    && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                    && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                if (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                    || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                    || uri.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase))
+                {
+                    e.Cancel = true;
+                    try
                     {
-                        File.Delete(file);
+                        Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        _context?.API.ShowMsg("Could not open link", ex.Message);
                     }
                 }
-                catch (IOException)
+            };
+            core.NewWindowRequested += (_, e) =>
+            {
+                e.Handled = true;
+                if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
                 {
-                    // A browser may still have a file open; skip it and continue.
+                    return;
                 }
-                catch (UnauthorizedAccessException)
+
+                if (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                    || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                    || uri.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase))
                 {
-                    // Ignore files that the current user cannot remove.
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        _context?.API.ShowMsg("Could not open link", ex.Message);
+                    }
                 }
-            }
+            };
+            core.NavigationCompleted += async (_, e) =>
+            {
+                if (!e.IsSuccess)
+                {
+                    appWindow.Content = new TextBlock
+                    {
+                        Margin = new Thickness(24),
+                        TextWrapping = TextWrapping.Wrap,
+                        Text = "The LocalLLM chat page could not be loaded. Check that ChatWindow.html is deployed beside the plugin DLL.",
+                    };
+                    return;
+                }
+
+                try
+                {
+                    // This one-way call supplies only the original query/result and settings.
+                    // All model discovery and subsequent chat turns stay in page JavaScript.
+                    await core.ExecuteScriptAsync("window.initializeLocalLLM(" + bootstrapJson + ");");
+                }
+                catch (Exception ex)
+                {
+                    _context?.API.ShowMsg("Could not initialize the LocalLLM chat session", ex.Message);
+                }
+            };
+            core.Navigate("https://localhost/ChatWindow.html");
         }
-        catch (IOException)
+        catch (Exception ex)
         {
-            // Cleanup is best-effort and must not prevent opening the current response.
+            appWindow.Content = new TextBlock
+            {
+                Margin = new Thickness(24),
+                TextWrapping = TextWrapping.Wrap,
+                Text = "The LocalLLM chat window could not initialize WebView2. " + ex.Message,
+            };
+            _context?.API.ShowMsg("Could not initialize the LocalLLM chat window", ex.Message);
         }
-        catch (UnauthorizedAccessException)
+    }
+
+    private static (string FolderPath, string BootstrapJson) BuildChatNavigation(
+        string title,
+        string model,
+        string prompt,
+        string response,
+        bool isError,
+        SettingsSnapshot settings)
+    {
+        var assemblyDirectory = Path.GetDirectoryName(typeof(Main).Assembly.Location)
+            ?? AppContext.BaseDirectory;
+        var htmlPath = Path.Combine(assemblyDirectory, "ChatWindow.html");
+        if (!File.Exists(htmlPath))
         {
-            // Cleanup is best-effort and must not prevent opening the current response.
+            throw new FileNotFoundException(
+                "ChatWindow.html was not found beside the LocalLLM plugin assembly. Ensure the file is copied to the plugin output directory.",
+                htmlPath);
         }
+
+        var thinkInitiallyEnabled = TryResolveThinkValue(model, settings.Thinking, out var thinkValue)
+            && (thinkValue is bool boolValue
+                ? boolValue
+                : !string.Equals(Convert.ToString(thinkValue, System.Globalization.CultureInfo.InvariantCulture), "false", StringComparison.OrdinalIgnoreCase));
+        var bootstrap = new
+        {
+            title,
+            initialModel = model,
+            prompt = prompt ?? string.Empty,
+            response = response ?? string.Empty,
+            isError,
+            ollamaBaseUrl = BuildOllamaBaseUrl(settings.Endpoint),
+            lmStudioBaseUrl = RewriteLocalhostToLoopback(settings.LMStudioBaseUrl),
+            keepAliveSeconds = settings.KeepAliveSeconds,
+            requestTimeoutSeconds = settings.RequestTimeoutSeconds,
+            initialThink = thinkInitiallyEnabled,
+        };
+        var serializedBootstrap = JsonSerializer.Serialize(bootstrap);
+        return (assemblyDirectory, serializedBootstrap);
+    }
+
+    private static string RewriteLocalhostToLoopback(string baseUrl)
+    {
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return baseUrl;
+        }
+
+        var builder = new UriBuilder(uri);
+        if (builder.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            // The WebView2 app itself is mapped at https://localhost; use the equivalent
+            // loopback IP for provider calls so they cannot collide with the mapped app host.
+            builder.Host = "127.0.0.1";
+        }
+
+        return builder.Uri.ToString().TrimEnd('/');
+    }
+
+    private static string BuildOllamaBaseUrl(string endpoint)
+    {
+        // A malformed endpoint must not prevent an error window from retaining the original
+        // prompt. The inline request will already have surfaced the relevant endpoint error;
+        // use the standard local Ollama address as a recoverable chat-window fallback.
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var generateUri)
+            || (generateUri.Scheme != Uri.UriSchemeHttp && generateUri.Scheme != Uri.UriSchemeHttps)
+            || string.IsNullOrWhiteSpace(generateUri.Host))
+        {
+            generateUri = new Uri(DefaultEndpoint, UriKind.Absolute);
+        }
+
+        var builder = new UriBuilder(generateUri);
+        var path = builder.Path.TrimEnd('/');
+        var lastSlash = path.LastIndexOf('/');
+        var lastSegment = lastSlash >= 0 ? path[(lastSlash + 1)..] : path;
+        if (!lastSegment.Equals("generate", StringComparison.OrdinalIgnoreCase))
+        {
+            builder = new UriBuilder(new Uri(DefaultEndpoint, UriKind.Absolute));
+            path = builder.Path.TrimEnd('/');
+            lastSlash = path.LastIndexOf('/');
+        }
+
+        var prefix = lastSlash >= 0 ? path[..(lastSlash + 1)] : string.Empty;
+        var apiIndex = prefix.LastIndexOf("/api/", StringComparison.OrdinalIgnoreCase);
+        if (apiIndex >= 0)
+        {
+            prefix = prefix[..(apiIndex + 1)];
+        }
+        else
+        {
+            prefix = prefix.TrimEnd('/');
+        }
+
+        builder.Path = prefix.TrimEnd('/');
+        builder.Query = string.Empty;
+        builder.Fragment = string.Empty;
+        if (builder.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.Host = "127.0.0.1";
+        }
+
+        return builder.Uri.ToString().TrimEnd('/');
     }
 
     private sealed record SettingsSnapshot(
         string Endpoint,
+        string LMStudioBaseUrl,
         string DefaultModel,
         string Thinking,
         int KeepAliveSeconds,

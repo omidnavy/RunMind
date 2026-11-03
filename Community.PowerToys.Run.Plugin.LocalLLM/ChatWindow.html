@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src http: https:; img-src data:; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>LocalLLM Chat</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --color-bg: #101216;
+      --color-surface: #171a21;
+      --color-surface-raised: #202530;
+      --color-surface-hover: #29303d;
+      --color-input: #11141a;
+      --color-text: #e9edf5;
+      --color-muted: #a0a8b7;
+      --color-accent: #9aabff;
+      --color-accent-contrast: #101426;
+      --color-border: #323a49;
+      --color-user-bubble: #232b42;
+      --color-assistant-bubble: #171a21;
+      --color-danger: #ff858a;
+      --color-success: #83d7ab;
+      --font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --font-code: Consolas, "Cascadia Code", "Courier New", monospace;
+      --font-size: 14px;
+      --radius-xs: 5px;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --radius-pill: 999px;
+      --shadow-panel: 0 12px 36px rgba(0, 0, 0, .20);
+      --shadow-float: 0 3px 12px rgba(0, 0, 0, .14);
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --color-bg: #f4f6fa;
+      --color-surface: #ffffff;
+      --color-surface-raised: #f0f2f7;
+      --color-surface-hover: #e5e9f2;
+      --color-input: #ffffff;
+      --color-text: #20232b;
+      --color-muted: #616a7a;
+      --color-accent: #3d55bf;
+      --color-accent-contrast: #ffffff;
+      --color-border: #d7dce6;
+      --color-user-bubble: #e7ebff;
+      --color-assistant-bubble: #ffffff;
+      --color-danger: #b32630;
+      --color-success: #167948;
+      --shadow-panel: 0 12px 36px rgba(34, 44, 70, .09);
+      --shadow-float: 0 3px 12px rgba(34, 44, 70, .08);
+    }
+    @media (prefers-color-scheme: light) {
+      :root[data-theme="system"] {
+        color-scheme: light;
+        --color-bg: #f4f6fa;
+        --color-surface: #ffffff;
+        --color-surface-raised: #f0f2f7;
+        --color-surface-hover: #e5e9f2;
+        --color-input: #ffffff;
+        --color-text: #20232b;
+        --color-muted: #616a7a;
+        --color-accent: #3d55bf;
+        --color-accent-contrast: #ffffff;
+        --color-border: #d7dce6;
+        --color-user-bubble: #e7ebff;
+        --color-assistant-bubble: #ffffff;
+        --color-danger: #b32630;
+        --color-success: #167948;
+        --shadow-panel: 0 12px 36px rgba(34, 44, 70, .09);
+        --shadow-float: 0 3px 12px rgba(34, 44, 70, .08);
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      background: var(--color-bg); color: var(--color-text); font: var(--font-size) / 1.55 var(--font-ui);
+      overflow: hidden; -webkit-font-smoothing: antialiased;
+    }
+    button, input, select, textarea { font: inherit; }
+    button, select { color: var(--color-text); }
+    button { cursor: pointer; }
+    button:disabled, select:disabled, textarea:disabled { opacity: .55; cursor: not-allowed; }
+    .app { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+    .topbar { padding: 14px 20px 12px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); box-shadow: var(--shadow-float); z-index: 2; }
+    .top-line { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+    .brand { min-width: 0; }
+    .brand h1 { margin: 0; font-size: 17px; font-weight: 680; letter-spacing: .01em; line-height: 1.3; }
+    .brand p { margin: 3px 0 0; color: var(--color-muted); font-size: 12px; }
+    .theme-wrap { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 9px; margin-top: 13px; }
+    .field { min-width: 0; display: flex; flex: 1 1 220px; flex-direction: column; gap: 4px; }
+    .field label, .field-label { color: var(--color-muted); font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+    select, textarea, .text-input { border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-input); color: var(--color-text); outline: none; }
+    select { height: 36px; padding: 0 10px; max-width: 100%; }
+    select:focus, textarea:focus { border-color: var(--color-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 22%, transparent); }
+    .button { min-height: 36px; padding: 7px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); transition: background .12s ease, transform .12s ease; }
+    .button:hover:not(:disabled) { background: var(--color-surface-hover); }
+    .button.primary { color: var(--color-accent-contrast); background: var(--color-accent); border-color: var(--color-accent); font-weight: 700; }
+    .button.primary:hover:not(:disabled) { filter: brightness(1.05); }
+    .button.danger { color: var(--color-danger); }
+    .icon-button { min-width: 36px; padding-inline: 10px; }
+    .statusline { min-height: 18px; margin-top: 8px; display: flex; gap: 8px; align-items: center; color: var(--color-muted); font-size: 12px; }
+    .status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--color-muted); }
+    .status-dot.good { background: var(--color-success); }
+    .status-dot.bad { background: var(--color-danger); }
+    .transcript { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 22px clamp(14px, 4vw, 54px) 28px; scroll-behavior: smooth; }
+    .transcript-inner { width: 100%; max-width: 1000px; margin: 0 auto; }
+    .empty-state { margin: 12vh auto; max-width: 520px; text-align: center; color: var(--color-muted); }
+    .empty-state strong { display: block; margin-bottom: 8px; color: var(--color-text); font-size: 17px; }
+    .message { margin: 0 auto 18px; padding: 15px 17px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-assistant-bubble); box-shadow: var(--shadow-float); overflow-wrap: anywhere; }
+    .message.user { background: var(--color-user-bubble); }
+    .message.error { border-color: color-mix(in srgb, var(--color-danger) 58%, var(--color-border)); }
+    .message-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; color: var(--color-muted); font-size: 11px; font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
+    .message-meta .role { color: var(--color-text); }
+    .message-meta .error-label { color: var(--color-danger); }
+    .message-content { font-size: 14px; line-height: 1.72; overflow-wrap: anywhere; }
+    .message-content > :first-child { margin-top: 0; }
+    .message-content > :last-child { margin-bottom: 0; }
+    .message-content p { margin: 0 0 12px; white-space: normal; }
+    .message-content h1, .message-content h2, .message-content h3, .message-content h4 { margin: 20px 0 9px; line-height: 1.35; }
+    .message-content h1 { font-size: 1.55em; } .message-content h2 { font-size: 1.32em; } .message-content h3 { font-size: 1.14em; }
+    .message-content ul, .message-content ol { padding-left: 24px; margin: 8px 0 14px; }
+    .message-content li { margin: 3px 0; }
+    .message-content blockquote { margin: 10px 0; padding: 3px 13px; border-left: 3px solid var(--color-accent); color: var(--color-muted); }
+    .message-content a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+    .message-content hr { border: 0; border-top: 1px solid var(--color-border); margin: 18px 0; }
+    .message-content code { font: .92em var(--font-code); background: var(--color-surface-raised); border-radius: var(--radius-xs); padding: .13em .35em; }
+    .message-content pre { position: relative; margin: 12px 0 15px; padding: 38px 14px 14px; max-width: 100%; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-input); box-shadow: inset 0 1px 0 rgba(255,255,255,.025); }
+    .message-content pre code { display: block; padding: 0; background: transparent; border-radius: 0; color: var(--color-text); white-space: pre; line-height: 1.55; }
+    .copy-code { position: absolute; top: 6px; right: 7px; padding: 3px 8px; font-size: 11px; border: 1px solid var(--color-border); border-radius: var(--radius-xs); background: var(--color-surface-raised); color: var(--color-text); }
+    .pending { color: var(--color-muted); }
+    .composer { flex: 0 0 auto; border-top: 1px solid var(--color-border); padding: 12px 20px 14px; background: var(--color-surface); }
+    .composer-inner { max-width: 1050px; margin: 0 auto; }
+    .composer textarea { display: block; width: 100%; resize: vertical; min-height: 68px; max-height: 200px; padding: 10px 12px; line-height: 1.5; }
+    .composer-bottom { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; justify-content: space-between; margin-top: 9px; }
+    .composer-left, .composer-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .think-label { display: inline-flex; align-items: center; gap: 7px; color: var(--color-muted); font-size: 12px; user-select: none; cursor: pointer; }
+    .think-label input { width: 15px; height: 15px; accent-color: var(--color-accent); }
+    .export-select { width: min(245px, 48vw); flex: 0 1 245px; }
+    .footer-note { color: var(--color-muted); font-size: 11px; margin-top: 6px; }
+    .toast { position: fixed; z-index: 10; right: 18px; bottom: 120px; max-width: min(440px, calc(100vw - 36px)); padding: 10px 13px; background: var(--color-surface-raised); color: var(--color-text); border: 1px solid var(--color-border); border-radius: var(--radius-sm); box-shadow: var(--shadow-panel); }
+    .toast[hidden] { display: none; }
+    @media (max-width: 620px) {
+      .topbar { padding: 12px; }
+      .brand p { max-width: 245px; }
+      .toolbar { align-items: stretch; }
+      .field { flex-basis: 100%; }
+      .transcript { padding: 14px 11px 20px; }
+      .message { padding: 12px; }
+      .composer { padding: 10px 11px 12px; }
+      .composer-bottom { align-items: flex-start; }
+      .composer-left, .composer-right { width: 100%; }
+      .composer-right .button.primary { margin-left: auto; }
+      .export-select { flex: 1; width: auto; }
+    }
+    @media print {
+      body { height: auto; overflow: visible; background: #fff !important; color: #111 !important; }
+      .topbar, .composer, .toast, .copy-code { display: none !important; }
+      .app, .transcript { height: auto; overflow: visible; display: block; padding: 0; background: #fff; }
+      .transcript-inner { max-width: none; }
+      .message { break-inside: avoid; color: #111 !important; background: #fff !important; border: 1px solid #ddd; box-shadow: none; }
+      .message-content pre { white-space: pre-wrap; overflow: visible; }
+      .message-content pre code { white-space: pre-wrap; }
+      .message-content a { color: #174ea6; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="top-line">
+        <div class="brand">
+          <h1 id="conversationTitle">LocalLLM Chat</h1>
+          <p>Private in-memory session · closing this window ends the session unless exported</p>
+        </div>
+        <div class="theme-wrap">
+          <label class="field-label" for="themeSelect">Theme</label>
+          <select id="themeSelect" aria-label="Theme">
+            <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
+          </select>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="field">
+          <label for="modelSelect">Model</label>
+          <select id="modelSelect" aria-label="Choose provider and model">
+            <optgroup label="Ollama" id="ollamaModels"><option value="">Discovering models…</option></optgroup>
+            <optgroup label="LM Studio" id="lmStudioModels"><option value="">Discovering models…</option></optgroup>
+          </select>
+        </div>
+        <button type="button" class="button icon-button" id="refreshModels" title="Refresh Ollama and LM Studio models" aria-label="Refresh models">↻ Refresh</button>
+      </div>
+      <div class="statusline" aria-live="polite"><span class="status-dot" id="statusDot"></span><span id="statusText">Discovering Ollama and LM Studio models…</span></div>
+    </header>
+    <main class="transcript" id="transcript" aria-label="Conversation">
+      <div class="transcript-inner" id="transcriptInner"></div>
+    </main>
+    <footer class="composer">
+      <div class="composer-inner">
+        <textarea id="promptInput" aria-label="Message" placeholder="Message the selected local model… (Ctrl+Enter to send)"></textarea>
+        <div class="composer-bottom">
+          <div class="composer-left">
+            <label class="think-label" title="Send the think flag to the selected model endpoint"><input type="checkbox" id="thinkToggle"> think</label>
+            <select class="export-select" id="exportFormat" aria-label="Export format">
+              <option value="">Export conversation…</option>
+              <option value="html">Standalone HTML</option>
+              <option value="openwebui">Open WebUI import JSON</option>
+              <option value="portable">Portable conversation JSON</option>
+              <option value="openai">OpenAI-compatible request JSON</option>
+              <option value="markdown">Markdown (.md)</option>
+              <option value="csv">CSV (UTF-8 with BOM)</option>
+              <option value="txt">Plain text (.txt)</option>
+              <option value="jsonl">JSONL (.jsonl)</option>
+              <option value="print">Print / Save as PDF</option>
+            </select>
+            <button type="button" class="button" id="exportButton">Export</button>
+          </div>
+          <div class="composer-right">
+            <button type="button" class="button danger" id="stopButton" hidden>Stop</button>
+            <button type="button" class="button primary" id="sendButton">Send ↵</button>
+          </div>
+        </div>
+        <div class="footer-note">Requests go directly from this WebView2 page to Ollama or LM Studio. No chat-turn bridge to the plugin is used.</div>
+      </div>
+    </footer>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script>
+    'use strict';
+    let BOOT = {};
+    const $ = (selector) => document.querySelector(selector);
+    const modelSelect = $('#modelSelect');
+    const ollamaGroup = $('#ollamaModels');
+    const lmStudioGroup = $('#lmStudioModels');
+    const transcript = $('#transcript');
+    const transcriptInner = $('#transcriptInner');
+    const promptInput = $('#promptInput');
+    const sendButton = $('#sendButton');
+    const stopButton = $('#stopButton');
+    const refreshButton = $('#refreshModels');
+    const exportFormat = $('#exportFormat');
+    const thinkToggle = $('#thinkToggle');
+    const statusText = $('#statusText');
+    const statusDot = $('#statusDot');
+    const toast = $('#toast');
+    const conversationStartedAt = Date.now();
+    const messages = [];
+    let activeController = null;
+    let activeTimeoutHandle = null;
+    let activeRequestTimedOut = false;
+    let toastHandle = null;
+    let modelLists = { ollama: [], lmstudio: [] };
+    let fallbackTimeoutMs = 600000;
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+    function inlineMarkdown(source) {
+      let text = source;
+      const inlineCodes = [];
+      text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+        const marker = `@@INLINECODE${inlineCodes.length}@@`;
+        inlineCodes.push(`<code>${code}</code>`);
+        return marker;
+      });
+      text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        .replace(/~~(.+?)~~/g, '<del>$1</del>')
+        .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
+      return text.replace(/@@INLINECODE(\d+)@@/g, (_, i) => inlineCodes[Number(i)] || '');
+    }
+    function renderMarkdown(markdown) {
+      let source = escapeHtml(markdown).replace(/\r\n?/g, '\n');
+      const codeBlocks = [];
+      source = source.replace(/```([^\n]*)\n([\s\S]*?)```/g, (_, language, code) => {
+        const lang = language.trim().replace(/[^a-zA-Z0-9_+-]/g, '');
+        const marker = `@@CODEBLOCK${codeBlocks.length}@@`;
+        codeBlocks.push(`<pre><code${lang ? ` class="language-${lang}"` : ''}>${code.replace(/\n$/, '')}</code></pre>`);
+        return marker;
+      });
+      const lines = source.split('\n');
+      const blocks = [];
+      let paragraph = [];
+      const flushParagraph = () => {
+        if (paragraph.length) {
+          blocks.push(`<p>${inlineMarkdown(paragraph.join('<br>'))}</p>`);
+          paragraph = [];
+        }
+      };
+      for (let i = 0; i < lines.length;) {
+        const line = lines[i];
+        const codeMarker = line.match(/^@@CODEBLOCK(\d+)@@$/);
+        const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*$/);
+        const bullet = line.match(/^\s*[-*+]\s+(.+)$/);
+        const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+        const quote = line.match(/^\s*&gt;\s?(.*)$/);
+        if (!line.trim()) { flushParagraph(); i++; continue; }
+        if (codeMarker) { flushParagraph(); blocks.push(line); i++; continue; }
+        if (heading) { flushParagraph(); const level = heading[1].length; blocks.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`); i++; continue; }
+        if (/^\s*(---+|\*\*\*+|___+)\s*$/.test(line)) { flushParagraph(); blocks.push('<hr>'); i++; continue; }
+        if (bullet || ordered) {
+          flushParagraph(); const isOrdered = !!ordered; const items = [];
+          while (i < lines.length) {
+            const match = lines[i].match(isOrdered ? /^\s*\d+[.)]\s+(.+)$/ : /^\s*[-*+]\s+(.+)$/);
+            if (!match) break;
+            items.push(`<li>${inlineMarkdown(match[1])}</li>`); i++;
+          }
+          blocks.push(`<${isOrdered ? 'ol' : 'ul'}>${items.join('')}</${isOrdered ? 'ol' : 'ul'}>`); continue;
+        }
+        if (quote) { flushParagraph(); const quotes = []; while (i < lines.length) { const match = lines[i].match(/^\s*&gt;\s?(.*)$/); if (!match) break; quotes.push(inlineMarkdown(match[1])); i++; } blocks.push(`<blockquote>${quotes.join('<br>')}</blockquote>`); continue; }
+        paragraph.push(line); i++;
+      }
+      flushParagraph();
+      let html = blocks.join('\n');
+      html = html.replace(/@@CODEBLOCK(\d+)@@/g, (_, i) => codeBlocks[Number(i)] || '');
+      return html;
+    }
+    function dateLabel(value) {
+      const d = new Date(value || Date.now());
+      return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
+    }
+    function renderMessageMarkup(message, index) {
+      const role = message.role === 'user' ? 'user' : 'assistant';
+      const label = role === 'user' ? 'You' : 'Assistant';
+      const provider = message.provider ? ` · ${message.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'}` : '';
+      const model = message.model ? ` · ${escapeHtml(message.model)}` : '';
+      const errorClass = message.error ? ' error' : '';
+      const errorLabel = message.error ? '<span class="error-label">Request error</span>' : '';
+      const content = message.pending && !message.content
+        ? '<span class="pending">Generating response…</span>'
+        : renderMarkdown(message.content || (message.pending ? ' ' : ''));
+      return `<article class="message ${role}${errorClass}" data-index="${index}"><div class="message-meta"><span class="role">${label}</span><span>${escapeHtml(dateLabel(message.timestamp))}</span><span>${provider}${model}</span>${errorLabel}</div><div class="message-content">${content}</div></article>`;
+    }
+    function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).then(() => true).catch(() => legacyCopy(text));
+      }
+      return Promise.resolve(legacyCopy(text));
+    }
+    function legacyCopy(text) {
+      const area = document.createElement('textarea'); area.value = text; area.setAttribute('readonly', 'readonly');
+      area.style.position = 'fixed'; area.style.opacity = '0'; area.style.left = '-10000px'; document.body.appendChild(area); area.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+      area.remove(); return ok;
+    }
+    function addCodeCopyButtons(container) {
+      for (const pre of container.querySelectorAll('pre')) {
+        if (pre.querySelector('.copy-code')) continue;
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'copy-code'; button.textContent = 'Copy code';
+        button.addEventListener('click', async () => {
+          const code = pre.querySelector('code'); const success = await copyText((code || pre).textContent || '');
+          button.textContent = success ? 'Copied' : 'Copy failed'; setTimeout(() => button.textContent = 'Copy code', 1400);
+        });
+        pre.appendChild(button);
+      }
+    }
+    function renderMessages(keepScroll = true) {
+      const wasNearBottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 110;
+      transcriptInner.innerHTML = messages.length
+        ? messages.map(renderMessageMarkup).join('')
+        : '<div class="empty-state"><strong>Your conversation starts here</strong>Send a message to the selected local model.</div>';
+      addCodeCopyButtons(transcriptInner);
+      if (keepScroll && wasNearBottom) transcript.scrollTop = transcript.scrollHeight;
+    }
+    function setStatus(text, kind = 'neutral') {
+      statusText.textContent = text;
+      statusDot.className = `status-dot${kind === 'good' ? ' good' : kind === 'bad' ? ' bad' : ''}`;
+    }
+    function showToast(text) {
+      toast.textContent = text; toast.hidden = false; clearTimeout(toastHandle);
+      toastHandle = setTimeout(() => toast.hidden = true, 3400);
+    }
+    function normalizeBase(url) { return String(url || '').trim().replace(/\/+$/, ''); }
+    function fetchWithTimeout(url, options = {}, timeoutMs = fallbackTimeoutMs) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const externalSignal = options.signal;
+      if (externalSignal) {
+        if (externalSignal.aborted) controller.abort();
+        else externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+      }
+      return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
+    }
+    async function getJson(url, timeoutMs = Math.min(fallbackTimeoutMs, 8000)) {
+      // Discovery uses a short, separate timeout so one stalled provider cannot hide
+      // the models from the other provider for the full generation timeout.
+      const response = await fetchWithTimeout(url, { headers: { 'Accept': 'application/json' } }, timeoutMs);
+      const text = await response.text();
+      if (!response.ok) throw new Error(`HTTP ${response.status}${text ? `: ${text.slice(0, 350)}` : ''}`);
+      try { return JSON.parse(text); } catch (_) { throw new Error('The endpoint returned invalid JSON.'); }
+    }
+    function setGroupOptions(group, provider, names) {
+      group.replaceChildren();
+      const unique = [...new Set((names || []).map(v => String(v || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      if (!unique.length) {
+        const opt = document.createElement('option'); opt.value = ''; opt.textContent = provider === 'ollama' ? 'No Ollama models found' : 'No LM Studio models found'; opt.disabled = true; group.appendChild(opt); return;
+      }
+      for (const name of unique) {
+        const opt = document.createElement('option'); opt.value = `${provider}::${name}`; opt.textContent = name;
+        opt.dataset.provider = provider; opt.dataset.model = name; group.appendChild(opt);
+      }
+    }
+    function currentModelKey() { return modelSelect.selectedOptions[0]?.value || ''; }
+    async function refreshModels(announce = true) {
+      const prior = currentModelKey();
+      refreshButton.disabled = true;
+      setStatus('Discovering Ollama and LM Studio models…');
+      const ollamaBase = normalizeBase(BOOT.ollamaBaseUrl);
+      const lmBase = normalizeBase(BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1');
+      const ollamaPromise = getJson(`${ollamaBase}/api/tags`).then(data => {
+        if (!Array.isArray(data.models)) throw new Error("Ollama response has no 'models' array.");
+        return data.models.map(m => typeof m === 'string' ? m : (m.name || m.model)).filter(Boolean);
+      });
+      const lmPromise = getJson(`${lmBase}/models`).then(data => {
+        if (!Array.isArray(data.data)) throw new Error("LM Studio response has no 'data' array.");
+        return data.data.map(m => typeof m === 'string' ? m : (m.id || m.name)).filter(Boolean);
+      });
+      const settled = await Promise.allSettled([ollamaPromise, lmPromise]);
+      modelLists.ollama = settled[0].status === 'fulfilled' ? settled[0].value : [];
+      modelLists.lmstudio = settled[1].status === 'fulfilled' ? settled[1].value : [];
+      if (BOOT.initialModel && !modelLists.ollama.some(m => m.toLowerCase() === String(BOOT.initialModel).toLowerCase())) modelLists.ollama.push(String(BOOT.initialModel));
+      setGroupOptions(ollamaGroup, 'ollama', modelLists.ollama);
+      setGroupOptions(lmStudioGroup, 'lmstudio', modelLists.lmstudio);
+      const allOptions = [...modelSelect.querySelectorAll('option')].filter(o => !o.disabled);
+      const matchedPrior = allOptions.find(o => o.value === prior);
+      const seeded = allOptions.find(o => o.dataset.provider === 'ollama' && o.dataset.model === BOOT.initialModel);
+      if (matchedPrior) modelSelect.value = prior;
+      else if (seeded) modelSelect.value = seeded.value;
+      else if (allOptions.length) modelSelect.value = allOptions[0].value;
+      const okOllama = settled[0].status === 'fulfilled'; const okLm = settled[1].status === 'fulfilled';
+      refreshButton.disabled = false;
+      const parts = [];
+      if (okOllama) parts.push(`Ollama: ${modelLists.ollama.length} model${modelLists.ollama.length === 1 ? '' : 's'}`);
+      else parts.push('Ollama unavailable');
+      if (okLm) parts.push(`LM Studio: ${modelLists.lmstudio.length} model${modelLists.lmstudio.length === 1 ? '' : 's'}`);
+      else parts.push('LM Studio unavailable');
+      if (okOllama || okLm) setStatus(parts.join(' · ') + ((!okOllama || !okLm) ? ' · Check endpoint/CORS settings for the unavailable provider.' : ''), 'good');
+      else setStatus('Neither endpoint responded. Check that both local servers are running and allow browser requests (CORS).', 'bad');
+      if (announce) showToast('Model lists refreshed.');
+    }
+    function selectedModel() {
+      const option = modelSelect.selectedOptions[0];
+      if (!option || option.disabled || !option.dataset.model) return null;
+      return { provider: option.dataset.provider, model: option.dataset.model };
+    }
+    async function readResponseError(response) {
+      const text = await response.text();
+      if (!text) return `HTTP ${response.status} ${response.statusText}`;
+      try { const obj = JSON.parse(text); return obj.error?.message || obj.error || obj.message || text.slice(0, 800); }
+      catch (_) { return text.slice(0, 800); }
+    }
+    async function streamOllama(model, conversationMessages, controller, onToken) {
+      const base = normalizeBase(BOOT.ollamaBaseUrl);
+      const payload = { model, messages: conversationMessages, stream: true, think: !!thinkToggle.checked, keep_alive: Number(BOOT.keepAliveSeconds ?? 300) };
+      const response = await fetchWithTimeout(`${base}/api/chat`, {
+        method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson, application/json' },
+        body: JSON.stringify(payload)
+      }, fallbackTimeoutMs);
+      if (!response.ok) throw new Error(`Ollama /api/chat: ${await readResponseError(response)}`);
+      if (!response.body) throw new Error('Ollama returned no response stream.');
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; let output = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let chunk; try { chunk = JSON.parse(line); } catch (_) { continue; }
+          if (chunk.error) throw new Error(typeof chunk.error === 'string' ? chunk.error : JSON.stringify(chunk.error));
+          const text = chunk.message?.content;
+          if (typeof text === 'string' && text) { output += text; onToken(text); }
+          if (chunk.done === true) return output;
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        const chunk = JSON.parse(buffer);
+        if (chunk.error) throw new Error(typeof chunk.error === 'string' ? chunk.error : JSON.stringify(chunk.error));
+        const text = chunk.message?.content;
+        if (typeof text === 'string' && text) { output += text; onToken(text); }
+      }
+      return output;
+    }
+    function extractOpenAIContent(delta) {
+      if (typeof delta === 'string') return delta;
+      if (Array.isArray(delta)) return delta.map(p => typeof p === 'string' ? p : (p.text || '')).join('');
+      return '';
+    }
+    async function streamLmStudio(model, conversationMessages, controller, onToken) {
+      const base = normalizeBase(BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1');
+      const payload = { model, messages: conversationMessages, stream: true, think: !!thinkToggle.checked };
+      const response = await fetchWithTimeout(`${base}/chat/completions`, {
+        method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream, application/json' },
+        body: JSON.stringify(payload)
+      }, fallbackTimeoutMs);
+      if (!response.ok) throw new Error(`LM Studio /v1/chat/completions: ${await readResponseError(response)}`);
+      if (!response.body) throw new Error('LM Studio returned no response stream.');
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; let output = '';
+      const handleLine = line => {
+        const trimmed = line.trim(); if (!trimmed || trimmed.startsWith(':') || !trimmed.startsWith('data:')) return false;
+        const data = trimmed.slice(5).trim(); if (data === '[DONE]') return true;
+        let chunk; try { chunk = JSON.parse(data); } catch (_) { return false; }
+        if (chunk.error) throw new Error(typeof chunk.error === 'string' ? chunk.error : (chunk.error.message || JSON.stringify(chunk.error)));
+        const delta = chunk.choices?.[0]?.delta?.content;
+        const text = extractOpenAIContent(delta);
+        if (text) { output += text; onToken(text); }
+        return false;
+      };
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(/\r?\n/); buffer = lines.pop() || '';
+        for (const line of lines) if (handleLine(line)) return output;
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) handleLine(buffer);
+      return output;
+    }
+    async function sendMessage() {
+      if (activeController) { activeController.abort(); return; }
+      const content = promptInput.value.trim();
+      if (!content) return;
+      const selection = selectedModel();
+      if (!selection) { showToast('No model is selected. Refresh model lists and choose a model.'); return; }
+      promptInput.value = '';
+      const userMessage = { role: 'user', content, timestamp: Date.now(), provider: selection.provider, model: selection.model };
+      messages.push(userMessage);
+      const assistantMessage = { role: 'assistant', content: '', timestamp: Date.now(), provider: selection.provider, model: selection.model, pending: true };
+      messages.push(assistantMessage);
+      renderMessages();
+      activeController = new AbortController();
+      activeRequestTimedOut = false;
+      activeTimeoutHandle = setTimeout(() => {
+        if (activeController) { activeRequestTimedOut = true; activeController.abort(); }
+      }, fallbackTimeoutMs);
+      sendButton.disabled = true; promptInput.disabled = true; refreshButton.disabled = true;
+      stopButton.hidden = false; sendButton.textContent = 'Sending…';
+      setStatus(`Waiting for ${selection.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'} (${selection.model})…`);
+      const requestMessages = messages.filter(m => !m.pending).map(m => ({ role: m.role, content: m.content }));
+      try {
+        const onToken = text => { assistantMessage.content += text; renderMessages(); };
+        const output = selection.provider === 'lmstudio'
+          ? await streamLmStudio(selection.model, requestMessages, activeController, onToken)
+          : await streamOllama(selection.model, requestMessages, activeController, onToken);
+        assistantMessage.pending = false;
+        if (!assistantMessage.content && !output) assistantMessage.content = '(The model returned an empty response.)';
+        setStatus(`Connected · ${selection.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'} · ${selection.model}`, 'good');
+      } catch (error) {
+        assistantMessage.pending = false;
+        if (error?.name === 'AbortError' && activeRequestTimedOut) {
+          assistantMessage.error = true;
+          assistantMessage.content = (assistantMessage.content ? assistantMessage.content + '\n\n' : '') + 'Request timed out. Increase Request timeout (seconds) in the plugin settings or use a smaller/faster model.';
+          setStatus('Request timed out.', 'bad');
+        } else if (error?.name === 'AbortError') {
+          if (!assistantMessage.content) assistantMessage.content = '[Generation stopped.]';
+          setStatus('Generation stopped.');
+        } else {
+          assistantMessage.error = true;
+          assistantMessage.content = (assistantMessage.content ? assistantMessage.content + '\n\n' : '') + `Request failed: ${error?.message || String(error)}\n\nIf this is a browser network/CORS error, verify the provider's allowed origins and that the local endpoint is reachable from WebView2.`;
+          setStatus(`Request failed · ${selection.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'}`, 'bad');
+        }
+      } finally {
+        clearTimeout(activeTimeoutHandle);
+        activeTimeoutHandle = null;
+        activeController = null; assistantMessage.pending = false;
+        activeRequestTimedOut = false;
+        sendButton.disabled = false; promptInput.disabled = false; refreshButton.disabled = false;
+        stopButton.hidden = true; sendButton.textContent = 'Send ↵';
+        renderMessages(); promptInput.focus();
+      }
+    }
+    function filenameSafe(value) { return String(value || 'conversation').replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'conversation'; }
+    function downloadFile(filename, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType }); const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; anchor.style.display = 'none'; document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+    function allMessages() { return messages.filter(m => !m.pending); }
+    function conversationTitle() {
+      const first = messages.find(m => m.role === 'user' && m.content);
+      const base = (first?.content || BOOT.title || 'LocalLLM Conversation').replace(/\s+/g, ' ').trim();
+      return base.length > 72 ? base.slice(0, 69) + '…' : base;
+    }
+    function portableConversation() {
+      return { format: 'PowerToys-Run-LocalLLM-conversation', version: 1, title: conversationTitle(), createdAt: new Date(conversationStartedAt).toISOString(), updatedAt: new Date().toISOString(), messages: allMessages().map(m => ({ role: m.role, content: m.content, timestamp: new Date(m.timestamp || Date.now()).toISOString(), provider: m.provider || null, model: m.model || null, error: !!m.error })) };
+    }
+    function openWebUiExport() {
+      const items = allMessages(); const ids = items.map((_, i) => `local-llm-${i + 1}-${Math.random().toString(36).slice(2, 9)}`); const tree = {};
+      items.forEach((m, i) => {
+        const timestamp = Math.floor(Number(m.timestamp || Date.now()) / 1000);
+        tree[ids[i]] = { id: ids[i], parentId: i === 0 ? null : ids[i - 1], childrenIds: i + 1 < ids.length ? [ids[i + 1]] : [], role: m.role, content: m.content, timestamp };
+        if (m.role === 'assistant') { tree[ids[i]].model = m.model || selectedModel()?.model || BOOT.initialModel || 'local-model'; tree[ids[i]].done = !m.pending; }
+      });
+      const models = [...new Set(items.filter(m => m.role === 'assistant').map(m => m.model).filter(Boolean))];
+      const created = Math.floor(conversationStartedAt / 1000); const updated = Math.floor(Date.now() / 1000);
+      return [{ chat: { title: conversationTitle(), models, history: { currentId: ids.length ? ids[ids.length - 1] : null, messages: tree } }, meta: { tags: ['local-llm'] }, pinned: false, folder_id: null, created_at: created, updated_at: updated }];
+    }
+    function openAiRequestExport() {
+      const choice = selectedModel();
+      return { model: choice?.model || BOOT.initialModel || '', messages: allMessages().map(m => ({ role: m.role, content: m.content })), stream: true, think: !!thinkToggle.checked };
+    }
+    function markdownExport() {
+      const rows = [`# ${conversationTitle()}`, '', `Exported: ${new Date().toLocaleString()}`, ''];
+      for (const m of allMessages()) {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        rows.push(`## ${role}${m.model ? ` · ${m.model}` : ''}${m.error ? ' · Request error' : ''}`, '', m.content, '');
+      }
+      return rows.join('\n');
+    }
+    function csvCell(value) {
+      let text = String(value ?? '');
+      if (/^[\t\r\n]/.test(text) || /^[\s]*[=+\-@]/.test(text)) text = "'" + text;
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    function csvExport() {
+      const rows = [['timestamp', 'role', 'provider', 'model', 'error', 'content']];
+      for (const m of allMessages()) rows.push([dateLabel(m.timestamp), m.role, m.provider || '', m.model || '', m.error ? 'true' : 'false', m.content]);
+      return '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
+    }
+    const standaloneCss = `
+      :root{color-scheme:light dark;--bg:#101216;--surface:#171a21;--text:#e9edf5;--muted:#a0a8b7;--border:#323a49;--accent:#9aabff;--user:#232b42;--code:#11141a;--radius:12px;--font:Segoe UI,system-ui,sans-serif;--mono:Consolas,Cascadia Code,monospace}
+      @media(prefers-color-scheme:light){:root{color-scheme:light;--bg:#f4f6fa;--surface:#fff;--text:#20232b;--muted:#616a7a;--border:#d7dce6;--accent:#3d55bf;--user:#e7ebff;--code:#f6f7fa}}
+      *{box-sizing:border-box}body{margin:0;padding:28px;background:var(--bg);color:var(--text);font:15px/1.7 var(--font)}main{max-width:1000px;margin:0 auto}.export-title{font-size:24px;margin:0 0 6px}.export-note{color:var(--muted);font-size:12px;margin-bottom:22px}.message{margin:0 0 18px;padding:15px 17px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow-wrap:anywhere}.message.user{background:var(--user)}.message.error{border-color:#bd5860}.message-meta{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:8px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase}.message-meta .role{color:var(--text)}.message-meta .error-label{color:#ff858a}.message-content p{margin:0 0 12px}.message-content h1,.message-content h2,.message-content h3{line-height:1.35;margin:20px 0 9px}.message-content ul,.message-content ol{padding-left:24px}.message-content blockquote{margin:10px 0;padding:3px 13px;border-left:3px solid var(--accent);color:var(--muted)}.message-content a{color:var(--accent)}.message-content pre{position:relative;overflow:auto;padding:38px 14px 14px;background:var(--code);border:1px solid var(--border);border-radius:8px}.message-content code{font:.92em var(--mono);background:var(--code);padding:.13em .35em;border-radius:4px}.message-content pre code{display:block;background:transparent;padding:0;white-space:pre}.copy-code{position:absolute;right:7px;top:6px;padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);cursor:pointer}.message-content hr{border:0;border-top:1px solid var(--border)}
+      @media print{body{padding:0;background:#fff;color:#111}.message,.message.user{background:#fff;color:#111;break-inside:avoid;box-shadow:none}.message-content pre{white-space:pre-wrap;overflow:visible}.message-content pre code{white-space:pre-wrap}.copy-code{display:none}}
+    `;
+    function standaloneHtmlExport() {
+      const body = allMessages().map(renderMessageMarkup).join('\n');
+      const title = escapeHtml(conversationTitle());
+      const copyHelper = `(function(){document.querySelectorAll('pre').forEach(function(pre){var b=document.createElement('button');b.type='button';b.className='copy-code';b.textContent='Copy code';b.addEventListener('click',function(){var c=pre.querySelector('code');var t=(c||pre).textContent||'';var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();b.textContent=ok?'Copied':'Copy failed';setTimeout(function(){b.textContent='Copy code'},1400)});pre.appendChild(b)})})();`;
+      return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${standaloneCss}</style></head><body><main><h1 class="export-title">${title}</h1><div class="export-note">Standalone transcript export · no provider connection or plugin bridge</div>${body}</main><script>${copyHelper}<\/script></body></html>`;
+    }
+    function exportConversation() {
+      const key = exportFormat.value;
+      if (!key) { showToast('Choose an export format first.'); return; }
+      const base = filenameSafe(conversationTitle());
+      switch (key) {
+        case 'html': downloadFile(`${base}.html`, standaloneHtmlExport(), 'text/html;charset=utf-8'); break;
+        case 'openwebui': downloadFile(`${base}-open-webui.json`, JSON.stringify(openWebUiExport(), null, 2), 'application/json;charset=utf-8'); break;
+        case 'portable': downloadFile(`${base}-conversation.json`, JSON.stringify(portableConversation(), null, 2), 'application/json;charset=utf-8'); break;
+        case 'openai': downloadFile(`${base}-openai-request.json`, JSON.stringify(openAiRequestExport(), null, 2), 'application/json;charset=utf-8'); break;
+        case 'markdown': downloadFile(`${base}.md`, markdownExport(), 'text/markdown;charset=utf-8'); break;
+        case 'csv': downloadFile(`${base}.csv`, csvExport(), 'text/csv;charset=utf-8'); break;
+        case 'txt': downloadFile(`${base}.txt`, allMessages().map(m => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}${m.model ? ` · ${m.model}` : ''}${m.error ? ' · REQUEST ERROR' : ''}\n${m.content}`).join('\n\n' + '─'.repeat(56) + '\n\n'), 'text/plain;charset=utf-8'); break;
+        case 'jsonl': downloadFile(`${base}.jsonl`, allMessages().map(m => JSON.stringify({ role: m.role, content: m.content, timestamp: new Date(m.timestamp || Date.now()).toISOString(), provider: m.provider || null, model: m.model || null, error: !!m.error })).join('\n') + '\n', 'application/x-ndjson;charset=utf-8'); break;
+        case 'print': window.print(); break;
+      }
+    }
+
+    $('#themeSelect').addEventListener('change', event => { document.documentElement.dataset.theme = event.target.value; });
+    refreshButton.addEventListener('click', () => refreshModels(true));
+    sendButton.addEventListener('click', sendMessage);
+    stopButton.addEventListener('click', () => activeController?.abort());
+    promptInput.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); sendMessage(); } });
+    exportFormat.addEventListener('change', () => { if (exportFormat.value === 'print') { exportConversation(); exportFormat.value = ''; } });
+    $('#exportButton').addEventListener('click', exportConversation);
+
+    let isInitialized = false;
+    window.initializeLocalLLM = function (initialState) {
+      if (isInitialized) return;
+      isInitialized = true;
+      BOOT = initialState && typeof initialState === 'object' ? initialState : {};
+      const configuredTimeout = Number(BOOT.requestTimeoutSeconds || 600) * 1000;
+      fallbackTimeoutMs = Math.max(30000, Math.min(configuredTimeout, 3600000));
+      if (BOOT.prompt) messages.push({ role: 'user', content: String(BOOT.prompt), timestamp: Date.now(), provider: 'ollama', model: BOOT.initialModel || '', initial: true });
+      if (BOOT.response !== undefined && BOOT.response !== null) {
+        messages.push({ role: 'assistant', content: String(BOOT.response), timestamp: Date.now(), provider: 'ollama', model: BOOT.initialModel || '', error: !!BOOT.isError, initial: true });
+      }
+      $('#conversationTitle').textContent = BOOT.title || 'LocalLLM Chat';
+      thinkToggle.checked = !!BOOT.initialThink;
+      renderMessages(false);
+      void refreshModels(false);
+    };
+  </script>
+</body>
+</html>
