@@ -8,7 +8,7 @@
 	<UseWindowsForms>true</UseWindowsForms>
 	<RootNamespace>Community.PowerToys.Run.Plugin.LocalLLm</RootNamespace>
 	<AssemblyName>Community.PowerToys.Run.Plugin.LocalLLM</AssemblyName>
-	<Version>1.4.0-preview.8</Version>
+	<Version>1.6.5</Version>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
@@ -33,15 +33,23 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="plugin.json">
-      <CopyToOutputDirectory> PreserveNewest </CopyToOutputDirectory>
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="ChatWindow.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="Images\*.png">
-      <CopyToOutputDirectory> PreserveNewest </CopyToOutputDirectory>
+    <None Update="Images\*.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Content Include="..\Assets\Brand\Icon.svg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Assets\Brand\Icon.svg</Link>
+    </Content>
+    <Content Include="..\Assets\Brand\Icon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Assets\Brand\Icon.ico</Link>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />

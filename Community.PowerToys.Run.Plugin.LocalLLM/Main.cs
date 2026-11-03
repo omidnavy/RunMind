@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -13,6 +14,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using ManagedCommon;
 using Microsoft.PowerToys.Settings.UI.Library;
 using Microsoft.Web.WebView2.Core;
@@ -26,7 +29,7 @@ namespace Community.PowerToys.Run.Plugin.LocalLLM;
 /// PowerToys Run plugin that sends the user's exact query to the selected local LLM provider.
 /// No system prompt or sampling parameters are injected.
 /// </summary>
-public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, IContextMenu
+public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, IContextMenu, IDisposable
 {
     public static string PluginID => "550A34D0CFA845449989D581149B3D9C";
     public string Name => "LocalLLM";
@@ -51,10 +54,16 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     // Reuse WebView2 environments across chat windows to avoid profile/process races.
     private static readonly SemaphoreSlim WebView2EnvironmentLock = new(1, 1);
+    private static readonly ConditionalWeakTable<WebView2, object> DisposedWebViews = new();
     private static CoreWebView2Environment? _localAppDataWebView2Environment;
     private static CoreWebView2Environment? _temporaryWebView2Environment;
 
     private readonly object _settingsLock = new();
+    private readonly object _queryLock = new();
+    private QueryOperation? _activeQuery;
+    private string? _latestFastQuery;
+    private bool _hasReceivedFastQuery;
+    private bool _disposed;
     private PluginInitContext? _context;
     private string _iconPath = @"Images\icon.png";
     private string _endpoint = DefaultEndpoint;
@@ -179,70 +188,243 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _keepAliveSeconds = keepAliveSeconds;
             _requestTimeoutSeconds = requestTimeoutSeconds;
         }
+
+        CancelActiveQuery();
     }
 
-    // This plugin performs its work through delayed execution; don't call an LLM for
-    // every keystroke in the immediate query path.
-    public List<Result> Query(Query query) => new();
+    // PowerToys calls this fast path as the user types. It must never perform network I/O.
+    // Starting a new fast query cancels the previous delayed LLM request immediately.
+    public List<Result> Query(Query query)
+    {
+        if (query is null)
+        {
+            CancelActiveQuery();
+            return new List<Result>();
+        }
 
+        var search = (query.Search ?? string.Empty).Trim();
+        if (search.Length == 0
+            || search.Equals("llm", StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrWhiteSpace(query.ActionKeyword)
+                && search.Equals(query.ActionKeyword.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            // `llm` by itself is intentionally not a launcher command. Windows Search /
+            // PowerToys' normal application indexer launches LocalLLM.exe by its app name.
+            CancelActiveQuery();
+            return new List<Result>();
+        }
+
+        // Let PowerToys' normal application indexer handle the standalone app name.
+        if (string.IsNullOrWhiteSpace(query.ActionKeyword)
+            && (search.Equals("LocalLLM", StringComparison.OrdinalIgnoreCase)
+                || search.Equals("Local LLM", StringComparison.OrdinalIgnoreCase)))
+        {
+            CancelActiveQuery();
+            return new List<Result>();
+        }
+
+        // Global mode accepts even a one-character prompt. PowerToys may use short
+        // prefixes while typing; the normal delayed-execution path handles throttling.
+
+        var settings = GetSettingsSnapshot();
+        var (model, prompt) = ParseModelAndPrompt(search, settings.DefaultModel);
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            CancelActiveQuery();
+            return new List<Result>();
+        }
+
+        var operation = BeginQuery(search, model, prompt, settings);
+        return operation is null
+            ? new List<Result>()
+            : new List<Result> { CreatePendingResult(operation) };
+    }
+
+    // The delayed path runs after PowerToys' input throttle. The returned result is a
+    // completed, copyable answer. Every provider HTTP call uses the operation token.
     public List<Result> Query(Query query, bool delayedExecution)
     {
-        if (query is null || string.IsNullOrWhiteSpace(query.Search))
+        if (!delayedExecution || query is null)
         {
             return new List<Result>();
         }
 
-        var settings = GetSettingsSnapshot();
-        var (model, prompt) = ParseModelAndPrompt(query.Search, settings.DefaultModel);
-
-        if (string.IsNullOrWhiteSpace(prompt))
+        var search = (query.Search ?? string.Empty).Trim();
+        if (search.Length == 0)
         {
-            return new List<Result>
-            {
-                CreateResponseResult(
-                    model,
-                    "Enter a prompt after the LocalLLM keyword. To choose a model for one query, use: > model-name > your prompt.",
-                    isError: true,
-                    prompt: string.Empty,
-                    settings: settings),
-            };
+            CancelActiveQuery();
+            return new List<Result>();
         }
+
+        // Resolve the immutable snapshot created by the fast query. If this plugin is
+        // invoked through delayed execution only, create the same snapshot here.
+        var currentSettings = GetSettingsSnapshot();
+        var (currentModel, currentPrompt) = ParseModelAndPrompt(search, currentSettings.DefaultModel);
+        if (string.IsNullOrWhiteSpace(currentPrompt)) return new List<Result>();
+        var operation = GetOrBeginQuery(search, currentModel, currentPrompt, currentSettings);
+        if (operation is null || !operation.TryStart()) return new List<Result>();
+
+        var settings = operation.Settings;
+        var model = operation.Model;
+        var prompt = operation.Prompt;
 
         try
         {
-            var models = FetchModelsFromEndpointAsync(settings).GetAwaiter().GetResult();
+            var cancellationToken = operation.Token;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var models = FetchModelsFromEndpointAsync(settings, cancellationToken).GetAwaiter().GetResult();
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!IsCurrentQuery(operation))
+            {
+                return new List<Result>();
+            }
+
             if (!models.Contains(model, StringComparer.OrdinalIgnoreCase))
             {
                 var available = models.Count == 0
                     ? $"{GetProviderName(settings)} returned an empty model list."
                     : $"Available models: {string.Join(", ", models)}";
-
-                return new List<Result>
-                {
-                    CreateResponseResult(
-                        model,
-                        $"Model '{model}' was not found. {available}",
-                        isError: true,
-                        prompt: prompt,
-                        settings: settings),
-                };
+                var error = $"Model '{model}' was not found. {available}";
+                operation.SetCompletion(error, isError: true);
+                return IsCurrentQuery(operation)
+                    ? new List<Result> { CreateResponseResult(model, error, isError: true, prompt, settings) }
+                    : new List<Result>();
             }
 
-            var response = QueryLLMStreamAsync(prompt, model, settings).GetAwaiter().GetResult();
+            var response = QueryLLMStreamAsync(prompt, model, settings, cancellationToken).GetAwaiter().GetResult();
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!IsCurrentQuery(operation))
+            {
+                return new List<Result>();
+            }
+
             if (string.IsNullOrWhiteSpace(response))
             {
                 response = "The model completed the request but returned no text.";
             }
 
-            return CreateResponseResults(model, response, isError: false, prompt: prompt, settings: settings);
+            operation.SetCompletion(response, isError: false);
+            return IsCurrentQuery(operation)
+                ? new List<Result> { CreateResponseResult(model, response, isError: false, prompt, settings) }
+                : new List<Result>();
+        }
+        catch (OperationCanceledException) when (operation.IsCancellationRequested)
+        {
+            // A newer query or an explicit hand-off to chat owns the user's intent now.
+            // Return no error result: stale/cancelled work must not reappear in PowerToys.
+            return new List<Result>();
         }
         catch (Exception ex)
         {
-            var message = GetUsefulExceptionMessage(ex);
-            return new List<Result>
+            if (!IsCurrentQuery(operation) || operation.IsCancellationRequested)
             {
-                CreateResponseResult(model, $"Request failed: {message}", isError: true, prompt: prompt, settings: settings),
-            };
+                return new List<Result>();
+            }
+
+            var error = $"Request failed: {GetUsefulExceptionMessage(ex)}";
+            operation.SetCompletion(error, isError: true);
+            return IsCurrentQuery(operation)
+                ? new List<Result> { CreateResponseResult(model, error, isError: true, prompt, settings) }
+                : new List<Result>();
+        }
+        finally
+        {
+            operation.MarkFinished();
+        }
+    }
+
+    private QueryOperation? BeginQuery(string search, string model, string prompt, SettingsSnapshot settings)
+    {
+        QueryOperation? previous;
+        QueryOperation operation;
+        lock (_queryLock)
+        {
+            if (_disposed) return null;
+            previous = _activeQuery;
+            operation = new QueryOperation(search, model, prompt, settings);
+            _activeQuery = operation;
+            _latestFastQuery = search;
+            _hasReceivedFastQuery = true;
+        }
+
+        // Cancel outside the state lock: CancellationToken callbacks may run inline.
+        previous?.Cancel();
+        previous?.Dispose();
+        return operation;
+    }
+
+    private QueryOperation? GetOrBeginQuery(string search, string model, string prompt, SettingsSnapshot settings)
+    {
+        lock (_queryLock)
+        {
+            if (_disposed) return null;
+
+            // A delayed callback for an obsolete query must never restart cancelled work.
+            if (_hasReceivedFastQuery && !string.Equals(_latestFastQuery, search, StringComparison.Ordinal))
+                return null;
+
+            if (_activeQuery is not null)
+            {
+                if (!string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
+                    || _activeQuery.IsCancellationRequested || _activeQuery.WasHandedOff)
+                    return null;
+                return _activeQuery;
+            }
+
+            // Supports launcher configurations which invoke only the delayed path first.
+            var operation = new QueryOperation(search, model, prompt, settings);
+            _activeQuery = operation;
+            return operation;
+        }
+    }
+
+    private bool IsCurrentQuery(QueryOperation operation)
+    {
+        lock (_queryLock)
+        {
+            return ReferenceEquals(_activeQuery, operation)
+                && !operation.IsCancellationRequested
+                && !operation.WasHandedOff
+                && !_disposed;
+        }
+    }
+
+    private void CancelActiveQuery()
+    {
+        QueryOperation? previous;
+        lock (_queryLock)
+        {
+            previous = _activeQuery;
+            _activeQuery = null;
+            _latestFastQuery = null;
+            _hasReceivedFastQuery = true;
+        }
+
+        // Invalidate the query before triggering cancellation callbacks.
+        previous?.Cancel();
+        previous?.Dispose();
+    }
+
+    public void Dispose()
+    {
+        QueryOperation? previous;
+        lock (_queryLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            previous = _activeQuery;
+            _activeQuery = null;
+            _latestFastQuery = null;
+            _hasReceivedFastQuery = true;
+        }
+
+        previous?.Cancel();
+        previous?.Dispose();
+
+        if (_context is not null)
+        {
+            _context.API.ThemeChanged -= OnThemeChanged;
         }
     }
 
@@ -273,17 +455,19 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private Task<string> QueryLLMStreamAsync(
         string input,
         string model,
-        SettingsSnapshot settings)
+        SettingsSnapshot settings,
+        CancellationToken cancellationToken = default)
     {
         return settings.Provider == 1
-            ? QueryLMStudioStreamAsync(input, model, settings)
-            : QueryOllamaStreamAsync(input, model, settings);
+            ? QueryLMStudioStreamAsync(input, model, settings, cancellationToken)
+            : QueryOllamaStreamAsync(input, model, settings, cancellationToken);
     }
 
     private async Task<string> QueryOllamaStreamAsync(
         string input,
         string model,
-        SettingsSnapshot settings)
+        SettingsSnapshot settings,
+        CancellationToken cancellationToken)
     {
         var endpoint = ValidateGenerateEndpoint(settings.Endpoint);
         var requestBody = new Dictionary<string, object>(StringComparer.Ordinal)
@@ -302,7 +486,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
         using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, connectionTimeout.Token);
+        using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
+        using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(requestTimeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
@@ -312,18 +497,18 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         connectionTimeout.CancelAfter(Timeout.InfiniteTimeSpan);
         if (!response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+            var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
             var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
             throw new HttpRequestException($"Ollama returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).{detail}", null, response.StatusCode);
         }
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync(requestTimeout.Token).ConfigureAwait(false);
         using var reader = new StreamReader(responseStream, Encoding.UTF8);
         var output = new StringBuilder();
         var recordNumber = 0;
         while (true)
         {
-            var line = await reader.ReadLineAsync(timeout.Token).ConfigureAwait(false);
+            var line = await reader.ReadLineAsync(requestTimeout.Token).ConfigureAwait(false);
             if (line is null) break;
             if (string.IsNullOrWhiteSpace(line)) continue;
             recordNumber++;
@@ -344,7 +529,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return output.ToString();
     }
 
-    private async Task<string> QueryLMStudioStreamAsync(string input, string model, SettingsSnapshot settings)
+    private async Task<string> QueryLMStudioStreamAsync(string input, string model, SettingsSnapshot settings, CancellationToken cancellationToken)
     {
         var endpoint = BuildLMStudioUri(settings.LMStudioBaseUrl, "chat/completions");
         var requestBody = new
@@ -356,7 +541,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
         using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, connectionTimeout.Token);
+        using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
+        using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(requestTimeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
@@ -365,18 +551,18 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         connectionTimeout.CancelAfter(Timeout.InfiniteTimeSpan);
         if (!response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+            var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
             var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
             throw new HttpRequestException($"LM Studio returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).{detail}", null, response.StatusCode);
         }
 
-        await using var responseStream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync(requestTimeout.Token).ConfigureAwait(false);
         using var reader = new StreamReader(responseStream, Encoding.UTF8);
         var output = new StringBuilder();
         var recordNumber = 0;
         while (true)
         {
-            var line = await reader.ReadLineAsync(timeout.Token).ConfigureAwait(false);
+            var line = await reader.ReadLineAsync(requestTimeout.Token).ConfigureAwait(false);
             if (line is null) break;
             if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
             var data = line[5..].Trim();
@@ -406,12 +592,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return output.ToString();
     }
 
-    private async Task<List<string>> FetchModelsFromEndpointAsync(SettingsSnapshot settings)
+    private async Task<List<string>> FetchModelsFromEndpointAsync(SettingsSnapshot settings, CancellationToken cancellationToken = default)
     {
         var modelsUri = settings.Provider == 1
             ? BuildLMStudioUri(settings.LMStudioBaseUrl, "models")
             : BuildTagsUri(settings.Endpoint);
         var cacheKey = modelsUri.AbsoluteUri;
+        cancellationToken.ThrowIfCancellationRequested();
         lock (ModelCacheLock)
         {
             if (string.Equals(_modelCacheEndpoint, cacheKey, StringComparison.OrdinalIgnoreCase)
@@ -420,16 +607,18 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-        using var response = await HttpClient.GetAsync(modelsUri, timeout.Token).ConfigureAwait(false);
+        using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, modelsUri);
+        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+            var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
             var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
             throw new HttpRequestException($"Could not query the {GetProviderName(settings)} model list (HTTP {(int)response.StatusCode} {response.ReasonPhrase}).{detail}", null, response.StatusCode);
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
-        using var json = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token).ConfigureAwait(false);
+        var modelListBytes = await ReadBoundedContentBytesAsync(response.Content, 4 * 1024 * 1024, requestTimeout.Token).ConfigureAwait(false);
+        using var json = JsonDocument.Parse(modelListBytes);
         var modelNames = new List<string>();
         var arrayName = settings.Provider == 1 ? "data" : "models";
         if (!json.RootElement.TryGetProperty(arrayName, out var modelsElement) || modelsElement.ValueKind != JsonValueKind.Array)
@@ -456,9 +645,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     {
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri)
             || (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps)
-            || string.IsNullOrWhiteSpace(baseUri.Host))
-            throw new InvalidOperationException("The LM Studio base URL must be an absolute HTTP or HTTPS URL, for example http://localhost:1234/v1.");
-        return new Uri(baseUrl.TrimEnd('/') + "/" + relativePath.TrimStart('/'), UriKind.Absolute);
+            || string.IsNullOrWhiteSpace(baseUri.Host)
+            || !string.IsNullOrEmpty(baseUri.UserInfo)
+            || !string.IsNullOrEmpty(baseUri.Query)
+            || !string.IsNullOrEmpty(baseUri.Fragment))
+            throw new InvalidOperationException("The LM Studio base URL must be an absolute HTTP or HTTPS URL without embedded credentials, query strings, or fragments, for example http://localhost:1234/v1.");
+        var builder = new UriBuilder(baseUri) { Path = baseUri.AbsolutePath.TrimEnd('/') + "/" + relativePath.TrimStart('/'), Query = string.Empty, Fragment = string.Empty };
+        return builder.Uri;
     }
 
     private static bool TryResolveThinkValue(string model, string? thinkingSetting, out object value)
@@ -493,68 +686,73 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return true;
     }
 
-    private List<Result> CreateResponseResults(string model, string response, bool isError, string prompt, SettingsSnapshot settings)
+    private Result CreatePendingResult(QueryOperation operation)
     {
-        var results = new List<Result>();
-        var fullResponse = response ?? string.Empty;
-
-        // Inline launcher results keep their existing preview behavior. Selecting any
-        // section opens a new independent chat session seeded with the complete prompt
-        // and initial response.
-        var sections = SplitResponseForInlineReading(fullResponse, 420);
-        for (var i = 0; i < sections.Count; i++)
+        var model = operation.Model;
+        var prompt = operation.Prompt;
+        var settings = operation.Settings;
+        return new Result
         {
-            var section = sections[i];
-            var preview = CreatePreview(section);
-            var result = new Result
+            Title = "Ask LocalLLM",
+            SubTitle = $"{CreatePreview(prompt)} · Generating… · Open in chat",
+            IcoPath = _iconPath,
+            Score = 45,
+            ContextData = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                SubTitle = preview,
-                IcoPath = _iconPath,
-                ContextData = new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["copy"] = fullResponse,
-                    ["model"] = model,
-                    ["prompt"] = prompt ?? string.Empty,
-                    ["isError"] = isError.ToString(),
-                },
-                Action = _ =>
+                ["prompt"] = prompt,
+                ["model"] = model,
+                ["mode"] = "pending",
+            },
+            Action = _ =>
+            {
+                DispatchToUi(() =>
                 {
                     try
                     {
-                        ShowNativeResponseWindow(
-                            settings,
-                            model,
-                            prompt,
-                            fullResponse,
-                            isError);
+                        if (!TryResolvePendingOperation(operation, out var completedResponse, out var isError, out var needsHandoff))
+                            return;
+                        if (needsHandoff)
+                        {
+                            // Cancel the inline HTTP request before starting the chat request.
+                            operation.Cancel();
+                            ShowPromptChatWindow(settings, model, prompt);
+                        }
+                        else
+                        {
+                            ShowNativeResponseWindow(settings, model, prompt, completedResponse, isError);
+                        }
                     }
                     catch (Exception ex)
                     {
-                        _context?.API.ShowMsg(
-                            "Could not display the LLM response",
-                            ex.Message);
+                        _context?.API.ShowMsg("Could not open the LocalLLM chat window", ex.ToString());
                     }
+                }, "Could not open the LocalLLM chat window");
+                return true;
+            },
+        };
+    }
 
-                    return true;
-                },
-            };
-
-            // results.Add();
-
-            if (i == 0)
+    private bool TryResolvePendingOperation(QueryOperation operation, out string response, out bool isError, out bool needsHandoff)
+    {
+        lock (_queryLock)
+        {
+            if (_disposed || !ReferenceEquals(_activeQuery, operation) || operation.IsCancellationRequested || operation.WasHandedOff)
             {
-                result.Title = "LocalLLM:";
+                response = string.Empty;
+                isError = false;
+                needsHandoff = false;
+                return false;
             }
 
-            results.Add(result);
+            var completed = operation.TryGetCompletionOrMarkHandoff(out response, out isError);
+            needsHandoff = !completed;
+            return true;
         }
-
-        return results;
     }
 
     private Result CreateResponseResult(string model, string response, bool isError, string prompt, SettingsSnapshot settings)
     {
-        var title = isError ? "LocalLLM · Request failed" : "LocalLLM";
+        var title = isError ? "LocalLLM · Request failed" : "LocalLLM response";
         var preview = CreatePreview(response);
 
         return new Result
@@ -562,6 +760,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             Title = title,
             SubTitle = preview,
             IcoPath = _iconPath,
+            Score = 45,
             ContextData = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["copy"] = response,
@@ -571,72 +770,20 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             },
             Action = _ =>
             {
-                try
+                DispatchToUi(() =>
                 {
-                    ShowNativeResponseWindow(settings, model, prompt, response, isError);
-                }
-                catch (Exception ex)
-                {
-                    _context?.API.ShowMsg("Could not display the LLM response", ex.Message);
-                }
-
+                    try
+                    {
+                        ShowNativeResponseWindow(settings, model, prompt, response, isError);
+                    }
+                    catch (Exception ex)
+                    {
+                        _context?.API.ShowMsg("Could not display the LLM response", ex.ToString());
+                    }
+                }, "Could not display the LLM response");
                 return true;
             },
         };
-    }
-
-    private static List<string> SplitResponseForInlineReading(string response, int maxChunkLength)
-    {
-        var chunks = new List<string>();
-        if (string.IsNullOrEmpty(response))
-        {
-            chunks.Add("(The model returned an empty response.)");
-            return chunks;
-        }
-
-        // Preserve the user's existing compact multi-result UX. Split at natural line or
-        // word boundaries when possible, but never trim either side: concatenating the
-        // sections must reproduce the original response byte-for-byte at the string level.
-        maxChunkLength = Math.Max(80, maxChunkLength);
-        var start = 0;
-        while (start < response.Length)
-        {
-            var remaining = response.Length - start;
-            if (remaining <= maxChunkLength)
-            {
-                chunks.Add(response[start..]);
-                break;
-            }
-
-            var hardEnd = start + maxChunkLength;
-            var newline = response.LastIndexOf('\n', hardEnd - 1, maxChunkLength);
-            var space = response.LastIndexOf(' ', hardEnd - 1, maxChunkLength);
-            var minimumUsefulBoundary = start + Math.Max(40, maxChunkLength / 3);
-            var end = newline >= minimumUsefulBoundary
-                ? newline + 1
-                : space >= minimumUsefulBoundary
-                    ? space + 1
-                    : hardEnd;
-
-            // Guard against a pathological boundary result; every iteration must advance.
-            if (end <= start || end > hardEnd)
-            {
-                end = hardEnd;
-            }
-
-            // Avoid cutting a UTF-16 surrogate pair between adjacent sections.
-            if (end < response.Length && end > start
-                && char.IsHighSurrogate(response[end - 1])
-                && char.IsLowSurrogate(response[end]))
-            {
-                end--;
-            }
-
-            chunks.Add(response[start..end]);
-            start = end;
-        }
-
-        return chunks;
     }
 
     public List<ContextMenuResult> LoadContextMenus(Result selectedResult)
@@ -658,15 +805,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             AcceleratorKey = Key.Enter,
             Action = _ =>
             {
-                try
+                DispatchToUi(() =>
                 {
-                    Clipboard.SetText(section ?? fullResponse);
-                }
-                catch (Exception ex)
-                {
-                    _context?.API.ShowMsg("Could not copy response", ex.Message);
-                }
-
+                    try { Clipboard.SetText(section ?? fullResponse); }
+                    catch (Exception ex) { _context?.API.ShowMsg("Could not copy response", ex.Message); }
+                }, "Could not copy response");
                 return true;
             },
         });
@@ -681,15 +824,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 Glyph = "\xE8C8",
                 Action = _ =>
                 {
-                    try
+                    DispatchToUi(() =>
                     {
-                        Clipboard.SetText(fullResponse);
-                    }
-                    catch (Exception ex)
-                    {
-                        _context?.API.ShowMsg("Could not copy response", ex.Message);
-                    }
-
+                        try { Clipboard.SetText(fullResponse); }
+                        catch (Exception ex) { _context?.API.ShowMsg("Could not copy response", ex.Message); }
+                    }, "Could not copy response");
                     return true;
                 },
             });
@@ -809,23 +948,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     private static string CreatePreview(string text)
     {
-            if (string.IsNullOrWhiteSpace(text))
-                return string.Empty;
-
-            return System.Text.RegularExpressions.Regex
-                .Replace(text.Trim(), @"\r?\n\s*\r?\n+", "\n");
-        // var preview = $"<html><head></head><body><p style=\"margin:0\">{text}</p></body></html>";
-
-        // return preview;
-        // var   preview = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-
-        // const int maxLength = 155;
-        // if (preview.Length > maxLength)
-        // {
-        //     preview = preview[..(maxLength - 1)] + "…";
-        // }
-
-        // return preview;
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var preview = System.Text.RegularExpressions.Regex.Replace(
+            text.Trim(), @"\r?\n\s*\r?\n+", "\n");
+        const int maxLength = 420;
+        return preview.Length <= maxLength ? preview : preview[..(maxLength - 1)].TrimEnd() + "…";
     }
 
     private static string GetUsefulExceptionMessage(Exception exception)
@@ -851,11 +978,133 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return exceptionChain.LastOrDefault()?.Message ?? exception.Message;
     }
 
+    private static async Task<byte[]> ReadBoundedContentBytesAsync(HttpContent content, int maximumBytes, CancellationToken cancellationToken)
+    {
+        if (maximumBytes < 1) throw new ArgumentOutOfRangeException(nameof(maximumBytes));
+        if (content.Headers.ContentLength is long declaredLength && declaredLength > maximumBytes)
+            throw new InvalidDataException($"HTTP response exceeded the {maximumBytes:N0}-byte size limit.");
+
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var output = new MemoryStream(Math.Min(maximumBytes, 64 * 1024));
+        var buffer = new byte[16 * 1024];
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false);
+            if (read == 0) break;
+            if (output.Length + read > maximumBytes)
+                throw new InvalidDataException($"HTTP response exceeded the {maximumBytes:N0}-byte size limit.");
+            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+        }
+        return output.ToArray();
+    }
+
+    private static async Task<string> ReadBoundedContentTextAsync(HttpContent content, int maximumBytes, CancellationToken cancellationToken)
+    {
+        var bytes = await ReadBoundedContentBytesAsync(content, maximumBytes, cancellationToken).ConfigureAwait(false);
+        return Encoding.UTF8.GetString(bytes);
+    }
+
     private static string TrimForError(string text)
     {
         var singleLine = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         const int maxLength = 500;
         return singleLine.Length <= maxLength ? singleLine : singleLine[..(maxLength - 1)] + "…";
+    }
+
+    private void DispatchToUi(Action action, string failureTitle)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+        {
+            _context?.API.ShowMsg(failureTitle, "PowerToys' WPF UI dispatcher is unavailable or shutting down.");
+            return;
+        }
+
+        void SafeInvoke()
+        {
+            try
+            {
+                if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
+                if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+                    throw new InvalidOperationException("The PowerToys UI dispatcher is not running on an STA thread; WPF/WebView2 windows cannot be created safely.");
+                action();
+            }
+            catch (Exception ex)
+            {
+                _context?.API.ShowMsg(failureTitle, ex.ToString());
+            }
+        }
+
+        if (dispatcher.CheckAccess())
+        {
+            SafeInvoke();
+        }
+        else
+        {
+            _ = dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(SafeInvoke));
+        }
+    }
+
+    private static void DisposeWebViewSafely(WebView2 webView)
+    {
+        lock (DisposedWebViews)
+        {
+            if (DisposedWebViews.TryGetValue(webView, out _)) return;
+            DisposedWebViews.Add(webView, new object());
+        }
+
+        try { webView.Dispose(); }
+        catch { /* Partially initialized WebView2 controls can throw during teardown. */ }
+    }
+
+    private static BitmapFrame? LoadWindowIcon(string assemblyDirectory)
+    {
+        var iconPath = Path.Combine(assemblyDirectory, "Assets", "Brand", "Icon.ico");
+        if (!File.Exists(iconPath)) return null;
+
+        try
+        {
+            var frame = BitmapFrame.Create(
+                new Uri(iconPath, UriKind.Absolute),
+                BitmapCreateOptions.None,
+                BitmapCacheOption.OnLoad);
+            if (frame.CanFreeze) frame.Freeze();
+            return frame;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private void ShowPromptChatWindow(SettingsSnapshot settings, string model, string prompt)
+    {
+        var assemblyDirectory = Path.GetDirectoryName(typeof(Main).Assembly.Location) ?? AppContext.BaseDirectory;
+        var htmlPath = Path.Combine(assemblyDirectory, "ChatWindow.html");
+        if (!File.Exists(htmlPath)) throw new FileNotFoundException("ChatWindow.html was not found beside the LocalLLM plugin assembly.", htmlPath);
+        var bootstrap = new
+        {
+            title = CreateFallbackConversationTitle(prompt),
+            windowInstanceId = Guid.NewGuid().ToString("N"),
+            initialModel = model,
+            initialProvider = settings.Provider == 1 ? "lmstudio" : "ollama",
+            autoSendPromptText = prompt,
+            generateTitleAfterFirstResponse = true,
+            ollamaBaseUrl = BuildOllamaBaseUrl(settings.Endpoint),
+            lmStudioBaseUrl = RewriteLocalhostToLoopback(settings.LMStudioBaseUrl),
+            keepAliveSeconds = settings.KeepAliveSeconds,
+        };
+        var webView = CreateChatWebView();
+        var appWindow = new Window
+        {
+            Title = "LocalLLM", Width = 1120, Height = 860, MinWidth = 680, MinHeight = 520,
+            Icon = LoadWindowIcon(assemblyDirectory),
+            WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = webView,
+        };
+        appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        appWindow.Show();
+        appWindow.Activate();
+        _ = InitializeChatWebViewAsync(appWindow, webView, assemblyDirectory, JsonSerializer.Serialize(bootstrap));
     }
 
     private void ShowNativeResponseWindow(SettingsSnapshot settings, string model, string? prompt, string response, bool isError)
@@ -874,10 +1123,12 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             Height = 860,
             MinWidth = 680,
             MinHeight = 520,
+            Icon = LoadWindowIcon(Path.GetDirectoryName(typeof(Main).Assembly.Location) ?? AppContext.BaseDirectory),
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
             Content = webView,
         };
 
+        appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
         appWindow.Show();
         appWindow.Activate();
         _ = InitializeChatWebViewAsync(appWindow, webView, navigation.FolderPath, navigation.BootstrapJson);
@@ -922,52 +1173,83 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         SettingsSnapshot settings,
         string fallbackTitle)
     {
-        string title;
-        try
-        {
-            title = await GenerateConversationTitleAsync(model, prompt, responseText, settings).ConfigureAwait(false);
-            title = NormalizeGeneratedConversationTitle(title, fallbackTitle);
-        }
-        catch
-        {
-            title = fallbackTitle;
-        }
+        using var lifetime = new CancellationTokenSource();
+        EventHandler closedHandler = (_, _) => lifetime.Cancel();
+        appWindow.Closed += closedHandler;
 
         try
         {
-            // This method resumes on a worker thread after the HTTP request. All WPF
-            // Window/WebView2 access must therefore be marshalled back to the UI thread.
-            var dispatcher = appWindow.Dispatcher;
-            await dispatcher.InvokeAsync(() => appWindow.Title = $"LocalLLM — {title}");
-            var serializedTitle = JsonSerializer.Serialize(title);
-            // The document may still be loading. Retry briefly until its one-way title
-            // setter exists; no WebMessageReceived handler or host bridge is introduced.
-            for (var attempt = 0; attempt < 120; attempt++)
+            string title;
+            try
             {
+                title = await GenerateConversationTitleAsync(model, prompt, responseText, settings, lifetime.Token).ConfigureAwait(false);
+                title = NormalizeGeneratedConversationTitle(title, fallbackTitle);
+            }
+            catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+            {
+                return;
+            }
+            catch
+            {
+                title = fallbackTitle;
+            }
+
+            try
+            {
+                // Window and WebView2 access is always performed on the owning dispatcher.
+                var dispatcher = appWindow.Dispatcher;
                 if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
-                try
+                var isVisible = await dispatcher.InvokeAsync(() => appWindow.IsVisible).Task.ConfigureAwait(false);
+                if (!isVisible || lifetime.IsCancellationRequested) return;
+
+                await dispatcher.InvokeAsync(() =>
                 {
-                    var readyScriptTask = await dispatcher.InvokeAsync(
-                        () => webView.CoreWebView2.ExecuteScriptAsync("typeof window.setConversationTitle === 'function'"));
-                    var ready = await readyScriptTask.ConfigureAwait(false);
-                    if (string.Equals(ready, "true", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var setTitleTask = await dispatcher.InvokeAsync(
-                            () => webView.CoreWebView2.ExecuteScriptAsync($"window.setConversationTitle({serializedTitle});"));
-                        await setTitleTask.ConfigureAwait(false);
+                    if (appWindow.IsVisible) appWindow.Title = $"LocalLLM — {title}";
+                }).Task.ConfigureAwait(false);
+
+                var serializedTitle = JsonSerializer.Serialize(title);
+                // The document may still be loading. Retry briefly until its one-way title
+                // setter exists. Every WebView2 access is dispatched to its owning STA thread.
+                for (var attempt = 0; attempt < 120; attempt++)
+                {
+                    if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || lifetime.IsCancellationRequested)
                         return;
+
+                    try
+                    {
+                        var readyScriptTask = await dispatcher.InvokeAsync(() =>
+                        {
+                            if (!appWindow.IsVisible) return Task.FromResult("false");
+                            return webView.CoreWebView2.ExecuteScriptAsync("typeof window.setConversationTitle === 'function'");
+                        }).Task.ConfigureAwait(false);
+                        var ready = await readyScriptTask.ConfigureAwait(false);
+                        if (string.Equals(ready, "true", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var setTitleTask = await dispatcher.InvokeAsync(() =>
+                            {
+                                if (!appWindow.IsVisible) return Task.CompletedTask;
+                                return webView.CoreWebView2.ExecuteScriptAsync($"window.setConversationTitle({serializedTitle});");
+                            }).Task.ConfigureAwait(false);
+                            await setTitleTask.ConfigureAwait(false);
+                            return;
+                        }
                     }
+                    catch
+                    {
+                        // Navigation, WebView disposal, or window closure can race title work.
+                    }
+
+                    await Task.Delay(250, lifetime.Token).ConfigureAwait(false);
                 }
-                catch
-                {
-                    // Navigation or window closure can race with title generation.
-                }
-                await Task.Delay(250).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The stable caption and prompt-derived in-app title remain usable.
             }
         }
-        catch
+        finally
         {
-            // The static application title and prompt-derived in-app title remain usable.
+            appWindow.Closed -= closedHandler;
         }
     }
 
@@ -975,13 +1257,15 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         string model,
         string prompt,
         string responseText,
-        SettingsSnapshot settings)
+        SettingsSnapshot settings,
+        CancellationToken cancellationToken)
     {
         var titlePrompt = "Create a concise chat title of 3 to 7 words. Use the user's request and the assistant's response to identify the actual topic. Return only the title, without quotes, markdown, or explanation.\n\nUSER REQUEST:\n"
             + (prompt ?? string.Empty)[..Math.Min((prompt ?? string.Empty).Length, 1800)]
             + "\n\nASSISTANT RESPONSE:\n"
             + (responseText ?? string.Empty)[..Math.Min((responseText ?? string.Empty).Length, 1800)];
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
 
         if (settings.Provider == 1)
         {
@@ -1001,9 +1285,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
             };
-            using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeout.Token).ConfigureAwait(false);
+            using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
             if (!result.IsSuccessStatusCode) throw new HttpRequestException($"LM Studio title request returned HTTP {(int)result.StatusCode}.");
-            using var document = JsonDocument.Parse(await result.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false));
+            var responseBytes = await ReadBoundedContentBytesAsync(result.Content, 512 * 1024, timeout.Token).ConfigureAwait(false);
+            using var document = JsonDocument.Parse(responseBytes);
             return document.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
         }
         else
@@ -1021,9 +1306,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
             };
-            using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeout.Token).ConfigureAwait(false);
+            using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
             if (!result.IsSuccessStatusCode) throw new HttpRequestException($"Ollama title request returned HTTP {(int)result.StatusCode}.");
-            using var document = JsonDocument.Parse(await result.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false));
+            var responseBytes = await ReadBoundedContentBytesAsync(result.Content, 512 * 1024, timeout.Token).ConfigureAwait(false);
+            using var document = JsonDocument.Parse(responseBytes);
             return document.RootElement.TryGetProperty("response", out var response) ? response.GetString() ?? string.Empty : string.Empty;
         }
     }
@@ -1037,15 +1323,20 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         Exception? primaryInitializationException = null)
     {
         string userDataFolder = "(not resolved)";
+        string stage = "Resolve WebView2 user-data folder";
         try
         {
-            // Never let WebView2 infer a profile next to the PowerToys host executable.
-            // PowerToys commonly runs from a protected install location, which can cause
-            // EnsureCoreWebView2Async() to fail with E_ACCESSDENIED.
+            // PowerToys and Standalone use separate profiles, avoiding cross-host profile
+            // contention while preserving a deterministic profile location per host.
             userDataFolder = GetWebView2UserDataFolder(useTemporaryUserDataFolder);
+            stage = "Create WebView2 environment";
             var environment = await GetWebView2EnvironmentAsync(useTemporaryUserDataFolder, userDataFolder);
+            if (!appWindow.IsVisible) return;
+            stage = "Initialize WebView2 control";
             await webView.EnsureCoreWebView2Async(environment);
+            if (!appWindow.IsVisible) return;
 
+            stage = "Configure WebView2 origin and navigation policy";
             var core = webView.CoreWebView2;
             // Give the static page a stable localhost origin so browser CORS policies can
             // recognize the page. API requests are still issued directly by JavaScript.
@@ -1058,6 +1349,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             // or request/response bridge is registered with the plugin.
             core.Settings.IsWebMessageEnabled = false;
             core.Settings.AreHostObjectsAllowed = false;
+            core.DocumentTitleChanged += (_, _) =>
+            {
+                if (!appWindow.IsVisible) return;
+                var documentTitle = core.DocumentTitle;
+                if (!string.IsNullOrWhiteSpace(documentTitle) && documentTitle.Length <= 100)
+                    appWindow.Title = documentTitle;
+            };
             core.NavigationStarting += (_, e) =>
             {
                 if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
@@ -1111,13 +1409,16 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             };
             core.NavigationCompleted += async (_, e) =>
             {
+                if (!appWindow.IsVisible) return;
                 if (!e.IsSuccess)
                 {
+                    if (ReferenceEquals(appWindow.Content, webView)) appWindow.Content = null;
+                    DisposeWebViewSafely(webView);
                     appWindow.Content = new TextBlock
                     {
                         Margin = new Thickness(24),
                         TextWrapping = TextWrapping.Wrap,
-                        Text = "The LocalLLM chat page could not be loaded. Check that ChatWindow.html is deployed beside the plugin DLL.",
+                        Text = "The LocalLLM chat page could not be loaded. Check that ChatWindow.html and Assets/Brand/Icon.svg are deployed beside the plugin DLL.",
                     };
                     return;
                 }
@@ -1133,15 +1434,26 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     _context?.API.ShowMsg("Could not initialize the LocalLLM chat session", ex.Message);
                 }
             };
+            stage = "Navigate to ChatWindow.html";
             core.Navigate("https://localhost/ChatWindow.html");
         }
-        catch (Exception ex) when (!useTemporaryUserDataFolder && IsAccessDeniedException(ex))
+        catch (Exception ex) when (!useTemporaryUserDataFolder && ShouldRetryWebViewWithTemporaryProfile(ex))
         {
-            // If the user's LocalAppData profile is redirected or restricted, retry using a
-            // fresh control and a per-user temporary directory. Retrying with a fresh control
-            // avoids reusing a WebView2 control whose initialization already failed.
+            // Access-denied and WebView2 invalid-state failures can be associated with the
+            // selected user-data folder/session. Retry once with a separate profile and a
+            // fresh control; never reuse a control whose initialization already failed.
+            if (!appWindow.IsVisible)
+            {
+                DisposeWebViewSafely(webView);
+                return;
+            }
+
+            if (ReferenceEquals(appWindow.Content, webView))
+                appWindow.Content = null;
+            DisposeWebViewSafely(webView);
             var fallbackWebView = CreateChatWebView();
             appWindow.Content = fallbackWebView;
+            appWindow.Closed += (_, _) => DisposeWebViewSafely(fallbackWebView);
             await InitializeChatWebViewAsync(
                 appWindow,
                 fallbackWebView,
@@ -1152,14 +1464,20 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
         catch (Exception ex)
         {
+            if (!appWindow.IsVisible) return;
             var priorFailure = primaryInitializationException is null
                 ? string.Empty
                 : $"\nPrimary profile attempt also failed: {primaryInitializationException.Message}";
             var message = "The LocalLLM chat window could not initialize WebView2. "
                 + ex.Message
+                + $"\nFailed stage: {stage}"
+                + $"\nHRESULT: 0x{ex.HResult:X8}"
                 + $"\nUser-data folder: {userDataFolder}"
                 + priorFailure
+                + $"\nException details: {ex}"
                 + "\nCheck that Microsoft Edge WebView2 Runtime is installed and that this folder is writable.";
+            if (ReferenceEquals(appWindow.Content, webView)) appWindow.Content = null;
+            DisposeWebViewSafely(webView);
             appWindow.Content = new TextBlock
             {
                 Margin = new Thickness(24),
@@ -1194,9 +1512,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             }
 
             Directory.CreateDirectory(userDataFolder);
+            var environmentOptions = new CoreWebView2EnvironmentOptions();
             var environment = await CoreWebView2Environment.CreateAsync(
                 browserExecutableFolder: null,
-                userDataFolder: userDataFolder);
+                userDataFolder: userDataFolder,
+                options: environmentOptions);
 
             if (useTemporaryFolder)
             {
@@ -1219,7 +1539,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     {
         if (useTemporaryFolder)
         {
-            return Path.Combine(Path.GetTempPath(), "PowerToys-Run-LocalLLM", "WebView2");
+            return Path.Combine(Path.GetTempPath(), "PowerToys-Run-LocalLLM", "PowerToys", "WebView2");
         }
 
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -1228,15 +1548,16 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             throw new InvalidOperationException("Windows did not provide a Local AppData path for the current user.");
         }
 
-        return Path.Combine(localAppData, "Microsoft", "PowerToys", "LocalLLM", "WebView2");
+        return Path.Combine(localAppData, "Microsoft", "PowerToys", "LocalLLM", "PowerToys", "WebView2");
     }
 
-    private static bool IsAccessDeniedException(Exception exception)
+    private static bool ShouldRetryWebViewWithTemporaryProfile(Exception exception)
     {
         for (Exception? current = exception; current is not null; current = current.InnerException)
         {
             if (current is UnauthorizedAccessException
-                || current.HResult == unchecked((int)0x80070005)) // E_ACCESSDENIED
+                || current.HResult == unchecked((int)0x80070005) // E_ACCESSDENIED
+                || current.HResult == unchecked((int)0x8007139F)) // ERROR_INVALID_STATE
             {
                 return true;
             }
@@ -1347,6 +1668,148 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         return builder.Uri.ToString().TrimEnd('/');
+    }
+
+    private sealed class QueryOperation : IDisposable
+    {
+        private readonly CancellationTokenSource _cancellation = new();
+        private readonly object _sync = new();
+        private int _started;
+        private int _cancelRequested;
+        private int _handedOff;
+        private bool _finished;
+        private bool _disposed;
+        private bool _cancelInProgress;
+        private bool _disposeRequested;
+        private bool _hasCompletion;
+        private string _response = string.Empty;
+        private bool _isError;
+
+        public QueryOperation(string search, string model, string prompt, SettingsSnapshot settings)
+        {
+            Search = search;
+            Model = model;
+            Prompt = prompt;
+            Settings = settings;
+        }
+
+        public string Search { get; }
+        public string Model { get; }
+        public string Prompt { get; }
+        public SettingsSnapshot Settings { get; }
+        public CancellationToken Token
+        {
+            get
+            {
+                lock (_sync) return _cancellation.Token;
+            }
+        }
+        public bool IsCancellationRequested => Volatile.Read(ref _cancelRequested) != 0;
+        public bool WasHandedOff => Volatile.Read(ref _handedOff) != 0;
+
+        public bool TryStart()
+        {
+            lock (_sync)
+            {
+                if (_disposed || IsCancellationRequested || WasHandedOff || _started != 0) return false;
+                _started = 1;
+                return true;
+            }
+        }
+
+        public void Cancel()
+        {
+            CancellationTokenSource? sourceToCancel = null;
+            lock (_sync)
+            {
+                if (!_disposed && Interlocked.Exchange(ref _cancelRequested, 1) == 0)
+                {
+                    _cancelInProgress = true;
+                    sourceToCancel = _cancellation;
+                }
+
+                if (_started == 0 || _finished) _disposeRequested = true;
+                TryDisposeSourceLocked();
+            }
+
+            // Cancellation callbacks may execute synchronously and can re-enter plugin
+            // code. Never invoke CancellationTokenSource.Cancel while holding _sync.
+            if (sourceToCancel is not null)
+            {
+                try { sourceToCancel.Cancel(); }
+                catch (ObjectDisposedException) { }
+                finally
+                {
+                    lock (_sync)
+                    {
+                        _cancelInProgress = false;
+                        TryDisposeSourceLocked();
+                    }
+                }
+            }
+        }
+
+        public bool TryGetCompletionOrMarkHandoff(out string response, out bool isError)
+        {
+            lock (_sync)
+            {
+                if (_hasCompletion && !IsCancellationRequested && !WasHandedOff)
+                {
+                    response = _response;
+                    isError = _isError;
+                    // Claim the pending result exactly once. A double-click must not open
+                    // multiple windows from the same query operation.
+                    Interlocked.Exchange(ref _handedOff, 1);
+                    return true;
+                }
+
+                response = string.Empty;
+                isError = false;
+                // Mark handoff before releasing the lock. SetCompletion and IsCurrentQuery
+                // will reject the operation immediately, even before HTTP cancellation runs.
+                Interlocked.Exchange(ref _handedOff, 1);
+                return false;
+            }
+        }
+
+        public void SetCompletion(string response, bool isError)
+        {
+            lock (_sync)
+            {
+                if (_finished || _disposed || IsCancellationRequested || WasHandedOff) return;
+                _response = response;
+                _isError = isError;
+                _hasCompletion = true;
+            }
+        }
+
+        public void MarkFinished()
+        {
+            lock (_sync)
+            {
+                _finished = true;
+                _disposeRequested = true;
+                TryDisposeSourceLocked();
+            }
+        }
+
+        public void Dispose()
+        {
+            Cancel();
+            lock (_sync)
+            {
+                _disposeRequested = true;
+                TryDisposeSourceLocked();
+            }
+        }
+
+        private void TryDisposeSourceLocked()
+        {
+            if (!_disposeRequested || _cancelInProgress || _disposed) return;
+            if (_started != 0 && !_finished) return;
+            _disposed = true;
+            _cancellation.Dispose();
+        }
     }
 
     private sealed record SettingsSnapshot(

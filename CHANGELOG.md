@@ -1,8 +1,68 @@
+# Version 1.6.5
 
+- Standalone WPF title bar now follows the Windows app appearance preference (`AppsUseLightTheme`) using the native DWM immersive dark-mode attribute.
+- Re-applies the title-bar appearance when Windows broadcasts `WM_SETTINGCHANGE` or `WM_THEMECHANGED`, so switching Windows between light and dark updates an already-open standalone window.
+- Retains the normal Windows title bar and window controls; no custom chrome or taskbar grouping changes.
+
+# 1.6.4
+
+- Set the LocalLLM ICO on both PowerToys-hosted chat window types so the title bar and taskbar use the app branding.
+- Removed standalone single-instance activation; each launch now opens a separate chat window in its own process.
+
+
+# 1.6.3
+
+- Integrated the latest supplied branding exports: colorful `Icon.ico` for the executable/window, colorful `Icon.png`, all supplied raster sizes, light/dark monochrome PNG variants, and the updated theme-aware `Icon.svg`.
+- Added an explicit WebView2 favicon reference and deploy the ICO beside the virtual-hosted chat page, eliminating the implicit missing `/favicon.ico` request.
+- Global PowerToys mode now accepts one-character prompts instead of suppressing them before delayed execution.
+- Added actionable model-discovery diagnostics for browser network/CORS failures. Clarified that WebView2 fetches originate from `https://localhost`; provider servers must allow that origin. Rewriting the provider hostname to `127.0.0.1` avoids the virtual-host collision but does not bypass server-side CORS.
+
+
+# 1.6.1
+
+- Finalized the global two-stage PowerToys Run workflow and explicit `llm` action keyword while leaving standalone launch to normal Windows/PowerToys application search.
+- Tightened stale-query protection and cancellation ownership across fast queries, delayed execution, and pending-result hand-off.
+- Hardened WPF dispatcher checks and WebView2 initialization/disposal diagnostics for the PowerToys host; retained independent WebView2 profiles for standalone and PowerToys.
+- Updated build, setup, feature, implementation, and validation documentation for the 1.6.1 source package.
+- Validation remains static in this environment: JavaScript and metadata checks pass, but a Windows/.NET build and live PowerToys/WebView2 tests are still required.
+
+# 1.6.0
+
+- Replaced the configurable live-chat/inline switch with a global two-stage PowerToys Run result: immediate `Ask LocalLLM` placeholder, followed by a completed response result.
+- Enabled global plugin matching while retaining the `llm` action keyword. `llm` by itself no longer opens a chat window; the standalone executable is launched through normal application search.
+- Added query-operation cancellation. Every new fast query cancels the previous request; the delayed path uses linked cancellation tokens for model discovery, response headers, and streamed response bodies, and suppresses stale results.
+- Clicking the pending result hands the request to the chat window and cancels the PowerToys request first. Clicking a completed result opens the chat with the existing prompt and answer.
+- Marshalled PowerToys window creation, WebView2 initialization entry points, clipboard actions, and teardown to the WPF dispatcher; added safe disposal and stage/HRESULT diagnostics.
+- Gave PowerToys and standalone separate WebView2 user-data folders, added a standalone single-instance activation signal, and integrated the supplied ICO/PNG/SVG branding assets.
+- Kept the shared ChatWindow.html implementation and existing provider, Agent, Deep Research, workspace, and MCP code intact.
+
+# 1.5.1
+
+- Added immediate PowerToys Run live-chat handoff as the default inline behavior; selecting the result opens the shared chat and starts the prompt automatically. The previous blocking inline behavior remains configurable. Actual inline token mutation is not supported by the PowerToys plugin result contract.
+- Added Agent and Deep Research task-scoped snapshots for model connection, generation settings, and tool definitions.
+- Bounded direct page/document and Agent tool-turn response bodies.
+- Added collision-resistant MCP tool names and safe expired-session recovery for idempotent reads/lists.
+- Improved Deep Research source provenance: discovered/read distinction, retrieval route, final URL, and failed fetch records.
+- Tightened LM Studio base URL validation and cancel conversation-title generation when the owning window closes.
+- Retained the one-product/two-host architecture with no installer, startup registration, tray, or service.
 
 ---
 
-# Version 1.3.0
+# Version 1.5.0
+
+- Added a direct-launch Windows desktop host using WebView2 and the existing shared chat application.
+- Kept the PowerToys Run plugin as the second entry point to the same product.
+- Both hosts share the existing WebView2 profile and therefore the same application settings and local browser storage.
+- Pressing Enter on the `llm` action keyword without a prompt opens a clean chat window.
+- Added explicit WebView2 disposal and window-lifetime checks to the PowerToys chat host.
+- Removed global provider/base-URL mutation during model discovery; each discovery request now uses its own connection snapshot and credentials.
+- Serialized concurrent model refresh operations.
+- Added bounded MCP response reads, request deadlines, and parsing for multiple SSE data events.
+- Applied bounded response reads to direct webpage and Reader retrieval.
+- No installer, startup registration, tray, service, Electron, C# Agent bridge, or MCP process bridge was added.
+---
+
+# Version 1.4.0
 ## 1.4.0-preview.8
 
 - Fixed two C# compile errors in the conversation-title WebView2 update path.

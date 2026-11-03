@@ -1,14 +1,14 @@
 {
 	"ID": "550A34D0CFA845449989D581149B3D9C",
 	"ActionKeyword": "llm",
-	"IsGlobal": false,
+	"IsGlobal": true,
 	"Name": "LocalLLM",
 	"Author": "Omid Navy",
-	"Version": "1.4.0-preview.8",
+	"Version": "1.6.5",
 	"Language": "csharp",
 	"Website": "https://omid.navy",
 	"ExecuteFileName": "Community.PowerToys.Run.Plugin.LocalLLM.dll",
-	"IcoPathDark": "Images\\icon.png",
-	"IcoPathLight": "Images\\icon.png",
+	"IcoPathDark": "Images\\icon-dark.png",
+	"IcoPathLight": "Images\\icon-light.png",
 	"DynamicLoading": true
 }
