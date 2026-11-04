@@ -31,7 +31,7 @@ This document describes the **current feature set** of RunMind across its PowerT
 |---|---|---|
 | Global search | Returns an immediate **Ask RunMind** result without waiting for the model. | **Implemented** |
 | Action keyword | `llm <prompt>` uses the same two-stage query flow. `llm` without a prompt does not return a chat result. | **Implemented** |
-| Delayed execution | Provider/model discovery and generation run asynchronously outside the PowerToys search callback. | **Implemented**; verify responsiveness against other plugins on Windows. |
+| Delayed execution | Provider/model discovery and generation run asynchronously outside the PowerToys search callback. Ollama inline requests support an optional CPU thread cap; blank or `0` leaves thread selection to Ollama, while `1`–`128` sets `options.num_thread`. | **Implemented**; the cap does not apply to LM Studio or standalone chat. |
 | Completed result | RunMind requests a refreshed PowerToys result after background generation finishes. | **Implemented** |
 | Copy answer | Completed results provide a context-menu action to copy the full response. | **Implemented** |
 | Open completed answer | Opening a completed result transfers the original prompt and generated answer into chat without generating the answer again. | **Implemented** |
@@ -86,8 +86,9 @@ This document describes the **current feature set** of RunMind across its PowerT
 | Feature | Current behavior | Status / limits |
 |---|---|---|
 | Shared chat UI | Both hosts use the same browser-side chat implementation. | **Implemented** |
+| Text selection | Application controls, status labels, metadata, and message action buttons are excluded from text selection; user and assistant message bodies remain selectable. | **Implemented** |
 | Themes | System, Light, and Dark chat themes are available. | **Implemented** |
-| Streaming rendering | Streaming updates are batched and update the active message without rebuilding the entire transcript on every token. | **Implemented** |
+| Streaming rendering | Streaming updates patch only the active message and are throttled to at most one Markdown render every 90 ms; a final render runs when generation ends. | **Implemented** |
 | Thinking disclosure | Thinking content can be expanded/collapsed while a response is streaming. | **Implemented** |
 | Context manager | Shows approximate input/context usage and distinguishes included, summarized, and omitted conversation messages. | **Implemented** |
 | Context limits | Supports a manual context override, optional recent-turn cap, and optional stricter history-token budget. | **Implemented** |

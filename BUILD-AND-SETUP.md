@@ -1,4 +1,4 @@
-# Build and setup — RunMind 1.7.1
+# Build and setup — RunMind 1.7.3
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
@@ -16,20 +16,31 @@ The linter's `Repository missing` result also requires a published GitHub reposi
 - For the PowerToys plugin build, matching PowerToys reference assemblies are included under `lib\x64`: `PowerToys.Common.UI.dll`, `PowerToys.ManagedCommon.dll`, `PowerToys.Settings.UI.Lib.dll`, `Wox.Infrastructure.dll`, and `Wox.Plugin.dll`. Replace them with assemblies from your installed PowerToys build if you need to target a different PowerToys version.
 - Ollama or an OpenAI-compatible model server reachable from the host/browser.
 
-## Agent file and data capabilities in 1.7.1
+## Agent file and data capabilities in 1.7.2
 
-The Agent can read supported text/source attachments by exact filename, validate attached or workspace JSON files (including bounded JSON Schema checks), extract best-effort selectable text from attached or workspace PDFs, and inspect attached or workspace ZIP archives. PDF and ZIP attachments are signature-checked and bounded by the attachment limits; binary content is retained when a `.runmind` conversation is saved and reopened. ZIP extraction from either source remains approval-gated, CRC-checked, and writes only into a new folder inside the selected workspace. PDF OCR and TAR/ZIP64 extraction are not included. CSV inference/joins and model endpoint discovery diagnosis are also available. See `FEATURE-MATRIX.md` for limits.
+The Agent can read supported text/source attachments by exact filename, validate attached or workspace JSON files (including bounded JSON Schema checks), read attached or workspace PDFs with PDF.js, automatically OCR pages whose extracted text is missing or suspicious, and inspect attached or workspace ZIP archives. PDF and ZIP attachments are signature-checked and bounded; binary content is retained when a `.runmind` conversation is saved and reopened. ZIP extraction remains approval-gated, CRC-checked, and writes only into a new folder inside the selected workspace. PDF reading is limited to 25 MB and 500 pages; encrypted PDFs, handwriting, low-quality scans, and complex reading order may still need manual review. CSV inference/joins and model endpoint discovery diagnosis are also available. See `FEATURE-MATRIX.md` for limits.
 
-## Build
+## PDF/OCR resources and build
 
-From the solution directory, on Windows:
+RunMind uses PDF.js for PDF parsing and Tesseract.js for local OCR. The source overlay pins PDF.js `6.5.438`, Tesseract.js `7.0.0`, and `tesseract.js-core` `7.0.0`. English (`eng`) and Persian (`fas`, selected in RunMind as `fa_IR`) are the bundled language choices.
+
+The overlay intentionally does not contain the third-party JavaScript/WASM binaries or traineddata files. On the first build, `Prepare-RunMind-OCR.ps1` downloads the pinned packages and the two language models into `Vendor\` and `OCR\tessdata\`. This first preparation requires internet access. It does not require Node.js or npm; it uses Windows PowerShell and the built-in `tar.exe`. Once those resource folders are populated, subsequent builds skip downloads and can run offline. Both project files copy the local resources into their output directories.
+
+Use the included one-click script on Windows:
 
 ```powershell
+.\Build-Release-x64.bat
+```
+
+For a manual build, prepare the resources first, then restore and build:
+
+```powershell
+.\Prepare-RunMind-OCR.ps1
 dotnet restore .\RunMind.sln
 dotnet build .\RunMind.sln -c Release -p:Platform=x64
 ```
 
-The standalone host can be built independently:
+The standalone host can be built independently after the same preparation step:
 
 ```powershell
 dotnet build .\RunMind.Standalone\RunMind.Standalone.csproj -c Release -p:Platform=x64
@@ -37,7 +48,19 @@ dotnet build .\RunMind.Standalone\RunMind.Standalone.csproj -c Release -p:Platfo
 
 Run `RunMind.exe` directly from the standalone build output. Every launch creates a separate process and chat window. Multiple standalone windows can run simultaneously; each receives a unique window instance ID. The native title bar follows the Windows app light/dark appearance preference and updates when that preference changes.
 
+### OCR languages
+
+The PDF OCR menu starts with English and Persian selected. Optional language packs are downloaded individually from the `tessdata_fast` model collection and cached in the current WebView2 profile. After a successful download, that profile can use the pack offline. Select multiple languages for mixed-language documents, for example `eng+fas`. RunMind does not automatically identify a document's language.
+
+Available language packs: French (`fra`), Spanish (`spa`), Arabic (`ara`), Chinese Simplified (`chi_sim`), Chinese Traditional (`chi_tra`), Russian (`rus`), Finnish (`fin`), German (`deu`), Italian (`ita`), Portuguese (`por`), Japanese (`jpn`), Korean (`kor`), Turkish (`tur`), and Urdu (`urd`). The PowerToys and standalone hosts use separate WebView2 profiles, so optional language packs are downloaded separately in each host. Clearing a host's WebView2 site data also clears its cached optional OCR packs.
+
 The PowerToys project requires the matching `lib\x64` reference assemblies before it can build. After building it, deploy the **entire** plugin output directory, including `Community.PowerToys.Run.Plugin.RunMind.dll`, `plugin.json`, `ChatWindow.html`, `Images\`, `Assets\Brand\Icon.svg`, `Assets\Brand\Icon.ico`, and the copied WebView2 dependencies. Restart PowerToys Run after replacing the plugin files.
+
+## PowerToys Run responsiveness
+
+The plugin returns its pending result synchronously and runs model discovery/generation on a background task. For Ollama, the inline request also sends `options.num_thread` using the configurable **Ollama max CPU threads (optional)** setting. Leave it blank or set it to `0` to let Ollama choose automatically; enter `1`–`128` to pass that maximum as `options.num_thread`. This is an Ollama-only per-request limit and does not change LM Studio model settings or standalone chat.
+
+The shared chat page throttles growing-Markdown rendering to at most one update every 90 ms. This reduces browser-side rendering work but does not control CPU/GPU usage inside the model server.
 
 ## PowerToys Run behavior
 
@@ -72,7 +95,7 @@ The PowerToys `IDelayedExecutionPlugin` interface does not provide a `Cancellati
 
 ## Validation
 
-The source package includes `VALIDATION-REPORT.md` with the checks performed for this release. JavaScript syntax, project metadata, XML/XAML structure, source-tree paths, and archive integrity can be checked without Windows. A successful .NET 10 build, live WebView2 initialization, PowerToys dispatcher behavior, provider requests, clipboard actions, and concurrent standalone launches / window-icon rendering must still be verified on Windows; this environment does not include the .NET SDK or a Windows WebView2 runtime.
+The 1.7.3 upgrade overlay does not include a validation report. Static checks in this environment cover JavaScript syntax, project XML/JSON metadata, the optional Ollama CPU-thread setting path, non-selectable interface selectors, the streaming-render scheduler, and ZIP integrity. A successful .NET 10 build, PowerToys Run responsiveness with a CPU-bound Ollama model, and WebView2 text-selection/rendering behavior still need verification on Windows.
 
 ### Local model server CORS
 

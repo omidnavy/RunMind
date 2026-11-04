@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.7.3] — Responsiveness and interface polish
+
+### Changed
+- Added an optional Ollama CPU thread cap for PowerToys Run inline requests. Leave the setting blank or use `0` for Ollama's automatic thread selection; enter `1`–`128` to set the maximum worker-thread count. No automatic CPU policy is applied. The setting does not affect standalone chat or LM Studio.
+- Throttled live chat Markdown rendering to at most one update every 90 ms. The final transcript is still rendered immediately when generation ends; the limit reduces repeated parsing of an ever-growing response.
+- Made application controls, status labels, message metadata, action buttons, and other interface chrome non-selectable. User and assistant message content remains selectable for normal copying.
+
+### Validation
+- Static checks in this environment cover JavaScript syntax, project XML, plugin manifest JSON, the optional CPU-thread setting path, the non-selectable chrome selectors, the 90 ms render scheduler, and ZIP integrity.
+- A Windows/.NET 10 build, live Ollama comparison with automatic versus capped CPU threads, PowerToys Run responsiveness under load, and WebView2 selection/rendering behavior still need verification on Windows.
+
 ## [1.7.2] — PDF.js and offline multilingual OCR
 
 ### Added

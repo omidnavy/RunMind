@@ -1,6 +1,6 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. All unchecked items remain in scope; there are no priority levels or implementation phases. Implemented items are recorded in `FEATURE-MATRIX.md` for 1.7.2.
+This file preserves the full feature wishlist discussed for RunMind. All unchecked items remain in scope; there are no priority levels or implementation phases. Implemented items are recorded in `FEATURE-MATRIX.md` for 1.7.3.
 
 ## Core agent completeness
 

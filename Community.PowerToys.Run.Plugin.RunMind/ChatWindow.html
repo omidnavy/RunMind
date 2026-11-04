@@ -82,6 +82,15 @@
     }
     button, input, select, textarea { font: inherit; }
     button, select { color: var(--color-text); }
+    /* Keep application chrome out of Ctrl+A selections without restricting response text. */
+    button, summary, .brand-lockup, .toolbar .field label, .statusline, .selected-model-health,
+    .message-meta, .message-actions, .generation-metrics, .jump-to-latest,
+    .toolbar-panel > h2, .toolbar-panel .panel-note, .conversation-panel-title,
+    .conversation-panel-note, .research-toolbar label, .agent-approval-title,
+    .agent-approval-subtitle, .agent-approval-hint, .toast, .empty-state {
+      -webkit-user-select: none;
+      user-select: none;
+    }
     button { cursor: pointer; }
     button:disabled, select:disabled, textarea:disabled, input:disabled { opacity: .55; cursor: not-allowed; }
     .app { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; isolation: isolate; }
@@ -1348,7 +1357,10 @@
       updateJumpToLatest();
     }
 
+    const STREAM_RENDER_INTERVAL_MS = 90;
     let streamRenderQueued = false;
+    let streamRenderTimer = null;
+    let lastStreamRenderAt = 0;
     let generationStallWarningActive = false;
     function scheduleActiveMessageRender() {
       if (activeAssistantMessage?.pending && activeAssistantMessage.metrics) {
@@ -1358,14 +1370,25 @@
           setStatus('Generation resumed · receiving output.');
         }
       }
-      if (streamRenderQueued) return;
-      streamRenderQueued = true;
-      requestAnimationFrame(() => {
-        streamRenderQueued = false;
-        if (!activeAssistantMessage) return;
-        const index = messages.indexOf(activeAssistantMessage);
-        if (index >= 0) renderMessageAt(index);
-      });
+      if (streamRenderQueued || streamRenderTimer !== null) return;
+
+      // Markdown is parsed from the beginning of the growing response. Limit the
+      // number of full-message parses while keeping the stream visibly responsive.
+      const delay = Math.max(0, STREAM_RENDER_INTERVAL_MS - (Date.now() - lastStreamRenderAt));
+      const queueFrame = () => {
+        streamRenderTimer = null;
+        streamRenderQueued = true;
+        requestAnimationFrame(() => {
+          streamRenderQueued = false;
+          lastStreamRenderAt = Date.now();
+          if (!activeAssistantMessage) return;
+          const index = messages.indexOf(activeAssistantMessage);
+          if (index >= 0) renderMessageAt(index);
+        });
+      };
+
+      if (delay > 0) streamRenderTimer = setTimeout(queueFrame, delay);
+      else queueFrame();
     }
 
     function updateActiveMetricsOnly() {
@@ -2906,7 +2929,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.2' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.3' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -2926,7 +2949,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.2' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.3' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;

@@ -42,6 +42,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private const string DefaultThinking = "auto";
     private const int DefaultKeepAliveSeconds = 300;
     private const int DefaultRequestTimeoutSeconds = 600;
+    private const int DefaultInlineCpuThreads = 0;
 
     // The HttpClient is shared, but individual requests have their own configurable timeout.
     private static readonly HttpClient HttpClient = new()
@@ -74,6 +75,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private int _provider;
     private int _keepAliveSeconds = DefaultKeepAliveSeconds;
     private int _requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
+    private int _inlineCpuThreads = DefaultInlineCpuThreads;
 
     public IEnumerable<PluginAdditionalOption> AdditionalOptions => new List<PluginAdditionalOption>
     {
@@ -138,6 +140,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
             TextValue = DefaultRequestTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
         },
+        new()
+        {
+            Key = "InlineCpuThreads",
+            DisplayLabel = "Ollama max CPU threads (optional)",
+            DisplayDescription = "Optional Ollama-only CPU thread limit for inline PowerToys Run requests. Leave blank or set to 0 to let Ollama choose automatically. Set 1–128 to use that maximum. Does not affect LM Studio or standalone chat.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = DefaultInlineCpuThreads.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        },
     };
 
     public void Init(PluginInitContext context)
@@ -156,6 +166,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         int provider = 0;
         int keepAliveSeconds = DefaultKeepAliveSeconds;
         int requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
+        int inlineCpuThreads = DefaultInlineCpuThreads;
 
         if (settings?.AdditionalOptions is not null)
         {
@@ -177,6 +188,12 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 requestTimeoutSeconds = parsedTimeout;
             }
+
+            if (int.TryParse(GetTextOption(options, "InlineCpuThreads", DefaultInlineCpuThreads.ToString()), out var parsedCpuThreads)
+                && parsedCpuThreads is >= 0 and <= 128)
+            {
+                inlineCpuThreads = parsedCpuThreads;
+            }
         }
 
         lock (_settingsLock)
@@ -188,6 +205,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _thinking = string.IsNullOrWhiteSpace(thinking) ? DefaultThinking : thinking.Trim();
             _keepAliveSeconds = keepAliveSeconds;
             _requestTimeoutSeconds = requestTimeoutSeconds;
+            _inlineCpuThreads = inlineCpuThreads;
         }
 
         CancelActiveQuery();
@@ -512,6 +530,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             ["stream"] = true,
             ["keep_alive"] = settings.KeepAliveSeconds,
         };
+
+        if (settings.InlineCpuThreads > 0)
+        {
+            requestBody["options"] = new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["num_thread"] = settings.InlineCpuThreads,
+            };
+        }
 
         if (TryResolveThinkValue(model, settings.Thinking, out var thinkValue))
         {
@@ -909,7 +935,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 _defaultModel,
                 _thinking,
                 _keepAliveSeconds,
-                _requestTimeoutSeconds);
+                _requestTimeoutSeconds,
+                _inlineCpuThreads);
         }
     }
 
@@ -1987,5 +2014,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         string DefaultModel,
         string Thinking,
         int KeepAliveSeconds,
-        int RequestTimeoutSeconds);
+        int RequestTimeoutSeconds,
+        int InlineCpuThreads);
 }
