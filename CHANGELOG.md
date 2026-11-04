@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.10.2] — Conversation branch layout hotfix
+
+### Fixed
+- Fixed the branch manager's `hidden` state being overridden by `.conversation-branchbar { display:flex }`. With only the Main branch, the supposedly hidden manager was still rendered because the author CSS won over the browser's default hidden rule.
+- Fixed the transcript frame's default horizontal flex direction. The branch manager and comparison view now occupy a full-width row above the transcript instead of becoming a side-by-side column that squeezed the conversation to roughly half the window.
+- Added a compact **Branches** toggle that appears only when multiple branches exist. Branch management is collapsed by default, opens after the user explicitly creates a branch, and has an explicit close button. The comparison panel retains its own Close control.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.2`.
+
+### Validation
+- Static regression checks confirm hidden branch controls are force-hidden, the transcript frame uses a vertical layout, branch management starts collapsed, create-branch opens it, and both branch manager and comparison views have close controls.
+- JavaScript syntax, HTML ID uniqueness, metadata alignment, and ZIP integrity checks pass. Windows/.NET 10 and live WebView2 rendering still require validation on Windows.
+
 ## [1.10.1] — Context metrics hotfix
 
 ### Fixed

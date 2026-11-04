@@ -1,6 +1,6 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.1. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.2. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
 
 ## RunMind 1.9.0 — implemented scope
 
@@ -25,6 +25,12 @@ This file preserves the full feature wishlist discussed for RunMind. This backlo
 ## RunMind 1.10.1 — hotfix
 
 - [x] Fix Deep Research context-metric assignment when an active provider/model context limit is available (`estimatedPromptTokens: estimatedTokens`).
+
+## RunMind 1.10.2 — branch UI hotfix
+
+- [x] Keep conversation branch controls collapsed until explicitly opened; provide a compact toggle and close button.
+- [x] Fix transcript-frame flex direction so branch management and comparison occupy full-width rows instead of a side-by-side half-screen pane.
+- [x] Ensure the HTML `hidden` attribute is respected by the branch manager despite its flex display rule.
 
 ## Core agent completeness
 

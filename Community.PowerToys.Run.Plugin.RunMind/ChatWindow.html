@@ -300,7 +300,13 @@
     .workflow-metric-row:last-child { border-bottom:0; }
     .workflow-metric-row span:first-child { color:var(--color-muted); }
     .workflow-subagent-card p { margin:5px 0 0; color:var(--color-muted); font-size:9px; line-height:1.45; overflow-wrap:anywhere; }
-    .conversation-branchbar { display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:7px 12px; border-bottom:1px solid var(--color-border); background:var(--color-surface); }
+    .conversation-branch-tools { display:flex; justify-content:flex-end; align-items:center; flex:0 0 auto; min-height:0; padding:0 12px; }
+    .conversation-branch-toggle { display:inline-flex; align-items:center; gap:7px; min-height:27px; margin:5px 0; padding:4px 9px; font-size:10px; }
+    .conversation-branch-toggle[hidden] { display:none !important; }
+    .conversation-branch-count { display:inline-grid; min-width:17px; height:17px; place-items:center; padding:0 4px; border-radius:var(--radius-pill); background:var(--color-surface-raised); color:var(--color-muted); font-size:9px; font-variant-numeric:tabular-nums; }
+    .conversation-branchbar { display:flex; align-items:center; gap:7px; flex-wrap:wrap; flex:0 0 auto; width:100%; box-sizing:border-box; padding:7px 12px; border-bottom:1px solid var(--color-border); background:var(--color-surface); }
+    .conversation-branchbar[hidden] { display:none !important; }
+    .conversation-branchbar-close { margin-left:auto; min-width:28px; width:28px; padding:3px !important; font-size:16px !important; line-height:1; }
     .conversation-branchbar label { display:flex; align-items:center; gap:7px; color:var(--color-muted); font-size:10px; }
     .conversation-branchbar select { min-width:130px; max-width:min(48vw,260px); height:29px; padding:0 8px; font-size:10px; }
     .conversation-branchbar .button { min-height:28px; padding:4px 8px; font-size:10px; }
@@ -356,8 +362,8 @@
     #agentHistoryMenu .toolbar-panel { max-height: min(70vh, 620px); overflow: auto; }
     #agentTaskHistoryList { display: flex; flex-direction: column; gap: 5px; }
     @media (max-width: 620px) { .research-panel { left: 10px; right: 10px; width: auto; padding: 12px; } .research-settings { margin-left: 0; width: 100%; } .research-plan-editor { min-height: 110px; } }
-    .transcript-frame { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
-    .transcript { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 22px clamp(14px, 4vw, 54px) 28px; scroll-behavior: auto; }
+    .transcript-frame { position: relative; display: flex; flex: 1 1 auto; flex-direction:column; align-items:stretch; min-width:0; min-height: 0; }
+    .transcript { flex: 1 1 auto; width:100%; min-width:0; min-height: 0; overflow: auto; padding: 22px clamp(14px, 4vw, 54px) 28px; scroll-behavior: auto; }
     .transcript-inner { width: 100%; margin: 0; }
     .jump-to-latest { position: absolute; z-index: 4; right: 24px; bottom: 18px; display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-panel); font-size: 12px; font-weight: 650; }
     .jump-to-latest[hidden] { display: none; }
@@ -791,13 +797,20 @@
       </section>
     </section>
     <div class="transcript-frame">
+      <div class="conversation-branch-tools">
+        <button type="button" class="button conversation-branch-toggle" id="conversationBranchToggle" aria-controls="conversationBranchBar" aria-expanded="false" hidden>
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M6 3v12a4 4 0 0 0 4 4h8"/><path d="m14 15 4 4-4 4"/><path d="M6 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>
+          Branches <span class="conversation-branch-count" id="conversationBranchCount">2</span>
+        </button>
+      </div>
       <div class="conversation-branchbar" id="conversationBranchBar" hidden>
         <label for="conversationBranchSelect">Branch <select id="conversationBranchSelect" aria-label="Select conversation branch"><option value="main">Main</option></select></label>
         <button type="button" class="button" id="conversationBranchRename" disabled>Rename</button>
         <button type="button" class="button danger" id="conversationBranchDelete" disabled>Delete</button>
         <label for="conversationBranchCompareSelect">Compare with <select id="conversationBranchCompareSelect" aria-label="Branch to compare"><option value="">Choose branch…</option></select></label>
         <button type="button" class="button" id="conversationBranchCompare" disabled>Compare</button>
-        <span class="conversation-branch-note" id="conversationBranchNote">Branch here from any message. Histories are independent; research checkpoints remain attached to their original task.</span>
+        <span class="conversation-branch-note" id="conversationBranchNote">Independent conversation histories. Research checkpoints stay with their original task.</span>
+        <button type="button" class="button conversation-branchbar-close" id="conversationBranchClose" title="Close branch controls" aria-label="Close branch controls">×</button>
       </div>
       <section class="conversation-branch-compare" id="conversationBranchCompareView" hidden aria-label="Compare conversation branches">
         <div class="branch-compare-head"><strong id="conversationBranchCompareTitle">Branch comparison</strong><button type="button" class="button" id="conversationBranchCompareClose">Close</button></div>
@@ -967,6 +980,9 @@
     const workflowGraphMeta = $('#workflowGraphMeta');
     const workflowSubagents = $('#workflowSubagents');
     const workflowAnalytics = $('#workflowAnalytics');
+    const conversationBranchToggle = $('#conversationBranchToggle');
+    const conversationBranchCount = $('#conversationBranchCount');
+    const conversationBranchClose = $('#conversationBranchClose');
     const conversationBranchBar = $('#conversationBranchBar');
     const conversationBranchSelect = $('#conversationBranchSelect');
     const conversationBranchRename = $('#conversationBranchRename');
@@ -1165,6 +1181,7 @@
     const workflowLastBatchByLane = new Map();
     let conversationBranches = [];
     let activeConversationBranchId = 'main';
+    let conversationBranchManagerOpen = false;
     let researchResumeResolver = null;
     let researchLastAssistantMessage = null;
     let mcpModeEnabled = false;
@@ -1718,11 +1735,17 @@
       }
       if (conversationBranches.some(item => item.id === previousCompareId && item.id !== activeConversationBranchId)) conversationBranchCompareSelect.value = previousCompareId;
       const active = conversationBranches.find(item => item.id === activeConversationBranchId);
-      conversationBranchBar.hidden = conversationBranches.length < 2;
+      const hasMultipleBranches = conversationBranches.length > 1;
+      if (conversationBranchCount) conversationBranchCount.textContent = String(conversationBranches.length);
+      if (conversationBranchToggle) {
+        conversationBranchToggle.hidden = !hasMultipleBranches;
+        conversationBranchToggle.setAttribute('aria-expanded', String(hasMultipleBranches && conversationBranchManagerOpen));
+      }
+      conversationBranchBar.hidden = !hasMultipleBranches || !conversationBranchManagerOpen;
       conversationBranchRename.disabled = !active || active.id === 'main';
       conversationBranchDelete.disabled = !active || active.id === 'main';
-      conversationBranchCompareButton.disabled = conversationBranches.length < 2 || !conversationBranchCompareSelect.value;
-      if (conversationBranchNote) conversationBranchNote.textContent = `Independent histories · ${conversationBranches.length}/${CONVERSATION_BRANCH_LIMIT} branches. Local snapshots retain up to ${CONVERSATION_BRANCH_MESSAGE_LIMIT} recent messages per branch; binary attachment bytes are not copied, and text is bounded to protect browser storage. Save a .runmind file for a full conversation archive. Research checkpoints stay with their original task.`;
+      conversationBranchCompareButton.disabled = !hasMultipleBranches || !conversationBranchCompareSelect.value;
+      if (conversationBranchNote) conversationBranchNote.textContent = 'Independent histories · research checkpoints stay with their original task.';
     }
     function loadConversationBranches(restoreActive = false) {
       if (!restoreActive) {
@@ -1760,6 +1783,7 @@
       const label = String(source).replace(/\s+/g, ' ').trim().slice(0, 32) || `Branch ${conversationBranches.length}`;
       const branch = { id: crypto.randomUUID(), name: `${label}${label.length >= 32 ? '…' : ''}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: prefix };
       conversationBranches.push(branch); activeConversationBranchId = branch.id;
+      conversationBranchManagerOpen = true;
       messages.splice(0, messages.length, ...prefix.map(message => cloneBranchMessage(message, false)));
       contextSummary = ''; contextSummaryThrough = 0; contextSummaryDirty = false;
       lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
@@ -1819,6 +1843,8 @@
       conversationBranchCompareRight.textContent = lastAssistant(other)?.content || '(No assistant response in this branch.)';
       conversationBranchCompareView.hidden = false;
     }
+    conversationBranchToggle?.addEventListener('click', () => { conversationBranchManagerOpen = !conversationBranchManagerOpen; renderConversationBranchBar(); });
+    conversationBranchClose?.addEventListener('click', () => { conversationBranchManagerOpen = false; renderConversationBranchBar(); });
     conversationBranchSelect?.addEventListener('change', () => switchConversationBranch(conversationBranchSelect.value));
     conversationBranchRename?.addEventListener('click', renameConversationBranch);
     conversationBranchDelete?.addEventListener('click', deleteConversationBranch);
@@ -3357,7 +3383,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.1' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.2' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -3377,7 +3403,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.1' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.2' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;

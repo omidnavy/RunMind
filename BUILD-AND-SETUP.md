@@ -1,10 +1,16 @@
-# Build and setup — RunMind 1.10.1
+# Build and setup — RunMind 1.10.2
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
 ## RunMind 1.10.1 hotfix
 
 This is a patch release over 1.10.0. It fixes a JavaScript `ReferenceError` in Deep Research context compaction when the selected model/provider exposes an active context limit. The context metric now correctly assigns `estimatedPromptTokens` from the already-calculated `estimatedTokens` value. No provider configuration change is required.
+
+## RunMind 1.10.2 UI hotfix
+
+This patch fixes the conversation branch manager layout. Branch controls are collapsed by default and appear only when the conversation has multiple branches. Use the compact **Branches** control to open the manager, and its **×** button to close it. Creating a branch from a message opens the manager so the new branch can be renamed, compared, or switched immediately. The manager and branch comparison now occupy full-width rows above the transcript; neither takes a permanent side column or reduces the chat width.
+
+The underlying issue was two CSS interactions: `.conversation-branchbar { display:flex }` overrode the browser's default `[hidden]` behavior, and `.transcript-frame` used the default horizontal flex direction. The fix adds an explicit `[hidden]` rule and makes the transcript frame a vertical flex container.
 
 ## Requirements
 

@@ -1,6 +1,6 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.1 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.2 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
 ## RunMind 1.10.0 — Agent Orchestration & Workflow Intelligence (retained in 1.10.1)
 
@@ -15,6 +15,7 @@ This document describes the **current RunMind 1.10.1 feature set** across its Po
 | Sub-agents | Specialized roles | Researcher, Coder, Security Analyst, Reviewer, and Summarizer delegate roles are available through the parent agent. | **Implemented with limits**; one level only, selected model, at most four child model/tool turns, read-only child tools. |
 | Sub-agents | Structured results | Child results are normalized to summary, findings, sources, uncertainties, and limitations. | **Implemented with limits**; when the model does not return valid JSON, its text is preserved as an unstructured summary. |
 | Conversation | Branching | Branch from a completed message, switch, rename, delete, return to Main, and compare latest assistant responses. | **Implemented with limits**; eight branches per window, last 16 messages per local snapshot, bounded text, binary attachments omitted; `.runmind` remains the full archive. |
+| Conversation UX | Branch manager visibility and layout | Branch controls are collapsed by default, accessible through a compact **Branches** toggle when multiple branches exist, and can be explicitly closed. | **Implemented**; branch manager and comparison view use full-width rows above the transcript. |
 | Analytics | Local workflow analytics | Per-tool invocations, success rate, average duration; provider/model requests, failures, average latency, and reported tokens. | **Implemented with limits**; stored per WebView profile; provider tokens appear only when reported. |
 | Recovery | Operation intent/retry | Operation intent is persisted before execution; interrupted operations are identified; known read-only operations can be retried after user confirmation when outcome is ambiguous. | **Implemented with limits**; not an exactly-once guarantee for arbitrary external operations. |
 
