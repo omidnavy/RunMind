@@ -1,4 +1,4 @@
-# Build and setup — RunMind 1.9.0
+# Build and setup — RunMind 1.10.0
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
@@ -15,6 +15,18 @@ The linter's `Repository missing` result also requires a published GitHub reposi
 - WebView2 Runtime installation is managed by RunMind. At startup, both hosts perform a quick availability check. If the Evergreen Runtime is missing, RunMind downloads Microsoft's official bootstrapper and silently installs it per-user. Only that first launch needs internet access and may take longer; normal launches use the existing shared runtime. See [Microsoft's WebView2 distribution guidance](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution).
 - For the PowerToys plugin build, matching PowerToys reference assemblies are included under `lib\x64`: `PowerToys.Common.UI.dll`, `PowerToys.ManagedCommon.dll`, `PowerToys.Settings.UI.Lib.dll`, `Wox.Infrastructure.dll`, and `Wox.Plugin.dll`. Replace them with assemblies from your installed PowerToys build if you need to target a different PowerToys version.
 - Ollama or an OpenAI-compatible model server reachable from the host/browser.
+
+## RunMind 1.10.0 features
+
+The 1.10.0 release adds a **Workflow** view to the existing workspace drawer; it does not create another panel or application. Research, Review, and Recovery remain. Agent Mode and Deep Research now share a bounded tool-batch scheduler. Only an explicit allowlist of known read-only built-in tools runs concurrently (up to four workers); results are returned to the model in original tool-call order. A model response is a dependency layer, and the next model turn waits for its results. Writes, approval-gated operations, MCP calls, duplicate calls, and delegation remain serialized.
+
+The Workflow view shows recent operation layers, state, duration, sanitized input, bounded output, sub-agent activity, and local analytics. The main Stop control aborts the active run, marks queued operations cancelled, and prevents later model-turn layers from being dispatched; an in-flight adapter or external service must honor its abort signal, and an already accepted side effect cannot be undone. Dragging a parallel read-only operation card onto another changes the preferred start order for future independent groups; it does not reorder an active or historical workflow, and it cannot override dependency/side-effect barriers. The preference is local to the WebView profile.
+
+The five sub-agent roles are Researcher, Coder, Security Analyst, Reviewer, and Summarizer. Delegation is one level only, uses the selected model, and is limited to a read-only child-tool subset and at most four child model/tool turns. Deep Research sub-agent retrieval shares the parent task's domain restrictions and page/tool/time budgets. The parent remains responsible for integrating and reviewing the returned findings. JSON results are normalized; a model that ignores the JSON-only instruction is preserved as unstructured text.
+
+Conversation branching is available from the **Branch here** action on completed messages. Up to eight independent branches are kept per window instance, with rename/delete/switch and latest-assistant-answer comparison. Local branch snapshots retain at most 16 recent messages, trim long text, and omit binary attachment bytes. A `.runmind` file remains the full-fidelity conversation archive; research checkpoints remain attached to their original task.
+
+Workflow analytics are stored locally in the current WebView profile and show tool call counts, success rates, average tool durations, provider/model request counts, successes/failures, client-observed latency, and provider-reported token usage when available. Token reporting is optional and depends on the endpoint. Operation intent is persisted before execution; an operation left running after a WebView interruption is marked ambiguous and is never replayed silently. Only known read-only operations offer an in-app retry. These safeguards do not provide exactly-once execution for arbitrary external tools.
 
 ## RunMind 1.9.0 features
 

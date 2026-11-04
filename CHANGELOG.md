@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.10.0] — Agent orchestration and workflow intelligence
+
+### Added
+- Added one shared bounded tool-batch scheduler for Agent Mode, Deep Research, and sub-agents. Independent operations in a model tool-call layer can run concurrently when their tool is on the explicit read-only allowlist, up to a user-configurable limit of four workers. Result messages are returned to the model in the original call order. Mutating tools, approval-gated reads, MCP calls, duplicate identical calls, and delegated-agent calls remain serialized.
+- Added workflow operation records with dependency-layer IDs, sanitized inputs, bounded output previews, lifecycle states, duration, retry controls for safe read-only Agent operations, and durable local persistence before execution. Interrupted in-flight read-only operations require an explicit user confirmation before retry. The shared Stop control aborts the active run, marks undispatched queued operations cancelled, and prevents later model-turn layers from being sent.
+- Added read-only tool start-priority preferences to Workflow. Dragging a parallel read-only operation card onto another changes the preferred start order for future independent groups. Existing executions, provider result ordering, and dependency layers are not reordered. Priorities are stored in the current WebView profile.
+- Expanded bounded one-level sub-agent workflows for Researcher, Coder, Security Analyst, Reviewer, and Summarizer roles. Child agents receive only the approved read-only tool subset, cannot delegate further, and return a normalized structured result (summary, findings, sources, uncertainties, and limitations). Deep Research child retrieval consumes the parent task budgets and domain policy.
+- Added inspectable sub-agent assignments/results, including bounded tool-call counts and elapsed time.
+- Added conversation branching from completed messages, independent in-window histories, branch selector, rename/delete, return-to-Main, and latest-answer side-by-side comparison. Local snapshots are bounded to eight branches and the latest 16 messages per branch; binary attachment bytes are not duplicated into branch snapshots.
+- Expanded local Workflow analytics with per-tool call counts, success rate, average execution duration, provider/model request counts, request success/failure, average latency, and provider-reported token usage when available.
+
+### Changed
+- Agent Mode and Deep Research use the same tool-batch scheduler. Each model tool-call response is treated as a dependency layer; the next model turn waits for every result in that layer. Dependencies between calls generated together are not inferred because the model has not seen any of those results yet. Cancellation is propagated through the active AbortSignal; an adapter or external service may take time to stop or may not be able to undo a side effect already accepted.
+- Added the **Workflow** view alongside the existing Research, Review, and Recovery views in the same workspace drawer. It shows recent dependency layers, operation status, inputs/outputs, sub-agent work, and local analytics.
+- Persisted operation intent before a tool starts. On reload, operations left in `running` state become `interrupted`; pending undispatched operations become `not_started`. RunMind does not silently replay them.
+- Provider request telemetry now records failed requests as well as successful ones. Token counts remain provider-reported only; providers that omit usage metadata are shown as not reporting tokens.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.0`.
+
+### Limits and behavior
+- Parallel execution is deliberately limited to a reviewed allowlist of known read-only built-in tools. It is not arbitrary dependency inference, arbitrary code concurrency, or unrestricted MCP parallelism. MCP tools remain serialized because the current approval UI and route metadata do not provide a trusted concurrent read-only authorization path.
+- Priority drag-and-drop changes the start preference of tool types in future independent read-only groups only. It cannot reorder operations already running or override serialized side-effect/approval barriers. The model's result transcript remains in original tool-call order.
+- Sub-agents use the selected model/provider, at most four model/tool turns per delegation, one delegation level, and a read-only child-tool subset. They are not separate models, isolated processes, or autonomous background workers. Structured JSON is normalized when returned; if a model ignores the JSON instruction, its text is retained as an unstructured summary.
+- Agent workflow operation history is locally persisted and bounded; a crash during an external operation can leave its outcome ambiguous. Only allowlisted read-only operations have an in-app retry action. This is not an exactly-once guarantee for arbitrary external services. Deep Research additionally retains its existing per-task operation ledger and checkpoint recovery.
+- Conversation branches are scoped to the WebView profile/window instance. Local branch snapshots keep at most eight branches and 16 recent messages per branch, trim long text, and omit binary attachment bytes. Use a `.runmind` save for a complete conversation archive. Research checkpoints remain attached to their original research task and are not cloned into branches. Branch comparison is a side-by-side comparison of the latest assistant answers, not a semantic diff.
+- Workflow analytics remain local to the current WebView profile and are best-effort. Tool duration is measured by RunMind; provider latency is client-observed. Token usage appears only when a provider reports usage metadata. Clearing workflow history also clears its local analytics, but does not clear conversation branches or research checkpoints.
+
+### Validation
+- Static JavaScript syntax, shared scheduler behavior, bounded concurrency, deterministic output order, safe-tool gating, priority ordering, branch snapshot limits, metadata/version alignment, and overlay ZIP integrity are checked in this environment.
+- A Windows/.NET 10 build and live WebView2/PowerToys/provider/MCP integration tests still require validation on Windows.
+
 ## [1.9.0] — Research intelligence and agent reliability
 
 ### Added

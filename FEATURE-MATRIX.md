@@ -1,6 +1,22 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.9.0 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.0 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+
+## RunMind 1.10.0 — Agent Orchestration & Workflow Intelligence
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| Execution | Shared tool-batch scheduler | Agent Mode, Deep Research, and sub-agent tool batches use one scheduler. | **Implemented**; one model tool-call response is a dependency layer; next model turn waits for all results. |
+| Execution | Bounded parallel reads | Independent tools on the explicit read-only built-in allowlist can execute concurrently, with a configurable limit of 1–4. | **Implemented with limits**; writes, approval-gated reads, MCP calls, duplicate calls, `research_topic` in Deep Research, and delegated agents remain serialized. |
+| Execution | Result ordering | Tool results return to the provider in original model call order, regardless of start/completion order. | **Implemented** |
+| Execution | Cancellation | The main Stop control aborts the active run, marks queued operations cancelled, and prevents later model-turn layers from being dispatched. | **Implemented with limits**; in-flight adapters and external services must honor the abort signal; already accepted side effects cannot be undone. |
+| Workflow graph | Dependency-layer visualization | Recent operations are grouped by model turn and show state, duration, sanitized inputs, bounded outputs, and prior-layer dependencies. | **Implemented**; it visualizes known turn barriers, not speculative argument-level dependencies. |
+| Workflow graph | Read-only tool priorities | Drag parallel read-only operation cards to change their preferred start order in future independent groups. | **Implemented with limits**; tool-type preference only; no reorder of active/history or serialized operations. |
+| Sub-agents | Specialized roles | Researcher, Coder, Security Analyst, Reviewer, and Summarizer delegate roles are available through the parent agent. | **Implemented with limits**; one level only, selected model, at most four child model/tool turns, read-only child tools. |
+| Sub-agents | Structured results | Child results are normalized to summary, findings, sources, uncertainties, and limitations. | **Implemented with limits**; when the model does not return valid JSON, its text is preserved as an unstructured summary. |
+| Conversation | Branching | Branch from a completed message, switch, rename, delete, return to Main, and compare latest assistant responses. | **Implemented with limits**; eight branches per window, last 16 messages per local snapshot, bounded text, binary attachments omitted; `.runmind` remains the full archive. |
+| Analytics | Local workflow analytics | Per-tool invocations, success rate, average duration; provider/model requests, failures, average latency, and reported tokens. | **Implemented with limits**; stored per WebView profile; provider tokens appear only when reported. |
+| Recovery | Operation intent/retry | Operation intent is persisted before execution; interrupted operations are identified; known read-only operations can be retried after user confirmation when outcome is ambiguous. | **Implemented with limits**; not an exactly-once guarantee for arbitrary external operations. |
 
 ## Status legend
 
@@ -105,7 +121,7 @@ This document describes the **current RunMind 1.9.0 feature set** across its Pow
 | Agent Mode | Browser-side, model-driven tool-calling loop for multi-step tasks. | **Implemented**; success depends on model tool-use capability and tool results. |
 | Planning | Supports an `update_plan` tool to create and update concise multi-step plans. | **Implemented** |
 | Regex testing | `regex_test` evaluates JavaScript regular expressions in a disposable Web Worker with a 750 ms hard timeout, bounded pattern/input sizes, and bounded match output. | **Implemented**; supports `i`, `m`, `s`, and `u` flags. It is a JavaScript regex tester, not a formal proof that every pattern is linear-time. |
-| Model connection diagnosis | `diagnose_connection` checks the selected model server's discovery endpoint, lists a bounded set of models, checks whether the selected model is present, and classifies common failures. | **Partial**; it does not send a generation request, verify tool calling, or reliably distinguish network failures from CORS rejections. |
+| Model connection diagnosis | `diagnose_connection` checks the selected model server's discovery endpoint and classifies common failures. Recovery diagnostics also test a small generation request and a harmless tool-calling response. | **Implemented with limits**; the tool probe is never executed; LM Studio Native REST is not covered by chat-completions probes. |
 | Tool execution | Tool calls are executed by the browser-side application and returned to the model as tool results. Ollama NDJSON and OpenAI-compatible SSE streams expose partial tool-call names/arguments and live progress before a call is executed. | **Implemented with limits**; arguments must finish parsing before execution. Non-streaming JSON responses remain supported. |
 | Tool limits | Tool turns are bounded by configured step/request limits and response-size limits. | **Implemented** |
 | Approval UI | Inline themed approval cards replace browser-native confirmation dialogs for Agent/MCP actions. | **Implemented** |
@@ -115,7 +131,7 @@ This document describes the **current RunMind 1.9.0 feature set** across its Pow
 | Task history | Recent Agent Tasks stores local task snapshots and can reopen or clear them. | **Implemented**; history is scoped to the current chat window. |
 | Request snapshots | Agent runs snapshot the selected model connection, generation settings, and available tool definitions when the task starts. | **Implemented** |
 | Model behavior | System instructions encourage the agent to verify official documentation, follow relevant links, and avoid claiming an action succeeded without evidence. | **Implemented as instructions**; actual execution quality depends on the model and available tools. |
-| Parallel tools/subagents | Parallel tool orchestration, autonomous subagents, and background scheduled agents are not provided. | **Not included** |
+| Parallel tools/subagents | Shared bounded execution for independent read-only built-ins and bounded one-level specialist sub-agents. | **Implemented with limits**; see the 1.10.0 section above; scheduled background agents remain out of scope. |
 
 ## 7. Workspace and local tools
 
@@ -241,7 +257,7 @@ The following are intentionally outside the current feature set or remain unimpl
 - Shell/terminal command execution and arbitrary local process launching.
 - MCP STDIO, OAuth, elicitation, resource subscriptions/templates, completions, progress, and MCP Tasks.
 - Persistent vector database, embeddings, or automatic indexing of MCP resources/local files.
-- Parallel tool orchestration, autonomous subagents, scheduled tasks, and conversation branching.
+- Unrestricted arbitrary parallel tool execution, nested/autonomous background subagents, and scheduled tasks. Conversation branching and bounded subagents are included as described above.
 - Cross-origin whole-site crawling, semantic webpage comparison, and automatic whole-site link auditing.
 - Native DOCX/XLSX/PPTX/PDF document creation, PDF editing/annotation, and document conversion.
 - A credential vault or encryption layer for locally stored API keys and MCP tokens.

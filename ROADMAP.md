@@ -1,6 +1,6 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.9.0. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.0. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
 
 ## RunMind 1.9.0 — implemented scope
 
@@ -12,6 +12,15 @@ This file preserves the full feature wishlist discussed for RunMind. This backlo
 - Selected-model discovery, generation, and harmless tool-call diagnostics.
 - Approximate context telemetry and active-limit-aware compaction of older research tool messages.
 - Seven research templates and expanded Markdown export.
+
+
+## RunMind 1.10.0 — implemented scope
+
+- Shared bounded tool-batch scheduler for Agent Mode and Deep Research; parallel read-only allowlist, configurable 1–4 concurrency, deterministic result order, model-turn dependency layers, and persisted operation intent.
+- Workflow view with recent execution layers, operation input/output inspection, retry for safe read-only failures, interruption visibility, drag/drop preferred start order for future independent read-only groups, and local performance analytics.
+- Bounded one-level sub-agent delegation for Researcher, Coder, Security Analyst, Reviewer, and Summarizer roles; read-only tool subset, maximum four child model/tool turns, normalized structured outputs, and Deep Research parent-budget/domain enforcement.
+- Conversation branching from completed messages, independent local branch histories, rename/delete/switch, return to Main, and side-by-side latest-answer comparison. Local snapshots are bounded and omit binary attachment bytes; `.runmind` remains the full conversation archive.
+- Local analytics for tool calls, success/failure, duration, provider/model request latency, and provider-reported token usage when available.
 
 ## Core agent completeness
 
@@ -92,20 +101,21 @@ This file preserves the full feature wishlist discussed for RunMind. This backlo
 
 - [x] Streaming tool-call visibility for Ollama NDJSON and OpenAI-compatible SSE, including partial function names/arguments and live progress (calls execute after complete argument parsing)
 - [x] Pause/resume with bounded IndexedDB checkpoints, heartbeat, and same-profile recovery (tool-batch checkpoints; no exactly-once guarantee or cross-profile synchronization)
-- [ ] Parallel tool execution with dependency scheduling
+- [x] Shared bounded parallel tool execution with dependency layers and read-only allowlist (model tool-call batches are layers; arbitrary in-batch dependency inference is not attempted)
+- [x] Safe workflow cancellation through the shared active AbortSignal (queued operations are marked cancelled and later model-turn layers are not dispatched; external side effects already accepted cannot be undone)
 - [x] Checkpoint history, review summaries, confirmed restore/rollback, and resume/retry controls (up to eight bounded snapshots per task in the current WebView2 profile)
 - [x] Approximate token/context monitoring and adaptive compaction of older research tool results (only when an active context limit is known; estimate is serialized characters ÷ 4)
 - [x] Search/page/tool/time budgets and live adjustment for Deep Research (time limit is a soft boundary; resumable downloads remain future work)
-- [ ] Sub-agent workflows
+- [x] One-level specialized sub-agent workflows with bounded read-only tool access and structured result normalization
 - [x] Source register with metadata, deduplication, exact quote presence checks, and a research evidence list
 - [x] Research Review view with claim filters, model verdicts, quoted source passages, local exact-quote match state, user accept/reject decisions, and targeted follow-up investigation
 - [x] Per-task checkpoint history and tool-operation recovery ledger with safe acknowledgement for ambiguous interrupted calls
 - [x] Model-assisted semantic claim assessment and explainable qualitative source-quality assessment (quote presence is checked locally; verdicts do not prove entailment, source authority, or factual truth)
 - [x] Research task templates (General, Technical, Product/Technology Comparison, Security, Academic, Website, Troubleshooting)
 - [ ] Scheduled tasks (subject to user-approved execution model)
-- [ ] Conversation branching
-- [ ] Tool usage analytics
-- [ ] Plan priorities, dependency graph, and drag/drop editing
+- [x] Conversation branching with independent local histories, rename/delete/switch, and side-by-side latest-answer comparison (bounded branch snapshots omit binary attachment bytes)
+- [x] Local tool/provider usage analytics (provider token counts only when reported)
+- [x] Workflow dependency-layer visualization and drag/drop preferred start order for future independent read-only tool groups
 - [x] Research preferred/allow/block domain rules
 
 ## Research controls
