@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.8.0] — Deep Research evolution and Agent runtime
+
+### Added
+- Extended the existing Deep Research workspace with a live operation indicator, source collection details, an evidence register, and a timestamped activity feed. Existing depth presets, page/tool budgets, plan editing, pause/resume/cancel, task history, copy actions, and report export remain.
+- Added bounded multi-query discovery with `research_topic` (up to six queries and eight results per query, deduplicated by normalized URL). Search is available only when SearXNG is configured.
+- Added `page_to_markdown`, converting directly retrieved HTML into readable Markdown and using the configured Reader fallback when direct retrieval is blocked.
+- Added bounded same-origin breadth-first crawling with `crawl_website` (up to 20 pages and depth 3), HTTP link reachability checks with `check_links` (up to 30 links), and exact line-based `compare_webpages`.
+- Added research source metadata: URL/final URL, title, domain, author, publication/modified dates when available, retrieval route/time, excerpt, read state, and fetch failures. Sources are deduplicated by normalized URL.
+- Added preferred, allowed, and blocked domain controls for Deep Research. Blocked domains take precedence; an allowlist restricts retrieval only when populated; preferred domains affect discovery ordering.
+- Added `research_record_evidence`, which records a claim and exact quotation and reports whether the quoted text occurs in the stored source excerpt.
+- Added streaming tool-call progress for Ollama NDJSON and OpenAI-compatible SSE responses, including partial tool names and argument previews. Non-streaming JSON responses remain supported.
+- Added IndexedDB-backed research checkpoints with bounded snapshots, periodic heartbeat persistence, stale/paused/interrupted task recovery in another window using the same WebView2 profile, and a session-storage fallback if durable storage is unavailable.
+- Expanded Markdown research report export with task/model/budget metadata, sources, evidence register, and activity history.
+
+### Changed
+- Research now records live status while the model plans, streams tool calls, executes retrieval, and synthesizes findings. Large research tool results are compacted as valid JSON before being appended to the model transcript; full fetched text remains in the source register rather than being cut mid-JSON. Multi-query discovery preserves results across subquestions when compacting.
+- Direct HTML retrieval produces Markdown with headings, paragraphs, links, lists, blockquotes, tables, and code blocks; title/author/publication/modified metadata is extracted where available, including supported JSON-LD metadata.
+- Domain policy and page/tool/time budgets are enforced by the Deep Research retrieval paths. Time limits are a soft boundary: an in-flight operation is allowed to finish before the task stops retrieving and synthesizes the collected material.
+- Updated standalone, PowerToys plugin, plugin manifest, and MCP client version identifiers to `1.8.0`.
+
+### Limits and behavior
+- `research_topic` requires a configured SearXNG endpoint. Search snippets are discovery leads and should be opened before use as evidence.
+- Direct webpage retrieval depends on CORS and site behavior. If enabled, Jina Reader or a custom Reader gateway may receive the public URL and page content needed for extraction. Reader fallback is not used for private/local or credential-bearing URLs.
+- `crawl_website` stays on the starting origin, with a maximum depth of 3 and 20 pages. It is not a whole-web crawler or scheduler.
+- `check_links` uses bounded HTTP HEAD requests. CORS/network failures and servers that reject HEAD are reported as unverified, not broken. Private/local destinations are skipped.
+- `compare_webpages` compares trimmed exact text lines; it does not infer semantic equivalence or explain meaning-level changes.
+- Evidence verification checks exact normalized quote presence in the bounded text stored for a source. It does not independently prove that a source is authoritative or that the quote supports the associated claim. Citation correctness remains model-assisted, not semantically verified by the application.
+- Domain preferences apply to Deep Research, not ordinary chat. Preferred domains are ranking hints; they do not prove source quality.
+- Pause and plan edits take effect at safe complete tool-call-batch checkpoints. If a process closes during an in-flight batch, the last committed transcript is recovered; operations may need review and are not guaranteed exactly-once. Checkpoints do not synchronize between separate PowerToys and standalone WebView2 profiles.
+- Research operations are executed serially. Parallel tool scheduling, generalized idempotent replay/rollback, resumable downloads, subagents, scheduled tasks, conversation branching, persistent knowledge indexing, and advanced MCP protocol features remain outside 1.8.0.
+
+### Validation
+- Static checks cover inline JavaScript syntax, Ollama NDJSON and OpenAI-compatible SSE/JSON tool-call parsing, project XML, plugin JSON, version consistency, and overlay archive integrity.
+- A Windows/.NET 10 build, WebView2 IndexedDB recovery behavior, live SearXNG/Reader/provider tests, and end-to-end research runs still require validation on Windows.
+
 ## [1.7.4] — Transcript text selection polish
 
 ### Changed

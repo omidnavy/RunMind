@@ -105,7 +105,7 @@ This document describes the **current feature set** of RunMind across its PowerT
 | Planning | Supports an `update_plan` tool to create and update concise multi-step plans. | **Implemented** |
 | Regex testing | `regex_test` evaluates JavaScript regular expressions in a disposable Web Worker with a 750 ms hard timeout, bounded pattern/input sizes, and bounded match output. | **Implemented**; supports `i`, `m`, `s`, and `u` flags. It is a JavaScript regex tester, not a formal proof that every pattern is linear-time. |
 | Model connection diagnosis | `diagnose_connection` checks the selected model server's discovery endpoint, lists a bounded set of models, checks whether the selected model is present, and classifies common failures. | **Partial**; it does not send a generation request, verify tool calling, or reliably distinguish network failures from CORS rejections. |
-| Tool execution | Tool calls are executed by the browser-side application and returned to the model as tool results. | **Implemented**; tool turns are not token-streamed. |
+| Tool execution | Tool calls are executed by the browser-side application and returned to the model as tool results. Ollama NDJSON and OpenAI-compatible SSE streams expose partial tool-call names/arguments and live progress before a call is executed. | **Implemented with limits**; arguments must finish parsing before execution. Non-streaming JSON responses remain supported. |
 | Tool limits | Tool turns are bounded by configured step/request limits and response-size limits. | **Implemented** |
 | Approval UI | Inline themed approval cards replace browser-native confirmation dialogs for Agent/MCP actions. | **Implemented** |
 | Approval choices | Supports Allow once and Deny; task-scoped read approvals and persistent per-tool Always allow are also available where configured. | **Implemented**; Always allow is scoped by tool name and can cover future arguments/paths, so use carefully. |
@@ -150,10 +150,13 @@ This document describes the **current feature set** of RunMind across its PowerT
 | Jina Reader | Uses `https://r.jina.ai` as a fallback after direct fetch fails. | **Conditional**; public URL content is sent to the Reader service. Optional API key supported. |
 | Custom Reader gateway | Supports an optional user-configured Reader-compatible HTTP gateway with its own token and connection test. | **Conditional**; only used after earlier retrieval routes fail. |
 | Private URL protection | Local/private addresses, embedded credentials, and likely secret-bearing query parameters are blocked from remote Reader forwarding. | **Implemented** |
-| Web extraction | Bounded extraction supports links, metadata, tables, sitemap, RSS/Atom, and readable page content. | **Partial**; raw XML operations require direct XML access; Reader Markdown is not represented as raw XML. |
+| Web extraction | Bounded extraction supports links, metadata, tables, sitemap, RSS/Atom, and readable page content. `page_to_markdown` converts direct HTML to Markdown with headings, lists, links, tables, blockquotes, and code blocks; Reader output is retained as Markdown. | **Implemented with limits**; complex client-rendered layouts and direct CORS-restricted pages may require Reader fallback. Raw XML operations still require direct XML access. |
 | Page downloads | Can save readable webpage snapshots; Reader may be used for Markdown snapshot fallback. | **Conditional**; distinct from `download_file`, which saves original response bytes. |
 | Direct resource downloads | `download_file` writes the original response bytes rather than Reader-extracted Markdown. | **Conditional**; CORS, workspace permission, approval, overwrite, and size limits apply. |
-| Full crawler workflows | Deep recursive crawling, automatic whole-site link checking, and full cross-site comparison workflows are not provided as turnkey features. | **Not included** |
+| Multi-query research | `research_topic` runs up to six SearXNG queries, returns up to eight results per query, deduplicates normalized URLs, and prioritizes preferred domains. | **Conditional**; requires configured SearXNG. Snippets are discovery leads, not evidence. |
+| Website crawling | `crawl_website` performs breadth-first same-origin traversal with bounded depth and page count. | **Implemented with limits**; maximum 20 pages and depth 3; not a whole-web crawler. |
+| Link validation | `check_links` checks up to 30 HTTP(S) links with bounded HEAD requests. | **Implemented with limits**; private/local destinations are skipped; CORS, network, or HEAD restrictions are `unverified`, not `broken`. |
+| Webpage comparison | `compare_webpages` fetches two pages and reports exact trimmed lines in common or unique to each. | **Implemented with limits**; exact line comparison only, not semantic comparison. |
 
 ## 9. Deep Research
 
@@ -162,13 +165,15 @@ This document describes the **current feature set** of RunMind across its PowerT
 | Research mode | Separate Deep Research mode uses the shared Agent tools and enabled MCP tools. | **Implemented** |
 | Mode exclusivity | Agent Mode and Deep Research are mutually exclusive. | **Implemented** |
 | Research drawer | Right-side overlay drawer can be opened/closed independently from research execution. Closing it does not stop the task or delete results. | **Implemented** |
-| Research plan | Creates an editable plan; approved revisions are applied at checkpoints. | **Implemented** |
-| Task lifecycle | Supports pause, resume, and cancel with checkpoint persistence. | **Conditional**; pause occurs at complete tool-batch checkpoints; abrupt interruption does not provide exactly-once execution guarantees. |
-| Budgets | Research uses bounded page/tool budgets. | **Implemented** |
-| Sources | Tracks discovered versus read sources, retrieval route, final URL, and failed retrieval attempts. | **Implemented** |
-| Evidence quality | Instructions encourage following landing-page links to version-matched manuals, release notes, and source/build instructions. | **Model-dependent**; generated citations are not independently validated. |
-| Results | Supports copying plans/results and exporting Markdown reports. | **Implemented** |
-| Checkpoint isolation | Research checkpoints are scoped to the individual chat window/session. | **Implemented** |
+| Research plan | Creates an editable plan; revisions are queued and applied at the next safe checkpoint. The model can update step statuses. | **Implemented**; no dependency graph or drag/drop ordering yet. |
+| Task lifecycle | Supports pause, resume, cancel, periodic persistence, and recovery of paused/interrupted or stale checkpoints in another window using the same WebView2 profile. | **Conditional**; pause occurs after a complete tool-call batch; the last committed transcript is restored after interruption, without exactly-once guarantees. |
+| Budgets | Supports page and tool-call budgets plus an optional 0–240 minute time limit. Limits can be adjusted while a task is active. | **Implemented with limits**; time is a soft boundary and an in-flight retrieval may finish before synthesis begins. |
+| Domain policy | Preferred, allowed, and blocked hostname lists apply to Deep Research discovery and retrieval. | **Implemented**; blocked entries take precedence; allowlist is restrictive only when populated; preferred domains are ranking hints, not trust scores. |
+| Live activity | Shows model planning/synthesis, streaming tool names/argument previews, active web operation, and a timestamped activity feed. | **Implemented**; progress depends on provider streaming support and partially parsed arguments are not executed. |
+| Sources | Tracks normalized-URL-deduplicated sources with title, domain, final URL, author, publication/modified dates when available, excerpt, retrieval route/time, read status, and failures. | **Implemented with limits**; metadata is best-effort and source authority is not automatically scored. |
+| Evidence register | Stores claims and exact quotations against sources already read; checks whether the normalized quotation appears in the bounded stored excerpt. | **Implemented with limits**; verifies quote presence only, not claim support, source authority, or factual truth. |
+| Results | Supports copying plans/results and exporting Markdown with task metadata, sources, evidence register, and activity history. | **Implemented** |
+| Checkpoint storage | Uses IndexedDB with bounded snapshots and a heartbeat; sessionStorage is a fallback if durable storage is unavailable. | **Conditional**; PowerToys and standalone profiles remain separate and do not sync; cross-window recovery is within a shared profile. |
 
 ## 10. MCP client
 
@@ -193,7 +198,7 @@ This document describes the **current feature set** of RunMind across its PowerT
 | Area | Current behavior | Status / limits |
 |---|---|---|
 | WebView2 profiles | PowerToys and standalone use separate WebView2 user-data folders. | **Implemented**; their settings and browser storage are intentionally not synchronized. |
-| Multiple standalone instances | Standalone windows share the standalone WebView2 profile. | **Implemented**; browser-local settings are shared between standalone windows, while task/checkpoint state is window-scoped. |
+| Multiple standalone instances | Standalone windows share the standalone WebView2 profile. | **Implemented**; browser-local settings are shared. Research checkpoints are keyed by window, but paused/interrupted or stale checkpoints can be recovered into another window in the same profile. |
 | Local settings | Model connections, generation preferences, Agent settings, Reader settings, MCP configuration, and related preferences are stored in local WebView storage. | **Implemented** |
 | Credentials | API keys and tokens are stored in local WebView profile storage. | **Implemented by design**; plaintext at rest, not encrypted by RunMind, and not included in conversation exports. |
 | Workspace handles | Directory handles are stored in IndexedDB and permission is rechecked. | **Implemented**; browser/Windows permission prompts cannot be restyled by RunMind. |
@@ -226,8 +231,8 @@ The following are intentionally outside the current feature set or remain unimpl
 - MCP STDIO, OAuth, elicitation, resource subscriptions/templates, completions, progress, and MCP Tasks.
 - Persistent vector database, embeddings, or automatic indexing of MCP resources/local files.
 - Parallel tool orchestration, autonomous subagents, scheduled tasks, and conversation branching.
-- Full recursive site crawling and automatic whole-site link auditing as turnkey workflows.
-- Native DOCX/XLSX/PPTX generation or conversion, PDF OCR/editing, and a complete PDF rendering engine.
+- Cross-origin whole-site crawling, semantic webpage comparison, and automatic whole-site link auditing.
+- Native DOCX/XLSX/PPTX/PDF document creation, PDF editing/annotation, and document conversion.
 - A credential vault or encryption layer for locally stored API keys and MCP tokens.
 - A bundled local model server or bundled WebView2 browser runtime.
 
@@ -239,4 +244,6 @@ The following are intentionally outside the current feature set or remain unimpl
 - CORS is enforced by WebView2. A provider being reachable from Windows does not guarantee it can be called from the chat page; the server must allow the `https://localhost` origin.
 - WebView2 directory access and permission prompts are controlled by Windows/browser APIs.
 - Token/context figures are estimates unless explicitly reported by the provider; character-based estimates do not equal exact model tokenization.
+- Deep Research quote matching confirms only that normalized quotation text occurs in a bounded stored excerpt; it does not semantically verify citations or claims.
+- Deep Research time budgets are soft boundaries: current HTTP operations complete before the task stops retrieving and synthesizes collected evidence.
 - Source-level checks do not replace a Windows build and live tests against the user's PowerToys, WebView2, model servers, Reader/SearXNG endpoints, workspace permissions, and MCP servers.

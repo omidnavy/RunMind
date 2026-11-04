@@ -1,4 +1,4 @@
-# Build and setup — RunMind 1.7.4
+# Build and setup — RunMind 1.8.0
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
@@ -56,6 +56,25 @@ Available language packs: French (`fra`), Spanish (`spa`), Arabic (`ara`), Chine
 
 The PowerToys project requires the matching `lib\x64` reference assemblies before it can build. After building it, deploy the **entire** plugin output directory, including `Community.PowerToys.Run.Plugin.RunMind.dll`, `plugin.json`, `ChatWindow.html`, `Images\`, `Assets\Brand\Icon.svg`, `Assets\Brand\Icon.ico`, and the copied WebView2 dependencies. Restart PowerToys Run after replacing the plugin files.
 
+## Deep Research 1.8.0
+
+RunMind 1.8.0 extends the existing Deep Research side workspace; it does not add a separate research application. The existing Standard/Deep/Extensive presets, editable plan, page/tool budgets, Pause/Resume/Cancel, source collection, task history, Copy plan/results, and report export remain.
+
+New research capabilities:
+
+- `research_topic`: up to six related SearXNG queries with bounded results, URL deduplication, and preferred-domain ordering. It is offered only when SearXNG is configured.
+- `page_to_markdown`: direct HTML-to-Markdown conversion for headings, paragraphs, links, lists, blockquotes, tables, and code blocks; configured Reader fallback can supply Markdown when direct retrieval is blocked.
+- `crawl_website`: breadth-first, same-origin crawling, maximum 20 pages and depth 3.
+- `check_links`: up to 30 bounded HTTP HEAD checks. CORS/network/unsupported HEAD outcomes are reported as unverified, not broken; private/local destinations are skipped.
+- `compare_webpages`: exact trimmed-line comparison of two retrieved pages, not semantic comparison.
+- Source register: normalized URL deduplication, title/domain/author, publication/modified dates when available, excerpt, retrieval route/time, read state, and fetch failures.
+- Source policy: preferred, allowed, and blocked hostnames. Blocked hosts take precedence; an empty allowlist permits any otherwise allowed public host. Preferred hosts are ranking hints, not reputation scores.
+- Evidence register: the model can associate a claim with an exact quote from a source already read. The application checks quote presence in the bounded stored excerpt; it does not independently verify the source's authority or whether the quote logically supports the claim.
+- Live operation status and streaming tool-call previews for Ollama NDJSON and OpenAI-compatible SSE.
+- Research checkpoint snapshots in IndexedDB, periodic heartbeat persistence, and recovery of paused/interrupted or stale checkpoints in another window that shares the same WebView2 profile. Session storage remains a fallback when IndexedDB is unavailable.
+
+Research time budgets are soft boundaries: an in-flight operation may finish before no further retrieval is started and the collected evidence is synthesized. Pausing and plan edits take effect at complete tool-call-batch checkpoints. A crash during a batch resumes from the last committed transcript; exactly-once execution is not guaranteed. PowerToys and standalone use separate WebView2 profiles, so their research checkpoints do not synchronize. See `FEATURE-MATRIX.md` for detailed limits.
+
 ## PowerToys Run responsiveness
 
 The plugin returns its pending result synchronously and runs model discovery/generation on a background task. For Ollama, the inline request also sends `options.num_thread` using the configurable **Ollama max CPU threads (optional)** setting. Leave it blank or set it to `0` to let Ollama choose automatically; enter `1`–`128` to pass that maximum as `options.num_thread`. This is an Ollama-only per-request limit and does not change LM Studio model settings or standalone chat.
@@ -81,7 +100,7 @@ The hosts deliberately have separate WebView2 user-data folders:
 - Standalone: `%LOCALAPPDATA%\LocalLLM\Standalone\WebView2`
 - PowerToys: `%LOCALAPPDATA%\Microsoft\PowerToys\LocalLLM\PowerToys\WebView2`
 
-This avoids both hosts trying to use the same WebView2 profile concurrently. The browser stores are separate, however: `localStorage` settings, Agent task history, Deep Research checkpoints, credentials, and IndexedDB workspace directory handles do **not** synchronize between standalone and PowerToys in this version. Ordinary chat transcripts are not automatically persisted; use Save conversation / Open conversation to persist and reopen sessions. The JavaScript application is shared; the browser profile data is not.
+This avoids both hosts trying to use the same WebView2 profile concurrently. The browser stores are separate, however: `localStorage` settings, Agent task history, Deep Research checkpoints, credentials, and IndexedDB workspace directory handles do **not** synchronize between standalone and PowerToys. Within the same profile, a new window can recover a paused/interrupted or sufficiently stale research checkpoint. Ordinary chat transcripts are not automatically persisted; use Save conversation / Open conversation to persist and reopen sessions. The JavaScript application is shared; the browser profile data is not.
 
 ## Cancellation behavior and boundary
 
@@ -95,7 +114,7 @@ The PowerToys `IDelayedExecutionPlugin` interface does not provide a `Cancellati
 
 ## Validation
 
-The 1.7.4 upgrade overlay does not include a validation report. Static checks cover JavaScript syntax, project XML/JSON metadata, release-version consistency, the composer placeholder selection rule, selectable message attribution and generation statistics, and ZIP integrity. A successful .NET 10 build and WebView2 text-selection behavior still need verification on Windows.
+The 1.8.0 upgrade overlay does not include a validation report. Static checks cover inline JavaScript syntax, Ollama NDJSON and OpenAI-compatible SSE/JSON tool-call parsing, project XML/JSON metadata, release-version consistency, and ZIP integrity. A Windows/.NET 10 build, WebView2 IndexedDB recovery behavior, and end-to-end research tests against real SearXNG/Reader/model endpoints still need verification on Windows.
 
 ### Local model server CORS
 

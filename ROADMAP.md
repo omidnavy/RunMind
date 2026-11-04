@@ -1,6 +1,6 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. All unchecked items remain in scope; there are no priority levels or implementation phases. Implemented items are recorded in `FEATURE-MATRIX.md` for 1.7.4.
+This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.8.0. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
 
 ## Core agent completeness
 
@@ -16,18 +16,19 @@ This file preserves the full feature wishlist discussed for RunMind. All uncheck
 
 ## Web research and knowledge
 
-- [ ] Multi-query topic investigation orchestrator (`research_topic`)
-- [ ] Website crawling with depth/domain limits (`crawl_website`)
-- [ ] Link validation (`check_links`)
-- [ ] Page-to-Markdown conversion (`page_to_markdown`)
-- [ ] Webpage comparison (`compare_webpages`)
+- [x] Multi-query topic investigation orchestrator (`research_topic`; up to six SearXNG queries, bounded results, URL deduplication; requires configured SearXNG)
+- [x] Website crawling with depth/domain limits (`crawl_website`; same-origin, maximum 20 pages and depth 3)
+- [x] Link validation (`check_links`; up to 30 HTTP HEAD checks; CORS/unsupported HEAD is unverified)
+- [x] Page-to-Markdown conversion (`page_to_markdown`; direct HTML conversion with Reader fallback)
+- [x] Webpage comparison (`compare_webpages`; exact trimmed-line comparison, not semantic comparison)
 - [ ] Searchable sitemap traversal and website change tracking
 - [ ] Persistent local knowledge indexing and full-text search
 - [ ] Unified knowledge search across local files and MCP resources
-- [ ] Source manager with exact evidence snippets, citation verification, source trust, allow/block lists, and deduplication
-- [ ] Domain prioritization and restrictions in Deep Research
-- [ ] Preserve page excerpts, publication dates, and retrieval timestamps
+- [x] Research source register with metadata, excerpts, normalized-URL deduplication, domain allow/block/preferred rules, and exact-quote presence checks (not semantic citation verification or source reputation scoring)
+- [x] Domain prioritization and allow/block restrictions in Deep Research (preferred domains rank first; blocked domains take precedence)
+- [x] Preserve bounded page excerpts, author/publication/modified metadata when available, retrieval route, and retrieval timestamps
 - [ ] More robust alternative Reader/proxy provider adapters and endpoint-specific telemetry
+- [ ] Semantic citation-to-claim verification and explainable source-quality assessment (no opaque trust score)
 
 ## Workspace and project tools
 
@@ -78,27 +79,29 @@ This file preserves the full feature wishlist discussed for RunMind. All uncheck
 
 ## Advanced agent and Deep Research runtime
 
-- [ ] True streaming tool-call pipeline
-- [ ] Pause/resume with durable, transactional checkpoints and recovery
+- [x] Streaming tool-call visibility for Ollama NDJSON and OpenAI-compatible SSE, including partial function names/arguments and live progress (calls execute after complete argument parsing)
+- [x] Pause/resume with bounded IndexedDB checkpoints, heartbeat, and same-profile recovery (tool-batch checkpoints; no exactly-once guarantee or cross-profile synchronization)
 - [ ] Parallel tool execution with dependency scheduling
 - [ ] Checkpoint review, retry, and roll-back controls
 - [ ] Token/context monitoring and adaptive context management
-- [ ] Search/download/time budgets and live budget adjustment
+- [x] Search/page/tool/time budgets and live adjustment for Deep Research (time limit is a soft boundary; resumable downloads remain future work)
 - [ ] Sub-agent workflows
-- [ ] Source manager and citation verification
+- [x] Source register with metadata, deduplication, exact quote presence checks, and a research evidence list
+- [ ] Semantic citation-to-claim verification and explainable source-quality assessment
 - [ ] Task templates
 - [ ] Scheduled tasks (subject to user-approved execution model)
 - [ ] Conversation branching
 - [ ] Tool usage analytics
 - [ ] Plan priorities, dependency graph, and drag/drop editing
-- [ ] Research domain allowlist/blocklist and configurable source trust
+- [x] Research preferred/allow/block domain rules
+- [ ] Explainable source-quality assessment (no opaque trust score)
 
 ## Research controls
 
 - Research depth presets (Standard, Deep, Extensive), max pages, max tool calls, and optional time budgets.
 - User-editable plan while running, step reordering, adding/removing questions, scope changes, source/domain preferences, pause/resume/cancel, and report export.
 - Cross-checking, disagreement/conflict reporting, explicit uncertainty, methodology, limitations, and linked source appendix.
-- Public web, MCP servers, local files, knowledge index, and user-provided sources as research inputs.
+- Public web, enabled MCP resources/tools, user-supplied URLs, and selected workspace files as research inputs when the user grants folder access. Persistent knowledge indexing remains future work.
 
 ## Workspace and data capabilities
 
