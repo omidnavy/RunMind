@@ -143,7 +143,7 @@
     .toolbar-menu { position: relative; flex: 0 0 auto; }
     .toolbar-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-surface); color: var(--color-muted); cursor: pointer; list-style: none; }
     .toolbar-icon::-webkit-details-marker { display: none; }
-    .toolbar-icon:hover, .toolbar-menu[open] > .toolbar-icon { color: var(--color-text); background: var(--color-surface-hover); }
+    .toolbar-icon:hover, .toolbar-menu[open] > .toolbar-icon, .toolbar-icon.active { color: var(--color-text); background: var(--color-surface-hover); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, var(--color-border)); }
     .toolbar-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
     .toolbar-panel { position: absolute; z-index: 25; top: calc(100% + 8px); left: 0; width: min(340px, calc(100vw - 28px)); padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
     #agentSettingsMenu .toolbar-panel { max-height: min(72vh, 700px); overflow: auto; }
@@ -195,6 +195,11 @@
     .setting-field input:focus { outline: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent); outline-offset: 1px; }
     .setting-note { margin: 10px 0 0; font-size: 11px; line-height: 1.45; color: var(--color-muted); }
     .setting-footer { display: flex; justify-content: flex-end; margin-top: 11px; }
+    .always-approved-tools { display: grid; gap: 5px; margin-top: 7px; }
+    .always-approved-tool-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); }
+    .always-approved-tool-name { min-width: 0; color: var(--color-text); font-size: 11px; overflow-wrap: anywhere; }
+    .always-approved-tool-remove { flex: 0 0 auto; padding: 3px 7px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-danger); font-size: 10px; text-decoration: underline; text-underline-offset: 2px; }
+    .always-approved-tool-remove:hover { background: var(--color-surface-hover); }
     .setting-reset { padding: 5px 8px; border: 0; background: transparent; color: var(--color-muted); font-size: 11px; text-decoration: underline; text-underline-offset: 2px; }
     .selected-model-health { display: inline-flex; align-items: center; gap: 6px; color: var(--color-muted); font-size: 11px; white-space: nowrap; }
     .selected-model-health .status-dot { width: 6px; height: 6px; flex-basis: 6px; }
@@ -215,8 +220,9 @@
     .status-dot.good { background: var(--color-success); }
     .status-dot.bad { background: var(--color-danger); }
     .status-dot.warn { background: var(--color-warning, #d99b35); }
-    /* Deep Research is a dismissible side workspace, never a permanent row above the chat. */
-    .research-panel { position: absolute; z-index: 12; top: 160px; right: 16px; bottom: 108px; width: min(480px, calc(100% - 32px)); max-height: none; overflow: auto; display: flex; flex-direction: column; gap: 11px; padding: 15px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: 0 18px 52px rgba(0, 0, 0, .42); }
+    /* Deep Research uses the same anchored, exclusive toolbar flyout as every other toolbar section. */
+    .research-workspace-menu { position: relative; }
+    .research-panel { position: absolute; z-index: 28; top: calc(100% + 8px); left: 0; right: auto; bottom: auto; width: min(480px, calc(100vw - 28px)); max-height: min(78vh, 720px); overflow: auto; display: flex; flex-direction: column; gap: 11px; padding: 15px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); transform: translateX(var(--research-panel-shift, 0px)); }
     .research-panel[hidden] { display: none !important; }
     .research-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; padding: 4px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); }
     .research-tab { min-width: 0; min-height: 32px; padding: 5px 8px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-muted); font-size: 11px; font-weight: 650; }
@@ -301,7 +307,7 @@
     .workflow-metric-row span:first-child { color:var(--color-muted); }
     .workflow-subagent-card p { margin:5px 0 0; color:var(--color-muted); font-size:9px; line-height:1.45; overflow-wrap:anywhere; }
     .conversation-branch-tools { display:flex; justify-content:flex-end; align-items:center; flex:0 0 auto; min-height:0; padding:0 12px; }
-    .conversation-branch-toggle { display:inline-flex; align-items:center; gap:7px; min-height:27px; margin:5px 0; padding:4px 9px; font-size:10px; }
+    .conversation-branch-toggle { display:inline-flex; align-items:center; gap:7px; min-height:25px; margin:3px 0; padding:3px 9px; font-size:10px; }
     .conversation-branch-toggle[hidden] { display:none !important; }
     .conversation-branch-count { display:inline-grid; min-width:17px; height:17px; place-items:center; padding:0 4px; border-radius:var(--radius-pill); background:var(--color-surface-raised); color:var(--color-muted); font-size:9px; font-variant-numeric:tabular-nums; }
     .conversation-branchbar { display:flex; align-items:center; gap:7px; flex-wrap:wrap; flex:0 0 auto; width:100%; box-sizing:border-box; padding:7px 12px; border-bottom:1px solid var(--color-border); background:var(--color-surface); }
@@ -361,7 +367,7 @@
     #deepResearchButton.active { background: color-mix(in srgb, var(--color-accent) 15%, var(--color-surface)); border: 1px solid color-mix(in srgb, var(--color-accent) 40%, var(--color-border)); color: var(--color-text); }
     #agentHistoryMenu .toolbar-panel { max-height: min(70vh, 620px); overflow: auto; }
     #agentTaskHistoryList { display: flex; flex-direction: column; gap: 5px; }
-    @media (max-width: 620px) { .research-panel { left: 10px; right: 10px; width: auto; padding: 12px; } .research-settings { margin-left: 0; width: 100%; } .research-plan-editor { min-height: 110px; } }
+    @media (max-width: 620px) { .research-panel { left: 0; right: auto; width: min(480px, calc(100vw - 28px)); padding: 12px; } .research-settings { margin-left: 0; width: 100%; } .research-plan-editor { min-height: 110px; } }
     .transcript-frame { position: relative; display: flex; flex: 1 1 auto; flex-direction:column; align-items:stretch; min-width:0; min-height: 0; }
     .transcript { flex: 1 1 auto; width:100%; min-width:0; min-height: 0; overflow: auto; padding: 22px clamp(14px, 4vw, 54px) 28px; scroll-behavior: auto; }
     .transcript-inner { width: 100%; margin: 0; }
@@ -671,63 +677,9 @@
             <p class="setting-note" id="modelInfoNote">Capability information is not always provided by the model endpoint.</p>
           </div>
         </details>
-        <button type="button" class="toolbar-icon" id="researchWorkspaceButton" title="Open Deep Research workspace" aria-label="Open Deep Research workspace" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5M7.8 10.8h6M10.8 7.8v6"/></svg></button>
-        <details class="toolbar-menu" id="agentHistoryMenu">
-          <summary class="toolbar-icon" title="Recent agent tasks" aria-label="Recent agent tasks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 10h16M4 15h10M4 20h7"/><path d="m17 17 2 2 3-4"/></svg></summary>
-          <div class="toolbar-panel" role="group" aria-label="Recent agent tasks">
-            <h2>Recent agent tasks</h2>
-            <p class="panel-note">Only tool-using Agent/MCP tasks from this chat window appear here. Other chat windows have separate task histories; attachments are not included in these snapshots.</p>
-            <div class="capability-list" id="agentTaskHistoryList"><p class="setting-note">No saved tasks yet.</p></div>
-            <div class="setting-footer"><button type="button" class="setting-reset" id="clearAgentTaskHistory">Clear task history</button></div>
-          </div>
-        </details>
-        <details class="toolbar-menu" id="agentSettingsMenu">
-          <summary class="toolbar-icon" title="Agent settings" aria-label="Agent settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="5"/></svg></summary>
-          <div class="toolbar-panel" role="group" aria-label="Agent configuration">
-            <h2>Agent settings</h2>
-            <p class="panel-note">Tools · Workspace · Web</p>
-            <div class="setting-field"><label for="agentSearchUrl">SearXNG instance URL</label><input id="agentSearchUrl" type="url" placeholder="https://your-searxng.example"></div>
-            <label class="setting-note"><input id="agentReaderFallback" type="checkbox" checked> Use a Reader service when direct browser fetching fails</label>
-            <div class="setting-field"><label for="agentReaderBaseUrl">Jina Reader endpoint</label><input id="agentReaderBaseUrl" type="url" spellcheck="false" placeholder="https://r.jina.ai"></div>
-            <div class="setting-field"><label for="agentJinaApiKey">Jina API key</label><input id="agentJinaApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Optional"></div>
-            <div class="setting-field"><label for="agentCustomReaderUrl">Custom HTTP gateway (optional)</label><input id="agentCustomReaderUrl" type="url" spellcheck="false" placeholder="https://your-reader-gateway.example"></div>
-            <div class="setting-field"><label for="agentCustomReaderToken">Custom gateway token</label><input id="agentCustomReaderToken" type="password" autocomplete="off" spellcheck="false" placeholder="Optional"></div>
-            <div class="setting-footer"><button type="button" class="setting-reset" id="testJinaReader">Test Jina Reader</button><button type="button" class="setting-reset" id="testCustomReader">Test custom gateway</button><button type="button" class="setting-reset" id="clearReaderCredentials">Clear Reader credentials</button></div>
-            <p class="setting-note" id="readerCredentialStatus">Credentials saved.</p>
-            <div class="setting-field"><label for="agentMaxSteps">Maximum tool steps per task</label><input id="agentMaxSteps" type="number" min="1" max="20" step="1" value="8"></div>
-            <label class="setting-note"><input id="agentAutoApproveReads" type="checkbox"> Automatically allow read-only tools</label>
-            <div class="setting-field"><strong>Always-approved tools</strong><div id="alwaysApprovedToolsList" class="setting-note">None</div><div class="setting-footer"><button type="button" class="setting-reset" id="clearAlwaysApprovedTools">Clear approvals</button></div></div>
-            <div class="setting-footer"><button type="button" class="setting-reset" id="changeAgentFolder">Change workspace folder</button><button type="button" class="setting-reset" id="clearAgentFolder">Clear folder access</button></div>
-            <div class="setting-footer"><button type="button" class="setting-reset" id="agentSaveSettings">Save agent settings</button></div>
-          </div>
-        </details>
-        <details class="toolbar-menu" id="ocrLanguageMenu">
-          <summary class="toolbar-icon" title="PDF OCR languages" aria-label="PDF OCR languages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 19h16M7 5c0 6 4 10 10 14M17 5c0 6-4 10-10 14M12 3v2M12 19v2"/></svg></summary>
-          <div class="toolbar-panel" role="group" aria-label="PDF OCR languages">
-            <h2>PDF OCR languages</h2>
-            <p class="panel-note">Choose the languages used when scanned or unreadable PDF pages need OCR. English and Persian are included; additional language packs are downloaded once and cached for offline use in this WebView2 profile.</p>
-            <div id="ocrLanguageList" class="capability-list"></div>
-            <p class="setting-note" id="ocrLanguageStatus" aria-live="polite">English and Persian are included.</p>
-          </div>
-        </details>
-        <details class="toolbar-menu" id="mcpSettingsMenu">
-          <summary class="toolbar-icon" title="MCP servers and knowledge sources" aria-label="MCP servers"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg></summary>
-          <div class="toolbar-panel" role="group" aria-label="MCP server connections">
-            <h2>MCP servers</h2>
-            <p class="panel-note">Remote tools and knowledge sources.</p>
-            <div class="setting-field"><label for="mcpServerName">Display name</label><input id="mcpServerName" type="text" maxlength="60" placeholder="My knowledge base"></div>
-            <div class="setting-field"><label for="mcpServerUrl">MCP endpoint URL</label><input id="mcpServerUrl" type="url" placeholder="http://localhost:3000/mcp"></div>
-            <div class="setting-field"><label for="mcpServerToken">Bearer token (optional)</label><input id="mcpServerToken" type="password" autocomplete="off" placeholder="Saved with this server"></div>
-            <div class="setting-footer"><button type="button" class="setting-reset" id="mcpConnectButton">Connect server</button></div>
-            <div id="mcpServerList" class="capability-list"><p class="setting-note">No MCP servers configured.</p></div>
-            
-          </div>
-        </details>
-        <span class="selected-model-health" id="selectedModelHealth"><span class="status-dot" id="selectedModelDot"></span><span id="selectedModelHealthText">Checking…</span></span>
-      </div>
-      <div class="statusline" aria-live="polite"><span class="status-dot" id="statusDot"></span><span id="statusText">Discovering Ollama and LM Studio models…</span></div>
-    </header>
-    <section class="research-panel" id="researchPanel" aria-label="Deep Research workspace" hidden>
+        <details class="toolbar-menu research-workspace-menu" id="researchWorkspaceMenu">
+          <summary class="toolbar-icon" id="researchWorkspaceButton" title="Open Deep Research workspace" aria-label="Open Deep Research workspace" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5M7.8 10.8h6M10.8 7.8v6"/></svg></summary>
+    <section class="toolbar-panel research-panel" id="researchPanel" aria-label="Deep Research workspace" hidden>
       <div class="research-head"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0"><strong>RunMind Workspace</strong><span class="research-state" id="researchState" data-state="idle">Ready · research mode is off</span></div><div class="research-head-actions"><button type="button" class="button" id="researchCopyPlanButton" title="Copy the current research plan">Copy plan</button><button type="button" class="button" id="researchCopyResultsButton" title="Copy the current partial or complete research results">Copy results</button><button type="button" class="button research-close-button" id="researchCloseButton" title="Close the workspace without stopping research" aria-label="Close research workspace">×</button></div></div>
       <nav class="research-tabs" role="tablist" aria-label="RunMind workspace views">
         <button type="button" class="research-tab" id="researchTabButton" role="tab" aria-selected="true" aria-controls="researchResearchView" data-research-view="research">Research</button>
@@ -796,6 +748,62 @@
         <div><div class="research-plan-head"><strong style="font-size:11px">Checkpoint history</strong><span class="research-note" id="researchCheckpointMeta">Recent durable research states</span></div><div class="research-checkpoint-list" id="researchCheckpointList"><span class="research-note">Checkpoint history will appear here when durable storage is available.</span></div></div>
       </section>
     </section>
+        </details>
+        <details class="toolbar-menu" id="agentHistoryMenu">
+          <summary class="toolbar-icon" title="Recent agent tasks" aria-label="Recent agent tasks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 10h16M4 15h10M4 20h7"/><path d="m17 17 2 2 3-4"/></svg></summary>
+          <div class="toolbar-panel" role="group" aria-label="Recent agent tasks">
+            <h2>Recent agent tasks</h2>
+            <p class="panel-note">Only tool-using Agent/MCP tasks from this chat window appear here. Other chat windows have separate task histories; attachments are not included in these snapshots.</p>
+            <div class="capability-list" id="agentTaskHistoryList"><p class="setting-note">No saved tasks yet.</p></div>
+            <div class="setting-footer"><button type="button" class="setting-reset" id="clearAgentTaskHistory">Clear task history</button></div>
+          </div>
+        </details>
+        <details class="toolbar-menu" id="agentSettingsMenu">
+          <summary class="toolbar-icon" title="Agent settings" aria-label="Agent settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="5"/></svg></summary>
+          <div class="toolbar-panel" role="group" aria-label="Agent configuration">
+            <h2>Agent settings</h2>
+            <p class="panel-note">Tools · Workspace · Web</p>
+            <div class="setting-field"><label for="agentSearchUrl">SearXNG instance URL</label><input id="agentSearchUrl" type="url" placeholder="https://your-searxng.example"></div>
+            <label class="setting-note"><input id="agentReaderFallback" type="checkbox" checked> Use a Reader service when direct browser fetching fails</label>
+            <div class="setting-field"><label for="agentReaderBaseUrl">Jina Reader endpoint</label><input id="agentReaderBaseUrl" type="url" spellcheck="false" placeholder="https://r.jina.ai"></div>
+            <div class="setting-field"><label for="agentJinaApiKey">Jina API key</label><input id="agentJinaApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Optional"></div>
+            <div class="setting-field"><label for="agentCustomReaderUrl">Custom HTTP gateway (optional)</label><input id="agentCustomReaderUrl" type="url" spellcheck="false" placeholder="https://your-reader-gateway.example"></div>
+            <div class="setting-field"><label for="agentCustomReaderToken">Custom gateway token</label><input id="agentCustomReaderToken" type="password" autocomplete="off" spellcheck="false" placeholder="Optional"></div>
+            <div class="setting-footer"><button type="button" class="setting-reset" id="testJinaReader">Test Jina Reader</button><button type="button" class="setting-reset" id="testCustomReader">Test custom gateway</button><button type="button" class="setting-reset" id="clearReaderCredentials">Clear Reader credentials</button></div>
+            <p class="setting-note" id="readerCredentialStatus">Credentials saved.</p>
+            <div class="setting-field"><label for="agentMaxSteps">Maximum tool steps per task</label><input id="agentMaxSteps" type="number" min="1" max="20" step="1" value="8"></div>
+            <label class="setting-note"><input id="agentAutoApproveReads" type="checkbox"> Automatically allow read-only tools</label>
+            <div class="setting-field"><strong>Always-approved tools</strong><div id="alwaysApprovedToolsList" class="setting-note">None</div><div class="setting-footer"><button type="button" class="setting-reset" id="clearAlwaysApprovedTools">Clear approvals</button></div></div>
+            <div class="setting-footer"><button type="button" class="setting-reset" id="changeAgentFolder">Change workspace folder</button><button type="button" class="setting-reset" id="clearAgentFolder">Clear folder access</button></div>
+            <div class="setting-footer"><button type="button" class="setting-reset" id="agentSaveSettings">Save agent settings</button></div>
+          </div>
+        </details>
+        <details class="toolbar-menu" id="ocrLanguageMenu">
+          <summary class="toolbar-icon" title="PDF OCR languages" aria-label="PDF OCR languages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 19h16M7 5c0 6 4 10 10 14M17 5c0 6-4 10-10 14M12 3v2M12 19v2"/></svg></summary>
+          <div class="toolbar-panel" role="group" aria-label="PDF OCR languages">
+            <h2>PDF OCR languages</h2>
+            <p class="panel-note">Choose the languages used when scanned or unreadable PDF pages need OCR. English and Persian are included; additional language packs are downloaded once and cached for offline use in this WebView2 profile.</p>
+            <div id="ocrLanguageList" class="capability-list"></div>
+            <p class="setting-note" id="ocrLanguageStatus" aria-live="polite">English and Persian are included.</p>
+          </div>
+        </details>
+        <details class="toolbar-menu" id="mcpSettingsMenu">
+          <summary class="toolbar-icon" title="MCP servers and knowledge sources" aria-label="MCP servers"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg></summary>
+          <div class="toolbar-panel" role="group" aria-label="MCP server connections">
+            <h2>MCP servers</h2>
+            <p class="panel-note">Remote tools and knowledge sources.</p>
+            <div class="setting-field"><label for="mcpServerName">Display name</label><input id="mcpServerName" type="text" maxlength="60" placeholder="My knowledge base"></div>
+            <div class="setting-field"><label for="mcpServerUrl">MCP endpoint URL</label><input id="mcpServerUrl" type="url" placeholder="http://localhost:3000/mcp"></div>
+            <div class="setting-field"><label for="mcpServerToken">Bearer token (optional)</label><input id="mcpServerToken" type="password" autocomplete="off" placeholder="Saved with this server"></div>
+            <div class="setting-footer"><button type="button" class="setting-reset" id="mcpConnectButton">Connect server</button></div>
+            <div id="mcpServerList" class="capability-list"><p class="setting-note">No MCP servers configured.</p></div>
+            
+          </div>
+        </details>
+        <span class="selected-model-health" id="selectedModelHealth"><span class="status-dot" id="selectedModelDot"></span><span id="selectedModelHealthText">Checking…</span></span>
+      </div>
+      <div class="statusline" aria-live="polite"><span class="status-dot" id="statusDot"></span><span id="statusText">Discovering Ollama and LM Studio models…</span></div>
+    </header>
     <div class="transcript-frame">
       <div class="conversation-branch-tools">
         <button type="button" class="button conversation-branch-toggle" id="conversationBranchToggle" aria-controls="conversationBranchBar" aria-expanded="false" hidden>
@@ -804,7 +812,7 @@
         </button>
       </div>
       <div class="conversation-branchbar" id="conversationBranchBar" hidden>
-        <label for="conversationBranchSelect">Branch <select id="conversationBranchSelect" aria-label="Select conversation branch"><option value="main">Main</option></select></label>
+        <label for="conversationBranchSelect">Branch <select id="conversationBranchSelect" aria-label="Select conversation branch"><option value="main">Original</option></select></label>
         <button type="button" class="button" id="conversationBranchRename" disabled>Rename</button>
         <button type="button" class="button danger" id="conversationBranchDelete" disabled>Delete</button>
         <label for="conversationBranchCompareSelect">Compare with <select id="conversationBranchCompareSelect" aria-label="Branch to compare"><option value="">Choose branch…</option></select></label>
@@ -925,6 +933,7 @@
     const agentModeButton = $('#agentModeButton');
     const deepResearchButton = $('#deepResearchButton');
     const researchPanel = $('#researchPanel');
+    const researchWorkspaceMenu = $('#researchWorkspaceMenu');
     const researchWorkspaceButton = $('#researchWorkspaceButton');
     const researchStateLabel = $('#researchState');
     const researchLiveOperation = $('#researchLiveOperation');
@@ -1357,7 +1366,34 @@
     function renderAlwaysApprovedAgentTools() {
       if (!alwaysApprovedToolsList) return;
       const names = [...alwaysApprovedAgentTools].sort();
-      alwaysApprovedToolsList.textContent = names.length ? names.join(' · ') : 'None';
+      alwaysApprovedToolsList.replaceChildren();
+      if (!names.length) {
+        alwaysApprovedToolsList.textContent = 'None';
+      } else {
+        const rows = document.createElement('div');
+        rows.className = 'always-approved-tools';
+        for (const name of names) {
+          const row = document.createElement('div');
+          row.className = 'always-approved-tool-row';
+          const label = document.createElement('span');
+          label.className = 'always-approved-tool-name';
+          label.textContent = name;
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'always-approved-tool-remove';
+          remove.textContent = 'Remove';
+          remove.title = `Remove ${name} from always-approved tools`;
+          remove.setAttribute('aria-label', `Remove ${name} from always-approved tools`);
+          remove.addEventListener('click', () => {
+            if (!alwaysApprovedAgentTools.delete(name)) return;
+            saveAlwaysApprovedAgentTools();
+            showToast(`Always approval removed for ${name}.`);
+          });
+          row.append(label, remove);
+          rows.appendChild(row);
+        }
+        alwaysApprovedToolsList.appendChild(rows);
+      }
       clearAlwaysApprovedToolsButton.disabled = names.length === 0;
     }
     function applyAgentSettings() {
@@ -1716,7 +1752,7 @@
       if (messages.some(item => item.pending)) return;
       let branch = conversationBranches.find(item => item.id === activeConversationBranchId);
       if (!branch) {
-        branch = { id: 'main', name: 'Main', createdAt: new Date().toISOString(), messages: [] };
+        branch = { id: 'main', name: 'Original', createdAt: new Date().toISOString(), messages: [] };
         conversationBranches.unshift(branch); activeConversationBranchId = 'main';
       }
       branch.messages = messages.map(message => cloneBranchMessage(message, false));
@@ -1738,7 +1774,7 @@
       const hasMultipleBranches = conversationBranches.length > 1;
       if (conversationBranchCount) conversationBranchCount.textContent = String(conversationBranches.length);
       if (conversationBranchToggle) {
-        conversationBranchToggle.hidden = !hasMultipleBranches;
+        conversationBranchToggle.hidden = !hasMultipleBranches || conversationBranchManagerOpen;
         conversationBranchToggle.setAttribute('aria-expanded', String(hasMultipleBranches && conversationBranchManagerOpen));
       }
       conversationBranchBar.hidden = !hasMultipleBranches || !conversationBranchManagerOpen;
@@ -1749,39 +1785,69 @@
     }
     function loadConversationBranches(restoreActive = false) {
       if (!restoreActive) {
-        conversationBranches = [{ id: 'main', name: 'Main', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: messages.map(message => cloneBranchMessage(message, false)) }];
+        conversationBranches = [{ id: 'main', name: 'Original', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: messages.map(message => cloneBranchMessage(message, false)) }];
         activeConversationBranchId = 'main'; saveConversationBranches(); renderConversationBranchBar(); return;
       }
       try {
         const stored = JSON.parse(localStorage.getItem(conversationBranchStorageKey) || 'null');
         if (stored?.version === 1 && Array.isArray(stored.branches) && stored.branches.length) {
           conversationBranches = stored.branches.slice(0, CONVERSATION_BRANCH_LIMIT).filter(item => item && typeof item.id === 'string').map(item => ({
-            id: item.id, name: String(item.name || 'Branch').slice(0, 48), createdAt: item.createdAt || '', updatedAt: item.updatedAt || '',
+            id: item.id, name: item.id === 'main' ? 'Original' : String(item.name || 'Alternative').slice(0, 48), createdAt: item.createdAt || '', updatedAt: item.updatedAt || '',
             messages: (Array.isArray(item.messages) ? item.messages : []).map(message => cloneBranchMessage(message, true))
           }));
-          if (!conversationBranches.some(item => item.id === 'main')) conversationBranches.unshift({ id: 'main', name: 'Main', createdAt: new Date().toISOString(), updatedAt: '', messages: [] });
+          if (!conversationBranches.some(item => item.id === 'main')) conversationBranches.unshift({ id: 'main', name: 'Original', createdAt: new Date().toISOString(), updatedAt: '', messages: [] });
           activeConversationBranchId = conversationBranches.some(item => item.id === stored.activeId) ? stored.activeId : 'main';
           const active = conversationBranches.find(item => item.id === activeConversationBranchId);
           if (restoreActive && active?.messages?.length) messages.splice(0, messages.length, ...active.messages.map(message => cloneBranchMessage(message, false)));
           else if (!restoreActive) activeConversationBranchId = 'main';
         }
       } catch (_) { conversationBranches = []; activeConversationBranchId = 'main'; }
-      if (!conversationBranches.length) conversationBranches = [{ id: 'main', name: 'Main', createdAt: new Date().toISOString(), updatedAt: '', messages: messages.map(message => cloneBranchMessage(message, false)) }];
+      if (!conversationBranches.length) conversationBranches = [{ id: 'main', name: 'Original', createdAt: new Date().toISOString(), updatedAt: '', messages: messages.map(message => cloneBranchMessage(message, false)) }];
       const main = conversationBranches.find(item => item.id === 'main');
       if (main && !main.messages.length && messages.length) main.messages = messages.map(message => cloneBranchMessage(message, false));
       if (!restoreActive) activeConversationBranchId = 'main';
       saveActiveConversationBranch();
       renderConversationBranchBar();
     }
+    function suggestConversationBranchName(prefix) {
+      const branchPointPrompt = [...(Array.isArray(prefix) ? prefix : [])].reverse()
+        .find(message => message?.role === 'user' && String(message.content || '').trim());
+      let source = String(branchPointPrompt?.content || '')
+        .replace(/https?:\/\/\S+/gi, ' ')
+        .replace(/```[\s\S]*?```/g, ' code ')
+        .replace(/[`*_#>~]/g, ' ')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ').trim()
+        .replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '');
+      const words = source.split(' ').filter(Boolean);
+      const isGeneric = words.length < 3
+        || /^(?:hi|hello|hey|yo|test|thanks|thank you|ok|okay|yes|no|continue|go ahead)[.!?]*$/i.test(source);
+      const existingBranchCount = conversationBranches.filter(branch => branch.id !== 'main').length;
+      let baseName;
+      if (isGeneric || !source) {
+        baseName = `Alternative ${existingBranchCount + 1}`;
+      } else {
+        baseName = words.slice(0, 7).join(' ').replace(/[.!?,;:]+$/, '');
+        if (baseName.length > 42) baseName = `${baseName.slice(0, 39).trimEnd()}…`;
+        baseName = baseName.charAt(0).toLocaleUpperCase() + baseName.slice(1);
+      }
+      baseName = baseName.slice(0, 48).trim() || `Alternative ${existingBranchCount + 1}`;
+      let candidate = baseName;
+      let duplicateIndex = 2;
+      while (conversationBranches.some(branch => String(branch.name || '').toLocaleLowerCase() === candidate.toLocaleLowerCase())) {
+        const suffix = ` (${duplicateIndex++})`;
+        candidate = `${baseName.slice(0, 48 - suffix.length).trimEnd()}${suffix}`;
+      }
+      return candidate;
+    }
+
     function createConversationBranchFrom(index) {
       if (activeController || messages.some(item => item.pending)) { showToast('Wait until the current response finishes before creating a branch.'); return; }
       if (conversationBranches.length >= CONVERSATION_BRANCH_LIMIT) { showToast(`RunMind keeps up to ${CONVERSATION_BRANCH_LIMIT} conversation branches. Delete an unused branch first.`); return; }
       if (!Number.isInteger(index) || index < 0 || index >= messages.length) return;
       saveActiveConversationBranch();
       const prefix = messages.slice(0, index + 1).map(message => cloneBranchMessage(message, false));
-      const source = messages.slice(0, index + 1).find(item => item.role === 'user' && item.content)?.content || conversationTitle();
-      const label = String(source).replace(/\s+/g, ' ').trim().slice(0, 32) || `Branch ${conversationBranches.length}`;
-      const branch = { id: crypto.randomUUID(), name: `${label}${label.length >= 32 ? '…' : ''}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: prefix };
+      const branch = { id: crypto.randomUUID(), name: suggestConversationBranchName(prefix), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: prefix };
       conversationBranches.push(branch); activeConversationBranchId = branch.id;
       conversationBranchManagerOpen = true;
       messages.splice(0, messages.length, ...prefix.map(message => cloneBranchMessage(message, false)));
@@ -1805,9 +1871,7 @@
       conversationBranchCompareView.hidden = true;
       promptInput.value = ''; pendingAttachments = []; renderPendingAttachments();
       renderMessages(false); renderConversationBranchBar(); updateContextManagerUI();
-      const firstPrompt = (target.messages || []).find(item => item.role === 'user' && String(item.content || '').trim())?.content || 'Chat';
-      const baseTitle = String(BOOT.title || firstPrompt).replace(/\s+/g, ' ').trim().slice(0, 42) || 'Chat';
-      setConversationTitle(`${baseTitle} · ${target.name}`.slice(0, 72));
+      // Keep the conversation title stable; the selected branch label is shown only in the branch manager.
     }
     function renameConversationBranch() {
       const branch = conversationBranches.find(item => item.id === activeConversationBranchId);
@@ -1829,7 +1893,7 @@
       contextSummary = ''; contextSummaryThrough = 0; contextSummaryDirty = false;
       lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
       renderMessages(false); saveConversationBranches(); renderConversationBranchBar(); updateContextManagerUI();
-      showToast('Branch deleted. Returned to Main.');
+      showToast('Branch deleted. Returned to the Original conversation.');
     }
     function compareConversationBranches() {
       const current = conversationBranches.find(item => item.id === activeConversationBranchId);
@@ -3383,7 +3447,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.2' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.4' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -3403,7 +3467,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.2' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.4' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;
@@ -6446,25 +6510,36 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
 
     // Deep Research is a distinct JavaScript-only execution mode. It reuses the
     // selected model, existing tool adapters, inline approvals, and MCP client.
-    function setResearchPanelOpen(open) {
-      researchPanelOpen = !!open;
-      if (researchPanelOpen) updateResearchPanelPosition();
+    function toolbarFlyoutMenus() {
+      return [...document.querySelectorAll('.toolbar-menu, .conversation-menu')];
+    }
+    function syncResearchPanelState() {
+      researchPanelOpen = !!researchWorkspaceMenu?.open;
       researchPanel.hidden = !researchPanelOpen;
       researchWorkspaceButton.classList.toggle('active', researchPanelOpen);
       researchWorkspaceButton.setAttribute('aria-expanded', String(researchPanelOpen));
       researchWorkspaceButton.title = researchPanelOpen ? 'Close Deep Research workspace' : 'Open Deep Research workspace';
       researchWorkspaceButton.setAttribute('aria-label', researchWorkspaceButton.title);
     }
+    function closeOtherToolbarFlyouts(exceptMenu = null) {
+      for (const menu of toolbarFlyoutMenus()) {
+        if (menu !== exceptMenu && menu.open) menu.open = false;
+      }
+      syncResearchPanelState();
+    }
+    function setResearchPanelOpen(open) {
+      const shouldOpen = !!open;
+      if (shouldOpen) closeOtherToolbarFlyouts(researchWorkspaceMenu);
+      researchWorkspaceMenu.open = shouldOpen;
+      syncResearchPanelState();
+      if (shouldOpen) updateResearchPanelPosition();
+    }
     function updateResearchPanelPosition() {
-      const app = $('.app');
-      const topbar = $('.topbar');
-      const composer = $('.composer');
-      if (!app || !topbar || !composer) return;
-      const appRect = app.getBoundingClientRect();
-      const topRect = topbar.getBoundingClientRect();
-      const composerRect = composer.getBoundingClientRect();
-      researchPanel.style.top = `${Math.max(8, topRect.bottom - appRect.top + 10)}px`;
-      researchPanel.style.bottom = `${Math.max(8, appRect.bottom - composerRect.top + 10)}px`;
+      if (!researchPanelOpen || !researchWorkspaceButton?.isConnected) return;
+      const triggerRect = researchWorkspaceButton.getBoundingClientRect();
+      const panelWidth = Math.min(480, Math.max(240, window.innerWidth - 28));
+      const desiredLeft = Math.max(14, Math.min(triggerRect.left, window.innerWidth - panelWidth - 14));
+      researchPanel.style.setProperty('--research-panel-shift', `${desiredLeft - triggerRect.left}px`);
     }
     function openResearchWorkspace() {
       // Workspace visibility is presentation only. The composer toggle controls execution mode.
@@ -7070,7 +7145,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       researchResumeButton.textContent = state === 'error' ? 'Retry checkpoint' : state === 'cancelled' ? 'Resume cancelled task' : 'Resume';
       researchCancelButton.disabled = !(running || state === 'paused' || state === 'interrupted');
       researchExportButton.disabled = !task || !(task.assistantContent || task.report || task.sources?.length);
-      researchPanel.hidden = !researchPanelOpen;
+      syncResearchPanelState();
       if (document.activeElement !== researchPlanEditor) researchPlanEditor.value = researchPlanText(task?.pendingPlan || task?.plan || []);
       const count = task?.sources?.length || 0;
       const evidenceCount = task?.evidence?.length || 0;
@@ -8232,7 +8307,7 @@ ${toolActivityDetail}`;
     }
     function applySessionData(data, restored, fileName) {
       messages.splice(0, messages.length, ...restored);
-      conversationBranches = [{ id: 'main', name: 'Main', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: restored.map(message => cloneBranchMessage(message, false)) }];
+      conversationBranches = [{ id: 'main', name: 'Original', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: restored.map(message => cloneBranchMessage(message, false)) }];
       activeConversationBranchId = 'main'; saveConversationBranches(); renderConversationBranchBar();
       // The selected file name is authoritative. Renames performed in Explorer are
       // reflected in both the native window caption and in-app conversation heading.
@@ -8241,11 +8316,9 @@ ${toolActivityDetail}`;
       deepResearchTask = null; researchLastAssistantMessage = null;
       void deleteResearchTaskCheckpoint();
       deepResearchEnabled = false;
-      researchPanelOpen = false;
       try { sessionStorage.removeItem(DEEP_RESEARCH_STORAGE_KEY); } catch (_) {}
       deepResearchButton.classList.remove('active'); deepResearchButton.setAttribute('aria-pressed', 'false');
       deepResearchButton.title = 'Deep Research mode is off'; deepResearchButton.setAttribute('aria-label', deepResearchButton.title);
-      researchPanel.hidden = true;
       setResearchPanelOpen(false);
       setAgentMode(false);
       lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
@@ -8493,9 +8566,10 @@ ${toolActivityDetail}`;
     $('#openSessionButton').addEventListener('click', () => sessionFileInput.click());
     sessionFileInput.addEventListener('change', () => { void openSessionFile(sessionFileInput.files?.[0]); });
     document.addEventListener('click', event => {
-      for (const menu of [$('#conversationMenu'), generationSettingsMenu, $('#contextManagerMenu'), modelInfoMenu, agentSettingsMenu, mcpSettingsMenu]) {
+      for (const menu of toolbarFlyoutMenus()) {
         if (menu.open && !menu.contains(event.target)) menu.open = false;
       }
+      syncResearchPanelState();
     });
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
@@ -8504,14 +8578,19 @@ ${toolActivityDetail}`;
       if (!agentFolderAccessRequest.hidden) { agentFolderAccessCancel.click(); return; }
       if (!attachmentWarningModal.hidden) { finishAttachmentConfirmation(false); return; }
       if (editingMessageIndex !== null) cancelEditing();
-      $('#conversationMenu').open = false; generationSettingsMenu.open = false; $('#contextManagerMenu').open = false; modelInfoMenu.open = false; agentSettingsMenu.open = false; mcpSettingsMenu.open = false; $('#agentHistoryMenu').open = false; $('#modelConnectionsMenu').open = false;
+      closeOtherToolbarFlyouts(null);
     });
 
+    for (const menu of toolbarFlyoutMenus()) {
+      menu.addEventListener('toggle', () => {
+        if (menu.open) closeOtherToolbarFlyouts(menu);
+        if (menu === researchWorkspaceMenu) {
+          syncResearchPanelState();
+          if (researchPanelOpen) updateResearchPanelPosition();
+        }
+      });
+    }
     deepResearchButton.addEventListener('click', () => setDeepResearchMode(!deepResearchEnabled));
-    researchWorkspaceButton.addEventListener('click', () => {
-      if (researchPanelOpen) closeResearchWorkspace();
-      else openResearchWorkspace();
-    });
     researchPauseButton.addEventListener('click', pauseDeepResearch);
     researchResumeButton.addEventListener('click', resumeDeepResearch);
     researchCancelButton.addEventListener('click', cancelDeepResearch);
@@ -8699,9 +8778,6 @@ ${toolActivityDetail}`;
         saveMcpServerConfigs(); renderMcpServers();
       }
     });
-    document.addEventListener('click', event => {
-      for (const menu of [agentSettingsMenu, ocrLanguageMenu, mcpSettingsMenu, $('#agentHistoryMenu'), $('#modelConnectionsMenu')]) if (menu.open && !menu.contains(event.target)) menu.open = false;
-    });
 
     let isInitialized = false;
     window.addEventListener('storage', event => {
@@ -8779,7 +8855,6 @@ ${toolActivityDetail}`;
       if (typeof ResizeObserver === 'function') {
         const researchLayoutObserver = new ResizeObserver(updateResearchPanelPosition);
         researchLayoutObserver.observe($('.topbar'));
-        researchLayoutObserver.observe($('.composer'));
       }
       setResearchPanelOpen(false);
       void refreshModels(false).then(() => {

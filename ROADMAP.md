@@ -1,6 +1,8 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.2. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.4. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+
+Current 1.10.4 UX refinements: Deep Research is a mutually exclusive toolbar flyout (not a side drawer), and Always-approved tools can be removed individually from Agent settings.
 
 ## RunMind 1.9.0 — implemented scope
 
@@ -19,7 +21,7 @@ This file preserves the full feature wishlist discussed for RunMind. This backlo
 - Shared bounded tool-batch scheduler for Agent Mode and Deep Research; parallel read-only allowlist, configurable 1–4 concurrency, deterministic result order, model-turn dependency layers, and persisted operation intent.
 - Workflow view with recent execution layers, operation input/output inspection, retry for safe read-only failures, interruption visibility, drag/drop preferred start order for future independent read-only groups, and local performance analytics.
 - Bounded one-level sub-agent delegation for Researcher, Coder, Security Analyst, Reviewer, and Summarizer roles; read-only tool subset, maximum four child model/tool turns, normalized structured outputs, and Deep Research parent-budget/domain enforcement.
-- Conversation branching from completed messages, independent local branch histories, rename/delete/switch, return to Main, and side-by-side latest-answer comparison. Local snapshots are bounded and omit binary attachment bytes; `.runmind` remains the full conversation archive.
+- Conversation branching from completed messages, independent local branch histories, rename/delete/switch, return to Original, and side-by-side latest-answer comparison. Local snapshots are bounded and omit binary attachment bytes; `.runmind` remains the full conversation archive.
 - Local analytics for tool calls, success/failure, duration, provider/model request latency, and provider-reported token usage when available.
 
 ## RunMind 1.10.1 — hotfix
@@ -31,6 +33,13 @@ This file preserves the full feature wishlist discussed for RunMind. This backlo
 - [x] Keep conversation branch controls collapsed until explicitly opened; provide a compact toggle and close button.
 - [x] Fix transcript-frame flex direction so branch management and comparison occupy full-width rows instead of a side-by-side half-screen pane.
 - [x] Ensure the HTML `hidden` attribute is respected by the branch manager despite its flex display rule.
+
+## RunMind 1.10.3 — branch title and spacing hotfix
+
+- [x] Keep the parent conversation title stable when switching branches; branch labels remain local to the branch manager.
+- [x] Display the immutable storage branch `main` as **Original**, migrating existing local state without changing its ID.
+- [x] Suggest child-branch labels from the latest user prompt at the fork point; use numbered alternatives for generic prompts and disambiguate duplicates.
+- [x] Hide the redundant **Branches** toggle while the manager is open so the manager sits directly below the application header.
 
 ## Core agent completeness
 

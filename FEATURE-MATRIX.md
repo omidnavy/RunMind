@@ -1,6 +1,6 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.2 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.4 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
 ## RunMind 1.10.0 — Agent Orchestration & Workflow Intelligence (retained in 1.10.1)
 
@@ -14,7 +14,7 @@ This document describes the **current RunMind 1.10.2 feature set** across its Po
 | Workflow graph | Read-only tool priorities | Drag parallel read-only operation cards to change their preferred start order in future independent groups. | **Implemented with limits**; tool-type preference only; no reorder of active/history or serialized operations. |
 | Sub-agents | Specialized roles | Researcher, Coder, Security Analyst, Reviewer, and Summarizer delegate roles are available through the parent agent. | **Implemented with limits**; one level only, selected model, at most four child model/tool turns, read-only child tools. |
 | Sub-agents | Structured results | Child results are normalized to summary, findings, sources, uncertainties, and limitations. | **Implemented with limits**; when the model does not return valid JSON, its text is preserved as an unstructured summary. |
-| Conversation | Branching | Branch from a completed message, switch, rename, delete, return to Main, and compare latest assistant responses. | **Implemented with limits**; eight branches per window, last 16 messages per local snapshot, bounded text, binary attachments omitted; `.runmind` remains the full archive. |
+| Conversation | Branching | Branch from a completed message, switch, rename, delete, return to Original, and compare latest assistant responses. | **Implemented with limits**; eight branches per window, last 16 messages per local snapshot, bounded text, binary attachments omitted; `.runmind` remains the full archive. |
 | Conversation UX | Branch manager visibility and layout | Branch controls are collapsed by default, accessible through a compact **Branches** toggle when multiple branches exist, and can be explicitly closed. | **Implemented**; branch manager and comparison view use full-width rows above the transcript. |
 | Analytics | Local workflow analytics | Per-tool invocations, success rate, average duration; provider/model requests, failures, average latency, and reported tokens. | **Implemented with limits**; stored per WebView profile; provider tokens appear only when reported. |
 | Recovery | Operation intent/retry | Operation intent is persisted before execution; interrupted operations are identified; known read-only operations can be retried after user confirmation when outcome is ambiguous. | **Implemented with limits**; not an exactly-once guarantee for arbitrary external operations. |
@@ -25,6 +25,24 @@ This document describes the **current RunMind 1.10.2 feature set** across its Po
 | Area | Fix | Current behavior | Status / limits |
 |---|---|---|---|
 | Deep Research | Active context-limit metrics | Stores `estimatedPromptTokens` from the calculated `estimatedTokens` value when an active context limit is available. | **Fixed**; prevents an undeclared-variable error before provider chat requests. |
+
+## RunMind 1.10.4 toolbar and permissions UX
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| Toolbar | Deep Research workspace flyout | The workspace is anchored below its toolbar icon using the same flyout layout as other toolbar sections. | **Implemented**; bounded to the viewport width and height. |
+| Toolbar | Active and expanded state | The Deep Research icon reflects the open state and exposes synchronized `aria-expanded`. | **Implemented** |
+| Toolbar | Exclusive flyout behavior | Opening any top-level toolbar or conversation menu closes the previously open flyout; outside click and Escape close the active flyout. | **Implemented**; nested in-panel disclosures are not part of the top-level group. |
+| Agent permissions | Per-tool always-approval removal | Each saved always-approved tool has its own Remove action; Clear approvals remains available. | **Implemented**; changes persist immediately in the current WebView profile. |
+
+## RunMind 1.10.3 branch UX refinement
+
+| Area | Fix | Current behavior | Status / limits |
+|---|---|---|---|
+| Conversation title | Separate parent title from branch labels | Switching branches never mutates the conversation title. The immutable `main` branch is displayed as **Original**. | **Fixed**; the underlying branch ID remains `main` for storage compatibility. |
+| Branch naming | Context-aware branch labels | New branches use the most recent user prompt at the fork point; generic prompts receive numbered alternatives and duplicate labels are disambiguated. | **Implemented**; deterministic prompt-derived labels can be renamed by the user. |
+| Branch manager spacing | Single-row open state | The **Branches** toggle hides while the manager is open, leaving the close button inside the manager as the only dismissal control. | **Fixed**; removes the redundant toggle row and its vertical gap. |
+
 
 ## Status legend
 

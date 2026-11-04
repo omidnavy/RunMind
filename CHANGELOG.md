@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.10.4] — Toolbar workspace and approval management hotfix
+
+### Fixed
+- Converted the Deep Research workspace from a standalone right-side drawer into a standard toolbar flyout anchored directly below its toolbar trigger, matching the placement and sizing behavior of the other toolbar sections.
+- Made the Deep Research toolbar trigger use the same open/active visual state as other toolbar menus, with `aria-expanded` kept synchronized for mouse, keyboard, and programmatic open/close actions.
+- Added shared mutual exclusion for toolbar and conversation flyouts: opening any section closes the previously open section, and opening Deep Research closes other toolbar sections. Outside-click and Escape handling now cover every top-level flyout, including menus previously omitted from the hard-coded lists.
+- Added per-tool **Remove** actions to the Always-approved tools list. Removing one approval updates the persisted permission set immediately; **Clear approvals** remains available.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.4`.
+
+### Validation
+- Static checks cover the toolbar-details structure, anchored flyout CSS, active state and `aria-expanded` synchronization, exclusive menu handling, per-tool permission removal, and version alignment.
+- JavaScript syntax, HTML ID uniqueness, metadata parsing, and ZIP integrity are checked in the release package. Windows/.NET 10 compilation and live WebView2 interaction still require validation on Windows.
+
+## [1.10.3] — Branch title and spacing hotfix
+
+### Fixed
+- Kept the conversation title independent from branch selection. Switching to a branch no longer appends the branch label to, or overwrites, the parent conversation title.
+- Renamed the immutable `main` branch's display label from `Main` to `Original`, including migration of existing per-window branch state. The stable internal branch ID remains `main`.
+- Generated new branch labels from the user prompt nearest the fork point instead of the first prompt in the conversation. Short greetings and generic prompts receive neutral labels such as `Alternative 1`; duplicate labels receive a numeric suffix.
+- Removed the redundant **Branches** toggle row while the branch manager is open. The manager now sits directly below the header and uses its own close control, eliminating the extra vertical gap. The collapsed toggle row is also more compact.
+
+### Limits
+- Branch labels are deterministic prompt-derived suggestions, not AI-generated summaries. Users can rename non-original branches at any time.
+- Branch names are labels within the current conversation; the parent conversation keeps one stable title across all branches.
+
+
 ## [1.10.2] — Conversation branch layout hotfix
 
 ### Fixed

@@ -1,10 +1,24 @@
-# Build and setup — RunMind 1.10.2
+# Build and setup — RunMind 1.10.4
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
 ## RunMind 1.10.1 hotfix
 
 This is a patch release over 1.10.0. It fixes a JavaScript `ReferenceError` in Deep Research context compaction when the selected model/provider exposes an active context limit. The context metric now correctly assigns `estimatedPromptTokens` from the already-calculated `estimatedTokens` value. No provider configuration change is required.
+
+## RunMind 1.10.4 toolbar and permissions hotfix
+
+This patch makes the Deep Research workspace a standard toolbar flyout anchored under its icon instead of a separate right-side drawer. Its icon now uses the same active/open visual state and `aria-expanded` behavior as the other toolbar sections. All top-level toolbar and conversation flyouts are mutually exclusive: opening one closes the others; outside-click and Escape handling use the same shared menu set. The Agent settings panel now lists always-approved tools as individual rows with a **Remove** action; removing a tool immediately saves the updated approval set, while **Clear approvals** remains available.
+
+## Installation
+
+Extract the overlay over the complete RunMind 1.10.3 source folder. Preserve the existing `Assets`, `lib`, image resources, README, and build scripts, then run `Build-Release-x64.bat` on Windows. Rebuild and deploy the PowerToys plugin or launch the standalone application.
+
+## RunMind 1.10.3 branch title and spacing hotfix
+
+This patch separates the conversation title from branch labels. Switching between branches no longer changes the title shown in the application or used for conversation export. The immutable internal `main` branch is now displayed as **Original**, and existing saved branch state is migrated to that label without changing the stable branch ID. New branch names are suggested from the latest user prompt at the fork point; short greetings and generic prompts receive labels such as **Alternative 1**, and duplicate names receive a numeric suffix. Users can rename non-original branches.
+
+The open branch manager now hides the separate **Branches** toggle row. Its own close button is the only control in the open state, so the manager sits directly below the application header without the redundant row or its vertical gap. When collapsed, the toggle remains compact at the top-right of the transcript area.
 
 ## RunMind 1.10.2 UI hotfix
 
