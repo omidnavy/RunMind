@@ -1,6 +1,6 @@
 # RunMind — Feature Matrix
 
-This document describes the **current feature set** of RunMind across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.9.0 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
 ## Status legend
 
@@ -50,6 +50,7 @@ This document describes the **current feature set** of RunMind across its PowerT
 | Providers | Additional model servers | Users can add multiple OpenAI-compatible endpoints, including custom base URLs and aliases. | **Implemented**; compatibility depends on the server's API implementation. |
 | Connections | Per-connection configuration | Each connection has its own endpoint, enabled state, alias, optional API key, and configurable authentication-header name. | **Implemented** |
 | Connections | Model discovery | Enabled connections are queried independently; discovered models are merged into the model selector and grouped by connection/alias. | **Implemented**; unavailable endpoints are reported independently. |
+| Connections | Selected-model diagnostics | Recovery view tests model discovery, a small generation request, and function-call output without executing the returned function. | **Conditional**; LM Studio Native REST mode reports generation/tool calling as not tested/not applicable. Other custom endpoints must expose a compatible chat-completions route. |
 | Connections | Request isolation | Discovery and task requests use connection/authentication snapshots so later UI changes do not silently redirect an in-flight task. | **Implemented** |
 | Authentication | Model API keys | Optional credentials are applied to discovery, metadata, chat, and tool-call requests for the configured connection. | **Implemented**; credentials are stored in local WebView storage and are not encrypted by RunMind. |
 | Chat | Streaming responses | Ordinary chat streams responses from supported Ollama and OpenAI-compatible endpoints. | **Implemented**; provider stream compatibility applies. |
@@ -173,7 +174,17 @@ This document describes the **current feature set** of RunMind across its PowerT
 | Sources | Tracks normalized-URL-deduplicated sources with title, domain, final URL, author, publication/modified dates when available, excerpt, retrieval route/time, read status, and failures. | **Implemented with limits**; metadata is best-effort and source authority is not automatically scored. |
 | Evidence register | Stores claims and exact quotations against sources already read; checks whether the normalized quotation appears in the bounded stored excerpt. | **Implemented with limits**; verifies quote presence only, not claim support, source authority, or factual truth. |
 | Results | Supports copying plans/results and exporting Markdown with task metadata, sources, evidence register, and activity history. | **Implemented** |
-| Checkpoint storage | Uses IndexedDB with bounded snapshots and a heartbeat; sessionStorage is a fallback if durable storage is unavailable. | **Conditional**; PowerToys and standalone profiles remain separate and do not sync; cross-window recovery is within a shared profile. |
+| Checkpoint storage | Uses IndexedDB with bounded task checkpoints and heartbeat; sessionStorage is a fallback if durable storage is unavailable. | **Conditional**; PowerToys and standalone profiles remain separate; cross-window recovery is within a shared profile. |
+| Research workspace UX | The existing drawer has Research, Review, and Recovery tabs; Research retains the existing plan, source/domain settings, budgets, sources, evidence, activity, and task controls. | **Implemented**; this is one drawer with views, not a second panel. |
+| Research templates | Provides General, Technical, Product/Technology Comparison, Security Assessment, Academic, Website, and Troubleshooting templates. Templates set initial instructions and plan steps; users can edit the plan. | **Implemented**; templates are starting points, not fixed workflows. |
+| Claim assessment | The model can register a material claim with a verdict, explanation, uncertainty, and supporting/contradicting/context passages from sources already read. | **Partial**; the verdict is model-assisted. Local verification checks exact quotation presence only, not entailment or factual truth. |
+| Research Review | Filters claims, shows explanations and quoted passages, links each passage to its source, and lets users Accept/Reject or request targeted further investigation. | **Implemented**; decisions are user annotations, not machine certification. Targeted investigation resumes the same task when a resumable transcript exists. |
+| Source quality assessment | Records qualitative source type, author/date visibility, freshness, strengths, limitations, and explanation. | **Partial**; model-assisted and explainable, with no numeric trust score or independent reputation verification. |
+| Source independence | Displays the number of hostnames represented by claim evidence and records a model-generated note about possible shared underlying reporting. | **Partial**; different hostnames do not prove editorial independence, and this is not a graph-based provenance analysis. |
+| Context intelligence | Shows estimated research context tokens, known active context limit, utilization, and compaction count. Older tool messages can be compacted at safe checkpoints. | **Partial**; tokens are estimated from serialized characters ÷ 4; compaction runs only when an active context limit is known and does not use the model's tokenizer. |
+| Checkpoint history | Retains up to eight IndexedDB snapshots per task, lists their status/time/reason and counts, and supports confirmed restore to an earlier snapshot. | **Conditional**; requires IndexedDB and storage availability. Snapshot content is bounded; history does not sync between distinct WebView2 profiles. |
+| Tool-operation recovery | Records tool intent before execution and bounded result data. Exact matching completed calls in an uncommitted batch can reuse saved results; ambiguous operations require user acknowledgement before retry. | **Partial**; exact tool-name/argument matching only. Different arguments can still repeat a side effect; arbitrary tools cannot receive exactly-once guarantees. |
+| Report export | Markdown export includes task metadata, sources, evidence, claim assessments, user decisions, qualitative source assessments, operation recovery state, and activity. | **Implemented**; inline citations in the model-written report still depend on model output quality. |
 
 ## 10. MCP client
 
@@ -244,6 +255,6 @@ The following are intentionally outside the current feature set or remain unimpl
 - CORS is enforced by WebView2. A provider being reachable from Windows does not guarantee it can be called from the chat page; the server must allow the `https://localhost` origin.
 - WebView2 directory access and permission prompts are controlled by Windows/browser APIs.
 - Token/context figures are estimates unless explicitly reported by the provider; character-based estimates do not equal exact model tokenization.
-- Deep Research quote matching confirms only that normalized quotation text occurs in a bounded stored excerpt; it does not semantically verify citations or claims.
+- Deep Research claim verdicts and source-quality explanations are model-assisted, not independently proven. Local quote matching confirms only that normalized quotation text occurs in a bounded stored excerpt; it does not prove logical entailment, factual truth, source authority, or editorial independence.
 - Deep Research time budgets are soft boundaries: current HTTP operations complete before the task stops retrieving and synthesizes collected evidence.
 - Source-level checks do not replace a Windows build and live tests against the user's PowerToys, WebView2, model servers, Reader/SearXNG endpoints, workspace permissions, and MCP servers.

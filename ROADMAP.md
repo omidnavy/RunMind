@@ -1,6 +1,17 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.8.0. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.9.0. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+
+## RunMind 1.9.0 — implemented scope
+
+- One Deep Research drawer with Research, Review, and Recovery views.
+- Model-assisted claim assessments and qualitative source assessments, with locally checked exact-quote presence and explicit limits.
+- Interactive claim review: filters, source passages, user Accept/Reject decisions, and targeted follow-up investigation.
+- Source disagreement and uncertainty instructions, plus hostname/source-dependency caveats.
+- Per-task checkpoint history, confirmed restore, exact-operation result reuse, and acknowledgement for ambiguous interrupted operations.
+- Selected-model discovery, generation, and harmless tool-call diagnostics.
+- Approximate context telemetry and active-limit-aware compaction of older research tool messages.
+- Seven research templates and expanded Markdown export.
 
 ## Core agent completeness
 
@@ -9,8 +20,8 @@ This file preserves the full feature wishlist discussed for RunMind. This backlo
 - [x] Attachment-aware Agent file tools for text/JSON, PDF, and ZIP files; PDF/ZIP uploads are signature-checked and bounded
 - [x] PDF text extraction and OCR (`read_pdf`; PDF.js extraction plus per-page Tesseract fallback, English/Persian bundled and optional cached language packs; encrypted PDFs remain unsupported)
 - [x] Image understanding from workspace files (`read_image`; requires a vision-capable model)
-- [ ] More complete connection diagnostics and error classification (`diagnose_connection` now checks model discovery and classifies common failures; endpoint-specific and generation diagnostics remain)
-- [ ] Retry/recovery controls and idempotency-aware tool replays
+- [x] More complete connection diagnostics and error classification (selected-model discovery, small generation probe, and harmless tool-call probe in Recovery; LM Studio Native REST remains not tested and custom endpoints require chat-completions compatibility)
+- [x] Retry/recovery controls and bounded idempotency-aware tool result reuse (exact tool name + canonical arguments within an uncommitted batch; ambiguous attempts require acknowledgement; no exactly-once guarantee)
 - [ ] Backups/undo for file edits and stronger transactional writes (file edit/delete backup and restore are implemented; broader rollback coverage remains)
 - [ ] Robust direct-download metadata, content validation, and resumable large downloads
 
@@ -24,11 +35,11 @@ This file preserves the full feature wishlist discussed for RunMind. This backlo
 - [ ] Searchable sitemap traversal and website change tracking
 - [ ] Persistent local knowledge indexing and full-text search
 - [ ] Unified knowledge search across local files and MCP resources
-- [x] Research source register with metadata, excerpts, normalized-URL deduplication, domain allow/block/preferred rules, and exact-quote presence checks (not semantic citation verification or source reputation scoring)
+- [x] Research source register with metadata, excerpts, normalized-URL deduplication, domain allow/block/preferred rules, exact-quote presence checks, model-assisted claim assessments, and qualitative source assessments and a model-generated source-dependency note (not deterministic entailment, reputation, factual verification, or independence proof)
 - [x] Domain prioritization and allow/block restrictions in Deep Research (preferred domains rank first; blocked domains take precedence)
 - [x] Preserve bounded page excerpts, author/publication/modified metadata when available, retrieval route, and retrieval timestamps
 - [ ] More robust alternative Reader/proxy provider adapters and endpoint-specific telemetry
-- [ ] Semantic citation-to-claim verification and explainable source-quality assessment (no opaque trust score)
+- [x] Model-assisted semantic claim assessment and explainable qualitative source assessment (local exact-quote presence check only; not deterministic entailment, reputation, factual verification, or independence proof)
 
 ## Workspace and project tools
 
@@ -82,19 +93,20 @@ This file preserves the full feature wishlist discussed for RunMind. This backlo
 - [x] Streaming tool-call visibility for Ollama NDJSON and OpenAI-compatible SSE, including partial function names/arguments and live progress (calls execute after complete argument parsing)
 - [x] Pause/resume with bounded IndexedDB checkpoints, heartbeat, and same-profile recovery (tool-batch checkpoints; no exactly-once guarantee or cross-profile synchronization)
 - [ ] Parallel tool execution with dependency scheduling
-- [ ] Checkpoint review, retry, and roll-back controls
-- [ ] Token/context monitoring and adaptive context management
+- [x] Checkpoint history, review summaries, confirmed restore/rollback, and resume/retry controls (up to eight bounded snapshots per task in the current WebView2 profile)
+- [x] Approximate token/context monitoring and adaptive compaction of older research tool results (only when an active context limit is known; estimate is serialized characters ÷ 4)
 - [x] Search/page/tool/time budgets and live adjustment for Deep Research (time limit is a soft boundary; resumable downloads remain future work)
 - [ ] Sub-agent workflows
 - [x] Source register with metadata, deduplication, exact quote presence checks, and a research evidence list
-- [ ] Semantic citation-to-claim verification and explainable source-quality assessment
-- [ ] Task templates
+- [x] Research Review view with claim filters, model verdicts, quoted source passages, local exact-quote match state, user accept/reject decisions, and targeted follow-up investigation
+- [x] Per-task checkpoint history and tool-operation recovery ledger with safe acknowledgement for ambiguous interrupted calls
+- [x] Model-assisted semantic claim assessment and explainable qualitative source-quality assessment (quote presence is checked locally; verdicts do not prove entailment, source authority, or factual truth)
+- [x] Research task templates (General, Technical, Product/Technology Comparison, Security, Academic, Website, Troubleshooting)
 - [ ] Scheduled tasks (subject to user-approved execution model)
 - [ ] Conversation branching
 - [ ] Tool usage analytics
 - [ ] Plan priorities, dependency graph, and drag/drop editing
 - [x] Research preferred/allow/block domain rules
-- [ ] Explainable source-quality assessment (no opaque trust score)
 
 ## Research controls
 

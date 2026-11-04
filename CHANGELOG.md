@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.9.0] — Research intelligence and agent reliability
+
+### Added
+- Added an integrated Research / Review / Recovery tab set inside the existing Deep Research drawer. No second panel or parallel research UI was introduced.
+- Added claim-level model assessments with supported, partially supported, contradicted, and insufficient-evidence verdicts; explanations; uncertainty notes; and 1–8 exact source passages classified as supporting, contradicting, or contextual. The application checks normalized exact-quote presence against the bounded source text it stored.
+- Added a Review view with claim filters, source passage links, hostname-independence cautions, user Accept/Reject decisions, and targeted “Investigate further” actions that continue the same research task.
+- Added qualitative source assessments covering primary/secondary/reference type, observable strengths and limitations, author/date visibility, and freshness. No numeric trust score is generated.
+- Added checkpoint history in IndexedDB (up to eight snapshots per research task), checkpoint summaries, restore/rollback confirmation, and a Recovery view.
+- Added a tool-operation ledger that records intent before a tool executes and saves bounded model results. Exact matching completed operations in an uncommitted batch can reuse their saved result; ambiguous interrupted operations require explicit user acknowledgement before retry.
+- Added selected-model diagnostics for discovery, a small text-generation probe, and a harmless function-calling probe. The diagnostic function is never executed.
+- Added research context telemetry with an approximate token estimate, active context-limit source, utilization, and compaction counts.
+- Added adaptive compaction of older research tool messages at safe checkpoints when an active context limit is known and utilization exceeds the threshold. Full bounded source text remains in the research source register.
+- Added seven reusable research templates: General, Technical Investigation, Product & Technology Comparison, Security Assessment, Academic Research, Website Investigation, and Troubleshooting Investigation.
+- Expanded Markdown report export with claim assessments, user review decisions, evidence passages, qualitative source assessments, and tool-operation recovery state.
+
+### Changed
+- The existing Deep Research workspace now has Research, Review, and Recovery views. Existing source preferences, plan editor, budgets, sources, evidence, activity, pause/resume/cancel, copy, and export remain in the Research view.
+- Research instructions ask the model to assess material claims and important sources, cross-check disagreements, disclose uncertainty, and explain possible source dependencies. The UI explicitly distinguishes model assessments from local exact-quote checks.
+- Checkpoint history is scoped by research task ID rather than WebView instance ID. The existing primary checkpoint and session fallback remain intact.
+- Updated standalone, PowerToys plugin, plugin manifest, and MCP client version identifiers to `1.9.0`.
+
+### Limits and behavior
+- Semantic claim verdicts and source-quality explanations are model-assisted assessments. RunMind does not independently prove logical entailment, source authority, factual truth, or editorial independence. Exact quote matching only confirms text presence in the bounded stored excerpt.
+- Hostname counts are a visual caution, not an independence test. Different hostnames do not prove independent reporting; common underlying sources can exist across domains.
+- Tool-operation keys use the tool name and canonicalized arguments. They protect identical operations within an uncommitted batch, not semantically equivalent actions with different arguments. If a process stops after a side effect but before its result is committed, RunMind labels the operation ambiguous and asks before retrying. Exactly-once execution cannot be guaranteed for arbitrary local or MCP tools.
+- Checkpoint history retains at most eight snapshots for the current task. Restoring replaces the current task state after confirmation; newer snapshots remain in history. Recovery storage is WebView-profile local, so PowerToys and standalone histories do not synchronize.
+- Context-token counts are estimates based on serialized conversation length divided by four, not provider tokenization. Adaptive compaction is limited to older tool messages and runs only when RunMind knows an active context limit; it does not guarantee that every model prompt will fit.
+- Context compaction and operation history are research-task features. Parallel tool scheduling, subagents, conversation branching, scheduled tasks, persistent knowledge indexing, resumable downloads, and advanced MCP protocol features remain outside 1.9.0.
+- The LM Studio Native REST mode does not receive the generation/tool-call diagnostics in this release; those probes require a supported chat-completions-compatible route.
+
+### Validation
+- Static validation covers inline JavaScript syntax, unique HTML IDs, required element references, project XML, plugin JSON, version alignment, checkpoint/operation-ledger invariants, and overlay archive integrity.
+- Windows/.NET 10 compilation and live WebView2 IndexedDB, SearXNG, Reader, provider, local workspace, and MCP side-effect recovery tests still require execution on Windows.
+
 ## [1.8.0] — Deep Research evolution and Agent runtime
 
 ### Added
