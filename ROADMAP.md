@@ -1,17 +1,16 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. All unchecked items remain in scope; there are no priority levels or implementation phases. Implemented items are recorded in `FEATURE-MATRIX.md` for 1.6.12.
+This file preserves the full feature wishlist discussed for RunMind. All unchecked items remain in scope; there are no priority levels or implementation phases. Implemented items are recorded in `FEATURE-MATRIX.md` for 1.7.0.
 
 ## Core agent completeness
 
-- [ ] JSON Schema validation (`validate_json_schema`)
-- [ ] Regex tester (`regex_test`) with execution-safety constraints
-- [ ] PDF text extraction (`read_pdf`)
-- [ ] Image understanding from workspace files (`read_image`)
-- [ ] More complete connection diagnostics and error classification (basic errors exist; deeper diagnostics remain)
-- [ ] Explicit per-task token, request, search, and download budgets with provider usage tracking
+- [x] JSON Schema validation (`validate_json_schema`; bounded keyword coverage and local `$ref`, with unsupported advanced keywords reported as warnings)
+- [x] Regex tester (`regex_test`) with execution-safety constraints (isolated worker, hard timeout, and bounded inputs)
+- [x] PDF text extraction (`read_pdf`; best-effort selectable text, no OCR or encrypted/object-stream PDF support)
+- [x] Image understanding from workspace files (`read_image`; requires a vision-capable model)
+- [ ] More complete connection diagnostics and error classification (`diagnose_connection` now checks model discovery and classifies common failures; endpoint-specific and generation diagnostics remain)
 - [ ] Retry/recovery controls and idempotency-aware tool replays
-- [ ] Backups/undo for file edits and stronger transactional writes
+- [ ] Backups/undo for file edits and stronger transactional writes (file edit/delete backup and restore are implemented; broader rollback coverage remains)
 - [ ] Robust direct-download metadata, content validation, and resumable large downloads
 
 ## Web research and knowledge
@@ -31,8 +30,8 @@ This file preserves the full feature wishlist discussed for RunMind. All uncheck
 
 ## Workspace and project tools
 
-- [ ] Archive inspection (`inspect_archive`)
-- [ ] ZIP/tar extraction (`extract_archive`)
+- [x] ZIP archive inspection (`inspect_archive`; standard ZIP only, ZIP64 and multi-disk archives remain unsupported)
+- [x] ZIP extraction (`extract_archive`; approval-gated, CRC-checked, traversal-safe; TAR extraction remains pending)
 - [ ] More complete project overviews and semantic/code search
 - [ ] Folder content comparison and robust content-level duplicate detection
 - [ ] Clipboard access (`clipboard_read`, `clipboard_write`) with explicit permissions
@@ -41,8 +40,10 @@ This file preserves the full feature wishlist discussed for RunMind. All uncheck
 
 ## Data analysis and documents
 
-- [ ] JSON Schema validation and advanced JSON transforms
-- [ ] Dataset join, schema inference, validation rules, and richer CSV/TSV processing
+- [x] JSON Schema validation (`validate_json_schema`)
+- [ ] Advanced JSON transforms
+- [x] CSV dataset joins (`join_datasets`; inner/left/full) and heuristic schema inference (`infer_dataset_schema`)
+- [ ] Dataset validation rules and broader CSV/TSV processing
 - [ ] DOCX creation (`create_docx`)
 - [ ] XLSX creation (`create_xlsx`)
 - [ ] PDF creation (`create_pdf`)

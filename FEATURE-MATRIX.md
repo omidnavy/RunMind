@@ -6,6 +6,7 @@ This document describes the **current feature set** of RunMind across its PowerT
 
 - **Implemented** — available in the current source.
 - **Conditional** — implemented, but depends on provider capabilities, browser permissions, server configuration, or Windows runtime behavior.
+- **Partial** — a useful bounded subset exists; the full roadmap capability remains in scope.
 - **Not included** — intentionally unsupported or not implemented.
 
 ---
@@ -101,6 +102,8 @@ This document describes the **current feature set** of RunMind across its PowerT
 |---|---|---|
 | Agent Mode | Browser-side, model-driven tool-calling loop for multi-step tasks. | **Implemented**; success depends on model tool-use capability and tool results. |
 | Planning | Supports an `update_plan` tool to create and update concise multi-step plans. | **Implemented** |
+| Regex testing | `regex_test` evaluates JavaScript regular expressions in a disposable Web Worker with a 750 ms hard timeout, bounded pattern/input sizes, and bounded match output. | **Implemented**; supports `i`, `m`, `s`, and `u` flags. It is a JavaScript regex tester, not a formal proof that every pattern is linear-time. |
+| Model connection diagnosis | `diagnose_connection` checks the selected model server's discovery endpoint, lists a bounded set of models, checks whether the selected model is present, and classifies common failures. | **Partial**; it does not send a generation request, verify tool calling, or reliably distinguish network failures from CORS rejections. |
 | Tool execution | Tool calls are executed by the browser-side application and returned to the model as tool results. | **Implemented**; tool turns are not token-streamed. |
 | Tool limits | Tool turns are bounded by configured step/request limits and response-size limits. | **Implemented** |
 | Approval UI | Inline themed approval cards replace browser-native confirmation dialogs for Agent/MCP actions. | **Implemented** |
@@ -120,12 +123,16 @@ This document describes the **current feature set** of RunMind across its PowerT
 | Workspace persistence | The directory handle is retained in IndexedDB and permissions are rechecked/reconnected for later chats. | **Conditional**; Windows/browser may require a renewed user permission gesture. |
 | Workspace scope | File tools operate relative to the user-selected workspace. | **Implemented**; access is not an unrestricted filesystem or shell. |
 | File operations | List, read, create, edit, delete, search, copy, move, and rename files/folders. | **Implemented**; bounded operations and user approvals apply. |
+| File recovery | `edit_file` and `delete_file` create automatic backups in the workspace `.runmind-backups` folder. `restore_file_backup` restores one of those backups and creates a recovery point when replacing an existing destination. | **Implemented**; backups are limited to 100 MB per file and are retained until the user removes them. There is not yet a backup browser or retention policy. |
 | File metadata | Inspect metadata and calculate checksums for files. | **Implemented** |
 | Comparisons | Compare files/folders, produce project overviews, and scan for duplicates. | **Implemented**; folder comparisons may use path/size metadata, and equal size alone does not prove equal content. |
-| CSV tools | Analyze statistics, filter, deduplicate, merge, and compare CSV data. | **Implemented**; uses bounded parsing and row/file limits. |
-| JSON tools | Validate JSON syntax, pretty-print, minify, and sort JSON. | **Implemented**; JSON Schema validation is not included. |
+| CSV tools | Analyze, filter, deduplicate, merge, compare, infer column types (`infer_dataset_schema`), and join datasets (`join_datasets`) using inner, left, or full joins. | **Implemented**; schema inference uses at most 10,000 rows, joins are capped at 100,000 output rows, and outputs require approval and a new destination. |
+| JSON tools | Validate JSON syntax and validate data against a bounded JSON Schema implementation (`validate_json_schema`); pretty-print, minify, and sort JSON. | **Implemented with limits**; supports local `$ref`, common structural/type/constraint keywords and logical combinators. Unsupported advanced keywords are reported as warnings, not asserted as validated. |
+| PDF reading | `read_pdf` extracts selectable text from workspace PDFs, including supported plain/Flate/ASCII85 streams. | **Partial**; no OCR, encrypted PDFs, object streams, and some custom font encodings are unsupported. Input limit is 25 MB. |
+| Archive tools | `inspect_archive` and approval-gated `extract_archive` inspect/extract standard ZIP files. Extraction validates CRC-32 and rejects traversal, symlinks, encryption, duplicates, and oversized entries. | **Implemented with limits**; ZIP64, multi-disk ZIP, TAR, and other formats are not supported. Limits: 500 entries, 100 MB expanded total, 25 MB per file, and 200:1 compression ratio. |
 | Reports | Create Markdown and HTML reports and SVG charts/flow diagrams in the selected workspace. | **Implemented**; new-file and approval rules apply. |
 | Images | Read image metadata and resize, crop, convert, or create thumbnails using browser canvas. | **Implemented**; input sizes and output formats are bounded (PNG/JPEG/WebP). |
+| Image understanding | `read_image` attaches a workspace PNG, JPEG, WebP, or GIF to the next model turn for visual analysis. | **Conditional**; requires a vision-capable selected model and is limited to 8 MB per image. The image is sent to the configured model endpoint. |
 | Downloads | Download HTTP resources into the selected workspace with approval and no-overwrite behavior. | **Conditional**; direct downloads require server CORS access and have a size limit. |
 | Shell/process execution | Run arbitrary shell commands, launch local processes, or provide a native command-execution bridge. | **Not included** |
 | Advanced document generation | Native DOCX/XLSX/PPTX/PDF document editing and conversion. | **Not included** |
@@ -209,7 +216,7 @@ This document describes the **current feature set** of RunMind across its PowerT
 
 ## 13. Not currently included
 
-The following are intentionally outside the current feature set:
+The following are intentionally outside the current feature set or remain unimplemented:
 
 - PowerToys inline token-by-token result mutation.
 - Shell/terminal command execution and arbitrary local process launching.
@@ -217,7 +224,7 @@ The following are intentionally outside the current feature set:
 - Persistent vector database, embeddings, or automatic indexing of MCP resources/local files.
 - Parallel tool orchestration, autonomous subagents, scheduled tasks, and conversation branching.
 - Full recursive site crawling and automatic whole-site link auditing as turnkey workflows.
-- Native DOCX/XLSX/PPTX generation or conversion and advanced PDF editing/reading workflows.
+- Native DOCX/XLSX/PPTX generation or conversion, PDF OCR/editing, and a complete PDF rendering engine.
 - A credential vault or encryption layer for locally stored API keys and MCP tokens.
 - A bundled local model server or bundled WebView2 browser runtime.
 

@@ -1,4 +1,4 @@
-# Build and setup — RunMind 1.6.12
+# Build and setup — RunMind 1.7.0
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
@@ -15,6 +15,10 @@ The linter's `Repository missing` result also requires a published GitHub reposi
 - WebView2 Runtime installation is managed by RunMind. At startup, both hosts perform a quick availability check. If the Evergreen Runtime is missing, RunMind downloads Microsoft's official bootstrapper and silently installs it per-user. Only that first launch needs internet access and may take longer; normal launches use the existing shared runtime. See [Microsoft's WebView2 distribution guidance](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution).
 - For the PowerToys plugin build, matching PowerToys reference assemblies are included under `lib\x64`: `PowerToys.Common.UI.dll`, `PowerToys.ManagedCommon.dll`, `PowerToys.Settings.UI.Lib.dll`, `Wox.Infrastructure.dll`, and `Wox.Plugin.dll`. Replace them with assemblies from your installed PowerToys build if you need to target a different PowerToys version.
 - Ollama or an OpenAI-compatible model server reachable from the host/browser.
+
+## Agent workspace capabilities in 1.7.0
+
+The Agent can validate workspace JSON files against bounded JSON Schema rules, extract best-effort selectable text from PDFs, inspect and safely extract standard ZIP archives, infer CSV column types, join CSV datasets, and diagnose the selected model endpoint's discovery API. PDF OCR and TAR/ZIP64 extraction are not included. ZIP extraction is approval-gated, CRC-checked, and writes only into a new folder. See `FEATURE-MATRIX.md` for limits.
 
 ## Build
 

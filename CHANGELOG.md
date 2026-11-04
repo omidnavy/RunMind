@@ -1,5 +1,46 @@
 # Changelog
 
+## [1.7.0] — Expanded Agent data and workspace tools
+
+### Added
+- Added `validate_json_schema` for workspace JSON data with local JSON Pointer `$ref`, type checks, object/array constraints, string/number bounds, common formats, and logical schema composition (`allOf`, `anyOf`, `oneOf`, `not`, and conditional schemas). Validation returns bounded, path-specific errors. Schema regular expressions run in the isolated worker with a hard timeout. Unsupported advanced keywords are reported as warnings rather than silently claimed as validated.
+- Added `read_pdf` for best-effort extraction of selectable PDF text from unencrypted PDFs, including plain, Flate-compressed, and ASCII85/Flate streams where supported. Extraction is bounded to 25 MB per source file and 80 MB of decoded streams.
+- Added `inspect_archive` and approval-gated `extract_archive` for standard ZIP files. Extraction rejects path traversal, symbolic links, encrypted entries, duplicate/case-colliding paths, unsupported compression, and oversized archives; every extracted file is checked against its ZIP CRC-32 before it is written. Extraction uses a new destination folder and removes partial output after a failure.
+- Added `diagnose_connection` to classify common model endpoint failures and report connection/model-discovery status without sending a generation request or exposing API key values.
+- Added CSV schema inference (`infer_dataset_schema`) and key-based CSV joins (`join_datasets`) supporting inner, left, and full joins, with approval and no-overwrite behavior.
+
+### Changed
+- Updated Agent tool descriptions and documentation for the new data, PDF, ZIP, and connection-diagnostic capabilities.
+- Synchronized standalone, PowerToys plugin, plugin manifest, and MCP client version metadata to `1.7.0`.
+
+### Limitations
+- PDF extraction is not a complete PDF renderer: scanned-page OCR, encrypted PDFs, ZIP/object streams, custom font CMaps, and some complex encodings are not supported. Extracted text should be checked against the original for layout-sensitive documents.
+- Archive support in this release is standard ZIP only; ZIP64, multi-disk ZIPs, TAR, and other archive formats are not included.
+- JSON Schema validation is a bounded in-app implementation, not a claim of full conformance to every draft/keyword. Local `$ref` is supported; dynamic/unevaluated and selected content keywords are reported as unimplemented warnings.
+- CSV inference is heuristic (up to 10,000 rows); joins are capped at 100,000 output rows. Empty join keys do not match.
+- Connection diagnosis checks model discovery only. It cannot distinguish every network failure from a WebView2 CORS rejection and does not test generation/tool-call capability.
+
+### Validation
+- JavaScript syntax validation passed with Node.js 22.
+- Targeted helper tests passed for valid/invalid JSON Schema checks, local `$ref`, basic PDF text extraction, deflated ZIP reading and CRC verification, CSV type inference, and full CSV joins.
+- Full Windows/.NET build, WebView2 integration, real-world PDF corpus testing, and destructive ZIP-extraction UI testing remain to be run on Windows.
+
+## [1.6.13] — Agent safety and multimodal workspace tools
+
+### Added
+- Added `regex_test`, which evaluates JavaScript regular expressions in a disposable Web Worker with a 750 ms hard timeout, bounded pattern/input sizes, and bounded match output.
+- Added `read_image` for workspace PNG, JPEG, WebP, and GIF files. The image is attached to the next model turn for visual analysis; a vision-capable model is required.
+- Added automatic workspace backups for file edits and deletions. Backups are stored under `.runmind-backups` and can be restored through the approved `restore_file_backup` tool.
+
+### Changed
+- File edit/delete approval cards now explain that a recovery backup is created before the operation.
+- Restoring over an existing file first saves its current contents as another recovery point.
+- Synchronized standalone, PowerToys plugin, plugin manifest, and MCP client version metadata to `1.6.13`.
+
+### Validation
+- The shared JavaScript application passes `node --check`.
+- The complete Windows/.NET build, WebView2 host integration, live regex timeout behavior, and vision-provider compatibility still require testing on Windows with suitable local model servers.
+
 All notable changes to RunMind are documented here, with the newest entries first. Historical product and file names are retained where they describe behavior at the time of that release.
 
 ## [1.6.12] — PowerToys plugin build fix
