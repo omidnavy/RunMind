@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="https://localhost/Assets/Brand/Icon.ico">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src http: https:; img-src data: https://localhost; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>LocalLLM Chat</title>
+  <title>RunMind Chat</title>
   <style>
     :root {
       color-scheme: dark;
@@ -396,9 +396,9 @@
     <header class="topbar">
       <div class="top-line">
         <div class="brand-lockup">
-          <span class="brand-mark" role="img" aria-label="LocalLLM"></span>
+          <span class="brand-mark" role="img" aria-label="RunMind"></span>
           <div class="brand">
-          <h1 id="conversationTitle">LocalLLM Chat</h1>
+          <h1 id="conversationTitle">RunMind Chat</h1>
           <p>Private in-memory session · closing this window ends the session unless exported</p>
           </div>
         </div>
@@ -2814,7 +2814,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'LocalLLM', version: '1.6.5' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.6' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -2834,7 +2834,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'LocalLLM', version: '1.6.5' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.6' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;
@@ -4616,6 +4616,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       const generateTitleAfterResponse = BOOT.generateTitleAfterFirstResponse === true
         && !BOOT.initialTitleGenerated
         && !messages.some(message => message.role === 'user');
+      if (generateTitleAfterResponse) setConversationTitle(createFallbackConversationTitle(content));
       const settingsForRequest = { ...generationSettings(), keepAliveSeconds: Number(BOOT.keepAliveSeconds ?? 300) };
       const thinkForRequest = !!thinkToggle.checked;
       const isContinuationRequest = nextMessageIsContinuation;
@@ -4794,26 +4795,33 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
         if (title.length > 64) title = `${title.slice(0, 61).trimEnd()}…`;
         if (title) setConversationTitle(title);
       } catch (error) {
-        if (error?.name !== 'AbortError') console.warn('LocalLLM conversation title generation failed; keeping the prompt-derived title.', error);
+        if (error?.name !== 'AbortError') console.warn('RunMind conversation title generation failed; keeping the prompt-derived title.', error);
       } finally {
         clearTimeout(timeout);
         if (titleGenerationController === controller) titleGenerationController = null;
       }
     }
     window.addEventListener('pagehide', () => { titleGenerationController?.abort(); activeController?.abort(); });
+    function createFallbackConversationTitle(prompt) {
+      const value = String(prompt || '').split(/\s+/).filter(Boolean).join(' ').trim().replace(/[.!?]+$/, '');
+      if (!value) return 'RunMind Chat';
+      const words = value.split(' ').slice(0, 7).join(' ');
+      const title = words.length > 58 ? `${words.slice(0, 55).trimEnd()}…` : words;
+      return title.charAt(0).toUpperCase() + title.slice(1);
+    }
     function setConversationTitle(value) {
       const title = String(value || '').replace(/\s+/g, ' ').trim().slice(0, 72);
       if (!title) return;
       conversationDisplayTitle = title;
       const heading = $('#conversationTitle');
       if (heading) heading.textContent = title;
-      document.title = `LocalLLM — ${title}`;
+      document.title = `RunMind — ${title}`;
     }
     window.setConversationTitle = setConversationTitle;
     function conversationTitle() {
       if (conversationDisplayTitle) return conversationDisplayTitle;
       const first = messages.find(m => m.role === 'user' && m.content);
-      const base = (first?.content || BOOT.title || 'LocalLLM Conversation').replace(/\s+/g, ' ').trim();
+      const base = (first?.content || BOOT.title || 'RunMind Conversation').replace(/\s+/g, ' ').trim();
       return base.length > 72 ? base.slice(0, 69) + '…' : base;
     }
     function portableConversation() {
@@ -4836,7 +4844,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     }
     function validateSessionFile(data) {
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('The selected file is not a conversation object.');
-      if (!['PowerToys-Run-LocalLLM-conversation', 'llmchat'].includes(data.format)) throw new Error('This file is not a supported LocalLLM conversation.');
+      if (!['PowerToys-Run-LocalLLM-conversation', 'llmchat'].includes(data.format)) throw new Error('This file is not a supported RunMind conversation.');
       if (Number(data.version) !== 1) throw new Error(`Unsupported conversation format version: ${String(data.version)}.`);
       if (!Array.isArray(data.messages) || data.messages.length > 10000) throw new Error('The file has an invalid or excessively large message list.');
       const clean = data.messages.map((message, index) => {
@@ -5331,7 +5339,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
         const responseParts = extractEmbeddedThinking(String(BOOT.response));
         messages.push({ role: 'assistant', content: responseParts.content, thinking: responseParts.thinking, thinkingOpen: true, thinkRequested: !!BOOT.initialThink, timestamp: Date.now(), provider: initialProvider, model: BOOT.initialModel || '', error: !!BOOT.isError, initial: true });
       }
-      setConversationTitle(BOOT.title || 'LocalLLM Chat');
+      setConversationTitle(BOOT.title || 'New chat');
       if (!Object.prototype.hasOwnProperty.call(initialPreferences, 'thinkEnabled')) thinkToggle.checked = !!BOOT.initialThink;
       syncThinkButton();
       autoResizePrompt();

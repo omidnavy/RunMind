@@ -1,7 +1,7 @@
 <Window x:Class="LocalLLM.Standalone.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="LocalLLM" Icon="pack://application:,,,/Assets/Brand/Icon.ico" Height="860" Width="1120"
+        Title="RunMind" Icon="pack://application:,,,/Assets/Brand/Icon.ico" Height="860" Width="1120"
         MinHeight="520" MinWidth="680"
         WindowStartupLocation="CenterScreen"
         Background="#111318">

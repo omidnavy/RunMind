@@ -90,7 +90,7 @@ public partial class MainWindow : Window
             var appFolder = AppContext.BaseDirectory;
             var htmlPath = Path.Combine(appFolder, "ChatWindow.html");
             if (!File.Exists(htmlPath))
-                throw new FileNotFoundException("ChatWindow.html must be deployed beside LocalLLM.exe.", htmlPath);
+                throw new FileNotFoundException("ChatWindow.html must be deployed beside RunMind.exe.", htmlPath);
 
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             if (string.IsNullOrWhiteSpace(localAppData))
@@ -145,23 +145,23 @@ public partial class MainWindow : Window
             {
                 if (!args.IsSuccess)
                 {
-                    ShowFailure("The LocalLLM chat page could not be loaded.");
+                    ShowFailure("The RunMind chat page could not be loaded.");
                     return;
                 }
                 try
                 {
                     var bootstrap = JsonSerializer.Serialize(new
                     {
-                        title = "LocalLLM Chat",
+                        title = "New chat",
                         windowInstanceId = Guid.NewGuid().ToString("N"),
                         standalone = true,
-                        generateTitleAfterFirstResponse = false,
+                        generateTitleAfterFirstResponse = true,
                     });
                     await core.ExecuteScriptAsync($"window.initializeLocalLLM({bootstrap});");
                 }
                 catch (Exception ex)
                 {
-                    ShowFailure($"Could not initialize the LocalLLM chat session: {ex.Message}");
+                    ShowFailure($"Could not initialize the RunMind chat session: {ex.Message}");
                 }
             };
             _initializationStage = "Navigate to ChatWindow.html";
@@ -169,7 +169,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowFailure("LocalLLM could not initialize WebView2. " + ex.Message
+            ShowFailure("RunMind could not initialize WebView2. " + ex.Message
                 + "\nFailed stage: " + _initializationStage
                 + "\nHRESULT: 0x" + ex.HResult.ToString("X8")
                 + "\nUser-data folder: " + _userDataFolder

@@ -32,7 +32,7 @@ namespace Community.PowerToys.Run.Plugin.LocalLLM;
 public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, IContextMenu, IDisposable
 {
     public static string PluginID => "550A34D0CFA845449989D581149B3D9C";
-    public string Name => "LocalLLM";
+    public string Name => "RunMind";
     public string Description => "Query a local language model using Ollama or LM Studio.";
 
     private const string DefaultEndpoint = "http://localhost:11434/api/generate";
@@ -209,14 +209,15 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 && search.Equals(query.ActionKeyword.Trim(), StringComparison.OrdinalIgnoreCase)))
         {
             // `llm` by itself is intentionally not a launcher command. Windows Search /
-            // PowerToys' normal application indexer launches LocalLLM.exe by its app name.
+            // PowerToys' normal application indexer launches RunMind.exe by its app name.
             CancelActiveQuery();
             return new List<Result>();
         }
 
         // Let PowerToys' normal application indexer handle the standalone app name.
         if (string.IsNullOrWhiteSpace(query.ActionKeyword)
-            && (search.Equals("LocalLLM", StringComparison.OrdinalIgnoreCase)
+            && (search.Equals("RunMind", StringComparison.OrdinalIgnoreCase)
+                || search.Equals("LocalLLM", StringComparison.OrdinalIgnoreCase)
                 || search.Equals("Local LLM", StringComparison.OrdinalIgnoreCase)))
         {
             CancelActiveQuery();
@@ -693,7 +694,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var settings = operation.Settings;
         return new Result
         {
-            Title = "Ask LocalLLM",
+            Title = "Ask RunMind",
             SubTitle = $"{CreatePreview(prompt)} · Generating… · Open in chat",
             IcoPath = _iconPath,
             Score = 45,
@@ -724,9 +725,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     }
                     catch (Exception ex)
                     {
-                        _context?.API.ShowMsg("Could not open the LocalLLM chat window", ex.ToString());
+                        _context?.API.ShowMsg("Could not open the RunMind chat window", ex.ToString());
                     }
-                }, "Could not open the LocalLLM chat window");
+                }, "Could not open the RunMind chat window");
                 return true;
             },
         };
@@ -752,7 +753,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     private Result CreateResponseResult(string model, string response, bool isError, string prompt, SettingsSnapshot settings)
     {
-        var title = isError ? "LocalLLM · Request failed" : "LocalLLM response";
+        var title = isError ? "RunMind · Request failed" : "RunMind response";
         var preview = CreatePreview(response);
 
         return new Result
@@ -840,7 +841,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     public Control CreateSettingPanel()
     {
         // All settings are supplied through AdditionalOptions; a custom WPF panel is not used.
-        throw new NotImplementedException("LocalLLM uses PowerToys Run's AdditionalOptions settings UI.");
+        throw new NotImplementedException("RunMind uses PowerToys Run's AdditionalOptions settings UI.");
     }
 
     private void OnThemeChanged(Theme currentTheme, Theme newTheme) => UpdateIconPath(newTheme);
@@ -1081,7 +1082,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     {
         var assemblyDirectory = Path.GetDirectoryName(typeof(Main).Assembly.Location) ?? AppContext.BaseDirectory;
         var htmlPath = Path.Combine(assemblyDirectory, "ChatWindow.html");
-        if (!File.Exists(htmlPath)) throw new FileNotFoundException("ChatWindow.html was not found beside the LocalLLM plugin assembly.", htmlPath);
+        if (!File.Exists(htmlPath)) throw new FileNotFoundException("ChatWindow.html was not found beside the RunMind plugin assembly.", htmlPath);
         var bootstrap = new
         {
             title = CreateFallbackConversationTitle(prompt),
@@ -1097,7 +1098,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var webView = CreateChatWebView();
         var appWindow = new Window
         {
-            Title = "LocalLLM", Width = 1120, Height = 860, MinWidth = 680, MinHeight = 520,
+            Title = "RunMind", Width = 1120, Height = 860, MinWidth = 680, MinHeight = 520,
             Icon = LoadWindowIcon(assemblyDirectory),
             WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = webView,
         };
@@ -1118,7 +1119,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
         var appWindow = new Window
         {
-            Title = "LocalLLM",
+            Title = "RunMind",
             Width = 1120,
             Height = 860,
             MinWidth = 680,
@@ -1141,7 +1142,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private static string CreateFallbackConversationTitle(string prompt)
     {
         var value = string.Join(" ", (prompt ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        if (string.IsNullOrWhiteSpace(value)) return "LocalLLM Chat";
+        if (string.IsNullOrWhiteSpace(value)) return "RunMind Chat";
         value = value.Trim().TrimEnd('.', '?', '!');
         var words = value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(7);
         var title = string.Join(" ", words);
@@ -1204,7 +1205,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
                 await dispatcher.InvokeAsync(() =>
                 {
-                    if (appWindow.IsVisible) appWindow.Title = $"LocalLLM — {title}";
+                    if (appWindow.IsVisible) appWindow.Title = $"RunMind — {title}";
                 }).Task.ConfigureAwait(false);
 
                 var serializedTitle = JsonSerializer.Serialize(title);
@@ -1418,7 +1419,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     {
                         Margin = new Thickness(24),
                         TextWrapping = TextWrapping.Wrap,
-                        Text = "The LocalLLM chat page could not be loaded. Check that ChatWindow.html and Assets/Brand/Icon.svg are deployed beside the plugin DLL.",
+                        Text = "The RunMind chat page could not be loaded. Check that ChatWindow.html and Assets/Brand/Icon.svg are deployed beside the plugin DLL.",
                     };
                     return;
                 }
@@ -1431,7 +1432,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 }
                 catch (Exception ex)
                 {
-                    _context?.API.ShowMsg("Could not initialize the LocalLLM chat session", ex.Message);
+                    _context?.API.ShowMsg("Could not initialize the RunMind chat session", ex.Message);
                 }
             };
             stage = "Navigate to ChatWindow.html";
@@ -1468,7 +1469,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             var priorFailure = primaryInitializationException is null
                 ? string.Empty
                 : $"\nPrimary profile attempt also failed: {primaryInitializationException.Message}";
-            var message = "The LocalLLM chat window could not initialize WebView2. "
+            var message = "The RunMind chat window could not initialize WebView2. "
                 + ex.Message
                 + $"\nFailed stage: {stage}"
                 + $"\nHRESULT: 0x{ex.HResult:X8}"
@@ -1484,7 +1485,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 TextWrapping = TextWrapping.Wrap,
                 Text = message,
             };
-            _context?.API.ShowMsg("Could not initialize the LocalLLM chat window", message);
+            _context?.API.ShowMsg("Could not initialize the RunMind chat window", message);
         }
     }
 
@@ -1580,7 +1581,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         if (!File.Exists(htmlPath))
         {
             throw new FileNotFoundException(
-                "ChatWindow.html was not found beside the LocalLLM plugin assembly. Ensure the file is copied to the plugin output directory.",
+                "ChatWindow.html was not found beside the RunMind plugin assembly. Ensure the file is copied to the plugin output directory.",
                 htmlPath);
         }
 
