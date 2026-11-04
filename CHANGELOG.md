@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.10.1] — Context metrics hotfix
+
+### Fixed
+- Fixed a `ReferenceError` in `compactResearchConversation` when the selected provider exposes an active context limit. The context metric now stores `estimatedPromptTokens: estimatedTokens` instead of referencing an undeclared `estimatedPromptTokens` variable. This prevented Deep Research from sending its first chat request for affected LM Studio models.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.1`.
+
+### Validation
+- Added a regression check for the active-context-limit branch and confirmed it records the estimated prompt token count without throwing.
+- JavaScript syntax, metadata alignment, and ZIP integrity checks pass. Windows/.NET 10 and live LM Studio/WebView2 integration still require validation on Windows.
+
 ## [1.10.0] — Agent orchestration and workflow intelligence
 
 ### Added

@@ -3357,7 +3357,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.0' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.1' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -3377,7 +3377,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.0' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.1' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;
@@ -7456,7 +7456,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
           task.activity ||= []; task.activity.push({ at: task.contextMetrics.lastCompactedAt, type: 'context_compaction', summary: `Compacted ${compactedCount} older tool result(s) to reduce research context pressure.` });
         }
       }
-      task.contextMetrics = { ...(task.contextMetrics || {}), estimatedPromptTokens, contextLimit: limit, limitSource: info.source, utilizationPercent: Math.round(estimatedTokens / limit * 100), measuredAt: new Date().toISOString() };
+      task.contextMetrics = { ...(task.contextMetrics || {}), estimatedPromptTokens: estimatedTokens, contextLimit: limit, limitSource: info.source, utilizationPercent: Math.round(estimatedTokens / limit * 100), measuredAt: new Date().toISOString() };
       return estimatedTokens;
     }
     function researchToolDefinitions() {

@@ -1,8 +1,8 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.0 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.1 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
-## RunMind 1.10.0 — Agent Orchestration & Workflow Intelligence
+## RunMind 1.10.0 — Agent Orchestration & Workflow Intelligence (retained in 1.10.1)
 
 | Area | Feature | Current behavior | Status / limits |
 |---|---|---|---|
@@ -17,6 +17,13 @@ This document describes the **current RunMind 1.10.0 feature set** across its Po
 | Conversation | Branching | Branch from a completed message, switch, rename, delete, return to Main, and compare latest assistant responses. | **Implemented with limits**; eight branches per window, last 16 messages per local snapshot, bounded text, binary attachments omitted; `.runmind` remains the full archive. |
 | Analytics | Local workflow analytics | Per-tool invocations, success rate, average duration; provider/model requests, failures, average latency, and reported tokens. | **Implemented with limits**; stored per WebView profile; provider tokens appear only when reported. |
 | Recovery | Operation intent/retry | Operation intent is persisted before execution; interrupted operations are identified; known read-only operations can be retried after user confirmation when outcome is ambiguous. | **Implemented with limits**; not an exactly-once guarantee for arbitrary external operations. |
+
+
+## RunMind 1.10.1 hotfix
+
+| Area | Fix | Current behavior | Status / limits |
+|---|---|---|---|
+| Deep Research | Active context-limit metrics | Stores `estimatedPromptTokens` from the calculated `estimatedTokens` value when an active context limit is available. | **Fixed**; prevents an undeclared-variable error before provider chat requests. |
 
 ## Status legend
 

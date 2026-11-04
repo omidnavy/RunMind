@@ -1,6 +1,10 @@
-# Build and setup — RunMind 1.10.0
+# Build and setup — RunMind 1.10.1
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
+
+## RunMind 1.10.1 hotfix
+
+This is a patch release over 1.10.0. It fixes a JavaScript `ReferenceError` in Deep Research context compaction when the selected model/provider exposes an active context limit. The context metric now correctly assigns `estimatedPromptTokens` from the already-calculated `estimatedTokens` value. No provider configuration change is required.
 
 ## Requirements
 

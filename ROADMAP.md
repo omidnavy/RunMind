@@ -1,6 +1,6 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.0. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.1. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
 
 ## RunMind 1.9.0 — implemented scope
 
@@ -21,6 +21,10 @@ This file preserves the full feature wishlist discussed for RunMind. This backlo
 - Bounded one-level sub-agent delegation for Researcher, Coder, Security Analyst, Reviewer, and Summarizer roles; read-only tool subset, maximum four child model/tool turns, normalized structured outputs, and Deep Research parent-budget/domain enforcement.
 - Conversation branching from completed messages, independent local branch histories, rename/delete/switch, return to Main, and side-by-side latest-answer comparison. Local snapshots are bounded and omit binary attachment bytes; `.runmind` remains the full conversation archive.
 - Local analytics for tool calls, success/failure, duration, provider/model request latency, and provider-reported token usage when available.
+
+## RunMind 1.10.1 — hotfix
+
+- [x] Fix Deep Research context-metric assignment when an active provider/model context limit is available (`estimatedPromptTokens: estimatedTokens`).
 
 ## Core agent completeness
 
