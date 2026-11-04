@@ -1,4 +1,4 @@
-# Build and setup — RunMind 1.10.4
+# Build and setup — RunMind 1.10.5
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
@@ -9,6 +9,12 @@ This is a patch release over 1.10.0. It fixes a JavaScript `ReferenceError` in D
 ## RunMind 1.10.4 toolbar and permissions hotfix
 
 This patch makes the Deep Research workspace a standard toolbar flyout anchored under its icon instead of a separate right-side drawer. Its icon now uses the same active/open visual state and `aria-expanded` behavior as the other toolbar sections. All top-level toolbar and conversation flyouts are mutually exclusive: opening one closes the others; outside-click and Escape handling use the same shared menu set. The Agent settings panel now lists always-approved tools as individual rows with a **Remove** action; removing a tool immediately saves the updated approval set, while **Clear approvals** remains available.
+
+## RunMind 1.10.5 — Deep Research mode and Warm Graphite theme
+
+Turning on **Deep Research** from the composer now opens the Research workspace flyout. The click is explicitly excluded from the document-level outside-click handler so event bubbling cannot immediately close the flyout. Opening other toolbar sections still closes Research, and clicking outside still closes the active section.
+
+The dark palette is now **Warm Graphite**, using neutral charcoal surfaces, warm ivory text, and a restrained amber accent instead of blue/indigo surfaces and highlights. The Light and System-Light palettes are unchanged. This is a color-palette change, not a display-level blue-light filter.
 
 ## Installation
 

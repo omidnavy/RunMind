@@ -1,6 +1,6 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.4 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.5 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
 ## RunMind 1.10.0 — Agent Orchestration & Workflow Intelligence (retained in 1.10.1)
 
@@ -25,6 +25,13 @@ This document describes the **current RunMind 1.10.4 feature set** across its Po
 | Area | Fix | Current behavior | Status / limits |
 |---|---|---|---|
 | Deep Research | Active context-limit metrics | Stores `estimatedPromptTokens` from the calculated `estimatedTokens` value when an active context limit is available. | **Fixed**; prevents an undeclared-variable error before provider chat requests. |
+
+## RunMind 1.10.5 mode integration and Warm Graphite theme
+
+| Area | Fix | Current behavior | Status / limits |
+|---|---|---|---|
+| Deep Research | Composer mode toggle | Enabling Deep Research from the composer opens the Research workspace flyout. | **Fixed**; the same bubbling click is ignored by outside-click dismissal, while other flyouts remain mutually exclusive. |
+| Theme | Warm Graphite dark palette | Dark mode uses warm neutral charcoal surfaces, ivory text, and muted amber accent colors instead of blue/indigo tones. | **Implemented**; Light and System-Light palettes are unchanged; this is not a display-level blue-light filter. |
 
 ## RunMind 1.10.4 toolbar and permissions UX
 

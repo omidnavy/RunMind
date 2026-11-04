@@ -9,20 +9,21 @@
   <style>
     :root {
       color-scheme: dark;
-      --color-bg: #101216;
-      --color-surface: #171a21;
-      --color-surface-raised: #202530;
-      --color-surface-hover: #29303d;
-      --color-input: #11141a;
-      --color-text: #e9edf5;
-      --color-muted: #a0a8b7;
-      --color-accent: #9aabff;
-      --color-accent-contrast: #101426;
-      --color-border: #323a49;
-      --color-user-bubble: #232b42;
-      --color-assistant-bubble: #171a21;
-      --color-danger: #ff858a;
-      --color-success: #83d7ab;
+      /* Warm Graphite: neutral charcoal surfaces, warm ivory text, and a restrained amber accent. */
+      --color-bg: #171613;
+      --color-surface: #201e19;
+      --color-surface-raised: #2a2721;
+      --color-surface-hover: #373229;
+      --color-input: #191814;
+      --color-text: #f1ece2;
+      --color-muted: #b0a797;
+      --color-accent: #d5a45f;
+      --color-accent-contrast: #21190e;
+      --color-border: #464035;
+      --color-user-bubble: #352a1e;
+      --color-assistant-bubble: #201e19;
+      --color-danger: #ef8b80;
+      --color-success: #91c6a0;
       --font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
       --font-code: Consolas, "Cascadia Code", "Courier New", monospace;
       --font-size: 14px;
@@ -31,8 +32,8 @@
       --radius-md: 12px;
       --radius-lg: 18px;
       --radius-pill: 999px;
-      --shadow-panel: 0 12px 36px rgba(0, 0, 0, .20);
-      --shadow-float: 0 3px 12px rgba(0, 0, 0, .14);
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .34);
+      --shadow-float: 0 4px 14px rgba(0, 0, 0, .24);
     }
     :root[data-theme="light"] {
       color-scheme: light;
@@ -3447,7 +3448,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.4' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.5' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -3467,7 +3468,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.4' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.5' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;
@@ -8566,6 +8567,12 @@ ${toolActivityDetail}`;
     $('#openSessionButton').addEventListener('click', () => sessionFileInput.click());
     sessionFileInput.addEventListener('change', () => { void openSessionFile(sessionFileInput.files?.[0]); });
     document.addEventListener('click', event => {
+      // Enabling Deep Research from the composer intentionally opens its header flyout.
+      // Do not interpret that same bubbling click as an outside click and close it again.
+      if (event.target instanceof Node && deepResearchButton.contains(event.target)) {
+        syncResearchPanelState();
+        return;
+      }
       for (const menu of toolbarFlyoutMenus()) {
         if (menu.open && !menu.contains(event.target)) menu.open = false;
       }

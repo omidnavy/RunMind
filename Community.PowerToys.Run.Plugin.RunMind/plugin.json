@@ -4,7 +4,7 @@
 	"IsGlobal": true,
 	"Name": "RunMind",
 	"Author": "Omid Navy",
-	"Version": "1.10.4",
+	"Version": "1.10.5",
 	"Language": "csharp",
 	"Website": "https://omid.navy",
 	"ExecuteFileName": "Community.PowerToys.Run.Plugin.RunMind.dll",

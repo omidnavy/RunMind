@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.10.5] — Deep Research mode and warm dark theme hotfix
+
+### Fixed
+- Fixed event bubbling from the composer **Deep Research** toggle: enabling research mode now opens the Research workspace flyout and the same click is no longer misinterpreted as an outside click that immediately closes it. Other toolbar flyouts still close as expected.
+- Replaced the blue/indigo dark palette with **Warm Graphite**: neutral charcoal surfaces, warm ivory text, subdued amber highlights, warm user-message surfaces, and softer neutral borders. Light and System-Light palettes remain unchanged.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.5`.
+
+### Notes
+- Warm Graphite reduces blue-toned interface colors; it is not a hardware/display blue-light filter and does not change monitor brightness or white-point settings.
+
+### Validation
+- Browser regression checks cover composer-toggle opening, exclusive flyout behavior, outside-click closing, active/ARIA state, and the warm dark palette tokens. JavaScript syntax, version alignment, and ZIP integrity are checked. Windows/.NET 10 compilation and live WebView2 visual validation still require Windows.
+
 ## [1.10.4] — Toolbar workspace and approval management hotfix
 
 ### Fixed
