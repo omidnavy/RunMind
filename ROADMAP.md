@@ -1,12 +1,13 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. All unchecked items remain in scope; there are no priority levels or implementation phases. Implemented items are recorded in `FEATURE-MATRIX.md` for 1.7.0.
+This file preserves the full feature wishlist discussed for RunMind. All unchecked items remain in scope; there are no priority levels or implementation phases. Implemented items are recorded in `FEATURE-MATRIX.md` for 1.7.1.
 
 ## Core agent completeness
 
 - [x] JSON Schema validation (`validate_json_schema`; bounded keyword coverage and local `$ref`, with unsupported advanced keywords reported as warnings)
 - [x] Regex tester (`regex_test`) with execution-safety constraints (isolated worker, hard timeout, and bounded inputs)
-- [x] PDF text extraction (`read_pdf`; best-effort selectable text, no OCR or encrypted/object-stream PDF support)
+- [x] Attachment-aware Agent file tools for text/JSON, PDF, and ZIP files; PDF/ZIP uploads are signature-checked and bounded
+- [x] PDF text extraction (`read_pdf`; workspace and attached PDFs, best-effort selectable text, no OCR or encrypted/object-stream PDF support)
 - [x] Image understanding from workspace files (`read_image`; requires a vision-capable model)
 - [ ] More complete connection diagnostics and error classification (`diagnose_connection` now checks model discovery and classifies common failures; endpoint-specific and generation diagnostics remain)
 - [ ] Retry/recovery controls and idempotency-aware tool replays
@@ -30,8 +31,8 @@ This file preserves the full feature wishlist discussed for RunMind. All uncheck
 
 ## Workspace and project tools
 
-- [x] ZIP archive inspection (`inspect_archive`; standard ZIP only, ZIP64 and multi-disk archives remain unsupported)
-- [x] ZIP extraction (`extract_archive`; approval-gated, CRC-checked, traversal-safe; TAR extraction remains pending)
+- [x] ZIP archive inspection (`inspect_archive`; workspace and attached ZIPs, standard ZIP only, ZIP64 and multi-disk archives remain unsupported)
+- [x] ZIP extraction (`extract_archive`; workspace or attached ZIP, approval-gated, CRC-checked, traversal-safe; TAR extraction remains pending)
 - [ ] More complete project overviews and semantic/code search
 - [ ] Folder content comparison and robust content-level duplicate detection
 - [ ] Clipboard access (`clipboard_read`, `clipboard_write`) with explicit permissions

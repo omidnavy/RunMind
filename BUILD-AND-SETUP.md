@@ -1,4 +1,4 @@
-# Build and setup — RunMind 1.7.0
+# Build and setup — RunMind 1.7.1
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
@@ -16,9 +16,9 @@ The linter's `Repository missing` result also requires a published GitHub reposi
 - For the PowerToys plugin build, matching PowerToys reference assemblies are included under `lib\x64`: `PowerToys.Common.UI.dll`, `PowerToys.ManagedCommon.dll`, `PowerToys.Settings.UI.Lib.dll`, `Wox.Infrastructure.dll`, and `Wox.Plugin.dll`. Replace them with assemblies from your installed PowerToys build if you need to target a different PowerToys version.
 - Ollama or an OpenAI-compatible model server reachable from the host/browser.
 
-## Agent workspace capabilities in 1.7.0
+## Agent file and data capabilities in 1.7.1
 
-The Agent can validate workspace JSON files against bounded JSON Schema rules, extract best-effort selectable text from PDFs, inspect and safely extract standard ZIP archives, infer CSV column types, join CSV datasets, and diagnose the selected model endpoint's discovery API. PDF OCR and TAR/ZIP64 extraction are not included. ZIP extraction is approval-gated, CRC-checked, and writes only into a new folder. See `FEATURE-MATRIX.md` for limits.
+The Agent can read supported text/source attachments by exact filename, validate attached or workspace JSON files (including bounded JSON Schema checks), extract best-effort selectable text from attached or workspace PDFs, and inspect attached or workspace ZIP archives. PDF and ZIP attachments are signature-checked and bounded by the attachment limits; binary content is retained when a `.runmind` conversation is saved and reopened. ZIP extraction from either source remains approval-gated, CRC-checked, and writes only into a new folder inside the selected workspace. PDF OCR and TAR/ZIP64 extraction are not included. CSV inference/joins and model endpoint discovery diagnosis are also available. See `FEATURE-MATRIX.md` for limits.
 
 ## Build
 

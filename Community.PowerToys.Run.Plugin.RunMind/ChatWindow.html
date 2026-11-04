@@ -621,7 +621,7 @@
               <button type="button" class="compose-icon" id="attachButton" title="Upload files" aria-label="Upload files">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5 19 13.5a5 5 0 0 0-7.1-7.1l-7.1 7.1a3.5 3.5 0 0 0 5 5l7.1-7.1a2 2 0 0 0-2.8-2.8L7 15.8"/></svg>
               </button>
-              <input class="file-input" type="file" id="fileInput" multiple accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp,.txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.html,.htm,.css,.js,.mjs,.cjs,.ts,.tsx,.jsx,.py,.cs,.java,.c,.h,.cpp,.hpp,.rs,.go,.php,.sql,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.ps1,.bat,.cmd,.sh,.diff,.patch,.tex">
+              <input class="file-input" type="file" id="fileInput" multiple accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,application/zip,.png,.jpg,.jpeg,.gif,.webp,.pdf,.zip,.txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.html,.htm,.css,.js,.mjs,.cjs,.ts,.tsx,.jsx,.py,.cs,.java,.c,.h,.cpp,.hpp,.rs,.go,.php,.sql,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.ps1,.bat,.cmd,.sh,.diff,.patch,.tex">
               <button type="button" class="compose-icon" id="mcpModeButton" aria-pressed="false" title="MCP access is off in normal chat" aria-label="Toggle MCP access in normal chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v5H5zM5 14h14v5H5zM8 7.5h.01M8 16.5h.01M11 7.5h5M11 16.5h5"/></svg></button>
               <button type="button" class="compose-icon" id="deepResearchButton" aria-pressed="false" title="Deep Research mode is off" aria-label="Toggle Deep Research mode"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5M7.8 10.8h6M10.8 7.8v6"/></svg></button>
               <button type="button" class="compose-icon think-button" id="agentModeButton" aria-pressed="false" title="Agent Mode is off" aria-label="Toggle Agent Mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.5 8 8 9 4.5-1 8-4 8-9V7z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></button>
@@ -825,6 +825,8 @@
       maxFilesPerMessage: 10,
       maxImageBytes: 10 * 1024 * 1024,
       maxTextBytes: 2 * 1024 * 1024,
+      maxPdfBytes: 25 * 1024 * 1024,
+      maxArchiveBytes: 25 * 1024 * 1024,
       maxTotalBytes: 25 * 1024 * 1024,
       confirmBeforeSendBytes: 8 * 1024 * 1024
     });
@@ -1595,19 +1597,36 @@
       const imageTypes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
       const image = declaredType.startsWith('image/') || Object.prototype.hasOwnProperty.call(imageTypes, extension);
       const type = declaredType || (image ? imageTypes[extension] : '');
+      const readDataUrl = async () => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error(`Could not read ${name}.`));
+        reader.onerror = () => reject(new Error(`Could not read ${name}.`));
+        reader.readAsDataURL(file);
+      });
       if (image) {
         if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(type)) throw new Error(`${name}: use a PNG, JPEG, GIF, or WebP image.`);
         if (file.size > ATTACHMENT_LIMITS.maxImageBytes) throw new Error(`${name}: images must be ${formatBytes(ATTACHMENT_LIMITS.maxImageBytes)} or smaller.`);
-        const dataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error(`Could not read ${name}.`));
-          reader.onerror = () => reject(new Error(`Could not read ${name}.`));
-          reader.readAsDataURL(file);
-        });
-        return { name, type: type || 'image/png', size: file.size, dataUrl };
+        return { name, type: type || 'image/png', size: file.size, dataUrl: await readDataUrl() };
+      }
+      const isPdf = extension === 'pdf' || declaredType === 'application/pdf';
+      const isZip = extension === 'zip' || ['application/zip', 'application/x-zip-compressed', 'application/x-zip'].includes(declaredType);
+      if (isPdf || isZip) {
+        if (isPdf && isZip) throw new Error(`${name}: the file extension and MIME type disagree.`);
+        const expectedType = isPdf ? 'application/pdf' : 'application/zip';
+        if (declaredType && declaredType !== expectedType && !(isZip && ['application/x-zip-compressed', 'application/x-zip'].includes(declaredType))) {
+          throw new Error(`${name}: the declared file type does not match ${expectedType}.`);
+        }
+        const maxBytes = isPdf ? ATTACHMENT_LIMITS.maxPdfBytes : ATTACHMENT_LIMITS.maxArchiveBytes;
+        if (file.size > maxBytes) throw new Error(`${name}: ${isPdf ? 'PDFs' : 'ZIP archives'} must be ${formatBytes(maxBytes)} or smaller.`);
+        const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+        const signature = isPdf
+          ? header.length >= 5 && String.fromCharCode(...header.subarray(0, 5)) === '%PDF-'
+          : header.length >= 4 && header[0] === 0x50 && header[1] === 0x4B && [[0x03,0x04],[0x05,0x06],[0x07,0x08]].some(pair => header[2] === pair[0] && header[3] === pair[1]);
+        if (!signature) throw new Error(`${name}: the file contents do not have a valid ${isPdf ? 'PDF' : 'ZIP'} signature.`);
+        return { name, type: expectedType, size: file.size, dataUrl: await readDataUrl() };
       }
       const textMime = declaredType.startsWith('text/') || ['application/json','application/xml','application/javascript','application/x-yaml','application/yaml','application/x-ndjson'].includes(declaredType);
-      if (!SUPPORTED_TEXT_EXTENSIONS.has(extension) && !(extension === '' && textMime)) throw new Error(`${name}: unsupported file type. Supported attachments are PNG/JPEG/GIF/WebP images and known text/source formats. This file was not attached.`);
+      if (!SUPPORTED_TEXT_EXTENSIONS.has(extension) && !(extension === '' && textMime)) throw new Error(`${name}: unsupported file type. Supported attachments are PNG/JPEG/GIF/WebP images, PDF, ZIP, and known text/source formats. This file was not attached.`);
       if (file.size > ATTACHMENT_LIMITS.maxTextBytes) throw new Error(`${name}: text files must be ${formatBytes(ATTACHMENT_LIMITS.maxTextBytes)} or smaller.`);
       return { name, type: declaredType || 'text/plain', size: file.size, text: await file.text() };
     }
@@ -1630,8 +1649,11 @@
     }
     function messageContentWithTextAttachments(message) {
       let content = String(message.content || '');
-      const textFiles = (Array.isArray(message.attachments) ? message.attachments : []).filter(file => typeof file.text === 'string');
+      const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+      const textFiles = attachments.filter(file => typeof file.text === 'string');
       if (textFiles.length) content += (content ? '\n\n' : '') + 'Attached text files:\n\n' + textFiles.map(file => `--- ${file.name} ---\n${file.text}`).join('\n\n');
+      const toolFiles = attachments.filter(file => typeof file.dataUrl === 'string' && ['application/pdf', 'application/zip'].includes(String(file.type || '').toLowerCase()));
+      if (toolFiles.length) content += (content ? '\n\n' : '') + 'Attached binary files available to file tools (use the exact filename as the path):\n' + toolFiles.map(file => `- ${file.name} (${file.type}, ${formatBytes(file.size || 0)})`).join('\n');
       return content;
     }
     function providerMessages(provider, sourceMessages) {
@@ -2654,11 +2676,11 @@
         { type: 'function', function: { name: 'checksum_file', description: 'Calculate the SHA-256 checksum of a workspace file.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'compare_files', description: 'Compare two UTF-8 text files and report whether they differ and the first differing line.', parameters: { type: 'object', properties: { path_a: { type: 'string' }, path_b: { type: 'string' } }, required: ['path_a','path_b'], additionalProperties: false } } },
         { type: 'function', function: { name: 'project_overview', description: 'Create a bounded overview of files and folders in the selected project workspace.', parameters: { type: 'object', properties: { max_depth: { type: 'integer' }, max_results: { type: 'integer' } }, additionalProperties: false } } },
-        { type: 'function', function: { name: 'validate_json', description: 'Parse and validate a JSON file, reporting its top-level type and basic structure.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'validate_json_schema', description: 'Validate a JSON data file against a JSON Schema. Provide either schema_path (a workspace JSON file) or schema (an inline schema object). Supports local $ref, types, properties, required, arrays, numeric/string constraints, formats, and logical combinators; reports exact JSON paths.', parameters: { type: 'object', properties: { data_path: { type: 'string' }, schema_path: { type: 'string' }, schema: { type: 'object', additionalProperties: true } }, required: ['data_path'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'read_pdf', description: 'Extract selectable text from a workspace PDF (up to 25 MB). No OCR is performed; custom font encodings and complex PDF structures may limit fidelity.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'inspect_archive', description: 'Inspect a ZIP archive without extracting it. Reports entries, sizes, compression, encryption, and safety-limit violations. Supports standard ZIP and deflate entries, not ZIP64 or multi-disk archives.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'extract_archive', description: 'Extract a ZIP archive into a NEW workspace folder after approval. Rejects path traversal, symlinks, encrypted entries, unsupported compression, duplicates, and oversized archives. Existing destination folders are never overwritten.', parameters: { type: 'object', properties: { path: { type: 'string' }, destination: { type: 'string' } }, required: ['path','destination'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'validate_json', description: 'Parse and validate a UTF-8 JSON file, reporting its top-level type and basic structure. path may be a workspace-relative path or the exact filename of a file attached to this conversation.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'validate_json_schema', description: 'Validate a JSON data file against a JSON Schema. data_path and schema_path may refer to workspace-relative paths or exact attached filenames. Provide either schema_path or schema (an inline schema object). Supports local $ref, types, properties, required, arrays, numeric/string constraints, formats, and logical combinators; reports exact JSON paths.', parameters: { type: 'object', properties: { data_path: { type: 'string' }, schema_path: { type: 'string' }, schema: { type: 'object', additionalProperties: true } }, required: ['data_path'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'read_pdf', description: 'Extract selectable text from a PDF in the workspace or attached to this conversation (up to 25 MB). path may be the exact attached filename. No OCR is performed; custom font encodings and complex PDF structures may limit fidelity.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'inspect_archive', description: 'Inspect a ZIP archive in the workspace or attached to this conversation without extracting it. path may be the exact attached filename. Reports entries, sizes, compression, encryption, and safety-limit violations. Supports standard ZIP and deflate entries, not ZIP64 or multi-disk archives.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'extract_archive', description: 'Extract a ZIP archive from the workspace or conversation attachments into a NEW workspace folder after approval. path may be the exact attached filename; destination is a workspace-relative folder. Rejects path traversal, symlinks, encrypted entries, unsupported compression, duplicates, and oversized archives. Existing destination folders are never overwritten.', parameters: { type: 'object', properties: { path: { type: 'string' }, destination: { type: 'string' } }, required: ['path','destination'], additionalProperties: false } } },
         { type: 'function', function: { name: 'infer_dataset_schema', description: 'Infer CSV column types, nullability, uniqueness, and samples using up to 10,000 rows. The result is heuristic and should be reviewed.', parameters: { type: 'object', properties: { path: { type: 'string' }, delimiter: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'join_datasets', description: 'Join two CSV files by selected key columns using inner, left, or full join. Writes a new CSV after approval; existing files are never overwritten and output is limited to 100,000 rows.', parameters: { type: 'object', properties: { path_a: { type: 'string' }, path_b: { type: 'string' }, key_a: { type: 'string' }, key_b: { type: 'string' }, join_type: { type: 'string', enum: ['inner','left','full'] }, destination: { type: 'string' }, delimiter: { type: 'string' }, delimiter_a: { type: 'string' }, delimiter_b: { type: 'string' } }, required: ['path_a','path_b','key_a','key_b','destination'], additionalProperties: false } } },
         { type: 'function', function: { name: 'transform_json', description: 'Transform a JSON file in memory: pretty, minify, or sort_keys. This does not modify the source file.', parameters: { type: 'object', properties: { path: { type: 'string' }, mode: { type: 'string', enum: ['pretty','minify','sort_keys'] } }, required: ['path','mode'], additionalProperties: false } } },
@@ -2864,7 +2886,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.0' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.1' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -2884,7 +2906,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.0' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.1' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;
@@ -3190,12 +3212,43 @@
       const dir = await getDirectoryAtPath(root, parts.join('/'));
       return { dir, name, handle: await dir.getFileHandle(name) };
     }
-    async function readWorkspaceText(path, maxBytes = 2 * 1024 * 1024) {
-      if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+    function findConversationAttachment(path) {
+      const requested = String(path || '').trim();
+      if (!requested || requested.includes('/') || requested.includes('\\')) return null;
+      for (let index = messages.length - 1; index >= 0; index--) {
+        const message = messages[index];
+        if (message?.role !== 'user' || !Array.isArray(message.attachments)) continue;
+        const matches = message.attachments.filter(file => (typeof file?.text === 'string' || typeof file?.dataUrl === 'string') && String(file?.name || '').toLowerCase() === requested.toLowerCase());
+        if (matches.length > 1) throw new Error(`More than one attachment is named '${requested}'. Use a unique filename so the correct file can be selected.`);
+        if (matches.length === 1) return matches[0];
+      }
+      return null;
+    }
+    function fileFromConversationAttachment(attachment) {
+      if (typeof attachment.text === 'string') return new File([attachment.text], attachment.name, { type: attachment.type || 'text/plain' });
+      const match = String(attachment.dataUrl || '').match(/^data:(application\/pdf|application\/zip);base64,([a-z0-9+/]+=*)$/i);
+      if (!match) throw new Error(`Attachment '${attachment.name}' does not contain readable text or supported PDF/ZIP bytes.`);
+      const binary = atob(match[2]); const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+      return new File([bytes], attachment.name, { type: match[1].toLowerCase() });
+    }
+    async function readTaskFile(path, maxBytes = 2 * 1024 * 1024) {
+      const attachment = findConversationAttachment(path);
+      if (attachment) {
+        const file = fileFromConversationAttachment(attachment);
+        if (file.size > maxBytes) throw new Error(`Attached file exceeds the ${maxBytes.toLocaleString()} byte read limit.`);
+        return { file, handle: null, source: 'attachment' };
+      }
+      if (!agentDirectoryHandle) throw new Error(`'${path}' is not an attached filename, and no task folder is selected. Attach the file or select a workspace folder.`);
       const { handle } = await getFileAtPath(agentDirectoryHandle, path);
       const file = await handle.getFile();
       if (file.size > maxBytes) throw new Error(`File exceeds the ${maxBytes.toLocaleString()} byte read limit.`);
-      return { file, text: await file.text(), handle };
+      return { file, handle, source: 'workspace' };
+    }
+    async function readWorkspaceText(path, maxBytes = 2 * 1024 * 1024) {
+      const result = await readTaskFile(path, maxBytes);
+      if (['application/pdf', 'application/zip'].includes(String(result.file.type || '').toLowerCase())) throw new Error(`'${path}' is a binary attachment. Use the PDF or ZIP tool for this file.`);
+      return { ...result, text: await result.file.text() };
     }
     async function writeWorkspaceFile(path, blob, overwrite = false) {
       const parts = safeRelativePath(path); const name = parts.pop();
@@ -3883,19 +3936,18 @@
           return { root: agentDirectoryHandle.name || 'workspace', itemCount: items.length, files: items.filter(item => item.type === 'file').length, folders: items.filter(item => item.type === 'directory').length, items };
         }
         case 'validate_json': {
-          const { text } = await readWorkspaceText(args.path); const value = JSON.parse(text);
+          const input = await readWorkspaceText(args.path); const value = JSON.parse(input.text);
           const type = Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;
-          return { valid: true, path: args.path, topLevelType: type, keys: type === 'object' ? Object.keys(value).slice(0,100) : undefined, length: Array.isArray(value) || typeof value === 'string' ? value.length : undefined };
+          return { valid: true, path: args.path, source: input.source, topLevelType: type, keys: type === 'object' ? Object.keys(value).slice(0,100) : undefined, length: Array.isArray(value) || typeof value === 'string' ? value.length : undefined };
         }
         case 'validate_json_schema': {
-          if (!agentDirectoryHandle) throw new Error('No workspace folder is selected.');
           const dataSource = await readWorkspaceText(args.data_path, 2 * 1024 * 1024);
           let data; try { data = JSON.parse(dataSource.text); } catch (error) { throw new Error(`Data file '${args.data_path}' is not valid JSON: ${error.message}`); }
           if (!!args.schema_path === (args.schema !== undefined)) throw new Error('Provide exactly one of schema_path or schema.');
           let schema = args.schema;
           if (args.schema_path) { const schemaSource = await readWorkspaceText(args.schema_path, 1024 * 1024); try { schema = JSON.parse(schemaSource.text); } catch (error) { throw new Error(`Schema file '${args.schema_path}' is not valid JSON: ${error.message}`); } }
           if (typeof schema === 'string') { try { schema = JSON.parse(schema); } catch (error) { throw new Error(`Inline schema is not valid JSON: ${error.message}`); } }
-          return { dataPath: args.data_path, schemaPath: args.schema_path || null, ...(await validateJsonSchemaData(data, schema, signal)) };
+          return { dataPath: args.data_path, dataSource: dataSource.source, schemaPath: args.schema_path || null, ...(await validateJsonSchemaData(data, schema, signal)) };
         }
         case 'read_pdf': return await readWorkspacePdf(args, signal);
         case 'inspect_archive': {
@@ -3903,6 +3955,7 @@
           return { ...archive, entries: archive.entries.slice(0, 200).map(entry => ({ path: entry.path, directory: entry.directory, size: entry.size, compressedSize: entry.compressedSize, compression: entry.method === 0 ? 'stored' : entry.method === 8 ? 'deflate' : `unsupported-${entry.method}`, encrypted: entry.encrypted, crc32: entry.crc32 })), entriesTruncated: archive.entries.length > 200, note: 'ZIP64, multi-disk ZIPs, and symbolic links are not supported. Extraction verifies each entry CRC-32 before writing.' };
         }
         case 'extract_archive': {
+          if (!agentDirectoryHandle) throw new Error('Select a task folder before extracting an attached ZIP; extraction writes into a new folder inside that workspace.');
           const archive = await parseWorkspaceZip(args, signal);
           if (!archive.entries.length) return { extracted: false, message: 'The archive contains no entries.' };
           for (const entry of archive.entries) { if (entry.encrypted) throw new Error(`Cannot extract encrypted entry '${entry.path}'.`); if (![0,8].includes(entry.method)) throw new Error(`Cannot extract '${entry.path}': compression method ${entry.method} is unsupported.`); }
@@ -3919,7 +3972,7 @@ Path traversal, symlinks, encrypted files and unsupported compression are reject
           try { await destinationParent.getFileHandle(destinationName); throw new Error(`Destination path '${args.destination}' is now occupied by a file.`); } catch (error) { if (error?.name !== 'NotFoundError') throw error; }
           const root = await destinationParent.getDirectoryHandle(destinationName, { create: true }); let filesWritten = 0; let directoriesCreated = 0;
           try {
-            const archiveFile = await (await getFileAtPath(agentDirectoryHandle, args.path)).handle.getFile(); const archiveBytes = new Uint8Array(await archiveFile.arrayBuffer());
+            const archiveFile = await readTaskFile(args.path, 50 * 1024 * 1024); const archiveBytes = new Uint8Array(await archiveFile.file.arrayBuffer());
             for (const entry of archive.entries) {
               if (signal?.aborted) throw new DOMException('Task cancelled.', 'AbortError');
               let current = root; const parts = entry.path.split('/'); const leaf = entry.directory ? null : parts.pop();
@@ -4294,8 +4347,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       const result = new Uint8Array(total); let offset = 0; for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.length; } return result;
     }
     async function readWorkspacePdf(args, signal) {
-      if (!agentDirectoryHandle) throw new Error('No workspace folder is selected.');
-      const { handle } = await getFileAtPath(agentDirectoryHandle, args.path); const file = await handle.getFile();
+      const input = await readTaskFile(args.path, 25 * 1024 * 1024); const file = input.file;
       if (file.size > 25 * 1024 * 1024) throw new Error('PDF reading is limited to 25 MB per file.');
       const bytes = new Uint8Array(await file.arrayBuffer()); const raw = pdfBinaryString(bytes);
       if (!raw.startsWith('%PDF-')) throw new Error('The selected file does not have a valid PDF header.');
@@ -4336,8 +4388,8 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
         objectPattern.lastIndex = objectEnd + 6;
       }
       const text = output.join('\n\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-      if (!text) return { path: args.path, title, pageCount, bytes: file.size, text: '', note: 'No extractable text was found. The PDF may contain scanned pages, unsupported object streams, custom font encodings, or unsupported filters. OCR is not performed.' };
-      return { path: args.path, title, pageCount, bytes: file.size, streamsScanned: scannedStreams, characters: text.length, text: text.slice(0, 90000), truncated: text.length > 90000, note: 'Text extraction is best-effort. Custom font CMaps, complex object streams, encryption, and scanned-page OCR are not supported; verify layout-sensitive or non-Latin text against the original PDF.' };
+      if (!text) return { path: args.path, source: input.source, title, pageCount, bytes: file.size, text: '', note: 'No extractable text was found. The PDF may contain scanned pages, unsupported object streams, custom font encodings, or unsupported filters. OCR is not performed.' };
+      return { path: args.path, source: input.source, title, pageCount, bytes: file.size, streamsScanned: scannedStreams, characters: text.length, text: text.slice(0, 90000), truncated: text.length > 90000, note: 'Text extraction is best-effort. Custom font CMaps, complex object streams, encryption, and scanned-page OCR are not supported; verify layout-sensitive or non-Latin text against the original PDF.' };
     }
     const ZIP_CRC_TABLE = (() => { const table = new Uint32Array(256); for (let index = 0; index < 256; index++) { let value = index; for (let bit = 0; bit < 8; bit++) value = value & 1 ? 0xEDB88320 ^ (value >>> 1) : value >>> 1; table[index] = value >>> 0; } return table; })();
     function zipCrc32(bytes) { let crc = 0xFFFFFFFF; for (const byte of bytes) crc = ZIP_CRC_TABLE[(crc ^ byte) & 255] ^ (crc >>> 8); return (crc ^ 0xFFFFFFFF) >>> 0; }
@@ -4347,8 +4399,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       return { path, parts: path.split('/'), directory };
     }
     async function parseWorkspaceZip(args, signal) {
-      if (!agentDirectoryHandle) throw new Error('No workspace folder is selected.');
-      const { handle } = await getFileAtPath(agentDirectoryHandle, args.path); const file = await handle.getFile();
+      const input = await readTaskFile(args.path, 50 * 1024 * 1024); const file = input.file;
       if (file.size > 50 * 1024 * 1024) throw new Error('ZIP inspection is limited to 50 MB per archive.');
       const bytes = new Uint8Array(await file.arrayBuffer()); const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
       const read16 = offset => view.getUint16(offset, true); const read32 = offset => view.getUint32(offset, true);
@@ -4380,7 +4431,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
         entries.push({ path: safe.path, directory: isDirectory || fileType === 0x4000, size, compressedSize, method, crc32: crc.toString(16).padStart(8, '0'), encrypted: !!(flags & 1), localOffset, flags });
         offset = nameStart + nameLength + extraLength + commentLength;
       }
-      return { path: args.path, archiveBytes: file.size, entryCount, totalUncompressedBytes: totalBytes, entries };
+      return { path: args.path, source: input.source, archiveBytes: file.size, entryCount, totalUncompressedBytes: totalBytes, entries };
     }
     async function decompressZipEntry(archiveBytes, entry, signal) {
       if (entry.encrypted) throw new Error(`ZIP entry '${entry.path}' is encrypted and cannot be extracted.`);
@@ -4635,7 +4686,11 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     function requestNeedsWorkspaceAccess(requestMessages) {
       const prompt = (requestMessages || []).filter(item => item.role === 'user').map(item => String(item.content || '')).join('\n');
       const hasFileTarget = /\b[A-Za-z0-9_.-]+\.(?:txt|md|markdown|html?|csv|tsv|json|jsonl|xml|yaml|yml|toml|ini|log|pdf|docx?|xlsx?|pptx?|zip|png|jpe?g|webp|gif|svg)\b/i.test(prompt) || /\b(?:workspace|local|existing)\s+files?\b/i.test(prompt);
-      const hasFileAction = /\b(?:write|save|create|edit|delete|rename|move|copy|download|export|store|read|list)\b/i.test(prompt);
+      const hasFileAction = /\b(?:write|save|create|edit|delete|rename|move|copy|download|export|store|read|list|extract)\b/i.test(prompt);
+      const latestUser = [...messages].reverse().find(message => message?.role === 'user');
+      const hasAttachments = Array.isArray(latestUser?.attachments) && latestUser.attachments.length > 0;
+      const needsWorkspaceWrite = /\b(?:write|save|create|edit|delete|rename|move|copy|download|export|store)\b/i.test(prompt) || /\b(?:extract|unzip)\b.{0,80}\b(?:folder|directory|workspace|path)\b/i.test(prompt);
+      if (hasAttachments && !needsWorkspaceWrite) return false;
       return hasFileTarget && hasFileAction;
     }
     async function runAgent(selection, requestMessages, assistantMessage, signal) {
@@ -5535,29 +5590,37 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
           if (!file || typeof file !== 'object' || Array.isArray(file)) throw new Error(`An attachment in message ${index + 1} is invalid.`);
           const declaredType = String(file.type || '').slice(0, 200).toLowerCase();
           const allowedImageTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+          const allowedBinaryTypes = new Set(['application/pdf', 'application/zip']);
           let normalizedType = declaredType;
-          let decodedImageSize = 0;
+          let decodedSize = 0;
           let dataUrl = '';
-          if (typeof file.dataUrl === 'string' && file.dataUrl.length > 25 * 1024 * 1024) throw new Error(`Attachment in message ${index + 1} has an oversized data URL.`);
+          if (typeof file.dataUrl === 'string' && file.dataUrl.length > 36 * 1024 * 1024) throw new Error(`Attachment in message ${index + 1} has an oversized data URL.`);
           if (typeof file.dataUrl === 'string') {
-            const match = file.dataUrl.match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([a-z0-9+/]+=*)$/i);
-            if (!match || !allowedImageTypes.has(match[1].toLowerCase())) throw new Error(`Attachment in message ${index + 1} has an unsupported or malformed image data URL.`);
+            const match = file.dataUrl.match(/^data:(image\/(?:png|jpeg|gif|webp)|application\/(?:pdf|zip));base64,([a-z0-9+/]+=*)$/i);
+            if (!match) throw new Error(`Attachment in message ${index + 1} has an unsupported or malformed data URL.`);
             normalizedType = match[1].toLowerCase();
-            if (declaredType && declaredType !== normalizedType) throw new Error(`Attachment in message ${index + 1} has a MIME type that does not match its image data URL.`);
+            if (declaredType && declaredType !== normalizedType) throw new Error(`Attachment in message ${index + 1} has a MIME type that does not match its data URL.`);
             try {
               const decoded = atob(match[2]);
-              decodedImageSize = decoded.length;
-              if (decodedImageSize > ATTACHMENT_LIMITS.maxImageBytes) throw new Error(`Attachment in message ${index + 1} exceeds the 10 MB decoded image limit.`);
+              decodedSize = decoded.length;
+              const isImage = allowedImageTypes.has(normalizedType);
+              const limit = isImage ? ATTACHMENT_LIMITS.maxImageBytes : normalizedType === 'application/pdf' ? ATTACHMENT_LIMITS.maxPdfBytes : ATTACHMENT_LIMITS.maxArchiveBytes;
+              if (decodedSize > limit) throw new Error(`Attachment in message ${index + 1} exceeds its ${formatBytes(limit)} decoded size limit.`);
+              if (normalizedType === 'application/pdf' && (decoded.length < 5 || decoded.slice(0, 5) !== '%PDF-')) throw new Error(`Attachment in message ${index + 1} does not have a valid PDF signature.`);
+              if (normalizedType === 'application/zip' && (decoded.length < 4 || decoded.charCodeAt(0) !== 0x50 || decoded.charCodeAt(1) !== 0x4B || ![[0x03,0x04],[0x05,0x06],[0x07,0x08]].some(pair => decoded.charCodeAt(2) === pair[0] && decoded.charCodeAt(3) === pair[1]))) throw new Error(`Attachment in message ${index + 1} does not have a valid ZIP signature.`);
             } catch (error) {
-              if (error?.message?.includes('decoded image limit')) throw error;
+              if (/exceeds its .* decoded size limit|valid (?:PDF|ZIP) signature/.test(error?.message || '')) throw error;
               throw new Error(`Attachment in message ${index + 1} contains invalid base64 data.`);
             }
             dataUrl = file.dataUrl;
           }
           if (declaredType.startsWith('image/') && !allowedImageTypes.has(declaredType)) throw new Error(`Attachment in message ${index + 1} uses an unsupported image type.`);
-          const size = Math.max(0, Number(file.size) || 0, decodedImageSize);
-          if (dataUrl && size > ATTACHMENT_LIMITS.maxImageBytes) throw new Error(`Attachment in message ${index + 1} exceeds the 10 MB per-image limit.`);
-          if (!dataUrl && size > ATTACHMENT_LIMITS.maxTextBytes) throw new Error(`Attachment in message ${index + 1} exceeds the 2 MB text-file limit.`);
+          if (declaredType.startsWith('application/') && !allowedBinaryTypes.has(declaredType) && !['application/json','application/xml','application/javascript','application/x-yaml','application/yaml','application/x-ndjson'].includes(declaredType)) throw new Error(`Attachment in message ${index + 1} uses an unsupported binary type.`);
+          const size = Math.max(0, Number(file.size) || 0, decodedSize);
+          const isImageData = dataUrl && allowedImageTypes.has(normalizedType);
+          const isBinaryData = dataUrl && allowedBinaryTypes.has(normalizedType);
+          const limit = isImageData ? ATTACHMENT_LIMITS.maxImageBytes : isBinaryData ? (normalizedType === 'application/pdf' ? ATTACHMENT_LIMITS.maxPdfBytes : ATTACHMENT_LIMITS.maxArchiveBytes) : ATTACHMENT_LIMITS.maxTextBytes;
+          if (size > limit) throw new Error(`Attachment in message ${index + 1} exceeds its ${formatBytes(limit)} per-file limit.`);
           return { name: String(file.name || 'Attachment').slice(0, 512), type: normalizedType, size, ...(typeof file.text === 'string' ? { text: file.text.slice(0, 2 * 1024 * 1024) } : {}), ...(dataUrl ? { dataUrl } : {}) };
         }) : [];
         if (attachments.reduce((total, file) => total + file.size, 0) > ATTACHMENT_LIMITS.maxTotalBytes) throw new Error(`Attachments in message ${index + 1} exceed the combined 25 MB limit.`);

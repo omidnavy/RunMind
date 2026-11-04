@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.7.1] — Conversation attachment support for Agent file tools
+
+### Fixed
+- Fixed Agent file tools treating attached filenames as workspace paths. Text-based readers and JSON validation now resolve exact filenames from conversation attachments before falling back to the selected workspace.
+- Added PDF and ZIP attachments with MIME/signature checks and bounded per-file/combined sizes. `read_pdf` and `inspect_archive` can read attached files directly; `extract_archive` can use an attached ZIP while still requiring a selected workspace and explicit extraction approval.
+- Updated conversation prompt context and tool descriptions so models can identify attached PDF/ZIP filenames and pass the exact filename to the corresponding tool.
+- Preserved supported PDF/ZIP attachment bytes when saving and reopening `.runmind` conversations, with validation of their MIME types, signatures, and size limits.
+
+### Changed
+- Synchronized standalone, PowerToys plugin, plugin manifest, and MCP client version metadata to `1.7.1`.
+
+### Limitations
+- PDF extraction remains best-effort selectable-text extraction; OCR, encrypted PDFs, and unsupported PDF structures/encodings remain unsupported.
+- ZIP64 and multi-disk ZIP archives remain unsupported. Extraction continues to require a selected workspace, explicit approval, a new destination folder, and CRC-32 verification.
+
+### Validation
+- JavaScript syntax validation passed. Targeted checks passed for PDF/ZIP upload and signature checks, text/PDF/ZIP attachment resolution, PDF text extraction, ZIP inspection/deflate decompression/CRC-32 verification, missing-file handling, workspace fallback, and PDF/ZIP payload validation when reopening `.runmind` sessions. Windows/.NET build and WebView2 end-to-end attachment tests must be run on Windows.
+
 ## [1.7.0] — Expanded Agent data and workspace tools
 
 ### Added
