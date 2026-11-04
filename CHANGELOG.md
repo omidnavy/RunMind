@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.4] — Transcript text selection polish
+
+### Changed
+- Kept the empty composer placeholder (`Message the selected local model…`) out of text selection while leaving text entered by the user selectable.
+- Restored text selection for message attribution (author, timestamp, provider, and model) and generation statistics (time to first token, elapsed time, token count, and tokens per second). Application controls and action buttons remain excluded from Ctrl+A selections.
+- Synchronized standalone, PowerToys plugin, and plugin manifest version metadata to `1.7.4`.
+
+### Validation
+- Static checks cover JavaScript syntax, CSS selection rules, project XML, plugin manifest JSON, release-version consistency, and overlay ZIP integrity. WebView2 selection behavior and a Windows/.NET 10 build still need verification on Windows.
+
 ## [1.7.3] — Responsiveness and interface polish
 
 ### Changed

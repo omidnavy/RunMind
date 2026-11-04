@@ -84,7 +84,7 @@
     button, select { color: var(--color-text); }
     /* Keep application chrome out of Ctrl+A selections without restricting response text. */
     button, summary, .brand-lockup, .toolbar .field label, .statusline, .selected-model-health,
-    .message-meta, .message-actions, .generation-metrics, .jump-to-latest,
+    .message-actions, .jump-to-latest,
     .toolbar-panel > h2, .toolbar-panel .panel-note, .conversation-panel-title,
     .conversation-panel-note, .research-toolbar label, .agent-approval-title,
     .agent-approval-subtitle, .agent-approval-hint, .toast, .empty-state {
@@ -255,6 +255,12 @@
     .message-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; color: var(--color-muted); font-size: 11px; font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
     .message-meta .role { color: var(--color-text); }
     .message-meta .error-label { color: var(--color-danger); }
+    /* Message attribution and generation statistics are useful transcript content. */
+    .message-meta, .generation-metrics,
+    .message-meta *, .generation-metrics * {
+      -webkit-user-select: text;
+      user-select: text;
+    }
     .message-content { font-size: 14px; line-height: 1.72; overflow-wrap: anywhere; }
     .message-actions { display: flex; align-items: center; gap: 4px; margin-top: 9px; opacity: .78; }
     .message-actions.user-actions { justify-content: flex-start; }
@@ -345,7 +351,9 @@
     .warning-file-list div { overflow-wrap: anywhere; }
     .warning-file-list div + div { margin-top: 4px; }
     .warning-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
-    .composer textarea { display: block; width: 100%; resize: none; min-height: 52px; max-height: 220px; overflow-y: hidden; padding: 14px 17px 5px; line-height: 1.55; border: 0; border-radius: 24px; background: transparent; color: var(--color-text); outline: none; box-shadow: none; }
+    .composer textarea { display: block; width: 100%; resize: none; min-height: 52px; max-height: 220px; overflow-y: hidden; padding: 14px 17px 5px; line-height: 1.55; border: 0; border-radius: 24px; background: transparent; color: var(--color-text); outline: none; box-shadow: none; -webkit-user-select: text; user-select: text; }
+    /* The empty-field hint is UI chrome; actual text entered in the composer stays selectable. */
+    #promptInput::placeholder { -webkit-user-select: none; user-select: none; }
     .composer textarea:focus { border: 0; box-shadow: none; }
     .compose-attachments { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 10px 12px 0; }
     .compose-attachments[hidden] { display: none; }
@@ -2929,7 +2937,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.3' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.4' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -2949,7 +2957,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.3' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.7.4' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;

@@ -1,4 +1,4 @@
-# Build and setup — RunMind 1.7.3
+# Build and setup — RunMind 1.7.4
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
@@ -95,7 +95,7 @@ The PowerToys `IDelayedExecutionPlugin` interface does not provide a `Cancellati
 
 ## Validation
 
-The 1.7.3 upgrade overlay does not include a validation report. Static checks in this environment cover JavaScript syntax, project XML/JSON metadata, the optional Ollama CPU-thread setting path, non-selectable interface selectors, the streaming-render scheduler, and ZIP integrity. A successful .NET 10 build, PowerToys Run responsiveness with a CPU-bound Ollama model, and WebView2 text-selection/rendering behavior still need verification on Windows.
+The 1.7.4 upgrade overlay does not include a validation report. Static checks cover JavaScript syntax, project XML/JSON metadata, release-version consistency, the composer placeholder selection rule, selectable message attribution and generation statistics, and ZIP integrity. A successful .NET 10 build and WebView2 text-selection behavior still need verification on Windows.
 
 ### Local model server CORS
 

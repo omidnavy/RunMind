@@ -86,7 +86,7 @@ This document describes the **current feature set** of RunMind across its PowerT
 | Feature | Current behavior | Status / limits |
 |---|---|---|
 | Shared chat UI | Both hosts use the same browser-side chat implementation. | **Implemented** |
-| Text selection | Application controls, status labels, metadata, and message action buttons are excluded from text selection; user and assistant message bodies remain selectable. | **Implemented** |
+| Text selection | Application controls, status labels, composer placeholder, and message action buttons are excluded from text selection. User-entered prompt text, message bodies, author/timestamp/provider/model attribution, and generation statistics remain selectable. | **Implemented** |
 | Themes | System, Light, and Dark chat themes are available. | **Implemented** |
 | Streaming rendering | Streaming updates patch only the active message and are throttled to at most one Markdown render every 90 ms; a final render runs when generation ends. | **Implemented** |
 | Thinking disclosure | Thinking content can be expanded/collapsed while a response is streaming. | **Implemented** |
