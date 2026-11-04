@@ -1,13 +1,19 @@
-# Build and setup — RunMind 1.6.10
+# Build and setup — RunMind 1.6.12
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
 ## Requirements
 
-- Windows 11 or a supported Windows 10 build with the Windows SDK targeting pack.
-- .NET 10 SDK.
+- Windows 11 x64, build 22621 or later, with the matching Windows SDK targeting pack.
+- .NET 10 SDK. Both projects target `net10.0-windows10.0.22621.0`, matching the current PowerToys plugin checklist.
+
+### PowerToys plugin linting
+
+`Community.PowerToys.Run.Plugin.Lint` 0.6.0 still reports a `net9.0` target-framework rule. That rule is stale: the current Microsoft PowerToys plugin checklist specifies `net10.0-windows10.0.22621.0`. Keep RunMind on .NET 10 rather than downgrading to satisfy the older linter rule.
+
+The linter's `Repository missing` result also requires a published GitHub repository and matching plugin metadata. RunMind's current Git remote is a private/local Gogs endpoint, so no public GitHub repository URL is claimed in this source package.
 - WebView2 Runtime installation is managed by RunMind. At startup, both hosts perform a quick availability check. If the Evergreen Runtime is missing, RunMind downloads Microsoft's official bootstrapper and silently installs it per-user. Only that first launch needs internet access and may take longer; normal launches use the existing shared runtime. See [Microsoft's WebView2 distribution guidance](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution).
-- For the PowerToys plugin build, matching PowerToys reference assemblies under `lib\x64`: `PowerToys.Common.UI.dll`, `PowerToys.ManagedCommon.dll`, `PowerToys.Settings.UI.Lib.dll`, `Wox.Infrastructure.dll`, and `Wox.Plugin.dll`. They are not included in this source archive.
+- For the PowerToys plugin build, matching PowerToys reference assemblies are included under `lib\x64`: `PowerToys.Common.UI.dll`, `PowerToys.ManagedCommon.dll`, `PowerToys.Settings.UI.Lib.dll`, `Wox.Infrastructure.dll`, and `Wox.Plugin.dll`. Replace them with assemblies from your installed PowerToys build if you need to target a different PowerToys version.
 - Ollama or an OpenAI-compatible model server reachable from the host/browser.
 
 ## Build
@@ -27,7 +33,7 @@ dotnet build .\RunMind.Standalone\RunMind.Standalone.csproj -c Release -p:Platfo
 
 Run `RunMind.exe` directly from the standalone build output. Every launch creates a separate process and chat window. Multiple standalone windows can run simultaneously; each receives a unique window instance ID. The native title bar follows the Windows app light/dark appearance preference and updates when that preference changes.
 
-The PowerToys project requires the matching `lib\x64` reference assemblies before it can build. After building it, deploy the **entire** plugin output directory, including `Community.PowerToys.Run.Plugin.RunMind.dll`, `plugin.json`, `ChatWindow.html`, `Images\`, `Assets\Brand\Icon.svg`, and the copied WebView2 dependencies. Restart PowerToys Run after replacing the plugin files.
+The PowerToys project requires the matching `lib\x64` reference assemblies before it can build. After building it, deploy the **entire** plugin output directory, including `Community.PowerToys.Run.Plugin.RunMind.dll`, `plugin.json`, `ChatWindow.html`, `Images\`, `Assets\Brand\Icon.svg`, `Assets\Brand\Icon.ico`, and the copied WebView2 dependencies. Restart PowerToys Run after replacing the plugin files.
 
 ## PowerToys Run behavior
 
@@ -48,7 +54,7 @@ The hosts deliberately have separate WebView2 user-data folders:
 - Standalone: `%LOCALAPPDATA%\LocalLLM\Standalone\WebView2`
 - PowerToys: `%LOCALAPPDATA%\Microsoft\PowerToys\LocalLLM\PowerToys\WebView2`
 
-This avoids both hosts trying to use the same WebView2 profile concurrently. The browser stores are separate, however: `localStorage` settings, Agent task history, Deep Research checkpoints, credentials, and IndexedDB workspace directory handles do **not** synchronize between standalone and PowerToys in this version. Ordinary chat transcripts are not automatically persisted; use Save conversation / Open conversation for explicit export and import. The JavaScript application is shared; the browser profile data is not.
+This avoids both hosts trying to use the same WebView2 profile concurrently. The browser stores are separate, however: `localStorage` settings, Agent task history, Deep Research checkpoints, credentials, and IndexedDB workspace directory handles do **not** synchronize between standalone and PowerToys in this version. Ordinary chat transcripts are not automatically persisted; use Save conversation / Open conversation to persist and reopen sessions. The JavaScript application is shared; the browser profile data is not.
 
 ## Cancellation behavior and boundary
 
@@ -62,7 +68,7 @@ The PowerToys `IDelayedExecutionPlugin` interface does not provide a `Cancellati
 
 ## Validation
 
-The source package includes a static validation report. JavaScript syntax, project metadata, XML/XAML structure, source-tree paths, and archive integrity can be checked without Windows. A successful .NET 10 build, live WebView2 initialization, PowerToys dispatcher behavior, provider requests, clipboard actions, and concurrent standalone launches / window-icon rendering must still be verified on Windows; this environment does not include the .NET SDK or a Windows WebView2 runtime.
+The source package includes `VALIDATION-REPORT.md` with the checks performed for this release. JavaScript syntax, project metadata, XML/XAML structure, source-tree paths, and archive integrity can be checked without Windows. A successful .NET 10 build, live WebView2 initialization, PowerToys dispatcher behavior, provider requests, clipboard actions, and concurrent standalone launches / window-icon rendering must still be verified on Windows; this environment does not include the .NET SDK or a Windows WebView2 runtime.
 
 ### Local model server CORS
 

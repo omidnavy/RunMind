@@ -5,7 +5,6 @@ RunMind brings local and OpenAI-compatible language models to **PowerToys Run** 
 
 ![Screenshot](screenshots/Screenshot-1.png)
 
-
 ## Features
 
 - Ollama, LM Studio, and additional OpenAI-compatible model servers.
@@ -18,7 +17,7 @@ RunMind brings local and OpenAI-compatible language models to **PowerToys Run** 
 
 ## Requirements
 
-- Windows x64. The current release does not include a Windows ARM64 build.
+- Windows 11 x64 (build 22621 or later). The current release does not include a Windows ARM64 build.
 - [Microsoft PowerToys](https://learn.microsoft.com/windows/powertoys/) for the PowerToys Run plugin.
 - .NET 10 Desktop Runtime (x64) for framework-dependent standalone builds.
 - [Ollama](https://ollama.com/) or another supported model server.
@@ -27,7 +26,7 @@ RunMind brings local and OpenAI-compatible language models to **PowerToys Run** 
 
 ## Build
 
-Run **`Build-Release-x64.bat`** from the repository root to build the x64 release with a single click. The build environment needs the .NET 10 SDK and the PowerToys reference assemblies under `lib\x64`:
+Run **`Build-Release-x64.bat`** from the repository root to build the x64 release with a single click. The build environment needs the .NET 10 SDK. The PowerToys reference assemblies are included under `lib\x64`:
 
 - `PowerToys.Common.UI.dll`
 - `PowerToys.ManagedCommon.dll`
@@ -77,10 +76,11 @@ Standalone and PowerToys use separate WebView2 profiles, so their settings, cred
 
 - [Build and setup details](BUILD-AND-SETUP.md)
 - [Feature matrix](FEATURE-MATRIX.md)
-- [Implementation notes](IMPLEMENTATION-NOTES.md)
+- [Static validation report](VALIDATION-REPORT.md)
 - [Changelog](CHANGELOG.md)
 - [Roadmap](ROADMAP.md)
 
+---
 
 ![Screenshot](screenshots/Screenshot-3.png)
 ![Screenshot](screenshots/Screenshot-2.png)

@@ -53,33 +53,42 @@ internal static class WebView2RuntimeBootstrapper
             if (!IsWindowsExecutable(installerPath))
                 await DownloadBootstrapperAsync(installerPath).ConfigureAwait(false);
 
-            using var process = Process.Start(new ProcessStartInfo
+            try
             {
-                FileName = installerPath,
-                Arguments = "/silent /install",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = installFolder,
-            }) ?? throw new InvalidOperationException("Microsoft's WebView2 installer could not be started.");
-
-            await process.WaitForExitAsync().ConfigureAwait(false);
-            var installed = false;
-            for (var attempt = 0; attempt < 20; attempt++)
-            {
-                if (IsRuntimeAvailable())
+                using var process = Process.Start(new ProcessStartInfo
                 {
-                    installed = true;
-                    break;
-                }
-                await Task.Delay(500).ConfigureAwait(false);
-            }
+                    FileName = installerPath,
+                    Arguments = "/silent /install",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = installFolder,
+                }) ?? throw new InvalidOperationException("Microsoft's WebView2 installer could not be started.");
 
-            if (!installed)
+                await process.WaitForExitAsync().ConfigureAwait(false);
+                var installed = false;
+                for (var attempt = 0; attempt < 20; attempt++)
+                {
+                    if (IsRuntimeAvailable())
+                    {
+                        installed = true;
+                        break;
+                    }
+                    await Task.Delay(500).ConfigureAwait(false);
+                }
+
+                if (!installed)
+                {
+                    throw new InvalidOperationException(
+                        "The Microsoft Edge WebView2 Runtime could not be installed. "
+                        + $"The installer exited with code {process.ExitCode}. "
+                        + "Check your internet connection and Windows installation permissions, then restart RunMind.");
+                }
+            }
+            catch
             {
-                throw new InvalidOperationException(
-                    "The Microsoft Edge WebView2 Runtime could not be installed. "
-                    + $"The installer exited with code {process.ExitCode}. "
-                    + "Check your internet connection and Windows installation permissions, then restart RunMind.");
+                // A broken/cancelled installer must not be reused forever on the next launch.
+                if (!IsRuntimeAvailable()) TryDelete(installerPath);
+                throw;
             }
         }
         finally
@@ -117,6 +126,11 @@ internal static class WebView2RuntimeBootstrapper
                 await Task.Delay(300).ConfigureAwait(false);
             }
         }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
     }
 
     private static bool IsWindowsExecutable(string path)

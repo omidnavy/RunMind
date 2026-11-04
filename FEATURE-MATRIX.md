@@ -1,22 +1,25 @@
-# Feature matrix — 1.6.10 update
+# Feature matrix — 1.6.12 update
 
-| Area | 1.6.10 behavior | Status / boundary |
+| Area | 1.6.12 behavior | Status / boundary |
 |---|---|---|
+| Target framework | Standalone and PowerToys projects target `net10.0-windows10.0.22621.0` | Kept aligned with the current official PowerToys plugin checklist; do not downgrade for the stale net9 linter rule |
 | Project identity | `RunMind.Standalone`, `Community.PowerToys.Run.Plugin.RunMind`, `RunMind.sln`, `RunMind.exe` | Renamed; compatibility-sensitive settings and profile paths retained |
 | PowerToys global search | Immediate `Ask RunMind`; provider discovery and generation execute asynchronously; completed results are requested only after the worker finishes | Implemented in source; verify competing plugin responsiveness on Windows |
 | `llm` keyword | `llm + prompt` uses the same two-stage flow; `llm` alone returns no result | Implemented in source |
 | Standalone launch | Normal app search by `RunMind`; every launch opens an independent process/window | Implemented in source; Windows validation pending |
 | Standalone title bar | Native Windows title bar follows the Windows app light/dark preference and responds to theme-change broadcasts | Implemented in source; Windows visual validation pending |
 | Conversation titles | New chats use the shared title generator; opening a saved file uses its filename; Save As pre-fills the suggested filename and synchronizes the in-app/native title with the chosen filename | Implemented in source; Windows/provider validation pending; selected Save As filename is returned by the native host |
-| Native Save As | Both desktop hosts show the Windows Save As dialog with the generated title pre-filled and `.runmind` as the default extension | Implemented in shared host code; Windows dialog testing pending; browser-only page preview falls back to download |
-| Conversation files | `.runmind` JSON format only; files with other formats/extensions are rejected | Implemented in source |
+| Native Save As | Both desktop hosts show the Windows Save As dialog with the generated title pre-filled and `.runmind` as the default extension; writes use a temporary file before atomic replacement | Implemented in shared host code; Windows dialog testing pending; browser-only page preview falls back to download |
+| Conversation files | `.runmind` JSON format only; files with other formats/extensions and empty sessions are rejected | Enforced by the file picker, page validation, and both native new-window bridges |
 | WebView2 runtime | Both hosts detect the Evergreen Runtime and silently install Microsoft's bootstrapper per-user when absent | Implemented in source; download/install needs Windows validation and internet only on machines missing the runtime |
 | Open saved conversation | Choose **Open in this window** to replace the current chat or **Open in new window** to preserve it and create an independent window | Implemented in source; Windows runtime testing pending |
 | WebView2 message bridge | Two bounded, origin-checked operations handle native Save As and open a validated saved conversation in a new window; host objects remain disabled | Implemented in source |
 | Cancellation | New fast query, hand-off, setting change and plugin disposal cancel linked HTTP work; stale delayed callbacks/results are suppressed | Implemented in source; PowerToys close/Escape lifecycle events are unavailable to the plugin |
 | WebView2 profiles | PowerToys and standalone use separate user-data folders | Implemented; browser-local settings and IndexedDB are intentionally not synchronized |
 | Branding | Supplied ICO/PNG/SVG assets integrated into standalone and PowerToys surfaces | Implemented in source |
-| Existing chat features | Shared `ChatWindow.html` retained | Existing 1.5.1 functionality preserved in source; not re-audited feature-by-feature in this change |
+| Conversation menu | The toolbar entry is labeled **Conversations** and separates resumable Save/Open actions from one-way transcript exports | Implemented in source |
+| HTML transcript export | Live-app-only message actions are omitted from exported standalone HTML; code-copy buttons remain functional | Implemented in source |
+| Existing chat features | Shared `ChatWindow.html` retained | Static JavaScript/DOM checks and targeted conversation-flow review performed; full model/Agent/Deep Research/MCP integration still requires Windows testing |
 
 
 ---

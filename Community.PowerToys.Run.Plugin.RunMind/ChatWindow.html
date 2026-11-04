@@ -103,19 +103,19 @@
     .theme-button:hover { color: var(--color-text); background: var(--color-surface-hover); }
     .theme-button[aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-hover); box-shadow: inset 0 0 0 1px var(--color-border); }
     .theme-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .export-menu { position: relative; }
-    .export-trigger { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); font-size: 12px; font-weight: 600; list-style: none; cursor: pointer; }
-    .export-trigger::-webkit-details-marker { display: none; }
-    .export-trigger:hover, .export-menu[open] .export-trigger { background: var(--color-surface-hover); }
-    .export-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .export-panel { position: absolute; z-index: 20; top: calc(100% + 9px); right: 0; width: min(310px, calc(100vw - 28px)); padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
-    .export-panel-title { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
-    .export-panel-note { margin: 0 0 12px; color: var(--color-muted); font-size: 11px; }
-    .export-panel select { display: block; width: 100%; margin-bottom: 10px; }
+    .conversation-menu { position: relative; }
+    .conversation-trigger { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); font-size: 12px; font-weight: 600; list-style: none; cursor: pointer; }
+    .conversation-trigger::-webkit-details-marker { display: none; }
+    .conversation-trigger:hover, .conversation-menu[open] .conversation-trigger { background: var(--color-surface-hover); }
+    .conversation-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .conversation-panel { position: absolute; z-index: 20; top: calc(100% + 9px); right: 0; width: min(310px, calc(100vw - 28px)); padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
+    .conversation-panel-title { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
+    .conversation-panel-note { margin: 0 0 12px; color: var(--color-muted); font-size: 11px; }
+    .conversation-panel select { display: block; width: 100%; margin-bottom: 10px; }
     .session-file-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 12px; }
     .session-file-actions .button { width: 100%; padding-inline: 8px; font-size: 11px; }
     .session-file-divider { border-top: 1px solid var(--color-border); margin: 0 0 12px; }
-    .export-panel .button { width: 100%; }
+    .conversation-panel .button { width: 100%; }
     .toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 9px; margin-top: 13px; }
     .field { min-width: 0; display: flex; flex: 1 1 220px; flex-direction: column; gap: 4px; }
     .field label, .field-label { color: var(--color-muted); font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
@@ -373,8 +373,8 @@
       .composer { padding: 10px 11px 12px; }
       .top-line { align-items: flex-start; }
       .top-actions { gap: 6px; }
-      .export-trigger .export-trigger-label { display: none; }
-      .export-trigger { width: 38px; padding: 0; justify-content: center; }
+      .conversation-trigger .conversation-trigger-label { display: none; }
+      .conversation-trigger { width: 38px; padding: 0; justify-content: center; }
       .attachment-chip .attachment-name { max-width: 155px; }
     }
     @media print {
@@ -399,7 +399,7 @@
           <span class="brand-mark" role="img" aria-label="RunMind"></span>
           <div class="brand">
           <h1 id="conversationTitle">RunMind Chat</h1>
-          <p>Private in-memory session · closing this window ends the session unless exported</p>
+          <p>Private in-memory session · save a .runmind file to keep it</p>
           </div>
         </div>
         <div class="top-actions">
@@ -414,20 +414,22 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.7 8.7 0 1 0 20.5 14.2Z"/></svg>
             </button>
           </div>
-          <details class="export-menu" id="exportMenu">
-            <summary class="export-trigger" aria-label="Export conversation" title="Export conversation">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 17v3h16v-3"/></svg><span class="export-trigger-label">Export</span>
+          <details class="conversation-menu" id="conversationMenu">
+            <summary class="conversation-trigger" aria-label="Conversations" title="Save, open, or export conversations">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5H11l-4.5 3v-3.1A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z"/><path d="M8 9h8M8 12h5"/></svg><span class="conversation-trigger-label">Conversations</span>
             </summary>
-            <div class="export-panel">
-              <p class="export-panel-title">Export conversation</p>
-              <p class="export-panel-note">Save a resumable session, open one, or export a readable copy.</p>
+            <div class="conversation-panel">
+              <p class="conversation-panel-title">Saved conversations</p>
+              <p class="conversation-panel-note">Save this chat as a resumable .runmind file, or open a conversation you saved earlier.</p>
               <div class="session-file-actions"><button type="button" class="button" id="saveSessionButton">Save conversation</button><button type="button" class="button" id="openSessionButton">Open conversation</button><input id="sessionFileInput" type="file" accept=".runmind" hidden></div>
               <div class="session-file-divider"></div>
+              <p class="conversation-panel-title">Export a copy</p>
+              <p class="conversation-panel-note">Create a readable transcript or a file for another chat tool.</p>
               <select id="exportFormat" aria-label="Export format">
-                <option value="">Choose a format…</option>
+                <option value="">Choose an export format…</option>
                 <option value="html">Standalone HTML</option>
                 <option value="openwebui">Open WebUI import JSON</option>
-                <option value="portable">Portable conversation JSON</option>
+                <option value="portable">Portable conversation JSON (export only)</option>
                 <option value="openai">OpenAI-compatible request JSON</option>
                 <option value="markdown">Markdown (.md)</option>
                 <option value="csv">CSV (UTF-8 with BOM)</option>
@@ -435,7 +437,7 @@
                 <option value="jsonl">JSONL (.jsonl)</option>
                 <option value="print">Print / Save as PDF</option>
               </select>
-              <button type="button" class="button primary" id="exportButton">Export file</button>
+              <button type="button" class="button primary" id="exportButton">Export copy</button>
             </div>
           </details>
         </div>
@@ -1156,7 +1158,7 @@
       const d = new Date(value || Date.now());
       return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
     }
-    function renderMessageMarkup(message, index) {
+    function renderMessageMarkup(message, index, includeActions = true) {
       const role = message.role === 'user' ? 'user' : 'assistant';
       const label = role === 'user' ? 'You' : 'Assistant';
       const provider = message.provider ? ` · ${message.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'}` : '';
@@ -1178,9 +1180,9 @@
       const latestEditableUserIndex = messages.reduce((latest, item, i) => item.role === 'user' && !item.isContinuation ? i : latest, -1);
       const hasCompletedContent = role === 'assistant' && !message.pending && String(message.content || '').trim().length > 0;
       let actions = '';
-      if (hasCompletedContent) {
+      if (includeActions && hasCompletedContent) {
         actions = `<div class="message-actions"><button type="button" class="message-action" data-message-action="copy" data-index="${index}" title="Copy response"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Copy</button>${index === latestAssistantIndex ? `<button type="button" class="message-action" data-message-action="regenerate" data-index="${index}" title="Regenerate using the currently selected model"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9a7 7 0 0 1 11.8-2L20 12M4 12l2.6 5a7 7 0 0 0 11.8-2"/></svg>Regenerate</button><button type="button" class="message-action" data-message-action="continue" data-index="${index}" title="Continue generating"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16l14-8Z"/></svg>Continue</button>` : ''}</div>`;
-      } else if (role === 'user' && index === latestEditableUserIndex && editingMessageIndex === null && !activeController && !messages.some(item => item.pending)) {
+      } else if (includeActions && role === 'user' && index === latestEditableUserIndex && editingMessageIndex === null && !activeController && !messages.some(item => item.pending)) {
         actions = `<div class="message-actions user-actions"><button type="button" class="message-action" data-message-action="edit" data-index="${index}" title="Edit and resubmit this prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>Edit prompt</button></div>`;
       }
       const metricMarkup = renderMetricMarkup(message);
@@ -2852,7 +2854,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.10' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.12' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -2872,7 +2874,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.10' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.12' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;
@@ -4895,7 +4897,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
             fileName: `${suggestedTitle}.runmind`,
             conversation: payload,
           });
-          $('#exportMenu').open = false;
+          $('#conversationMenu').open = false;
           return;
         } catch (error) {
           pendingNativeSaveRequests.delete(requestId);
@@ -4908,7 +4910,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       payload.title = suggestedTitle;
       setConversationTitle(suggestedTitle);
       downloadFile(`${suggestedTitle}.runmind`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
-      $('#exportMenu').open = false;
+      $('#conversationMenu').open = false;
       showToast(`Conversation downloaded as ${suggestedTitle}.runmind.`);
     }
     function conversationFileTitle(fileName) {
@@ -4927,7 +4929,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('The selected file is not a conversation object.');
       if (data.format !== 'runmind') throw new Error('This is not a RunMind `.runmind` conversation file.');
       if (Number(data.version) !== 1) throw new Error(`Unsupported conversation format version: ${String(data.version)}.`);
-      if (!Array.isArray(data.messages) || data.messages.length > 10000) throw new Error('The file has an invalid or excessively large message list.');
+      if (!Array.isArray(data.messages) || data.messages.length < 1 || data.messages.length > 10000) throw new Error('The file must contain between 1 and 10,000 messages.');
       const clean = data.messages.map((message, index) => {
         if (!message || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') throw new Error(`Message ${index + 1} is invalid.`);
         if (Array.isArray(message.attachments) && message.attachments.length > ATTACHMENT_LIMITS.maxFilesPerMessage) throw new Error(`Message ${index + 1} exceeds the ${ATTACHMENT_LIMITS.maxFilesPerMessage}-attachment limit.`);
@@ -5015,7 +5017,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       autoResizePrompt();
       savePreferences();
       void updateSelectedModelInfo();
-      $('#exportMenu').open = false;
+      $('#conversationMenu').open = false;
       showToast(modelUnavailable ? `Conversation opened; model “${savedModel}” is unavailable. Choose a model to continue.` : `Opened “${filenameSafe(selectedTitle)}”.`);
     }
     function openSessionInNewWindow(data, fileName) {
@@ -5031,13 +5033,14 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     }
     async function openSessionFile(file, options = {}) {
       if (!file) return;
+      const fileName = String(file.name || '');
+      if (!/\.runmind$/i.test(fileName)) { showToast('Choose a RunMind conversation file with the .runmind extension.'); return; }
       if (file.size > 50 * 1024 * 1024) { showToast('Conversation files must be 50 MB or smaller.'); return; }
       if (activeController || messages.some(message => message.pending)) { showToast('Stop the current response before opening another conversation.'); return; }
       try {
         const parsed = JSON.parse(await file.text());
         const { data, messages: restored } = validateSessionFile(parsed);
         if (!restored.length) throw new Error('This conversation contains no messages.');
-        const fileName = String(file.name || 'Conversation.runmind');
         const destination = options.destination || await requestOpenSessionDestination(fileName);
         if (!destination) return;
         if (destination === 'new') {
@@ -5108,7 +5111,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       @media print{body{padding:0;background:#fff;color:#111}.message,.message.user{background:#fff;color:#111;break-inside:avoid;box-shadow:none}.message-content pre{white-space:pre-wrap;overflow:visible}.message-content pre code{white-space:pre-wrap}.message-thinking:not([open])>.thinking-body{display:block!important}.copy-code{display:none}}
     `;
     function standaloneHtmlExport() {
-      const body = allMessages().map(renderMessageMarkup).join('\n');
+      const body = allMessages().map((message, index) => renderMessageMarkup(message, index, false)).join('\n');
       const title = escapeHtml(conversationTitle());
       const copyHelper = `(function(){document.querySelectorAll('pre').forEach(function(pre){var b=document.createElement('button');b.type='button';b.className='copy-code';b.textContent='Copy code';b.addEventListener('click',function(){var c=pre.querySelector('code');var t=(c||pre).textContent||'';var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();b.textContent=ok?'Copied':'Copy failed';setTimeout(function(){b.textContent='Copy code'},1400)});pre.appendChild(b)})})();`;
       return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${standaloneCss}</style></head><body><main><h1 class="export-title">${title}</h1><div class="export-note">Standalone transcript export · no provider connection or plugin bridge</div>${body}</main><script>${copyHelper}<\/script></body></html>`;
@@ -5219,13 +5222,13 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     exportFormat.addEventListener('change', () => { if (exportFormat.value === 'print') { exportConversation(); exportFormat.value = ''; } });
     $('#exportButton').addEventListener('click', () => {
       exportConversation();
-      if (exportFormat.value && exportFormat.value !== 'print') $('#exportMenu').open = false;
+      if (exportFormat.value && exportFormat.value !== 'print') $('#conversationMenu').open = false;
     });
     $('#saveSessionButton').addEventListener('click', saveSessionFile);
     $('#openSessionButton').addEventListener('click', () => sessionFileInput.click());
     sessionFileInput.addEventListener('change', () => { void openSessionFile(sessionFileInput.files?.[0]); });
     document.addEventListener('click', event => {
-      for (const menu of [$('#exportMenu'), generationSettingsMenu, $('#contextManagerMenu'), modelInfoMenu, agentSettingsMenu, mcpSettingsMenu]) {
+      for (const menu of [$('#conversationMenu'), generationSettingsMenu, $('#contextManagerMenu'), modelInfoMenu, agentSettingsMenu, mcpSettingsMenu]) {
         if (menu.open && !menu.contains(event.target)) menu.open = false;
       }
     });
@@ -5236,7 +5239,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       if (!agentFolderAccessRequest.hidden) { agentFolderAccessCancel.click(); return; }
       if (!attachmentWarningModal.hidden) { finishAttachmentConfirmation(false); return; }
       if (editingMessageIndex !== null) cancelEditing();
-      $('#exportMenu').open = false; generationSettingsMenu.open = false; $('#contextManagerMenu').open = false; modelInfoMenu.open = false; agentSettingsMenu.open = false; mcpSettingsMenu.open = false; $('#agentHistoryMenu').open = false; $('#modelConnectionsMenu').open = false;
+      $('#conversationMenu').open = false; generationSettingsMenu.open = false; $('#contextManagerMenu').open = false; modelInfoMenu.open = false; agentSettingsMenu.open = false; mcpSettingsMenu.open = false; $('#agentHistoryMenu').open = false; $('#modelConnectionsMenu').open = false;
     });
 
     deepResearchButton.addEventListener('click', () => setDeepResearchMode(!deepResearchEnabled));

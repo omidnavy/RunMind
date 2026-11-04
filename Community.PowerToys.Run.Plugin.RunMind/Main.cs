@@ -873,8 +873,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     public Control CreateSettingPanel()
     {
-        // All settings are supplied through AdditionalOptions; a custom WPF panel is not used.
-        throw new NotImplementedException("RunMind uses PowerToys Run's AdditionalOptions settings UI.");
+        // RunMind exposes its settings through PowerToys AdditionalOptions.
+        // This legacy custom-panel path is intentionally not implemented.
+        throw new NotImplementedException("RunMind settings are supplied through PowerToys AdditionalOptions.");
     }
 
     private void OnThemeChanged(Theme currentTheme, Theme newTheme) => UpdateIconPath(newTheme);
@@ -1238,6 +1239,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 : "Conversation.runmind";
             if (string.IsNullOrWhiteSpace(fileName)) fileName = "Conversation.runmind";
             if (fileName.Length > 255) fileName = fileName[..255];
+            if (!fileName.EndsWith(".runmind", StringComparison.OrdinalIgnoreCase)) return;
 
             var conversationJson = conversation.GetRawText();
             DispatchToUi(

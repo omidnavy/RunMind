@@ -240,6 +240,7 @@ public partial class MainWindow : Window
                 : "Conversation.runmind";
             if (string.IsNullOrWhiteSpace(fileName)) fileName = "Conversation.runmind";
             if (fileName.Length > 255) fileName = fileName[..255];
+            if (!fileName.EndsWith(".runmind", StringComparison.OrdinalIgnoreCase)) return;
 
             var child = new MainWindow(conversation.GetRawText(), fileName);
             child.Show();

@@ -118,7 +118,18 @@ internal static class ConversationSaveDialog
                 savedDocument["updatedAt"] = DateTimeOffset.UtcNow.ToString("O");
 
                 var serialized = savedDocument.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(targetPath, serialized, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                var temporaryPath = targetPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    File.WriteAllText(temporaryPath, serialized, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                    // Write beside the destination, then atomically replace it. A failed write
+                    // cannot leave a previously saved conversation truncated.
+                    File.Move(temporaryPath, targetPath, overwrite: true);
+                }
+                finally
+                {
+                    try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); } catch { }
+                }
 
                 PostResult(webView, requestId, cancelled: false, success: true, Path.GetFileName(targetPath), error: null);
             }
@@ -151,7 +162,7 @@ internal static class ConversationSaveDialog
             return false;
         return conversation.TryGetProperty("messages", out var messages)
             && messages.ValueKind == JsonValueKind.Array
-            && messages.GetArrayLength() <= 10000;
+            && messages.GetArrayLength() is > 0 and <= 10000;
     }
 
     private static string MakeSafeFileName(string value)
