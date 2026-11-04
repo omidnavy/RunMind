@@ -10,7 +10,7 @@
     <Product>RunMind</Product>
     <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
     <RootNamespace>RunMind.Standalone</RootNamespace>
-    <Version>1.7.1</Version>
+    <Version>1.7.2</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
@@ -22,5 +22,7 @@
     <Resource Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" />
     <Content Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\Assets\Brand\Icon.svg" Link="Assets\Brand\Icon.svg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Vendor\**\*.*" Link="Vendor\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\OCR\tessdata\**\*.*" Link="OCR\tessdata\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -1,13 +1,13 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. All unchecked items remain in scope; there are no priority levels or implementation phases. Implemented items are recorded in `FEATURE-MATRIX.md` for 1.7.1.
+This file preserves the full feature wishlist discussed for RunMind. All unchecked items remain in scope; there are no priority levels or implementation phases. Implemented items are recorded in `FEATURE-MATRIX.md` for 1.7.2.
 
 ## Core agent completeness
 
 - [x] JSON Schema validation (`validate_json_schema`; bounded keyword coverage and local `$ref`, with unsupported advanced keywords reported as warnings)
 - [x] Regex tester (`regex_test`) with execution-safety constraints (isolated worker, hard timeout, and bounded inputs)
 - [x] Attachment-aware Agent file tools for text/JSON, PDF, and ZIP files; PDF/ZIP uploads are signature-checked and bounded
-- [x] PDF text extraction (`read_pdf`; workspace and attached PDFs, best-effort selectable text, no OCR or encrypted/object-stream PDF support)
+- [x] PDF text extraction and OCR (`read_pdf`; PDF.js extraction plus per-page Tesseract fallback, English/Persian bundled and optional cached language packs; encrypted PDFs remain unsupported)
 - [x] Image understanding from workspace files (`read_image`; requires a vision-capable model)
 - [ ] More complete connection diagnostics and error classification (`diagnose_connection` now checks model discovery and classifies common failures; endpoint-specific and generation diagnostics remain)
 - [ ] Retry/recovery controls and idempotency-aware tool replays

@@ -8,7 +8,7 @@
 	<UseWindowsForms>true</UseWindowsForms>
 	<RootNamespace>Community.PowerToys.Run.Plugin.RunMind</RootNamespace>
 	<AssemblyName>Community.PowerToys.Run.Plugin.RunMind</AssemblyName>
-	<Version>1.7.1</Version>
+	<Version>1.7.2</Version>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
@@ -51,6 +51,14 @@
     <Content Include="..\Assets\Brand\Icon.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>Assets\Brand\Icon.ico</Link>
+    </Content>
+    <Content Include="..\Vendor\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Vendor\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
+    <Content Include="..\OCR\tessdata\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>OCR\tessdata\%(Filename)%(Extension)</Link>
     </Content>
   </ItemGroup>
   <ItemGroup>

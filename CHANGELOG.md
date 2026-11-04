@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.7.2] — PDF.js and offline multilingual OCR
+
+### Added
+- Replaced the hand-written PDF stream/text scanner with PDF.js for page-aware text extraction, standard font resources, and CMap support.
+- Added automatic per-page OCR fallback using Tesseract.js when extracted text is absent or fails basic text-quality checks. The `read_pdf` tool preserves page order and reports which pages used PDF.js or OCR, selected OCR languages, and pages with low or unavailable confidence.
+- Added the **PDF OCR languages** toolbar menu. English (`eng`) and Persian (`fas`, locale `fa_IR`) are the initial bundled language choices; users can select multiple languages for a document.
+- Added individually downloadable offline language packs for French, Spanish, Arabic, Simplified/Traditional Chinese, Russian, Finnish, German, Italian, Portuguese, Japanese, Korean, Turkish, and Urdu. Successfully downloaded packs are cached in the current WebView2 profile.
+- Added `Prepare-RunMind-OCR.ps1` to retrieve pinned PDF.js `6.5.438`, Tesseract.js `7.0.0`, matching `tesseract.js-core` `7.0.0`, and the English/Persian `tessdata_fast` files on first build. The build script skips downloads after the required local resources are present.
+
+### Changed
+- Updated the Agent tool description and system guidance to describe automatic OCR fallback and report OCR confidence limitations rather than claiming PDF OCR is unsupported.
+- Updated both desktop project files to copy local PDF.js, Tesseract.js, core, and language model resources into their build outputs.
+- Synchronized standalone, PowerToys plugin, and plugin manifest version metadata to `1.7.2`.
+
+### Limitations
+- OCR runs only on pages whose extracted text is missing or suspicious; language identification is not automatic. Select the expected language(s) in the OCR menu before reading a mixed-language or non-English scan.
+- The first build needs internet access to download pinned third-party runtimes and English/Persian traineddata. After preparation, app runtime and later builds can work offline. Optional language packs are downloaded on demand and cached separately in the PowerToys and standalone WebView2 profiles.
+- Encrypted PDFs are not supported. Handwriting, low-resolution scans, unusual scripts/fonts, tables, columns, and reading order can still produce OCR errors. Review low-confidence pages against the original.
+- PDF input is limited to 25 MB and 500 pages; extracted text is capped at 90,000 characters per tool result. PDF rendering is bounded to 12 million pixels per page for OCR.
+
+### Validation
+- JavaScript syntax, project XML, plugin JSON, build-script structure, and overlay archive integrity are checked in this environment. The PowerShell bootstrap cannot be executed here because this environment has no Windows PowerShell/tar.exe and outbound package downloads are unavailable.
+- A Windows/.NET 10 build, PDF.js worker/CMap loading, real English/Persian PDF corpus, scanned-page OCR, optional language download/cache, and WebView2 end-to-end tests still need to be run on Windows.
+
 ## [1.7.1] — Conversation attachment support for Agent file tools
 
 ### Fixed
