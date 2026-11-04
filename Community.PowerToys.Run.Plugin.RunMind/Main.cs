@@ -21,9 +21,10 @@ using Microsoft.PowerToys.Settings.UI.Library;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using Wox.Plugin;
+using RunMind.Shared;
 using Clipboard = System.Windows.Clipboard;
 
-namespace Community.PowerToys.Run.Plugin.LocalLLM;
+namespace Community.PowerToys.Run.Plugin.RunMind;
 
 /// <summary>
 /// PowerToys Run plugin that sends the user's exact query to the selected local LLM provider.
@@ -235,20 +236,19 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             return new List<Result>();
         }
 
-        var operation = BeginQuery(search, model, prompt, settings);
+        var operation = BeginQuery(search, query.RawQuery ?? search, model, prompt, settings);
         return operation is null
             ? new List<Result>()
             : new List<Result> { CreatePendingResult(operation) };
     }
 
-    // The delayed path runs after PowerToys' input throttle. The returned result is a
-    // completed, copyable answer. Every provider HTTP call uses the operation token.
+    // PowerToys invokes this synchronous interface from its search pipeline. Never wait
+    // for model I/O here: start the work in the background and let other plugins continue.
+    // When the response is ready, ChangeQuery asks PowerToys to collect the completed result.
     public List<Result> Query(Query query, bool delayedExecution)
     {
         if (!delayedExecution || query is null)
-        {
             return new List<Result>();
-        }
 
         var search = (query.Search ?? string.Empty).Trim();
         if (search.Length == 0)
@@ -257,93 +257,125 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             return new List<Result>();
         }
 
-        // Resolve the immutable snapshot created by the fast query. If this plugin is
-        // invoked through delayed execution only, create the same snapshot here.
         var currentSettings = GetSettingsSnapshot();
         var (currentModel, currentPrompt) = ParseModelAndPrompt(search, currentSettings.DefaultModel);
         if (string.IsNullOrWhiteSpace(currentPrompt)) return new List<Result>();
-        var operation = GetOrBeginQuery(search, currentModel, currentPrompt, currentSettings);
-        if (operation is null || !operation.TryStart()) return new List<Result>();
 
-        var settings = operation.Settings;
-        var model = operation.Model;
-        var prompt = operation.Prompt;
+        var operation = GetOrBeginQuery(search, query.RawQuery ?? search, currentModel, currentPrompt, currentSettings);
+        if (operation is null) return new List<Result>();
 
+        if (operation.TryGetCompletion(out var completedResponse, out var isError))
+            return IsCurrentQuery(operation)
+                ? new List<Result> { CreateResponseResult(operation.Model, completedResponse, isError, operation.Prompt, operation.Settings) }
+                : new List<Result>();
+
+        if (operation.TryStart())
+        {
+            // Task.Run ensures even synchronous cache/continuation work cannot execute on
+            // PowerToys' search dispatcher. The provider methods themselves remain async.
+            _ = Task.Run(() => ExecuteQueryAsync(operation));
+        }
+
+        // The fast Query() call already supplied the pending result in the normal flow.
+        // Delayed queries returning no results preserve that item while generation runs.
+        // Keep a pending result for hosts that invoke only the delayed interface.
+        return HasFastQueryResult(search)
+            ? new List<Result>()
+            : new List<Result> { CreatePendingResult(operation) };
+    }
+
+    private async Task ExecuteQueryAsync(QueryOperation operation)
+    {
         try
         {
             var cancellationToken = operation.Token;
             cancellationToken.ThrowIfCancellationRequested();
 
-            var models = FetchModelsFromEndpointAsync(settings, cancellationToken).GetAwaiter().GetResult();
+            var models = await FetchModelsFromEndpointAsync(operation.Settings, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            if (!IsCurrentQuery(operation))
-            {
-                return new List<Result>();
-            }
+            if (!IsCurrentQuery(operation)) return;
 
-            if (!models.Contains(model, StringComparer.OrdinalIgnoreCase))
+            if (!models.Contains(operation.Model, StringComparer.OrdinalIgnoreCase))
             {
                 var available = models.Count == 0
-                    ? $"{GetProviderName(settings)} returned an empty model list."
+                    ? $"{GetProviderName(operation.Settings)} returned an empty model list."
                     : $"Available models: {string.Join(", ", models)}";
-                var error = $"Model '{model}' was not found. {available}";
-                operation.SetCompletion(error, isError: true);
-                return IsCurrentQuery(operation)
-                    ? new List<Result> { CreateResponseResult(model, error, isError: true, prompt, settings) }
-                    : new List<Result>();
+                operation.SetCompletion($"Model '{operation.Model}' was not found. {available}", isError: true);
             }
-
-            var response = QueryLLMStreamAsync(prompt, model, settings, cancellationToken).GetAwaiter().GetResult();
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!IsCurrentQuery(operation))
+            else
             {
-                return new List<Result>();
-            }
+                var response = await QueryLLMStreamAsync(
+                    operation.Prompt,
+                    operation.Model,
+                    operation.Settings,
+                    cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!IsCurrentQuery(operation)) return;
 
-            if (string.IsNullOrWhiteSpace(response))
-            {
-                response = "The model completed the request but returned no text.";
-            }
+                if (string.IsNullOrWhiteSpace(response))
+                    response = "The model completed the request but returned no text.";
 
-            operation.SetCompletion(response, isError: false);
-            return IsCurrentQuery(operation)
-                ? new List<Result> { CreateResponseResult(model, response, isError: false, prompt, settings) }
-                : new List<Result>();
+                operation.SetCompletion(response, isError: false);
+            }
         }
         catch (OperationCanceledException) when (operation.IsCancellationRequested)
         {
             // A newer query or an explicit hand-off to chat owns the user's intent now.
-            // Return no error result: stale/cancelled work must not reappear in PowerToys.
-            return new List<Result>();
+            // Do not publish stale results back into PowerToys.
         }
         catch (Exception ex)
         {
-            if (!IsCurrentQuery(operation) || operation.IsCancellationRequested)
-            {
-                return new List<Result>();
-            }
-
-            var error = $"Request failed: {GetUsefulExceptionMessage(ex)}";
-            operation.SetCompletion(error, isError: true);
-            return IsCurrentQuery(operation)
-                ? new List<Result> { CreateResponseResult(model, error, isError: true, prompt, settings) }
-                : new List<Result>();
+            if (IsCurrentQuery(operation) && !operation.IsCancellationRequested)
+                operation.SetCompletion($"Request failed: {GetUsefulExceptionMessage(ex)}", isError: true);
         }
         finally
         {
             operation.MarkFinished();
         }
+
+        if (!IsCurrentQuery(operation) || !operation.TryGetCompletion(out _, out _)) return;
+
+        try
+        {
+            // IPublicAPI dispatches this re-query to PowerToys' UI thread. We call it
+            // from this worker, never from the original synchronous Query callback.
+            _context?.API.ChangeQuery(operation.RequeryText, true);
+        }
+        catch
+        {
+            // PowerToys may be shutting down; the completed request remains harmless.
+        }
     }
 
-    private QueryOperation? BeginQuery(string search, string model, string prompt, SettingsSnapshot settings)
+    private bool HasFastQueryResult(string search)
+    {
+        lock (_queryLock)
+        {
+            return _hasReceivedFastQuery
+                && string.Equals(_latestFastQuery, search, StringComparison.Ordinal);
+        }
+    }
+
+    private QueryOperation? BeginQuery(string search, string requeryText, string model, string prompt, SettingsSnapshot settings)
     {
         QueryOperation? previous;
         QueryOperation operation;
         lock (_queryLock)
         {
             if (_disposed) return null;
+            if (_activeQuery is not null
+                && string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
+                && !_activeQuery.IsCancellationRequested
+                && !_activeQuery.WasHandedOff)
+            {
+                _activeQuery.UpdateRequeryText(requeryText);
+                _latestFastQuery = search;
+                _hasReceivedFastQuery = true;
+                return _activeQuery;
+            }
+
             previous = _activeQuery;
-            operation = new QueryOperation(search, model, prompt, settings);
+            operation = new QueryOperation(search, requeryText, model, prompt, settings);
             _activeQuery = operation;
             _latestFastQuery = search;
             _hasReceivedFastQuery = true;
@@ -355,7 +387,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return operation;
     }
 
-    private QueryOperation? GetOrBeginQuery(string search, string model, string prompt, SettingsSnapshot settings)
+    private QueryOperation? GetOrBeginQuery(string search, string requeryText, string model, string prompt, SettingsSnapshot settings)
     {
         lock (_queryLock)
         {
@@ -370,11 +402,12 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 if (!string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
                     || _activeQuery.IsCancellationRequested || _activeQuery.WasHandedOff)
                     return null;
+                _activeQuery.UpdateRequeryText(requeryText);
                 return _activeQuery;
             }
 
             // Supports launcher configurations which invoke only the delayed path first.
-            var operation = new QueryOperation(search, model, prompt, settings);
+            var operation = new QueryOperation(search, requeryText, model, prompt, settings);
             _activeQuery = operation;
             return operation;
         }
@@ -1139,6 +1172,98 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
     }
 
+    private void ShowSavedConversationWindow(string assemblyDirectory, string conversationJson, string fileName)
+    {
+        var htmlPath = Path.Combine(assemblyDirectory, "ChatWindow.html");
+        if (!File.Exists(htmlPath))
+            throw new FileNotFoundException("ChatWindow.html was not found beside the RunMind plugin assembly.", htmlPath);
+
+        using var sessionDocument = JsonDocument.Parse(conversationJson);
+        var initialConversation = sessionDocument.RootElement.Clone();
+        var title = Path.GetFileNameWithoutExtension(fileName);
+        var bootstrap = new
+        {
+            title = string.IsNullOrWhiteSpace(title) ? "RunMind Chat" : title,
+            windowInstanceId = Guid.NewGuid().ToString("N"),
+            initialConversation,
+            initialConversationFileName = fileName,
+        };
+
+        var webView = CreateChatWebView();
+        var appWindow = new Window
+        {
+            Title = "RunMind",
+            Width = 1120,
+            Height = 860,
+            MinWidth = 680,
+            MinHeight = 520,
+            Icon = LoadWindowIcon(assemblyDirectory),
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Content = webView,
+        };
+
+        appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        appWindow.Show();
+        appWindow.Activate();
+        _ = InitializeChatWebViewAsync(appWindow, webView, assemblyDirectory, JsonSerializer.Serialize(bootstrap));
+    }
+
+    private void HandleOpenConversationInNewWindow(string source, string messageJson, string assemblyDirectory)
+    {
+        try
+        {
+            if (!Uri.TryCreate(source, UriKind.Absolute, out var sourceUri)
+                || sourceUri.Scheme != Uri.UriSchemeHttps
+                || !sourceUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || !sourceUri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (string.IsNullOrWhiteSpace(messageJson)
+                || Encoding.UTF8.GetByteCount(messageJson) > 55 * 1024 * 1024)
+                return;
+
+            using var messageDocument = JsonDocument.Parse(messageJson);
+            var root = messageDocument.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("type", out var type)
+                || type.ValueKind != JsonValueKind.String
+                || type.GetString() != "runmind.openConversationInNewWindow"
+                || !root.TryGetProperty("conversation", out var conversation)
+                || conversation.ValueKind != JsonValueKind.Object
+                || !IsSupportedConversation(conversation))
+                return;
+
+            var fileName = root.TryGetProperty("fileName", out var fileNameElement) && fileNameElement.ValueKind == JsonValueKind.String
+                ? Path.GetFileName(fileNameElement.GetString() ?? string.Empty)
+                : "Conversation.runmind";
+            if (string.IsNullOrWhiteSpace(fileName)) fileName = "Conversation.runmind";
+            if (fileName.Length > 255) fileName = fileName[..255];
+
+            var conversationJson = conversation.GetRawText();
+            DispatchToUi(
+                () => ShowSavedConversationWindow(assemblyDirectory, conversationJson, fileName),
+                "Could not open the saved conversation in a new window");
+        }
+        catch (Exception ex)
+        {
+            _context?.API.ShowMsg("Could not open the saved conversation in a new window", ex.Message);
+        }
+    }
+
+    private static bool IsSupportedConversation(JsonElement conversation)
+    {
+        if (!conversation.TryGetProperty("format", out var format) || format.ValueKind != JsonValueKind.String)
+            return false;
+        var formatName = format.GetString();
+        if (!string.Equals(formatName, "runmind", StringComparison.Ordinal))
+            return false;
+        if (!conversation.TryGetProperty("version", out var version) || !version.TryGetInt32(out var versionNumber) || versionNumber != 1)
+            return false;
+        return conversation.TryGetProperty("messages", out var messages)
+            && messages.ValueKind == JsonValueKind.Array
+            && messages.GetArrayLength() is > 0 and <= 10000;
+    }
+
     private static string CreateFallbackConversationTitle(string prompt)
     {
         var value = string.Join(" ", (prompt ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
@@ -1330,6 +1455,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             // PowerToys and Standalone use separate profiles, avoiding cross-host profile
             // contention while preserving a deterministic profile location per host.
             userDataFolder = GetWebView2UserDataFolder(useTemporaryUserDataFolder);
+            stage = "Ensure Microsoft Edge WebView2 Runtime";
+            await WebView2RuntimeBootstrapper.EnsureInstalledAsync();
+            if (!appWindow.IsVisible) return;
             stage = "Create WebView2 environment";
             var environment = await GetWebView2EnvironmentAsync(useTemporaryUserDataFolder, userDataFolder);
             if (!appWindow.IsVisible) return;
@@ -1346,10 +1474,19 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 appFolderPath,
                 CoreWebView2HostResourceAccessKind.DenyCors);
 
-            // The page is intentionally standalone: no WebMessageReceived handler, host object,
-            // or request/response bridge is registered with the plugin.
-            core.Settings.IsWebMessageEnabled = false;
+            // Web messages are enabled only for two bounded operations: a native Save As
+            // dialog for conversation files and opening a validated chat in a new window.
+            // No WebView2 host objects are exposed to page JavaScript.
+            core.Settings.IsWebMessageEnabled = true;
             core.Settings.AreHostObjectsAllowed = false;
+            core.WebMessageReceived += (_, messageArgs) =>
+            {
+                if (!ConversationSaveDialog.TryHandleMessage(
+                    messageArgs.Source, messageArgs.WebMessageAsJson, appWindow, core))
+                {
+                    HandleOpenConversationInNewWindow(messageArgs.Source, messageArgs.WebMessageAsJson, appFolderPath);
+                }
+            };
             core.DocumentTitleChanged += (_, _) =>
             {
                 if (!appWindow.IsVisible) return;
@@ -1428,7 +1565,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 {
                     // This one-way call supplies only the original query/result and settings.
                     // All model discovery and subsequent chat turns stay in page JavaScript.
-                    await core.ExecuteScriptAsync("window.initializeLocalLLM(" + bootstrapJson + ");");
+                    await core.ExecuteScriptAsync("window.initializeRunMind(" + bootstrapJson + ");");
                 }
                 catch (Exception ex)
                 {
@@ -1476,7 +1613,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 + $"\nUser-data folder: {userDataFolder}"
                 + priorFailure
                 + $"\nException details: {ex}"
-                + "\nCheck that Microsoft Edge WebView2 Runtime is installed and that this folder is writable.";
+                + "\nRunMind checks for WebView2 and installs Microsoft's Evergreen Runtime automatically when it is missing. If setup failed, check your internet connection and Windows permissions.";
             if (ReferenceEquals(appWindow.Content, webView)) appWindow.Content = null;
             DisposeWebViewSafely(webView);
             appWindow.Content = new TextBlock
@@ -1675,6 +1812,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     {
         private readonly CancellationTokenSource _cancellation = new();
         private readonly object _sync = new();
+        private string _requeryText;
         private int _started;
         private int _cancelRequested;
         private int _handedOff;
@@ -1686,15 +1824,20 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         private string _response = string.Empty;
         private bool _isError;
 
-        public QueryOperation(string search, string model, string prompt, SettingsSnapshot settings)
+        public QueryOperation(string search, string requeryText, string model, string prompt, SettingsSnapshot settings)
         {
             Search = search;
+            _requeryText = requeryText;
             Model = model;
             Prompt = prompt;
             Settings = settings;
         }
 
         public string Search { get; }
+        public string RequeryText
+        {
+            get { lock (_sync) return _requeryText; }
+        }
         public string Model { get; }
         public string Prompt { get; }
         public SettingsSnapshot Settings { get; }
@@ -1707,6 +1850,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
         public bool IsCancellationRequested => Volatile.Read(ref _cancelRequested) != 0;
         public bool WasHandedOff => Volatile.Read(ref _handedOff) != 0;
+
+        public void UpdateRequeryText(string value)
+        {
+            lock (_sync) _requeryText = value;
+        }
 
         public bool TryStart()
         {
@@ -1747,6 +1895,23 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                         TryDisposeSourceLocked();
                     }
                 }
+            }
+        }
+
+        public bool TryGetCompletion(out string response, out bool isError)
+        {
+            lock (_sync)
+            {
+                if (_hasCompletion && !IsCancellationRequested && !WasHandedOff)
+                {
+                    response = _response;
+                    isError = _isError;
+                    return true;
+                }
+
+                response = string.Empty;
+                isError = false;
+                return false;
             }
         }
 

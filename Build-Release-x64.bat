@@ -4,11 +4,11 @@ setlocal
 rem Run from the folder containing this batch file and the solution.
 cd /d "%~dp0"
 
-set "SOLUTION=Community.PowerToys.Run.Plugin.LocalLLM.sln"
+set "SOLUTION=RunMind.sln"
 set "EXITCODE=0"
 
 echo ================================================
-echo  Building Community PowerToys Run Plugin (x64)
+echo  Building RunMind PowerToys Run Plugin and Standalone(x64)
 echo ================================================
 echo.
 

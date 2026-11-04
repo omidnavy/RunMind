@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace LocalLLM.Standalone;
+namespace RunMind.Standalone;
 
 public partial class App : Application
 {

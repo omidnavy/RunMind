@@ -421,7 +421,7 @@
             <div class="export-panel">
               <p class="export-panel-title">Export conversation</p>
               <p class="export-panel-note">Save a resumable session, open one, or export a readable copy.</p>
-              <div class="session-file-actions"><button type="button" class="button" id="saveSessionButton">Save conversation</button><button type="button" class="button" id="openSessionButton">Open conversation</button><input id="sessionFileInput" type="file" accept=".llmchat,application/json,.json" hidden></div>
+              <div class="session-file-actions"><button type="button" class="button" id="saveSessionButton">Save conversation</button><button type="button" class="button" id="openSessionButton">Open conversation</button><input id="sessionFileInput" type="file" accept=".runmind" hidden></div>
               <div class="session-file-divider"></div>
               <select id="exportFormat" aria-label="Export format">
                 <option value="">Choose a format…</option>
@@ -647,6 +647,18 @@
       <div class="warning-actions"><button type="button" class="button" id="attachmentWarningCancel">Review attachments</button><button type="button" class="button primary" id="attachmentWarningConfirm">Send anyway</button></div>
     </section>
   </div>
+  <div class="modal-backdrop" id="openSessionDestinationModal" hidden>
+    <section class="warning-dialog" role="dialog" aria-modal="true" aria-labelledby="openSessionDestinationTitle" aria-describedby="openSessionDestinationMessage" tabindex="-1">
+      <h2 id="openSessionDestinationTitle">Open saved conversation</h2>
+      <p id="openSessionDestinationMessage">Choose where to open this conversation.</p>
+      <div class="warning-file-list" id="openSessionDestinationFileName"></div>
+      <div class="warning-actions">
+        <button type="button" class="button" id="openSessionDestinationCancel">Cancel</button>
+        <button type="button" class="button" id="openSessionDestinationNew">Open in new window</button>
+        <button type="button" class="button primary" id="openSessionDestinationCurrent">Open in this window</button>
+      </div>
+    </section>
+  </div>
   <div class="toast" id="toast" role="status" hidden></div>
   <script>
     'use strict';
@@ -671,6 +683,12 @@
     const refreshButton = $('#refreshModels');
     const exportFormat = $('#exportFormat');
     const sessionFileInput = $('#sessionFileInput');
+    const openSessionDestinationModal = $('#openSessionDestinationModal');
+    const openSessionDestinationMessage = $('#openSessionDestinationMessage');
+    const openSessionDestinationFileName = $('#openSessionDestinationFileName');
+    const openSessionDestinationCancel = $('#openSessionDestinationCancel');
+    const openSessionDestinationNew = $('#openSessionDestinationNew');
+    const openSessionDestinationCurrent = $('#openSessionDestinationCurrent');
     const thinkToggle = $('#thinkToggle');
     const statusText = $('#statusText');
     const statusDot = $('#statusDot');
@@ -823,6 +841,8 @@
     let activeAssistantMessage = null;
     let toastHandle = null;
     let attachmentConfirmResolver = null;
+    let openSessionDestinationResolver = null;
+    const pendingNativeSaveRequests = new Set();
     let isConfirmingAttachments = false;
     let modelLists = { ollama: [], lmstudio: [] };
     const MODEL_CONNECTIONS_KEY = 'local-llm.model-connections.v1';
@@ -1444,6 +1464,24 @@
       const resolve = attachmentConfirmResolver;
       attachmentConfirmResolver = null;
       if (resolve) resolve(!!confirmed);
+      if (!activeController) promptInput.focus();
+    }
+    function requestOpenSessionDestination(fileName) {
+      openSessionDestinationFileName.textContent = String(fileName || 'Conversation.runmind');
+      openSessionDestinationMessage.textContent = messages.length
+        ? 'Open in this window to replace the current chat, or open in a new window to keep this chat intact.'
+        : 'Choose whether to open this conversation here or in a separate window.';
+      openSessionDestinationModal.hidden = false;
+      openSessionDestinationModal.querySelector('.warning-dialog')?.focus();
+      openSessionDestinationCurrent.focus();
+      return new Promise(resolve => { openSessionDestinationResolver = resolve; });
+    }
+    function finishOpenSessionDestination(destination) {
+      if (openSessionDestinationModal.hidden) return;
+      openSessionDestinationModal.hidden = true;
+      const resolve = openSessionDestinationResolver;
+      openSessionDestinationResolver = null;
+      if (resolve) resolve(destination);
       if (!activeController) promptInput.focus();
     }
     function readBoundedNumber(input, min, max, integer = false) {
@@ -2814,7 +2852,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.6' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.10' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -2834,7 +2872,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.6' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.6.10' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;
@@ -4565,7 +4603,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
         const label = document.createElement('span'); label.textContent = row.title || 'Untitled task'; label.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px';
         const time = document.createElement('span'); time.textContent = new Date(row.updatedAt).toLocaleString(); time.style.cssText = 'font-size:10px;color:var(--color-muted);white-space:nowrap';
         button.append(label, time); button.addEventListener('click', async () => {
-          try { const file = new File([JSON.stringify(row.data)], `${filenameSafe(row.title)}.llmchat`, { type: 'application/json' }); await openSessionFile(file); $('#agentHistoryMenu').open = false; $('#modelConnectionsMenu').open = false; }
+          try { const file = new File([JSON.stringify(row.data)], `${filenameSafe(row.title)}.runmind`, { type: 'application/json' }); await openSessionFile(file, { destination: 'current' }); $('#agentHistoryMenu').open = false; $('#modelConnectionsMenu').open = false; }
           catch (error) { showToast(`Could not reopen task: ${error?.message || error}`); }
         });
         host.appendChild(button);
@@ -4825,14 +4863,57 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       return base.length > 72 ? base.slice(0, 69) + '…' : base;
     }
     function portableConversation() {
-      return { format: 'PowerToys-Run-LocalLLM-conversation', version: 1, title: conversationTitle(), createdAt: new Date(conversationStartedAt).toISOString(), updatedAt: new Date().toISOString(), session: { provider: selectedModel()?.provider || null, model: selectedModel()?.model || null, connectionId: selectedModel()?.connectionId || null, serverName: selectedModel()?.serverName || null, thinkEnabled: !!thinkToggle.checked, defaultThinkingOpen, generationSettings: generationSettings(), lmStudioApiMode: settingLmStudioApiMode.value, contextSummary, contextSummaryThrough, historyTurns: readBoundedNumber(settingHistoryTurns, 2, 200, true), historyTokenBudget: readBoundedNumber(settingHistoryTokenBudget, 256, 1000000, true) }, messages: allMessages().map(m => ({ role: m.role, content: m.content, thinking: m.thinking || '', thinkingOpen: m.thinkingOpen ?? defaultThinkingOpen, thinkRequested: !!m.thinkRequested, generationSettings: m.generationSettings || null, isContinuation: !!m.isContinuation, attachments: (m.attachments || []).map(file => ({ name: file.name, type: file.type, size: file.size, text: file.text, dataUrl: file.dataUrl })), timestamp: new Date(m.timestamp || Date.now()).toISOString(), provider: m.provider || null, model: m.model || null, error: !!m.error })) };
+      return { format: 'runmind', version: 1, title: conversationTitle(), createdAt: new Date(conversationStartedAt).toISOString(), updatedAt: new Date().toISOString(), session: { provider: selectedModel()?.provider || null, model: selectedModel()?.model || null, connectionId: selectedModel()?.connectionId || null, serverName: selectedModel()?.serverName || null, thinkEnabled: !!thinkToggle.checked, defaultThinkingOpen, generationSettings: generationSettings(), lmStudioApiMode: settingLmStudioApiMode.value, contextSummary, contextSummaryThrough, historyTurns: readBoundedNumber(settingHistoryTurns, 2, 200, true), historyTokenBudget: readBoundedNumber(settingHistoryTokenBudget, 256, 1000000, true) }, messages: allMessages().map(m => ({ role: m.role, content: m.content, thinking: m.thinking || '', thinkingOpen: m.thinkingOpen ?? defaultThinkingOpen, thinkRequested: !!m.thinkRequested, generationSettings: m.generationSettings || null, isContinuation: !!m.isContinuation, attachments: (m.attachments || []).map(file => ({ name: file.name, type: file.type, size: file.size, text: file.text, dataUrl: file.dataUrl })), timestamp: new Date(m.timestamp || Date.now()).toISOString(), provider: m.provider || null, model: m.model || null, error: !!m.error })) };
     }
+    function handleNativeSaveResult(event) {
+      const result = event?.data;
+      if (!result || result.type !== 'runmind.saveConversationResult'
+        || typeof result.requestId !== 'string' || !pendingNativeSaveRequests.delete(result.requestId)) return;
+      if (result.cancelled) return;
+      if (!result.success) {
+        showToast(`Could not save conversation: ${result.error || 'The save operation failed.'}`);
+        return;
+      }
+      const fileName = String(result.fileName || 'Conversation.runmind');
+      setConversationTitle(conversationFileTitle(fileName));
+      showToast(`Conversation saved as ${fileName}.`);
+    }
+    window.chrome?.webview?.addEventListener('message', handleNativeSaveResult);
     function saveSessionFile() {
       if (messages.some(message => message.pending)) { showToast('Stop or wait for the current response before saving.'); return; }
+      if (!allMessages().length) { showToast('Send a message before saving a conversation.'); return; }
+      const suggestedTitle = filenameSafe(conversationTitle());
       const payload = portableConversation();
-      downloadFile(`${filenameSafe(payload.title)}.llmchat`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
+      const bridge = window.chrome?.webview;
+      if (bridge && typeof bridge.postMessage === 'function') {
+        const requestId = `save-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        pendingNativeSaveRequests.add(requestId);
+        try {
+          bridge.postMessage({
+            type: 'runmind.saveConversation',
+            requestId,
+            fileName: `${suggestedTitle}.runmind`,
+            conversation: payload,
+          });
+          $('#exportMenu').open = false;
+          return;
+        } catch (error) {
+          pendingNativeSaveRequests.delete(requestId);
+          showToast(`Could not open the save dialog: ${error?.message || String(error)}`);
+          return;
+        }
+      }
+
+      // Browser-only fallback for previewing the shared page outside a desktop host.
+      payload.title = suggestedTitle;
+      setConversationTitle(suggestedTitle);
+      downloadFile(`${suggestedTitle}.runmind`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
       $('#exportMenu').open = false;
-      showToast('Conversation saved as a .llmchat file.');
+      showToast(`Conversation downloaded as ${suggestedTitle}.runmind.`);
+    }
+    function conversationFileTitle(fileName) {
+      const value = String(fileName || '').replace(/\.runmind$/i, '').replace(/\s+/g, ' ').trim();
+      return value || 'RunMind Chat';
     }
     function applyImportedGenerationSettings(settings) {
       const source = settings && typeof settings === 'object' ? settings : {};
@@ -4844,7 +4925,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     }
     function validateSessionFile(data) {
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('The selected file is not a conversation object.');
-      if (!['PowerToys-Run-LocalLLM-conversation', 'llmchat'].includes(data.format)) throw new Error('This file is not a supported RunMind conversation.');
+      if (data.format !== 'runmind') throw new Error('This is not a RunMind `.runmind` conversation file.');
       if (Number(data.version) !== 1) throw new Error(`Unsupported conversation format version: ${String(data.version)}.`);
       if (!Array.isArray(data.messages) || data.messages.length > 10000) throw new Error('The file has an invalid or excessively large message list.');
       const clean = data.messages.map((message, index) => {
@@ -4885,7 +4966,70 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       });
       return { data, messages: clean };
     }
-    async function openSessionFile(file) {
+    function applySessionData(data, restored, fileName) {
+      messages.splice(0, messages.length, ...restored);
+      // The selected file name is authoritative. Renames performed in Explorer are
+      // reflected in both the native window caption and in-app conversation heading.
+      const selectedTitle = fileName ? conversationFileTitle(fileName) : (String(data.title || '').trim() || 'RunMind Chat');
+      setConversationTitle(selectedTitle);
+      deepResearchTask = null; researchLastAssistantMessage = null;
+      deepResearchEnabled = false;
+      researchPanelOpen = false;
+      try { sessionStorage.removeItem(DEEP_RESEARCH_STORAGE_KEY); } catch (_) {}
+      deepResearchButton.classList.remove('active'); deepResearchButton.setAttribute('aria-pressed', 'false');
+      deepResearchButton.title = 'Deep Research mode is off'; deepResearchButton.setAttribute('aria-label', deepResearchButton.title);
+      researchPanel.hidden = true;
+      setResearchPanelOpen(false);
+      setAgentMode(false);
+      lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
+      const created = Date.parse(data.createdAt || '');
+      conversationStartedAt = Number.isFinite(created) ? created : (restored[0]?.timestamp || Date.now());
+      defaultThinkingOpen = typeof data.session?.defaultThinkingOpen === 'boolean' ? data.session.defaultThinkingOpen : (restored.at(-1)?.thinkingOpen ?? true);
+      const session = data.session && typeof data.session === 'object' ? data.session : {};
+      contextSummary = typeof session.contextSummary === 'string' ? session.contextSummary.slice(0, 200000) : '';
+      contextSummaryThrough = Math.max(0, Number(session.contextSummaryThrough) || 0);
+      contextSummaryDirty = false;
+      settingLmStudioApiMode.value = session.lmStudioApiMode === 'native' ? 'native' : 'openai';
+      settingHistoryTurns.value = Number.isFinite(Number(session.historyTurns)) && session.historyTurns !== null && Number(session.historyTurns) !== 12
+        ? String(Math.min(200, Math.max(2, Number(session.historyTurns)))) : '';
+      settingHistoryTokenBudget.value = session.historyTokenBudget === null || session.historyTokenBudget === undefined || !Number.isFinite(Number(session.historyTokenBudget)) ? '' : String(Math.min(1000000, Math.max(256, Number(session.historyTokenBudget))));
+      if (typeof session.thinkEnabled === 'boolean') thinkToggle.checked = session.thinkEnabled;
+      applyImportedGenerationSettings(session.generationSettings || restored.slice().reverse().find(m => m.generationSettings)?.generationSettings || {});
+      syncThinkButton();
+      const savedProvider = ['ollama', 'lmstudio'].includes(session.provider) ? session.provider : restored.slice().reverse().find(m => m.provider)?.provider;
+      const savedModel = typeof session.model === 'string' ? session.model : restored.slice().reverse().find(m => m.model)?.model;
+      let modelUnavailable = false;
+      if (savedProvider && savedModel) {
+        const option = [...modelSelect.options].find(item => item.dataset.provider === savedProvider && item.dataset.model === savedModel && session.connectionId && item.dataset.serverId === session.connectionId)
+          || [...modelSelect.options].find(item => item.dataset.provider === savedProvider && item.dataset.model === savedModel);
+        const savedKey = option?.value || `${savedProvider}::${savedModel}`;
+        preferredModelKey = savedKey;
+        if (option) modelSelect.value = option.value;
+        else modelUnavailable = true;
+      }
+      promptInput.value = '';
+      pendingAttachments = [];
+      renderPendingAttachments();
+      renderMessages(false);
+      updateContextManagerUI();
+      autoResizePrompt();
+      savePreferences();
+      void updateSelectedModelInfo();
+      $('#exportMenu').open = false;
+      showToast(modelUnavailable ? `Conversation opened; model “${savedModel}” is unavailable. Choose a model to continue.` : `Opened “${filenameSafe(selectedTitle)}”.`);
+    }
+    function openSessionInNewWindow(data, fileName) {
+      const bridge = window.chrome?.webview;
+      if (!bridge || typeof bridge.postMessage !== 'function') {
+        throw new Error('Opening a conversation in a new window is only available in the RunMind desktop hosts.');
+      }
+      bridge.postMessage({
+        type: 'runmind.openConversationInNewWindow',
+        fileName: String(fileName || 'Conversation.runmind').slice(0, 255),
+        conversation: data,
+      });
+    }
+    async function openSessionFile(file, options = {}) {
       if (!file) return;
       if (file.size > 50 * 1024 * 1024) { showToast('Conversation files must be 50 MB or smaller.'); return; }
       if (activeController || messages.some(message => message.pending)) { showToast('Stop the current response before opening another conversation.'); return; }
@@ -4893,53 +5037,17 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
         const parsed = JSON.parse(await file.text());
         const { data, messages: restored } = validateSessionFile(parsed);
         if (!restored.length) throw new Error('This conversation contains no messages.');
-        if (messages.length && !window.confirm('Open this conversation and replace the current chat? Any unsaved changes in the current chat will be lost.')) return;
-        messages.splice(0, messages.length, ...restored);
-        deepResearchTask = null; researchLastAssistantMessage = null;
-        deepResearchEnabled = false;
-        researchPanelOpen = false;
-        try { sessionStorage.removeItem(DEEP_RESEARCH_STORAGE_KEY); } catch (_) {}
-        deepResearchButton.classList.remove('active'); deepResearchButton.setAttribute('aria-pressed', 'false');
-        deepResearchButton.title = 'Deep Research mode is off'; deepResearchButton.setAttribute('aria-label', deepResearchButton.title);
-        researchPanel.hidden = true;
-        setResearchPanelOpen(false);
-        setAgentMode(false);
-        lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
-        const created = Date.parse(data.createdAt || '');
-        conversationStartedAt = Number.isFinite(created) ? created : (restored[0]?.timestamp || Date.now());
-        defaultThinkingOpen = typeof data.session?.defaultThinkingOpen === 'boolean' ? data.session.defaultThinkingOpen : (restored.at(-1)?.thinkingOpen ?? true);
-        const session = data.session && typeof data.session === 'object' ? data.session : {};
-        contextSummary = typeof session.contextSummary === 'string' ? session.contextSummary.slice(0, 200000) : '';
-        contextSummaryThrough = Math.max(0, Number(session.contextSummaryThrough) || 0);
-        contextSummaryDirty = false;
-        settingLmStudioApiMode.value = session.lmStudioApiMode === 'native' ? 'native' : 'openai';
-        settingHistoryTurns.value = Number.isFinite(Number(session.historyTurns)) && session.historyTurns !== null && Number(session.historyTurns) !== 12
-          ? String(Math.min(200, Math.max(2, Number(session.historyTurns)))) : '';
-        settingHistoryTokenBudget.value = session.historyTokenBudget === null || session.historyTokenBudget === undefined || !Number.isFinite(Number(session.historyTokenBudget)) ? '' : String(Math.min(1000000, Math.max(256, Number(session.historyTokenBudget))));
-        if (typeof session.thinkEnabled === 'boolean') thinkToggle.checked = session.thinkEnabled;
-        applyImportedGenerationSettings(session.generationSettings || restored.slice().reverse().find(m => m.generationSettings)?.generationSettings || {});
-        syncThinkButton();
-        const savedProvider = ['ollama', 'lmstudio'].includes(session.provider) ? session.provider : restored.slice().reverse().find(m => m.provider)?.provider;
-        const savedModel = typeof session.model === 'string' ? session.model : restored.slice().reverse().find(m => m.model)?.model;
-        let modelUnavailable = false;
-        if (savedProvider && savedModel) {
-          const option = [...modelSelect.options].find(item => item.dataset.provider === savedProvider && item.dataset.model === savedModel && session.connectionId && item.dataset.serverId === session.connectionId)
-            || [...modelSelect.options].find(item => item.dataset.provider === savedProvider && item.dataset.model === savedModel);
-          const savedKey = option?.value || `${savedProvider}::${savedModel}`;
-          preferredModelKey = savedKey;
-          if (option) modelSelect.value = option.value;
-          else modelUnavailable = true;
+        const fileName = String(file.name || 'Conversation.runmind');
+        const destination = options.destination || await requestOpenSessionDestination(fileName);
+        if (!destination) return;
+        if (destination === 'new') {
+          openSessionInNewWindow(data, fileName);
+          showToast(`Opening “${filenameSafe(conversationFileTitle(fileName))}” in a new window.`);
+          return;
         }
-        promptInput.value = '';
-        pendingAttachments = [];
-        renderPendingAttachments();
-        renderMessages(false);
-        updateContextManagerUI();
-        autoResizePrompt();
-        savePreferences();
-        void updateSelectedModelInfo();
-        $('#exportMenu').open = false;
-        showToast(modelUnavailable ? `Conversation opened; model “${savedModel}” is unavailable. Choose a model to continue.` : `Opened “${filenameSafe(data.title || 'conversation')}”.`);
+        if (messages.length && options.confirmReplace !== false
+          && !window.confirm('Open this conversation in the current window and replace the current chat? Any unsaved changes will be lost.')) return;
+        applySessionData(data, restored, fileName);
       } catch (error) {
         showToast(`Could not open conversation: ${error?.message || String(error)}`);
       } finally { sessionFileInput.value = ''; }
@@ -5104,6 +5212,10 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     attachmentWarningCancel.addEventListener('click', () => finishAttachmentConfirmation(false));
     attachmentWarningConfirm.addEventListener('click', () => finishAttachmentConfirmation(true));
     attachmentWarningModal.addEventListener('click', event => { if (event.target === attachmentWarningModal) finishAttachmentConfirmation(false); });
+    openSessionDestinationCurrent.addEventListener('click', () => finishOpenSessionDestination('current'));
+    openSessionDestinationNew.addEventListener('click', () => finishOpenSessionDestination('new'));
+    openSessionDestinationCancel.addEventListener('click', () => finishOpenSessionDestination(null));
+    openSessionDestinationModal.addEventListener('click', event => { if (event.target === openSessionDestinationModal) finishOpenSessionDestination(null); });
     exportFormat.addEventListener('change', () => { if (exportFormat.value === 'print') { exportConversation(); exportFormat.value = ''; } });
     $('#exportButton').addEventListener('click', () => {
       exportConversation();
@@ -5119,6 +5231,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     });
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
+      if (!openSessionDestinationModal.hidden) { finishOpenSessionDestination(null); return; }
       if (!researchPanel.hidden) { closeResearchWorkspace(); return; }
       if (!agentFolderAccessRequest.hidden) { agentFolderAccessCancel.click(); return; }
       if (!attachmentWarningModal.hidden) { finishAttachmentConfirmation(false); return; }
@@ -5301,7 +5414,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
         } catch (_) {}
       }
     });
-    window.initializeLocalLLM = function (initialState) {
+    window.initializeRunMind = function (initialState) {
       if (isInitialized) return;
       isInitialized = true;
       BOOT = initialState && typeof initialState === 'object' ? initialState : {};
@@ -5353,6 +5466,16 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       }
       setResearchPanelOpen(false);
       void refreshModels(false).then(() => {
+        if (BOOT.initialConversation && typeof BOOT.initialConversation === 'object') {
+          try {
+            const { data, messages: restored } = validateSessionFile(BOOT.initialConversation);
+            if (!restored.length) throw new Error('This conversation contains no messages.');
+            applySessionData(data, restored, BOOT.initialConversationFileName || `${filenameSafe(data.title || 'Conversation')}.runmind`);
+          } catch (error) {
+            showToast(`Could not open conversation: ${error?.message || String(error)}`);
+          }
+          return;
+        }
         const pendingPrompt = String(BOOT.autoSendPromptText || '').trim();
         if (!pendingPrompt) return;
         promptInput.value = pendingPrompt;

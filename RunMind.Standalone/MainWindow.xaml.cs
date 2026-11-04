@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Text;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using System.Windows;
@@ -8,8 +9,9 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using RunMind.Shared;
 
-namespace LocalLLM.Standalone;
+namespace RunMind.Standalone;
 
 public partial class MainWindow : Window
 {
@@ -32,9 +34,15 @@ public partial class MainWindow : Window
     private string _initializationStage = "Prepare standalone window";
     private string _userDataFolder = "(not resolved)";
     private HwndSource? _windowSource;
+    private readonly string? _initialConversationJson;
+    private readonly string? _initialConversationFileName;
 
-    public MainWindow()
+    public MainWindow() : this(null, null) { }
+
+    private MainWindow(string? initialConversationJson, string? initialConversationFileName)
     {
+        _initialConversationJson = initialConversationJson;
+        _initialConversationFileName = initialConversationFileName;
         InitializeComponent();
         Root.Children.Add(_webView);
         Closed += OnClosed;
@@ -102,6 +110,9 @@ public partial class MainWindow : Window
             var profile = Path.Combine(localAppData, "LocalLLM", "Standalone", "WebView2");
             _userDataFolder = profile;
             Directory.CreateDirectory(profile);
+            _initializationStage = "Ensure Microsoft Edge WebView2 Runtime";
+            await WebView2RuntimeBootstrapper.EnsureInstalledAsync();
+            if (_closing) return;
             _initializationStage = "Create standalone WebView2 environment";
             var environment = await CoreWebView2Environment.CreateAsync(
                 null,
@@ -115,8 +126,11 @@ public partial class MainWindow : Window
             _initializationStage = "Configure standalone WebView2 navigation";
             var core = _webView.CoreWebView2;
             core.SetVirtualHostNameToFolderMapping("localhost", appFolder, CoreWebView2HostResourceAccessKind.DenyCors);
-            core.Settings.IsWebMessageEnabled = false;
+            // Accept only two bounded native operations: Save As and opening a validated
+            // conversation in a separate window. No host objects are exposed.
+            core.Settings.IsWebMessageEnabled = true;
             core.Settings.AreHostObjectsAllowed = false;
+            core.WebMessageReceived += OnWebMessageReceived;
             core.DocumentTitleChanged += (_, _) =>
             {
                 if (_closing) return;
@@ -150,14 +164,26 @@ public partial class MainWindow : Window
                 }
                 try
                 {
+                    JsonElement? initialConversation = null;
+                    if (!string.IsNullOrWhiteSpace(_initialConversationJson))
+                    {
+                        using var sessionDocument = JsonDocument.Parse(_initialConversationJson);
+                        initialConversation = sessionDocument.RootElement.Clone();
+                    }
+
+                    var title = string.IsNullOrWhiteSpace(_initialConversationFileName)
+                        ? "New chat"
+                        : Path.GetFileNameWithoutExtension(_initialConversationFileName);
                     var bootstrap = JsonSerializer.Serialize(new
                     {
-                        title = "New chat",
+                        title,
                         windowInstanceId = Guid.NewGuid().ToString("N"),
                         standalone = true,
                         generateTitleAfterFirstResponse = true,
+                        initialConversation,
+                        initialConversationFileName = _initialConversationFileName,
                     });
-                    await core.ExecuteScriptAsync($"window.initializeLocalLLM({bootstrap});");
+                    await core.ExecuteScriptAsync($"window.initializeRunMind({bootstrap});");
                 }
                 catch (Exception ex)
                 {
@@ -174,8 +200,69 @@ public partial class MainWindow : Window
                 + "\nHRESULT: 0x" + ex.HResult.ToString("X8")
                 + "\nUser-data folder: " + _userDataFolder
                 + "\nException details: " + ex
-                + "\nCheck that Microsoft Edge WebView2 Runtime is installed and that the profile folder is writable.");
+                + "\nRunMind checks for WebView2 and installs Microsoft's Evergreen Runtime automatically when it is missing. If setup failed, check your internet connection and Windows permissions.");
         }
+    }
+
+    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
+    {
+        if (_closing) return;
+        try
+        {
+            if (ConversationSaveDialog.TryHandleMessage(args.Source, args.WebMessageAsJson, this, _webView.CoreWebView2))
+                return;
+            if (!Uri.TryCreate(args.Source, UriKind.Absolute, out var source)
+                || source.Scheme != Uri.UriSchemeHttps
+                || !source.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || !source.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var messageJson = args.WebMessageAsJson;
+            if (string.IsNullOrWhiteSpace(messageJson)
+                || Encoding.UTF8.GetByteCount(messageJson) > 55 * 1024 * 1024)
+                return;
+
+            using var messageDocument = JsonDocument.Parse(messageJson);
+            var root = messageDocument.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("type", out var type)
+                || type.ValueKind != JsonValueKind.String
+                || type.GetString() != "runmind.openConversationInNewWindow"
+                || !root.TryGetProperty("conversation", out var conversation)
+                || conversation.ValueKind != JsonValueKind.Object)
+                return;
+
+            if (!IsSupportedConversation(conversation))
+                return;
+
+            var fileName = root.TryGetProperty("fileName", out var fileNameElement) && fileNameElement.ValueKind == JsonValueKind.String
+                ? Path.GetFileName(fileNameElement.GetString() ?? string.Empty)
+                : "Conversation.runmind";
+            if (string.IsNullOrWhiteSpace(fileName)) fileName = "Conversation.runmind";
+            if (fileName.Length > 255) fileName = fileName[..255];
+
+            var child = new MainWindow(conversation.GetRawText(), fileName);
+            child.Show();
+            child.Activate();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"RunMind could not open a conversation in a new window: {ex}");
+        }
+    }
+
+    private static bool IsSupportedConversation(JsonElement conversation)
+    {
+        if (!conversation.TryGetProperty("format", out var format) || format.ValueKind != JsonValueKind.String)
+            return false;
+        var formatName = format.GetString();
+        if (!string.Equals(formatName, "runmind", StringComparison.Ordinal))
+            return false;
+        if (!conversation.TryGetProperty("version", out var version) || !version.TryGetInt32(out var versionNumber) || versionNumber != 1)
+            return false;
+        return conversation.TryGetProperty("messages", out var messages)
+            && messages.ValueKind == JsonValueKind.Array
+            && messages.GetArrayLength() is > 0 and <= 10000;
     }
 
     private static void OpenExternal(Uri uri)
