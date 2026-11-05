@@ -91,6 +91,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private double? _inlineTopP;
     private int? _inlineMaxOutputTokens;
     private int? _inlineSeed;
+    private bool _inlineConversationalMode;
 
     public IEnumerable<PluginAdditionalOption> AdditionalOptions => new List<PluginAdditionalOption>
     {
@@ -205,6 +206,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
             TextValue = string.Empty,
         },
+        new()
+        {
+            Key = "InlineConversationalMode",
+            DisplayLabel = "Nemotron 3.5 Bolt E4B conversational mode",
+            DisplayDescription = "Optional and OFF by default. When enabled, sends chat_template_kwargs.conversational_mode=true for matching NVIDIA Nemotron 3.5 Bolt E4B model IDs through the LM Studio / OpenAI-compatible provider only. Ollama's native API does not expose this template parameter.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Checkbox,
+            Value = false,
+        },
     };
 
     public void Init(PluginInitContext context)
@@ -229,6 +238,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         double? inlineTopP = null;
         int? inlineMaxOutputTokens = null;
         int? inlineSeed = null;
+        bool inlineConversationalMode = false;
 
         if (settings?.AdditionalOptions is not null)
         {
@@ -257,6 +267,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             inlineTopP = ParseOptionalDouble(options, "InlineTopP", 0, 1);
             inlineMaxOutputTokens = ParseOptionalInt(options, "InlineMaxOutputTokens", 1, 1000000);
             inlineSeed = ParseOptionalInt(options, "InlineSeed", 0, int.MaxValue);
+            inlineConversationalMode = options.FirstOrDefault(option => option.Key == "InlineConversationalMode")?.Value is bool enabled && enabled;
 
             if (int.TryParse(GetTextOption(options, "KeepAliveSeconds", DefaultKeepAliveSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedKeepAlive)
                 && parsedKeepAlive is >= 0 and <= 86400)
@@ -292,6 +303,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _inlineTopP = inlineTopP;
             _inlineMaxOutputTokens = inlineMaxOutputTokens;
             _inlineSeed = inlineSeed;
+            _inlineConversationalMode = inlineConversationalMode;
         }
 
         CancelActiveQuery();
@@ -692,6 +704,15 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         if (settings.InlineTopP is double topP) requestBody["top_p"] = topP;
         if (settings.InlineMaxOutputTokens is int maxOutputTokens) requestBody["max_tokens"] = maxOutputTokens;
         if (settings.InlineSeed is int seed) requestBody["seed"] = seed;
+        if (IsNemotron35BoltE4BModel(model))
+        {
+            // Send both states explicitly so PowerToys can enable and disable the
+            // chat-template mode for this model without changing other model requests.
+            requestBody["chat_template_kwargs"] = new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["conversational_mode"] = settings.InlineConversationalMode,
+            };
+        }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
         using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -1018,6 +1039,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
     }
 
+    private static bool IsNemotron35BoltE4BModel(string model)
+    {
+        var normalized = new string((model ?? string.Empty).Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+        return normalized.Contains("nemotron35bolte4b", StringComparison.Ordinal)
+            && !normalized.Contains("dflash", StringComparison.Ordinal)
+            && !normalized.Contains("74b", StringComparison.Ordinal);
+    }
+
     private SettingsSnapshot GetSettingsSnapshot()
     {
         lock (_settingsLock)
@@ -1035,7 +1064,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 _inlineTemperature,
                 _inlineTopP,
                 _inlineMaxOutputTokens,
-                _inlineSeed);
+                _inlineSeed,
+                _inlineConversationalMode);
         }
     }
 
@@ -1632,13 +1662,17 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 appFolderPath,
                 CoreWebView2HostResourceAccessKind.DenyCors);
 
-            // Web messages are enabled only for two bounded operations: a native Save As
-            // dialog for conversation files and opening a validated chat in a new window.
-            // No WebView2 host objects are exposed to page JavaScript.
+            // Expose only the bounded native public-page reader, conversation Save As,
+            // and validated open-in-new-window operations. General host objects stay disabled.
+            var nativePageReader = new NativePageReader();
+            appWindow.Closed += (_, _) => nativePageReader.Dispose();
             core.Settings.IsWebMessageEnabled = true;
             core.Settings.AreHostObjectsAllowed = false;
             core.WebMessageReceived += (_, messageArgs) =>
             {
+                if (nativePageReader.TryHandleMessage(
+                    messageArgs.Source, messageArgs.WebMessageAsJson, core, appWindow.Dispatcher))
+                    return;
                 if (!ConversationSaveDialog.TryHandleMessage(
                     messageArgs.Source, messageArgs.WebMessageAsJson, appWindow, core))
                 {
@@ -2146,5 +2180,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         double? InlineTemperature,
         double? InlineTopP,
         int? InlineMaxOutputTokens,
-        int? InlineSeed);
+        int? InlineSeed,
+        bool InlineConversationalMode);
 }

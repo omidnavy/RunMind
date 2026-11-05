@@ -1,3 +1,71 @@
+## [1.10.20] — Connection capabilities and message identity
+
+### Added
+- Custom OpenAI-compatible connections can optionally enable LM Studio native model metadata discovery (`/api/v1/models`, with `/api/v0/models` legacy fallback).
+- Message metadata preserves the selected connection name so headers identify the actual server rather than only its protocol/provider type.
+
+### Changed
+- Built-in LM Studio retains native metadata discovery. Generic custom OpenAI-compatible connections do not probe LM Studio-specific endpoints unless explicitly enabled.
+- Connection names are preserved in saved conversations, branch archives, and JSONL exports. Older messages without a saved connection name retain provider-label fallback.
+
+### Compatibility
+- Existing custom connections default to LM Studio metadata disabled. The built-in LM Studio connection remains enabled.
+- No changes to OpenAI-compatible model discovery (`/v1/models`) or chat-completions routes.
+
+## [1.10.19] — Native Reader DNS handling and Nemotron settings layout
+
+### Fixed
+- Fixed the Nemotron Conversational Mode checkbox layout in the generation settings flyout. The control now uses a compact native checkbox, its label is aligned beside it, and the explanatory note spans the full settings-grid width.
+- Fixed Native Reader handling of mixed DNS responses. A hostname is no longer rejected merely because one A/AAAA answer is non-public; the connection callback filters out every non-public address and connects only to globally routable candidates. Hosts resolving exclusively to private, local, link-local, or reserved addresses remain blocked.
+- Narrowed the IPv4 special-purpose check for `192.0.0.0/16` to the actual `192.0.0.0/24` assignment, while continuing to block `192.168.0.0/16` and the documented special-use ranges.
+
+### Diagnostics
+- When DNS has no globally routable result, the Native Reader error now identifies the hostname and suggests checking split-horizon DNS, VPN, or DNS filtering without exposing resolved private IP addresses.
+
+### Validation
+- JavaScript syntax and Nemotron checkbox structure/style checks passed.
+- Native destination filtering regression cases passed for public-only, mixed public/private, private-only, loopback, link-local, and reserved DNS answers; socket candidates are always filtered before connect.
+- Project XML, plugin JSON, version alignment, and ZIP integrity checks passed.
+- Windows/.NET compilation and live WebView2/network integration remain to be tested on Windows.
+
+## [1.10.18] — Reader routing, Nemotron conversational mode, and branch-aware saves
+
+### Changed
+- Changed the desktop Reader fallback order to **Native Reader → configured Custom Reader → Jina Reader**. A configured custom gateway is attempted first after native retrieval/extraction fails; Jina is attempted when no custom gateway is configured or when the configured custom gateway also fails. Private/local/security-blocked destinations remain hard stops and are never forwarded to remote Readers.
+- Reordered the Agent Reader settings to present the custom gateway before Jina and labelled each service's fallback priority.
+
+### Added
+- Added a model-specific **Nemotron Conversational Mode** control to Chat Generation Settings. It is shown only for recognized NVIDIA Nemotron 3.5 Bolt E4B model IDs; it is enabled only for an OpenAI-compatible connection. RunMind sends `chat_template_kwargs.conversational_mode` as an explicit boolean alongside the existing `enable_thinking` template argument, so users can request either `true` or `false`.
+- Added the equivalent optional checkbox to PowerToys Run settings. It is applied only when the selected provider is LM Studio/OpenAI-compatible and the effective model ID matches Nemotron 3.5 Bolt E4B. Ollama's native API and LM Studio Native REST mode do not expose this chat-template request argument, so the chat control explains why it is unavailable and PowerToys does not send it to Ollama.
+- Kept conversational mode disabled by default. The chat setting is persisted with generation preferences and conversation settings; the PowerToys setting is independent.
+- Added a save-scope choice when a conversation has multiple branches: **All branches** is preselected; **Active branch only** saves just the selected history as a standalone conversation. The modal can be cancelled with Escape or the existing Cancel/outside-click controls.
+- Full `.runmind` workspace saves preserve every branch history, branch IDs/names, active branch selection, creation/update timestamps, and fork-origin metadata (`parentId` and `forkedFromMessageIndex`) when known. The active branch transcript remains in the legacy top-level `messages` field for compatibility; non-active transcripts are stored in `branchWorkspace`. Old `.runmind` files without `branchWorkspace` still load as a single Original branch.
+- Full branch histories are hydrated from a per-WebView IndexedDB archive before saving; localStorage remains a bounded recovery fallback. The portable `.runmind` file is the complete transferable archive, subject to the 50 MiB file cap, eight-branch cap, and 20,000-message validation cap.
+- Hardened document reads so PDF/image/audio/video content types are treated as non-text and handed to the configured Reader fallback instead of being parsed as HTML. Native Reader failure details are retained in source metadata, compacted tool results, and Markdown research exports; stale native-failure labels are cleared after a later successful native read. Successful native reads log only the hostname, content type, and elapsed time to the application console.
+
+### Validation
+- Static tests cover Native → custom → Jina order, no-custom direct-to-Jina behavior, custom failure fallback to Jina, hard-stop handling for blocked destinations, Nemotron model-ID matching/exclusions, request-field placement, provider gating, preference persistence, and version consistency.
+- JavaScript syntax, project XML/XAML, plugin JSON, version alignment, and ZIP integrity checked. Windows/.NET 10 compilation and live provider/WebView2 testing still require Windows.
+
+## [1.10.17] — Native-first webpage reading
+
+### Added
+- Added a shared C# Native Reader used by both the PowerToys Run chat windows and the standalone WPF app. It retrieves public HTTP/HTTPS pages through `HttpClient`, returning bounded raw text/HTML to the existing shared JavaScript HTML-to-Markdown and metadata extraction pipeline.
+- Added an origin-checked, request-ID-based WebView2 message bridge for native page reads, cancellation, and bounded result delivery. No WebView2 host objects or general-purpose HTTP proxy are exposed.
+- Added redirect-by-redirect validation, public-IP-only DNS/connect checks, no cookies or ambient credentials, a 5-redirect limit, a 25-second timeout, and a 1.5 MiB response cap.
+
+### Changed
+- Desktop webpage reads now use this order: **Native C# Reader → configured Jina Reader → optional custom Reader gateway**. The browser no longer attempts a CORS-limited fetch of external webpages in either desktop host. Browser-only previews retain their direct-fetch behavior.
+- Sitemap, RSS/XML, and other document reads use the Native Reader in desktop hosts as well. Binary downloads remain on their original direct-byte path and are not converted into Markdown.
+- Updated Agent settings to clarify that external Reader services are fallback providers, not the primary fetch route.
+
+### Limits
+- The Native Reader retrieves public HTTP/HTTPS resources and does not execute page JavaScript. JavaScript-heavy pages, bot challenges, unsupported page formats, and native retrieval failures continue to the configured remote Reader. Private/local/reserved destinations and DNS results containing non-public addresses are blocked.
+- Direct outbound native HTTP currently bypasses configured system proxies to preserve destination validation. Remote Reader fallback remains available through the existing WebView fetch path.
+
+### Validation
+- Static checks cover bridge origin/type validation, bounded request/response sizes, cancellation, DNS/IP and redirect safeguards, native-first/external-fallback routing, project XML, manifest versions, JavaScript syntax, and ZIP integrity. Windows/.NET 10 compilation and live WebView2/network testing still require Windows.
+
 ## [1.10.16] — Preserve underscores and asterisks inside identifiers
 
 ### Fixed

@@ -1,3 +1,41 @@
+## RunMind 1.10.20
+
+Custom OpenAI-compatible connections do not probe LM Studio-specific `/api/v1/models` or legacy `/api/v0/models` endpoints unless **Use LM Studio native metadata API** is explicitly enabled. The built-in LM Studio connection retains this capability. Message headers show the selected connection alias; older saved messages without that metadata use the legacy provider label.
+
+## RunMind 1.10.19 — Native Reader DNS and Nemotron settings layout
+
+- Corrected the Nemotron Conversational Mode checkbox layout: compact checkbox, aligned label, full-width explanatory text.
+- Native Reader now filters mixed DNS answers and connects only to globally routable IPs instead of rejecting an entire public hostname because a separate answer is private/reserved.
+- DNS responses containing no public address remain blocked as an SSRF protection. The diagnostic identifies the hostname and suggests checking local DNS/VPN/DNS filtering.
+
+Overlay this release on the complete RunMind 1.10.18 source tree. Preserve `Assets`, `lib`, `Vendor`, `OCR`, and other omitted resources. Rebuild on Windows with `Build-Release-x64.bat`.
+
+## RunMind 1.10.18 — Reader routing, Nemotron conversational mode, and branch-aware saves
+
+- Desktop page retrieval first uses the shared C# Native Reader. If it fails to retrieve or extract readable content, RunMind tries the configured Custom Reader gateway, when present. Jina Reader is last: it is used directly when no custom gateway is configured, or after a configured custom gateway fails.
+- Private/local/reserved destinations and other Native Reader security refusals are hard stops. They do not fall through to a remote Reader.
+- Chat Generation Settings shows **Nemotron Conversational Mode** only for recognized NVIDIA Nemotron 3.5 Bolt E4B model IDs. The checkbox is usable on OpenAI-compatible connections and sends `chat_template_kwargs.conversational_mode=true` only when enabled. The PowerToys Run checkbox is independent and applies only to matching models sent through its LM Studio/OpenAI-compatible provider.
+- The native Ollama API and LM Studio Native REST endpoint do not expose this chat-template argument. llama.cpp's OpenAI-compatible `/v1/chat/completions` API documents `chat_template_kwargs`; verify pass-through with the specific LM Studio/backend version. The checkbox defaults off.
+- Saving a branched conversation now offers **All branches** (default) or **Active branch only**. Full `.runmind` saves include every branch's complete message history, branch names/IDs, active selection, and fork-origin metadata where available. Active-only saves remain standalone single-branch conversations. Existing `.runmind` files without a branch workspace remain backward compatible.
+- The shared branch archive in IndexedDB preserves full branch histories between reloads; localStorage remains a compact fallback. Saving a `.runmind` file is the portable full-history backup.
+- The shared Native Reader now treats non-text response types (PDF/image/audio/video) as a reason to use the configured Reader fallback instead of trying to parse their bytes as HTML. Native failure reasons remain available in source details and report exports. Successful native reads log the hostname, content type, and elapsed time to the application console; the full URL and query string are not logged.
+- This source overlay adds no separate service or dependency. Merge the included files into the complete 1.10.17 tree, preserving assets, libraries, vendor files, OCR data, and build scripts. Build on Windows with `Build-Release-x64.bat`.
+
+## RunMind 1.10.17 — Native-first webpage reading
+
+Both the PowerToys Run plugin and standalone WPF app now include `Shared/NativePageReader.cs`. It is linked into both projects and invoked through the existing WebView2 message channel; no extra service, port, container, host object, or install step is required.
+
+Desktop retrieval order:
+1. Native C# `HttpClient` fetches public HTTP/HTTPS pages and returns bounded response text to the existing JavaScript metadata/HTML-to-Markdown converter.
+2. If native retrieval or extraction fails, RunMind tries the configured Custom Reader gateway, but only when one has been configured.
+3. If no custom gateway is configured, or if the configured custom gateway fails, RunMind tries Jina Reader.
+
+The native reader validates every redirect and DNS connection, rejects private/local/reserved destinations, sends no cookies or ambient credentials, blocks HTTPS-to-HTTP redirect downgrades, and enforces a 25-second request timeout, five redirects, and a 1.5 MiB response cap. It does not execute page JavaScript; dynamic pages, bot challenges, and unsupported content may still require the remote Reader. Native outbound HTTP bypasses system proxy settings to preserve destination validation; the existing remote fallback remains available for proxy-dependent networks.
+
+The Agent setting **Use an external Reader only when the local Native Reader fails** controls the remote fallback. Turning it off keeps webpage retrieval local and reports the native failure instead. Browser-only previews continue to use browser fetch because they do not have the WPF native bridge. Direct binary downloads are unchanged and are not replaced by Markdown extraction.
+
+The ZIP is a source overlay. Extract over the complete project tree so `Assets`, `lib`, `Vendor`, `OCR`, build scripts, and other existing resources remain available. Build both projects on Windows with the repository's normal `Build-Release-x64.bat` script. This environment cannot run the Windows/.NET 10 build or live WebView2/network checks.
+
 ## RunMind 1.10.16 — literal identifier rendering
 
 - Fixed Markdown emphasis boundaries so embedded underscores and asterisks in identifiers remain literal. For example, `UD-Q3_K_XL` and `UD-Q3*K*XL` are no longer interpreted as emphasis around `K`.
@@ -8,7 +46,7 @@
 
 ## Source overlay
 
-This 8-file release package is an overlay for the complete RunMind 1.10.15 source tree. It contains the updated chat UI, project/plugin version metadata, and release documentation. Merge these paths into the complete tree, retaining its `Main.cs`, `Assets`, `lib`, `Vendor`, `OCR`, and build resources. The trimmed development archive used to prepare this release omits those supporting resources; keep them from the complete project when applying the overlay.
+This release package is an overlay for the complete RunMind 1.10.17 source tree. It contains the updated shared chat UI, both native WPF host files, the shared `NativePageReader.cs`, project/plugin version metadata, and release documentation. The trimmed development archive used to prepare this release omitted native host code and supporting resources, so this overlay restores the required host source files but still relies on the complete project for `Assets`, `lib`, `Vendor`, `OCR`, build scripts, and other resources. Merge the included paths into the complete tree before building.
 
 ## RunMind 1.10.15 — Branch naming correction
 

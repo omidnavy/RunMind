@@ -1,10 +1,41 @@
+## 1.10.20 updates
+
+- [x] Custom OpenAI-compatible connections can explicitly opt into LM Studio native metadata endpoints; built-in LM Studio keeps metadata discovery enabled.
+- [x] Message headers display the selected connection alias, with provider fallback for legacy messages.
+- [x] Connection aliases persist in conversation files, branch archives, and JSONL exports.
+
+## RunMind 1.10.19 fixes
+
+- Nemotron Conversational Mode now uses a dedicated compact checkbox row spanning the full Generation Settings grid; the explanatory text is no longer squeezed into one half-column.
+- Native Reader accepts mixed DNS answers when at least one globally routable address exists, but connects only to the public candidates. If DNS returns no public candidate, the request remains blocked.
+
+## RunMind 1.10.18 — Reader routing, Nemotron conversational mode, and branch-aware saves
+
+- Desktop webpage retrieval order: **Native C# Reader → configured Custom Reader gateway → Jina Reader**. If no custom gateway is configured, Jina is the next step. If a configured custom gateway fails, Jina remains the final remote fallback. Security refusals for private/local destinations are never sent to remote services.
+- The Agent settings panel presents the Custom Reader gateway before Jina and explains the fallback order.
+- The Chat Generation Settings menu exposes **Nemotron Conversational Mode** only when a recognized NVIDIA Nemotron 3.5 Bolt E4B model is selected. It is enabled only for OpenAI-compatible chat completions, and sends `chat_template_kwargs: { conversational_mode: true|false }` to supported servers.
+- PowerToys Run exposes an independent checkbox. It sends the same template argument only for a matching Nemotron 3.5 Bolt E4B model over the LM Studio/OpenAI-compatible provider. The native Ollama API does not expose this parameter. Both controls default off.
+- The model feature requires a server that forwards `chat_template_kwargs` into the model chat template. NVIDIA documents the flag, and llama.cpp documents the request field. LM Studio behavior varies by runtime/engine; some have reported ignoring this field. RunMind reports explicit rejection, but cannot detect silent ignoring.
+- Saving a branched conversation defaults to **All branches**; **Active branch only** is available as an escape hatch. Full saves include branch IDs/names, all message histories, the active branch, and fork lineage where known. Active-only saves reopen as a standalone Original branch. Older single-branch `.runmind` files remain supported.
+- Full per-window branch histories are persisted to IndexedDB, with compact localStorage snapshots retained as a fallback. Native Reader failure reasons are surfaced in Research sources and included in Markdown report exports when remote fallback succeeds. Non-text HTTP response types are sent through the configured remote Reader path rather than parsed as HTML. Successful native reads log hostname, content type, and elapsed time without logging the full URL or query string.
+
+## RunMind 1.10.17 — Native-first webpage reading
+
+- Both desktop hosts use a shared C# `HttpClient` Native Reader to retrieve public HTTP/HTTPS pages without browser CORS restrictions. The response is passed to the existing JavaScript HTML/metadata extraction and Markdown conversion code.
+- The 1.10.17 retrieval order was **Native Reader → configured Jina Reader → optional custom Reader gateway**; 1.10.19 changes it to **Native Reader → configured Custom Reader gateway → Jina Reader**. Browser-only previews retain direct browser fetch followed by the external Reader fallback.
+- The same native-first path is used by webpage, sitemap, RSS/XML, and document-reading tools. Binary downloads continue to preserve original response bytes and are not passed through the Markdown Reader.
+- The WebView2 bridge accepts only bounded read/cancel messages from the local `https://localhost/ChatWindow.html` page. It exposes no host objects or unrestricted HTTP proxy.
+- Native Reader safeguards: HTTP/HTTPS only; public DNS/IP destinations only; private/local/link-local/reserved destinations rejected; redirects validated one by one; HTTPS-to-HTTP downgrade blocked; cookies and ambient credentials disabled; maximum five redirects, 25 seconds, and 1.5 MiB response body.
+- The Native Reader does not execute page JavaScript. SPA shells, bot challenges, non-text content, blocked destinations, and failed/empty extractions are handed to the configured remote Reader where policy permits. External fallback can disclose the target URL and page request to that provider.
+- The native connection intentionally bypasses system proxies so its DNS/IP validation applies to the actual destination; environments requiring an outbound proxy can still use the configured remote Reader fallback.
+
 ## RunMind 1.10.16 — literal identifier rendering
 
 - Inline Markdown emphasis does not reinterpret underscores or asterisks embedded within alphanumeric identifiers. Model names and quantization labels retain their exact characters. User prompt contents continue to be sent unchanged.
 
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.16 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.19 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
 ## RunMind 1.10.15 — generated branch-label correction
 

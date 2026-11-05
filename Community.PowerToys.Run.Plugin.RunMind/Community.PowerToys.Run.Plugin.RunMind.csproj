@@ -8,7 +8,7 @@
 	<UseWindowsForms>true</UseWindowsForms>
 	<RootNamespace>Community.PowerToys.Run.Plugin.RunMind</RootNamespace>
 	<AssemblyName>Community.PowerToys.Run.Plugin.RunMind</AssemblyName>
-	<Version>1.10.16</Version>
+	<Version>1.10.20</Version>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
@@ -19,6 +19,7 @@
     <Compile Include="..\Shared\ConversationSaveDialog.cs" Link="Shared\ConversationSaveDialog.cs" />
     <Compile Include="..\Shared\WebView2RuntimeBootstrapper.cs" Link="Shared\WebView2RuntimeBootstrapper.cs" />
     <Compile Include="..\Shared\WindowLayout.cs" Link="Shared\WindowLayout.cs" />
+    <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
     <Reference Include="PowerToys.Common.UI">
       <HintPath>..\lib\x64\PowerToys.Common.UI.dll</HintPath>
     </Reference>
