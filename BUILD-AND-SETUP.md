@@ -1,8 +1,14 @@
+## RunMind 1.10.16 — literal identifier rendering
+
+- Fixed Markdown emphasis boundaries so embedded underscores and asterisks in identifiers remain literal. For example, `UD-Q3_K_XL` and `UD-Q3*K*XL` are no longer interpreted as emphasis around `K`.
+- This corrects display rendering; `sendMessage()` and `providerMessages()` already retain the raw user-entered string in the conversation and provider payload.
+- Normal standalone Markdown emphasis remains supported. Inline code remains protected from formatting parsing.
+
 # RunMind build and setup notes
 
 ## Source overlay
 
-This 9-file release package is an overlay for the complete RunMind 1.10.14 source tree. It includes the updated PowerToys plugin host source (`Main.cs`) because the QuickAI default and legacy-prompt migration live in the native plugin, plus the updated chat UI and release documentation. Merge these paths into the complete tree, retaining its `Assets`, `lib`, `Vendor`, `OCR`, and build resources. The trimmed development archive used to prepare this release omits those supporting resources; keep them from the complete project when applying the overlay.
+This 8-file release package is an overlay for the complete RunMind 1.10.15 source tree. It contains the updated chat UI, project/plugin version metadata, and release documentation. Merge these paths into the complete tree, retaining its `Main.cs`, `Assets`, `lib`, `Vendor`, `OCR`, and build resources. The trimmed development archive used to prepare this release omits those supporting resources; keep them from the complete project when applying the overlay.
 
 ## RunMind 1.10.15 — Branch naming correction
 

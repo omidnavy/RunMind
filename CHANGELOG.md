@@ -1,3 +1,14 @@
+## [1.10.16] — Preserve underscores and asterisks inside identifiers
+
+### Fixed
+- Corrected inline Markdown emphasis parsing so underscores and asterisks inside alphanumeric identifiers are treated as literal characters, not formatting delimiters. Names such as `UD-Q3_K_XL` and `UD-Q3*K*XL` now render exactly as written in chat messages and assistant output.
+- Preserved ordinary standalone Markdown emphasis such as `_italic_` and `*italic*` when delimiters are separated from surrounding words.
+- Confirmed the send/context pipeline continues to pass the original user message text unchanged; this fix addresses the rendering interpretation rather than rewriting submitted content.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.16`.
+
+### Validation
+- Source regression checks cover literal underscore/asterisk identifiers, punctuation-adjacent identifiers, Unicode text, normal Markdown emphasis, inline-code protection, and unchanged provider message content. JavaScript syntax, project XML, plugin JSON, version alignment, and ZIP integrity checked. Windows/.NET 10 compilation and live WebView2/provider testing still require Windows.
+
 ## [1.10.15] — Use Branch labels for generated conversation branches
 
 ### Changed

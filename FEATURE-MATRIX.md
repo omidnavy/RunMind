@@ -1,6 +1,10 @@
+## RunMind 1.10.16 — literal identifier rendering
+
+- Inline Markdown emphasis does not reinterpret underscores or asterisks embedded within alphanumeric identifiers. Model names and quantization labels retain their exact characters. User prompt contents continue to be sent unchanged.
+
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.15 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.16 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
 ## RunMind 1.10.15 — generated branch-label correction
 
