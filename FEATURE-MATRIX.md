@@ -1,6 +1,12 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.5 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.6 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+
+## RunMind 1.10.6 UI hotfix
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| Toolbar UX | Viewport-aware flyouts | Standard toolbar panels are horizontally shifted when needed to remain fully visible inside the WebView viewport; open panels are repositioned on window resize. | **Implemented**; vertical overflow remains governed by each panel's existing max-height/scroll rules. |
 
 ## RunMind 1.10.0 — Agent Orchestration & Workflow Intelligence (retained in 1.10.1)
 

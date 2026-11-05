@@ -146,7 +146,7 @@
     .toolbar-icon::-webkit-details-marker { display: none; }
     .toolbar-icon:hover, .toolbar-menu[open] > .toolbar-icon, .toolbar-icon.active { color: var(--color-text); background: var(--color-surface-hover); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, var(--color-border)); }
     .toolbar-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .toolbar-panel { position: absolute; z-index: 25; top: calc(100% + 8px); left: 0; width: min(340px, calc(100vw - 28px)); padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
+    .toolbar-panel { position: absolute; z-index: 25; top: calc(100% + 8px); left: 0; width: min(340px, calc(100vw - 28px)); padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); transform: translateX(var(--toolbar-panel-shift, 0px)); }
     #agentSettingsMenu .toolbar-panel { max-height: min(72vh, 700px); overflow: auto; }
     #ocrLanguageMenu .toolbar-panel { width: min(360px, calc(100vw - 28px)); max-height: min(72vh, 560px); overflow: auto; }
     .ocr-language-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--color-border); }
@@ -3448,7 +3448,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.5' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.6' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -3468,7 +3468,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.5' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.6' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;
@@ -6522,6 +6522,22 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       researchWorkspaceButton.title = researchPanelOpen ? 'Close Deep Research workspace' : 'Open Deep Research workspace';
       researchWorkspaceButton.setAttribute('aria-label', researchWorkspaceButton.title);
     }
+    function positionToolbarFlyout(menu) {
+      if (!menu?.open) return;
+      const panel = menu.querySelector(':scope > .toolbar-panel');
+      const trigger = menu.querySelector(':scope > summary');
+      if (!panel || !trigger) return;
+      panel.style.removeProperty('--toolbar-panel-shift');
+      const triggerRect = trigger.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const margin = 14;
+      const maxLeft = Math.max(margin, window.innerWidth - panelRect.width - margin);
+      const desiredLeft = Math.max(margin, Math.min(triggerRect.left, maxLeft));
+      panel.style.setProperty('--toolbar-panel-shift', `${desiredLeft - triggerRect.left}px`);
+    }
+    function positionOpenToolbarFlyouts() {
+      for (const menu of toolbarFlyoutMenus()) positionToolbarFlyout(menu);
+    }
     function closeOtherToolbarFlyouts(exceptMenu = null) {
       for (const menu of toolbarFlyoutMenus()) {
         if (menu !== exceptMenu && menu.open) menu.open = false;
@@ -8590,13 +8606,17 @@ ${toolActivityDetail}`;
 
     for (const menu of toolbarFlyoutMenus()) {
       menu.addEventListener('toggle', () => {
-        if (menu.open) closeOtherToolbarFlyouts(menu);
+        if (menu.open) {
+          closeOtherToolbarFlyouts(menu);
+          positionToolbarFlyout(menu);
+        }
         if (menu === researchWorkspaceMenu) {
           syncResearchPanelState();
           if (researchPanelOpen) updateResearchPanelPosition();
         }
       });
     }
+    window.addEventListener('resize', positionOpenToolbarFlyouts);
     deepResearchButton.addEventListener('click', () => setDeepResearchMode(!deepResearchEnabled));
     researchPauseButton.addEventListener('click', pauseDeepResearch);
     researchResumeButton.addEventListener('click', resumeDeepResearch);

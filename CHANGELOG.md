@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.10.6] — Toolbar flyout viewport positioning hotfix
+
+### Fixed
+- Fixed toolbar flyouts opening beyond the right edge of the application window. Every standard toolbar panel now measures its trigger and rendered width, then shifts horizontally just enough to remain within the visible WebView viewport with a consistent margin.
+- Applied the same positioning rule to all standard toolbar flyouts rather than special-casing only the MCP menu, so other right-side menus remain usable as the toolbar layout changes.
+- Recalculates open flyout positions when the window is resized.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.6`.
+
+### Validation
+- JavaScript syntax, flyout positioning bounds, version alignment, and ZIP integrity checked. Live Windows/WebView2 rendering still requires validation on Windows.
+
 ## [1.10.5] — Deep Research mode and warm dark theme hotfix
 
 ### Fixed
