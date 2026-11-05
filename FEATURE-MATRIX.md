@@ -1,6 +1,16 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.13 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.15 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+
+## RunMind 1.10.15 — generated branch-label correction
+
+- Generic child branches use `Branch 1`, `Branch 2`, etc. Meaningful fork prompts continue to produce descriptive branch names. Saved auto-generated `Alternative N` labels are migrated back to `Branch N`; descriptive names are retained.
+- The exact editable QuickAI default prompt introduced in 1.10.14 remains unchanged.
+
+## RunMind 1.10.14 — QuickAI prompt refinement
+
+- PowerToys Run's multiline system-prompt setting is pre-filled with the concise two-sentence QuickAI prompt. The setting remains editable and clearable. Only the exact prior built-in default is migrated; custom and empty values are preserved.
+- 1.10.14 temporarily migrated generated branch labels to `Alternative N`; 1.10.15 restores `Branch N`.
 
 ## RunMind 1.10.13 — copy sent prompts
 
@@ -96,7 +106,7 @@ This document describes the **current RunMind 1.10.13 feature set** across its P
 | Area | Fix | Current behavior | Status / limits |
 |---|---|---|---|
 | Conversation title | Separate parent title from branch labels | Switching branches never mutates the conversation title. The immutable `main` branch is displayed as **Original**. | **Fixed**; the underlying branch ID remains `main` for storage compatibility. |
-| Branch naming | Context-aware branch labels | New branches use the most recent user prompt at the fork point; generic prompts receive numbered alternatives and duplicate labels are disambiguated. | **Implemented**; deterministic prompt-derived labels can be renamed by the user. |
+| Branch naming | Context-aware branch labels | New branches use the most recent user prompt at the fork point; generic prompts receive numbered `Branch N` labels and duplicate labels are disambiguated. | **Implemented**; deterministic prompt-derived labels can be renamed by the user. |
 | Branch manager spacing | Single-row open state | The **Branches** toggle hides while the manager is open, leaving the close button inside the manager as the only dismissal control. | **Fixed**; removes the redundant toggle row and its vertical gap. |
 
 

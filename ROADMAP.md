@@ -1,8 +1,8 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.13. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.15. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
 
-Current 1.10.13 adds a Copy action to text-bearing user prompts in the chat transcript; original prompt text remains copyable while a response is streaming. Current 1.10.12 adds the editable pre-filled QuickAI system prompt in PowerToys settings and a shared native work-area-aware startup placement helper for both PowerToys and standalone windows; the default height is reduced by 24 DIPs. Current 1.10.x UX refinements: Deep Research is a mutually exclusive toolbar flyout (not a side drawer), and Always-approved tools can be removed individually from Agent settings.
+Current 1.10.15 restores the requested `Branch N` labels for generic child branches and migrates saved auto-generated `Alternative N` labels back to `Branch N`. Current 1.10.14 refines the editable PowerToys QuickAI starter prompt. Current 1.10.13 adds a Copy action to text-bearing user prompts in the chat transcript; original prompt text remains copyable while a response is streaming. Current 1.10.12 adds the editable pre-filled QuickAI system prompt in PowerToys settings and a shared native work-area-aware startup placement helper for both PowerToys and standalone windows; the default height is reduced by 24 DIPs. Current 1.10.x UX refinements: Deep Research is a mutually exclusive toolbar flyout (not a side drawer), and Always-approved tools can be removed individually from Agent settings.
 RunMind 1.10.5 also opens that flyout when Deep Research is enabled from the composer and replaces the blue-toned dark palette with Warm Graphite.
 RunMind 1.10.7 replaces the insufficient horizontal-only flyout adjustment with shared viewport-aware placement for all toolbar and Conversations panels, including vertical overflow and narrow-window handling.
 Current 1.10.11 prevents completed inline responses from overwriting newer PowerToys Run input by returning completed LLM results through PowerToys’ delayed query phase; the plugin no longer rewrites search-box text with `ChangeQuery`. Current 1.10.10 adds a native multiline PowerToys Run custom system prompt editor (PowerToys 0.80.0+); current 1.10.9 fixes flyout scroll restoration across all toolbar menus. Current 1.10.8 settings additions: independent PowerToys inline system instructions and sampling defaults; multiline chat-app custom instructions with preview/persistence; prompt composition across chat, Agent, Deep Research, and sub-agents; and consistent generation parameters in tool-calling paths.
@@ -41,7 +41,7 @@ Current 1.10.11 prevents completed inline responses from overwriting newer Power
 
 - [x] Keep the parent conversation title stable when switching branches; branch labels remain local to the branch manager.
 - [x] Display the immutable storage branch `main` as **Original**, migrating existing local state without changing its ID.
-- [x] Suggest child-branch labels from the latest user prompt at the fork point; use numbered alternatives for generic prompts and disambiguate duplicates.
+- [x] Suggest child-branch labels from the latest user prompt at the fork point; use numbered `Branch N` labels for generic prompts and disambiguate duplicates.
 - [x] Hide the redundant **Branches** toggle while the manager is open so the manager sits directly below the application header.
 
 ## Core agent completeness
@@ -156,6 +156,17 @@ Current 1.10.11 prevents completed inline responses from overwriting newer Power
 - Media: resize, convert, crop, metadata, QR, thumbnails, galleries.
 - Agent runtime: true streaming, pause/resume, retry, parallel execution, checkpoints, token/context monitoring, budgets, subagents, source manager, task templates, scheduled tasks, branching, analytics.
 
+
+## RunMind 1.10.15 — generated branch-label correction
+
+- [x] Use `Branch 1`, `Branch 2`, etc. for generic child branches while keeping descriptive prompt-based names for meaningful fork points.
+- [x] Migrate generated `Alternative N` labels back to `Branch N` while preserving descriptive branch names.
+
+## RunMind 1.10.14 — QuickAI prompt refinement
+
+- [x] Use the concise two-sentence QuickAI text as the pre-filled PowerToys Run prompt.
+- [x] Migrate only the exact previous built-in starter prompt; preserve user-customized and explicitly empty values.
+- [x] 1.10.14 briefly migrated generated `Branch N` labels to `Alternative N`; 1.10.15 restores `Branch N` and migrates those saved generated labels back.
 
 ## RunMind 1.10.13 — copy sent prompts
 

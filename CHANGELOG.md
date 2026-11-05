@@ -1,3 +1,23 @@
+## [1.10.15] — Use Branch labels for generated conversation branches
+
+### Changed
+- Replaced generic `Alternative N` child-branch labels with `Branch N`. Branches created from meaningful prompts retain their descriptive prompt-based names; short or generic prompts now receive straightforward `Branch 1`, `Branch 2`, etc. labels.
+- Migrated existing auto-generated `Alternative N` labels back to `Branch N` when loading saved branches. Existing `Branch N` labels remain in the requested format, descriptive names are preserved, and collisions are resolved without duplicate names.
+- Preserved the exact editable QuickAI default prompt introduced in 1.10.14.
+
+### Validation
+- Source regression checks cover generated branch labels, migration of stored `Alternative N` labels, preservation of descriptive names, numbering collisions, and prompt-based branch titles. JavaScript syntax, project XML, plugin JSON, version alignment, and ZIP integrity checked. Windows/.NET 10 compilation and live WebView2 testing still require Windows.
+
+## [1.10.14] — QuickAI prompt refinement and branch-name migration
+
+### Changed
+- Replaced the pre-filled PowerToys Run QuickAI starter prompt with the user's exact concise two-sentence version: it retains QuickAI's identity and clarifies that the input is the current PowerToys search-box text. The prompt remains editable and can still be cleared.
+- Migrated only the previous built-in QuickAI starter prompt to the new default when loading PowerToys settings. User-authored prompt content and intentionally empty settings remain unchanged.
+- This release briefly migrated generated `Branch N` labels to `Alternative N`; RunMind 1.10.15 reverses that naming choice to the user's requested `Branch N` labels.
+
+### Validation
+- Source tests cover exact default prompt text, migration of the previous built-in value, preservation of custom/empty prompts, and legacy branch-name migration with collision handling. JavaScript syntax, project XML, plugin JSON, version alignment, and ZIP integrity checked. Windows/.NET 10 compilation and live PowerToys Settings/WebView2 tests still require Windows.
+
 ## [1.10.13] — Copy sent prompts
 
 ### Added

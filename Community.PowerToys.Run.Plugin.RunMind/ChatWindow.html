@@ -1761,7 +1761,7 @@
         const payload = {
           version: 1, activeId: activeConversationBranchId,
           branches: conversationBranches.slice(0, CONVERSATION_BRANCH_LIMIT).map(branch => ({
-            id: branch.id, name: String(branch.name || 'Branch').slice(0, 48), createdAt: branch.createdAt || '', updatedAt: branch.updatedAt || '',
+            id: branch.id, name: String(branch.name || (branch.id === 'main' ? 'Original' : 'Branch')).slice(0, 48), createdAt: branch.createdAt || '', updatedAt: branch.updatedAt || '',
             messages: (branch.messages || []).slice(-CONVERSATION_BRANCH_MESSAGE_LIMIT).map(message => cloneBranchMessage(message, true))
           }))
         };
@@ -1803,6 +1803,62 @@
       conversationBranchCompareButton.disabled = !hasMultipleBranches || !conversationBranchCompareSelect.value;
       if (conversationBranchNote) conversationBranchNote.textContent = 'Independent histories · research checkpoints stay with their original task.';
     }
+    function normalizeStoredConversationBranchNames(branches) {
+      const items = Array.isArray(branches) ? branches : [];
+      const generatedPattern = /^(?:branch|alternative)(?:\s+(\d+))?$/i;
+      const explicitBranchNumbers = new Set(items
+        .filter(item => item && item.id !== 'main')
+        .map(item => /^branch\s+(\d+)$/i.exec(String(item.name || '').trim()))
+        .filter(Boolean)
+        .map(match => Number(match[1])));
+      const usedNames = new Set(['original']);
+      const usedBranchNumbers = new Set();
+      let nextBranchNumber = 1;
+
+      const allocateBranchName = preferredNumber => {
+        let number = Math.max(1, Number(preferredNumber) || nextBranchNumber);
+        while (explicitBranchNumbers.has(number) || usedBranchNumbers.has(number) || usedNames.has(`branch ${number}`)) number++;
+        usedBranchNumbers.add(number);
+        nextBranchNumber = Math.max(nextBranchNumber, number + 1);
+        return `Branch ${number}`;
+      };
+
+      return items.map(item => {
+        if (!item || typeof item !== 'object') return item;
+        if (item.id === 'main') {
+          usedNames.add('original');
+          return { ...item, name: 'Original' };
+        }
+
+        const rawName = String(item.name || '').trim().slice(0, 48);
+        const generatedMatch = generatedPattern.exec(rawName);
+        let candidate = rawName;
+        if (generatedMatch) {
+          const preferredNumber = generatedMatch[1] ? Number(generatedMatch[1]) : nextBranchNumber;
+          // Keep existing Branch N labels. Migrate Alternative N and other generated
+          // placeholders to the same Branch N naming convention.
+          if (/^branch\s+\d+$/i.test(rawName) && !usedBranchNumbers.has(preferredNumber) && !usedNames.has(`branch ${preferredNumber}`)) {
+            usedBranchNumbers.add(preferredNumber);
+            nextBranchNumber = Math.max(nextBranchNumber, preferredNumber + 1);
+            candidate = `Branch ${preferredNumber}`;
+          } else {
+            candidate = allocateBranchName(preferredNumber);
+          }
+        } else if (!candidate) {
+          candidate = allocateBranchName(nextBranchNumber);
+        }
+
+        let suffixIndex = 2;
+        const baseName = candidate;
+        while (usedNames.has(candidate.toLocaleLowerCase())) {
+          const suffix = ` (${suffixIndex++})`;
+          candidate = `${baseName.slice(0, 48 - suffix.length).trimEnd()}${suffix}`;
+        }
+        usedNames.add(candidate.toLocaleLowerCase());
+        return { ...item, name: candidate };
+      });
+    }
+
     function loadConversationBranches(restoreActive = false) {
       if (!restoreActive) {
         conversationBranches = [{ id: 'main', name: 'Original', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: messages.map(message => cloneBranchMessage(message, false)) }];
@@ -1811,10 +1867,10 @@
       try {
         const stored = JSON.parse(localStorage.getItem(conversationBranchStorageKey) || 'null');
         if (stored?.version === 1 && Array.isArray(stored.branches) && stored.branches.length) {
-          conversationBranches = stored.branches.slice(0, CONVERSATION_BRANCH_LIMIT).filter(item => item && typeof item.id === 'string').map(item => ({
-            id: item.id, name: item.id === 'main' ? 'Original' : String(item.name || 'Alternative').slice(0, 48), createdAt: item.createdAt || '', updatedAt: item.updatedAt || '',
+          conversationBranches = normalizeStoredConversationBranchNames(stored.branches.slice(0, CONVERSATION_BRANCH_LIMIT).filter(item => item && typeof item.id === 'string').map(item => ({
+            id: item.id, name: item.id === 'main' ? 'Original' : String(item.name || '').slice(0, 48), createdAt: item.createdAt || '', updatedAt: item.updatedAt || '',
             messages: (Array.isArray(item.messages) ? item.messages : []).map(message => cloneBranchMessage(message, true))
-          }));
+          })));
           if (!conversationBranches.some(item => item.id === 'main')) conversationBranches.unshift({ id: 'main', name: 'Original', createdAt: new Date().toISOString(), updatedAt: '', messages: [] });
           activeConversationBranchId = conversationBranches.some(item => item.id === stored.activeId) ? stored.activeId : 'main';
           const active = conversationBranches.find(item => item.id === activeConversationBranchId);
@@ -1845,13 +1901,13 @@
       const existingBranchCount = conversationBranches.filter(branch => branch.id !== 'main').length;
       let baseName;
       if (isGeneric || !source) {
-        baseName = `Alternative ${existingBranchCount + 1}`;
+        baseName = `Branch ${existingBranchCount + 1}`;
       } else {
         baseName = words.slice(0, 7).join(' ').replace(/[.!?,;:]+$/, '');
         if (baseName.length > 42) baseName = `${baseName.slice(0, 39).trimEnd()}…`;
         baseName = baseName.charAt(0).toLocaleUpperCase() + baseName.slice(1);
       }
-      baseName = baseName.slice(0, 48).trim() || `Alternative ${existingBranchCount + 1}`;
+      baseName = baseName.slice(0, 48).trim() || `Branch ${existingBranchCount + 1}`;
       let candidate = baseName;
       let duplicateIndex = 2;
       while (conversationBranches.some(branch => String(branch.name || '').toLocaleLowerCase() === candidate.toLocaleLowerCase())) {
@@ -3516,7 +3572,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.13' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.15' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -3536,7 +3592,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.13' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.15' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;

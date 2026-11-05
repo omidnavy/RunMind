@@ -2,7 +2,18 @@
 
 ## Source overlay
 
-This release package is an overlay for the complete RunMind 1.10.12 source tree. It includes the standalone WPF window source and a new shared helper; merge these paths into the complete tree, retaining its Assets/lib/Vendor/OCR and build resources. The trimmed development archive used to prepare it omitted the `Assets`, `lib`, `Vendor`, `OCR`, and other supporting resources. Keep those directories from the complete project when applying the overlay.
+This 9-file release package is an overlay for the complete RunMind 1.10.14 source tree. It includes the updated PowerToys plugin host source (`Main.cs`) because the QuickAI default and legacy-prompt migration live in the native plugin, plus the updated chat UI and release documentation. Merge these paths into the complete tree, retaining its `Assets`, `lib`, `Vendor`, `OCR`, and build resources. The trimmed development archive used to prepare this release omits those supporting resources; keep them from the complete project when applying the overlay.
+
+## RunMind 1.10.15 — Branch naming correction
+
+- Generic child branches now use `Branch 1`, `Branch 2`, etc. Branches created from meaningful prompts still receive descriptive prompt-based names.
+- Saved auto-generated `Alternative N` labels are migrated back to `Branch N`; existing descriptive names are retained and collisions are resolved.
+- The editable QuickAI prompt default from 1.10.14 is unchanged.
+
+## RunMind 1.10.14 — QuickAI prompt refinement
+
+- PowerToys Run's editable multiline prompt defaults to the exact two-sentence QuickAI prompt requested for that release. When an existing settings value exactly matches the prior built-in starter prompt, RunMind updates it to the new default. Custom edits and an explicitly empty prompt are preserved.
+- 1.10.14 temporarily changed generated generic branch labels from `Branch N` to `Alternative N`; 1.10.15 restores the requested `Branch N` labels.
 
 ## RunMind 1.10.13 — copy sent prompts
 

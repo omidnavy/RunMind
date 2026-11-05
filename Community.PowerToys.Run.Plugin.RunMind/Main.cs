@@ -45,11 +45,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private const int DefaultRequestTimeoutSeconds = 600;
     private const int DefaultInlineCpuThreads = 0;
     private const int MaximumInlineSystemPromptCharacters = 12000;
-    private const string DefaultInlineSystemPrompt =
+    private const string PreviousDefaultInlineSystemPrompt =
         "SYSTEM\n\n" +
         "You are QuickAI, a compact proactive local AI living inside \"Microsoft PowerToys Run\".\n" +
         "The input is the user's current search-box text. It may be a single letter, partial word, application name, command, question, complete task or anything else.\n" +
         "Answer immediately without introductions.";
+    private const string DefaultInlineSystemPrompt =
+        "You are QuickAI, a compact, proactive local AI living inside \"Microsoft PowerToys Run\".\n" +
+        "The input is the user's current search-box text. It may be a single letter, partial word, application name, command, question, complete task or anything else.";
 
     // The HttpClient is shared, but individual requests have their own configurable timeout.
     private static readonly HttpClient HttpClient = new()
@@ -236,9 +239,20 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             model = GetTextOption(options, "Model", model);
             thinking = GetTextOption(options, "Thinking", thinking);
             var inlinePromptOption = options.FirstOrDefault(option => option.Key == "InlineSystemPrompt");
-            inlineSystemPrompt = inlinePromptOption is null
-                ? DefaultInlineSystemPrompt
-                : NormalizeInlineSystemPrompt(inlinePromptOption.TextValue ?? string.Empty);
+            if (inlinePromptOption is null)
+            {
+                inlineSystemPrompt = DefaultInlineSystemPrompt;
+            }
+            else
+            {
+                var savedPrompt = NormalizeInlineSystemPrompt(inlinePromptOption.TextValue ?? string.Empty);
+                var previousDefault = NormalizeInlineSystemPrompt(PreviousDefaultInlineSystemPrompt);
+                // Migrate only the exact previous built-in starter text. Preserve custom prompts
+                // and an explicitly empty value (which disables the additional instructions).
+                inlineSystemPrompt = string.Equals(savedPrompt, previousDefault, StringComparison.Ordinal)
+                    ? DefaultInlineSystemPrompt
+                    : savedPrompt;
+            }
             inlineTemperature = ParseOptionalDouble(options, "InlineTemperature", 0, 2);
             inlineTopP = ParseOptionalDouble(options, "InlineTopP", 0, 1);
             inlineMaxOutputTokens = ParseOptionalInt(options, "InlineMaxOutputTokens", 1, 1000000);
