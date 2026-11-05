@@ -3513,7 +3513,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.8' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.10' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -3533,7 +3533,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.8' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.10' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;
@@ -6671,19 +6671,40 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
       const anchorRect = trigger.getBoundingClientRect();
 
+      // Repositioning can be triggered by viewport changes while a user is
+      // reading a long menu. Preserve the panel and nested scroll containers;
+      // never briefly remove max-height, because that collapses the scroll range
+      // and the browser clamps scrollTop back to zero.
+      const scrollPositions = [panel, ...panel.querySelectorAll('*')]
+        .filter(element => element.scrollTop > 0)
+        .map(element => [element, element.scrollTop, element.scrollLeft]);
+
       Object.assign(panel.style, {
         position: 'fixed', left: '0px', right: 'auto', top: '0px', bottom: 'auto',
-        transform: 'none', maxWidth: 'none', maxHeight: 'none', overflowX: 'hidden', overflowY: 'auto'
+        transform: 'none', maxWidth: `${Math.max(1, viewportWidth - 24)}px`,
+        // Keep a viewport-sized cap during measurement. scrollHeight still
+        // reports the full content height for overflow containers.
+        maxHeight: `${Math.max(1, viewportHeight - 24)}px`,
+        overflowX: 'hidden', overflowY: 'auto', overscrollBehavior: 'contain'
       });
 
-      const preliminary = calculateToolbarFlyoutPlacement(anchorRect, panel.getBoundingClientRect().width || panel.offsetWidth, panel.scrollHeight || panel.getBoundingClientRect().height, viewportWidth, viewportHeight);
-      panel.style.maxWidth = `${Math.floor(preliminary.maxWidth)}px`;
       const panelWidth = panel.getBoundingClientRect().width || panel.offsetWidth;
       const naturalHeight = panel.scrollHeight || panel.getBoundingClientRect().height;
       const placement = calculateToolbarFlyoutPlacement(anchorRect, panelWidth, naturalHeight, viewportWidth, viewportHeight);
+      panel.style.maxWidth = `${Math.floor(placement.maxWidth)}px`;
       panel.style.maxHeight = `${Math.floor(placement.maxHeight)}px`;
       panel.style.left = `${Math.round(placement.left)}px`;
       panel.style.top = `${Math.round(placement.top)}px`;
+
+      // Restore deepest scrollers first, then the outer flyout. The browser
+      // naturally clamps offsets if a resized viewport leaves less scroll room.
+      for (let index = scrollPositions.length - 1; index >= 0; index--) {
+        const [element, top, left] = scrollPositions[index];
+        if (element.isConnected) {
+          element.scrollTop = top;
+          element.scrollLeft = left;
+        }
+      }
     }
     function positionOpenToolbarFlyouts() {
       for (const menu of toolbarFlyoutMenus()) positionToolbarFlyout(menu);
@@ -8787,7 +8808,19 @@ ${toolActivityDetail}`;
     }
     window.addEventListener('resize', positionOpenToolbarFlyouts);
     window.visualViewport?.addEventListener('resize', positionOpenToolbarFlyouts);
-    document.addEventListener('scroll', positionOpenToolbarFlyouts, true);
+    document.addEventListener('scroll', event => {
+      // Scrolls originating inside an open flyout must remain native user
+      // scrolling. Reposition only when the surrounding document/viewport moves.
+      const target = event.target;
+      if (target instanceof Node) {
+        for (const menu of toolbarFlyoutMenus()) {
+          if (!menu.open) continue;
+          const panel = menu.querySelector(':scope > .toolbar-panel, :scope > .conversation-panel');
+          if (panel && (panel === target || panel.contains(target))) return;
+        }
+      }
+      positionOpenToolbarFlyouts();
+    }, true);
     deepResearchButton.addEventListener('click', () => setDeepResearchMode(!deepResearchEnabled));
     researchPauseButton.addEventListener('click', pauseDeepResearch);
     researchResumeButton.addEventListener('click', resumeDeepResearch);

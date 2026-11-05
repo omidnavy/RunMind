@@ -159,9 +159,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Key = "InlineSystemPrompt",
             DisplayLabel = "Custom system instructions (optional)",
-            DisplayDescription = "Instructions used only by PowerToys Run inline queries. Leave empty for no additional instructions. In this text field, use \\n for a line break. Maximum 12,000 characters. Does not affect the standalone chat app.",
-            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            DisplayDescription = "Instructions used only by PowerToys Run inline queries. Enter multiple lines directly; leave empty for no additional instructions. Maximum 12,000 characters. Does not affect the standalone chat app.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.MultilineTextbox,
             TextValue = string.Empty,
+            TextBoxMaxLength = MaximumInlineSystemPromptCharacters,
+            PlaceholderText = "Enter your PowerToys Run system instructions...",
         },
         new()
         {

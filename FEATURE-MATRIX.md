@@ -1,6 +1,17 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.8 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.10 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+
+## RunMind 1.10.10 — multiline PowerToys prompt setting
+
+- PowerToys Run custom system instructions use the native multiline settings control, support real line breaks and vertical scrolling, and retain the 12,000-character maximum and existing setting key. Legacy escaped `\n` prompt values remain normalized.
+
+## RunMind 1.10.9 — flyout scrolling hotfix
+
+| Area | Fix | Current behavior | Status / limits |
+|---|---|---|---|
+| Toolbar UX | Persistent flyout scrolling | Scroll events originating inside an open toolbar or Conversations flyout no longer invoke viewport repositioning. The shared placement routine preserves outer and nested scroll offsets during legitimate repositioning and keeps a non-collapsing measurement height. | **Fixed**; Windows WebView2 visual confirmation remains required. |
+| Toolbar UX | Scroll containment | Flyouts use contained overscroll so reaching a menu's scroll boundary does not unexpectedly scroll the page behind it. | **Implemented** |
 
 ## RunMind 1.10.8 — custom instructions and generation controls
 

@@ -1,3 +1,28 @@
+## [1.10.10] — Multiline PowerToys system prompt
+
+### Fixed
+- Changed the PowerToys Run **Custom system instructions** option from a single-line `Textbox` to PowerToys' native `MultilineTextbox` setting control. Users can now enter, paste, and edit real line breaks directly, with the standard multiline editor and vertical scrolling.
+- Retained the existing `InlineSystemPrompt` setting key and 12,000-character limit. Existing prompt content and provider request behavior remain compatible; normalization accepts real CR/LF line endings and legacy literal `\n` sequences.
+- Added a native placeholder and settings-side maximum length so the editor and runtime limit stay aligned.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.10`.
+
+### Compatibility
+- The native `MultilineTextbox` additional-option type is supported by PowerToys Run 0.80.0 and later. Older PowerToys versions do not render this setting type correctly and should be upgraded.
+
+### Validation
+- Source checks confirm the existing setting key and runtime normalization remain intact, and the PowerToys option is declared as `MultilineTextbox` with the 12,000-character limit. Project XML, plugin JSON, version alignment, and ZIP integrity checked. Windows/.NET 10 compilation and live PowerToys Settings UI testing still require Windows with the complete `lib` directory.
+
+## [1.10.9] — Flyout scrolling hotfix
+
+### Fixed
+- Fixed every toolbar flyout jumping back to the top while scrolling. The document-level capture listener now ignores scroll events originating inside an open flyout, including nested scroll containers.
+- Fixed scroll-position loss during legitimate flyout repositioning. The shared placement routine no longer removes `max-height` while measuring; it maintains a viewport-sized measurement cap, computes the full content height from `scrollHeight`, and restores existing outer and nested scroll offsets after layout changes.
+- Added contained overscroll behavior to flyouts so reaching the edge of a menu does not unexpectedly scroll the content behind it.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.9`.
+
+### Validation
+- JavaScript syntax and Chromium headless interaction checks cover outer flyout scrolling, nested scroll regions, viewport-triggered repositioning, and resize while scrolled. Package metadata and ZIP integrity checked. Windows/.NET 10 compilation and live WebView2 integration still require validation on Windows.
+
 ## [1.10.8] — Custom system instructions and consistent generation controls
 
 ### Added
