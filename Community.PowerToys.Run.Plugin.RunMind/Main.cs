@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
@@ -27,8 +28,8 @@ using Clipboard = System.Windows.Clipboard;
 namespace Community.PowerToys.Run.Plugin.RunMind;
 
 /// <summary>
-/// PowerToys Run plugin that sends the user's exact query to the selected local LLM provider.
-/// No system prompt or sampling parameters are injected.
+/// PowerToys Run plugin that sends the user's query to the selected local LLM provider,
+/// with optional plugin-local instructions and generation defaults.
 /// </summary>
 public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, IContextMenu, IDisposable
 {
@@ -43,6 +44,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private const int DefaultKeepAliveSeconds = 300;
     private const int DefaultRequestTimeoutSeconds = 600;
     private const int DefaultInlineCpuThreads = 0;
+    private const int MaximumInlineSystemPromptCharacters = 12000;
 
     // The HttpClient is shared, but individual requests have their own configurable timeout.
     private static readonly HttpClient HttpClient = new()
@@ -76,6 +78,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private int _keepAliveSeconds = DefaultKeepAliveSeconds;
     private int _requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
     private int _inlineCpuThreads = DefaultInlineCpuThreads;
+    private string _inlineSystemPrompt = string.Empty;
+    private double? _inlineTemperature;
+    private double? _inlineTopP;
+    private int? _inlineMaxOutputTokens;
+    private int? _inlineSeed;
 
     public IEnumerable<PluginAdditionalOption> AdditionalOptions => new List<PluginAdditionalOption>
     {
@@ -146,7 +153,47 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             DisplayLabel = "Ollama max CPU threads (optional)",
             DisplayDescription = "Optional Ollama-only CPU thread limit for inline PowerToys Run requests. Leave blank or set to 0 to let Ollama choose automatically. Set 1–128 to use that maximum. Does not affect LM Studio or standalone chat.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultInlineCpuThreads.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            TextValue = DefaultInlineCpuThreads.ToString(CultureInfo.InvariantCulture),
+        },
+        new()
+        {
+            Key = "InlineSystemPrompt",
+            DisplayLabel = "Custom system instructions (optional)",
+            DisplayDescription = "Instructions used only by PowerToys Run inline queries. Leave empty for no additional instructions. In this text field, use \\n for a line break. Maximum 12,000 characters. Does not affect the standalone chat app.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = string.Empty,
+        },
+        new()
+        {
+            Key = "InlineTemperature",
+            DisplayLabel = "Temperature (optional)",
+            DisplayDescription = "Inline PowerToys Run generation setting. Leave empty for the model default. Range: 0–2.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = string.Empty,
+        },
+        new()
+        {
+            Key = "InlineTopP",
+            DisplayLabel = "Top P (optional)",
+            DisplayDescription = "Inline PowerToys Run generation setting. Leave empty for the model default. Range: 0–1.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = string.Empty,
+        },
+        new()
+        {
+            Key = "InlineMaxOutputTokens",
+            DisplayLabel = "Max output tokens (optional)",
+            DisplayDescription = "Inline PowerToys Run output limit. Leave empty for the model default. Range: 1–1,000,000.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = string.Empty,
+        },
+        new()
+        {
+            Key = "InlineSeed",
+            DisplayLabel = "Seed (optional)",
+            DisplayDescription = "Inline PowerToys Run reproducibility setting. Leave empty for a random/provider default seed. Range: 0–2,147,483,647.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = string.Empty,
         },
     };
 
@@ -167,6 +214,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         int keepAliveSeconds = DefaultKeepAliveSeconds;
         int requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
         int inlineCpuThreads = DefaultInlineCpuThreads;
+        string inlineSystemPrompt = string.Empty;
+        double? inlineTemperature = null;
+        double? inlineTopP = null;
+        int? inlineMaxOutputTokens = null;
+        int? inlineSeed = null;
 
         if (settings?.AdditionalOptions is not null)
         {
@@ -176,20 +228,25 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             provider = options.FirstOrDefault(option => option.Key == "InlineProvider")?.ComboBoxValue == 1 ? 1 : 0;
             model = GetTextOption(options, "Model", model);
             thinking = GetTextOption(options, "Thinking", thinking);
+            inlineSystemPrompt = NormalizeInlineSystemPrompt(GetTextOption(options, "InlineSystemPrompt", string.Empty));
+            inlineTemperature = ParseOptionalDouble(options, "InlineTemperature", 0, 2);
+            inlineTopP = ParseOptionalDouble(options, "InlineTopP", 0, 1);
+            inlineMaxOutputTokens = ParseOptionalInt(options, "InlineMaxOutputTokens", 1, 1000000);
+            inlineSeed = ParseOptionalInt(options, "InlineSeed", 0, int.MaxValue);
 
-            if (int.TryParse(GetTextOption(options, "KeepAliveSeconds", DefaultKeepAliveSeconds.ToString()), out var parsedKeepAlive)
+            if (int.TryParse(GetTextOption(options, "KeepAliveSeconds", DefaultKeepAliveSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedKeepAlive)
                 && parsedKeepAlive is >= 0 and <= 86400)
             {
                 keepAliveSeconds = parsedKeepAlive;
             }
 
-            if (int.TryParse(GetTextOption(options, "RequestTimeoutSeconds", DefaultRequestTimeoutSeconds.ToString()), out var parsedTimeout)
+            if (int.TryParse(GetTextOption(options, "RequestTimeoutSeconds", DefaultRequestTimeoutSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTimeout)
                 && parsedTimeout is >= 30 and <= 3600)
             {
                 requestTimeoutSeconds = parsedTimeout;
             }
 
-            if (int.TryParse(GetTextOption(options, "InlineCpuThreads", DefaultInlineCpuThreads.ToString()), out var parsedCpuThreads)
+            if (int.TryParse(GetTextOption(options, "InlineCpuThreads", DefaultInlineCpuThreads.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedCpuThreads)
                 && parsedCpuThreads is >= 0 and <= 128)
             {
                 inlineCpuThreads = parsedCpuThreads;
@@ -206,6 +263,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _keepAliveSeconds = keepAliveSeconds;
             _requestTimeoutSeconds = requestTimeoutSeconds;
             _inlineCpuThreads = inlineCpuThreads;
+            _inlineSystemPrompt = inlineSystemPrompt;
+            _inlineTemperature = inlineTemperature;
+            _inlineTopP = inlineTopP;
+            _inlineMaxOutputTokens = inlineMaxOutputTokens;
+            _inlineSeed = inlineSeed;
         }
 
         CancelActiveQuery();
@@ -525,19 +587,20 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var requestBody = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["model"] = model,
-            // Deliberately pass the user's prompt directly: no hidden/system prompt is added.
             ["prompt"] = input,
             ["stream"] = true,
             ["keep_alive"] = settings.KeepAliveSeconds,
         };
+        if (!string.IsNullOrWhiteSpace(settings.InlineSystemPrompt))
+            requestBody["system"] = settings.InlineSystemPrompt;
 
-        if (settings.InlineCpuThreads > 0)
-        {
-            requestBody["options"] = new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                ["num_thread"] = settings.InlineCpuThreads,
-            };
-        }
+        var generationOptions = new Dictionary<string, object>(StringComparer.Ordinal);
+        if (settings.InlineCpuThreads > 0) generationOptions["num_thread"] = settings.InlineCpuThreads;
+        if (settings.InlineTemperature is double temperature) generationOptions["temperature"] = temperature;
+        if (settings.InlineTopP is double topP) generationOptions["top_p"] = topP;
+        if (settings.InlineMaxOutputTokens is int maxOutputTokens) generationOptions["num_predict"] = maxOutputTokens;
+        if (settings.InlineSeed is int seed) generationOptions["seed"] = seed;
+        if (generationOptions.Count > 0) requestBody["options"] = generationOptions;
 
         if (TryResolveThinkValue(model, settings.Thinking, out var thinkValue))
         {
@@ -592,12 +655,20 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private async Task<string> QueryLMStudioStreamAsync(string input, string model, SettingsSnapshot settings, CancellationToken cancellationToken)
     {
         var endpoint = BuildLMStudioUri(settings.LMStudioBaseUrl, "chat/completions");
-        var requestBody = new
+        var messages = new List<object>();
+        if (!string.IsNullOrWhiteSpace(settings.InlineSystemPrompt))
+            messages.Add(new { role = "system", content = settings.InlineSystemPrompt });
+        messages.Add(new { role = "user", content = input });
+        var requestBody = new Dictionary<string, object>(StringComparer.Ordinal)
         {
-            model,
-            messages = new[] { new { role = "user", content = input } },
-            stream = true,
+            ["model"] = model,
+            ["messages"] = messages,
+            ["stream"] = true,
         };
+        if (settings.InlineTemperature is double temperature) requestBody["temperature"] = temperature;
+        if (settings.InlineTopP is double topP) requestBody["top_p"] = topP;
+        if (settings.InlineMaxOutputTokens is int maxOutputTokens) requestBody["max_tokens"] = maxOutputTokens;
+        if (settings.InlineSeed is int seed) requestBody["seed"] = seed;
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
         using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -936,8 +1007,40 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 _thinking,
                 _keepAliveSeconds,
                 _requestTimeoutSeconds,
-                _inlineCpuThreads);
+                _inlineCpuThreads,
+                _inlineSystemPrompt,
+                _inlineTemperature,
+                _inlineTopP,
+                _inlineMaxOutputTokens,
+                _inlineSeed);
         }
+    }
+
+    private static string NormalizeInlineSystemPrompt(string value)
+    {
+        var normalized = (value ?? string.Empty)
+            .Replace("\\r\\n", "\n", StringComparison.Ordinal)
+            .Replace("\\n", "\n", StringComparison.Ordinal)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal)
+            .Trim();
+        return normalized.Length > MaximumInlineSystemPromptCharacters
+            ? normalized[..MaximumInlineSystemPromptCharacters]
+            : normalized;
+    }
+
+    private static double? ParseOptionalDouble(IEnumerable<PluginAdditionalOption> options, string key, double minimum, double maximum)
+    {
+        var raw = GetTextOption(options, key, string.Empty);
+        return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            && double.IsFinite(value) && value >= minimum && value <= maximum ? value : null;
+    }
+
+    private static int? ParseOptionalInt(IEnumerable<PluginAdditionalOption> options, string key, int minimum, int maximum)
+    {
+        var raw = GetTextOption(options, key, string.Empty);
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            && value >= minimum && value <= maximum ? value : null;
     }
 
     private static string GetTextOption(
@@ -2015,5 +2118,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         string Thinking,
         int KeepAliveSeconds,
         int RequestTimeoutSeconds,
-        int InlineCpuThreads);
+        int InlineCpuThreads,
+        string InlineSystemPrompt,
+        double? InlineTemperature,
+        double? InlineTopP,
+        int? InlineMaxOutputTokens,
+        int? InlineSeed);
 }

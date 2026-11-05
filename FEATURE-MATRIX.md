@@ -1,6 +1,16 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.7 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.8 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+
+## RunMind 1.10.8 — custom instructions and generation controls
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| PowerToys settings | Inline custom system instructions | Optional plugin-local prompt is sent as Ollama `system` or an LM Studio system message; literal `\n` sequences create line breaks. | **Implemented**; limited to 12,000 characters and independent of chat-app preferences. |
+| PowerToys settings | Inline generation defaults | Temperature, Top P, Max output tokens, and Seed are independently configurable and passed in provider-native request fields. | **Implemented**; blank/invalid values defer to provider defaults. |
+| Chat settings | Custom system instructions | Multiline prompt editor with 16,000-character limit, counter, preview, local persistence, and independent Clear action. | **Implemented**; applies to normal chat, Agent Mode, Deep Research, and specialist sub-agents. |
+| Prompt composition | Built-in and user instructions | User preferences are composed alongside built-in instructions and do not grant tool permissions or replace mode/tool contracts. | **Implemented**; active agent/research tasks retain a prompt snapshot. |
+| Generation | Agent and research provider settings | Configured temperature, Top P, max output tokens, context length where supported, and seed flow through Ollama and LM Studio tool-call requests. | **Implemented with provider limits**; explicit LM Studio 400/422 parameter rejections are cached and omitted on later requests. |
 
 ## RunMind 1.10.7 UI hotfix
 

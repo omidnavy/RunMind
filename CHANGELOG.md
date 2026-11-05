@@ -1,3 +1,26 @@
+## [1.10.8] — Custom system instructions and consistent generation controls
+
+### Added
+- Added an independent optional **Custom system instructions** PowerToys Run setting. It applies only to inline PowerToys queries; it does not leak into the standalone chat app when a pending query is handed off. The Additional Options text field supports explicit `\n` sequences for line breaks and is bounded to 12,000 characters.
+- Added independent PowerToys inline generation defaults: Temperature (0–2), Top P (0–1), Max output tokens (1–1,000,000), and Seed (0–2,147,483,647). Empty or invalid values use provider defaults. Ollama receives these under `options` (`temperature`, `top_p`, `num_predict`, `seed`); LM Studio receives the corresponding OpenAI-compatible chat-completion fields.
+- Added a multiline **Custom system instructions** editor to the chat application's existing Generation settings flyout, with a 16,000-character counter, live application preview, and a separate Clear action. It is saved in the chat WebView's local preferences and remains independent from PowerToys settings.
+- Chat custom instructions apply to normal chat, Agent Mode, Deep Research, and bounded specialist sub-agents. They are included in context budgeting and snapshotted into active agent/research task contexts. RunMind's built-in operational instructions, tool permissions, safety requirements, and task-specific workflows remain in place.
+
+### Changed
+- Applied the chat application's configured generation parameters consistently to Agent Mode, Deep Research, and sub-agent provider turns: Ollama uses its native `options` fields; LM Studio OpenAI-compatible requests receive Temperature, Top P, Max output tokens, and Seed; LM Studio Native REST receives its supported native fields including Seed.
+- Added conservative parameter fallback for LM Studio: optional parameters are cached as unsupported only after an explicit HTTP 400/422 validation response identifies the rejected field. Generic server, model, and network errors are not retried as parameter fallbacks.
+- A change to the chat custom system prompt clears LM Studio native response-chain IDs so the next request starts a new chain and cannot silently omit the changed instructions.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.8`.
+
+### Notes and limits
+- PowerToys Run's `AdditionalOptions` supports a single-line text field, so `\n` is the documented way to enter line breaks there. The chat application provides a true multiline editor.
+- Sampling controls are passed only where the selected provider API supports them. Invalid/out-of-range optional values are ignored; an explicitly rejected optional LM Studio parameter is omitted for subsequent requests to that model/endpoint combination.
+- Custom user instructions are not applied to internal title generation, context summarization, connection diagnostics, or capability probes; these use dedicated narrow-purpose prompts.
+
+### Validation
+- JavaScript syntax, custom-prompt composition and persistence paths, context-budget inclusion, Ollama/OpenAI generation-parameter mapping, active-task prompt snapshots, PowerToys request-body mappings, version alignment, and ZIP integrity checked.
+- Windows/.NET 10 compilation and live PowerToys/WebView2/Ollama/LM Studio integration were not available in this environment and still require validation on Windows.
+
 ## [1.10.7] — Shared viewport-aware flyout positioning
 
 ### Fixed

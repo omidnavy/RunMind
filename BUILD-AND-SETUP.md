@@ -1,202 +1,34 @@
-# Build and setup — RunMind 1.10.7
+# RunMind build and setup notes
 
-RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
+## Source overlay
 
-## RunMind 1.10.1 hotfix
+This release package is an overlay for the complete RunMind 1.10.7 source tree. The trimmed development archive used to prepare it omitted the `Assets`, `lib`, `Vendor`, `OCR`, and other supporting resources. Keep those directories from the complete project when applying the overlay.
 
-This is a patch release over 1.10.0. It fixes a JavaScript `ReferenceError` in Deep Research context compaction when the selected model/provider exposes an active context limit. The context metric now correctly assigns `estimatedPromptTokens` from the already-calculated `estimatedTokens` value. No provider configuration change is required.
+## RunMind 1.10.8 — Custom instructions and generation settings
 
-## RunMind 1.10.4 toolbar and permissions hotfix
+### PowerToys Run
+- Open PowerToys Run settings, select RunMind, and use **Custom system instructions (optional)** for PowerToys inline requests only.
+- The PowerToys Additional Options control is a single-line text field. Enter the literal sequence `\n` where a line break is required. The prompt is limited to 12,000 characters.
+- Temperature, Top P, Max output tokens, and Seed are optional. Leave them empty to use provider defaults. Valid ranges are Temperature `0–2`, Top P `0–1`, Max output tokens `1–1,000,000`, and Seed `0–2,147,483,647`.
+- These settings are independent from the chat application's local preferences and are not transferred when a pending query is opened in chat.
 
-This patch makes the Deep Research workspace a standard toolbar flyout anchored under its icon instead of a separate right-side drawer. Its icon now uses the same active/open visual state and `aria-expanded` behavior as the other toolbar sections. All top-level toolbar and conversation flyouts are mutually exclusive: opening one closes the others; outside-click and Escape handling use the same shared menu set. The Agent settings panel now lists always-approved tools as individual rows with a **Remove** action; removing a tool immediately saves the updated approval set, while **Clear approvals** remains available.
+### Chat application
+- Open the toolbar **Generation settings** menu.
+- Edit **Custom system instructions** in the multiline editor (up to 16,000 characters). The character counter and preview show how the prompt is composed. **Clear custom instructions** is separate from **Reset generation settings**.
+- The chat prompt is saved in the chat WebView's local preferences and applies to normal chat, Agent Mode, Deep Research, and specialist sub-agents. Active agent/research tasks retain the prompt snapshot with which they started.
+- RunMind's built-in tool contracts, approval rules, operational constraints, and mode instructions remain active. User preferences do not grant permissions or replace those requirements.
+- Temperature, Top P, Max output tokens, Context length where supported, and Seed are applied to regular and tool-calling requests. Some provider/model combinations reject optional parameters; RunMind only removes a parameter after an explicit validation error identifies it.
 
-## RunMind 1.10.5 — Deep Research mode and Warm Graphite theme
+## Build
 
-Turning on **Deep Research** from the composer now opens the Research workspace flyout. The click is explicitly excluded from the document-level outside-click handler so event bubbling cannot immediately close the flyout. Opening other toolbar sections still closes Research, and clicking outside still closes the active section.
-
-The dark palette is now **Warm Graphite**, using neutral charcoal surfaces, warm ivory text, and a restrained amber accent instead of blue/indigo surfaces and highlights. The Light and System-Light palettes are unchanged. This is a color-palette change, not a display-level blue-light filter.
-
-## RunMind 1.10.6 — toolbar flyout positioning hotfix
-
-Standard toolbar flyouts now stay inside the visible application viewport. When a menu is opened, RunMind measures its trigger and rendered panel width, then shifts the panel horizontally only as much as needed to keep both edges within a 14 px viewport margin. The position is recalculated when the window is resized. This fixes right-edge clipping (including the MCP servers panel) without changing the normal left-anchored placement of menus that already fit.
-
-## RunMind 1.10.7 — shared viewport-aware flyout positioning
-
-All top-level flyouts now share one fixed-to-viewport placement routine, including Conversations and Deep Research. The routine clamps panels to the left/right and top/bottom of the WebView, opens above the trigger when there is insufficient room below, limits tall panels to the available viewport space with internal scrolling, and repositions open panels after window, visual viewport, or document-scroll changes. This replaces 1.10.6's horizontal-only transform adjustment, which did not cover vertical overflow or the Conversations panel and could still fail when the toolbar layout wrapped.
-
-The native desktop window's initial height is **not changed by this HTML overlay**. That outer height is set by the WPF host when it creates the chat window; the host window-construction source files are not included in this trimmed source package. Changing the WebView page height would only shrink the content area, not the actual Windows window or its title bar. The native adjustment should be made in both host window creation paths, only for a fresh default window, using the active monitor's work area and preserving user-restored window sizes.
-
-## Installation
-
-Extract the overlay over the complete RunMind 1.10.6 source folder. Preserve the existing `Assets`, `lib`, image resources, README, and build scripts, then run `Build-Release-x64.bat` on Windows. Rebuild and deploy the PowerToys plugin or launch the standalone application.
-
-## RunMind 1.10.3 branch title and spacing hotfix
-
-This patch separates the conversation title from branch labels. Switching between branches no longer changes the title shown in the application or used for conversation export. The immutable internal `main` branch is now displayed as **Original**, and existing saved branch state is migrated to that label without changing the stable branch ID. New branch names are suggested from the latest user prompt at the fork point; short greetings and generic prompts receive labels such as **Alternative 1**, and duplicate names receive a numeric suffix. Users can rename non-original branches.
-
-The open branch manager now hides the separate **Branches** toggle row. Its own close button is the only control in the open state, so the manager sits directly below the application header without the redundant row or its vertical gap. When collapsed, the toggle remains compact at the top-right of the transcript area.
-
-## RunMind 1.10.2 UI hotfix
-
-This patch fixes the conversation branch manager layout. Branch controls are collapsed by default and appear only when the conversation has multiple branches. Use the compact **Branches** control to open the manager, and its **×** button to close it. Creating a branch from a message opens the manager so the new branch can be renamed, compared, or switched immediately. The manager and branch comparison now occupy full-width rows above the transcript; neither takes a permanent side column or reduces the chat width.
-
-The underlying issue was two CSS interactions: `.conversation-branchbar { display:flex }` overrode the browser's default `[hidden]` behavior, and `.transcript-frame` used the default horizontal flex direction. The fix adds an explicit `[hidden]` rule and makes the transcript frame a vertical flex container.
-
-## Requirements
-
-- Windows 11 x64, build 22621 or later, with the matching Windows SDK targeting pack.
-- .NET 10 SDK. Both projects target `net10.0-windows10.0.22621.0`, matching the current PowerToys plugin checklist.
-
-### PowerToys plugin linting
-
-`Community.PowerToys.Run.Plugin.Lint` 0.6.0 still reports a `net9.0` target-framework rule. That rule is stale: the current Microsoft PowerToys plugin checklist specifies `net10.0-windows10.0.22621.0`. Keep RunMind on .NET 10 rather than downgrading to satisfy the older linter rule.
-
-The linter's `Repository missing` result also requires a published GitHub repository and matching plugin metadata. RunMind's current Git remote is a private/local Gogs endpoint, so no public GitHub repository URL is claimed in this source package.
-- WebView2 Runtime installation is managed by RunMind. At startup, both hosts perform a quick availability check. If the Evergreen Runtime is missing, RunMind downloads Microsoft's official bootstrapper and silently installs it per-user. Only that first launch needs internet access and may take longer; normal launches use the existing shared runtime. See [Microsoft's WebView2 distribution guidance](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution).
-- For the PowerToys plugin build, matching PowerToys reference assemblies are included under `lib\x64`: `PowerToys.Common.UI.dll`, `PowerToys.ManagedCommon.dll`, `PowerToys.Settings.UI.Lib.dll`, `Wox.Infrastructure.dll`, and `Wox.Plugin.dll`. Replace them with assemblies from your installed PowerToys build if you need to target a different PowerToys version.
-- Ollama or an OpenAI-compatible model server reachable from the host/browser.
-
-## RunMind 1.10.0 features
-
-The 1.10.0 release adds a **Workflow** view to the existing workspace drawer; it does not create another panel or application. Research, Review, and Recovery remain. Agent Mode and Deep Research now share a bounded tool-batch scheduler. Only an explicit allowlist of known read-only built-in tools runs concurrently (up to four workers); results are returned to the model in original tool-call order. A model response is a dependency layer, and the next model turn waits for its results. Writes, approval-gated operations, MCP calls, duplicate calls, and delegation remain serialized.
-
-The Workflow view shows recent operation layers, state, duration, sanitized input, bounded output, sub-agent activity, and local analytics. The main Stop control aborts the active run, marks queued operations cancelled, and prevents later model-turn layers from being dispatched; an in-flight adapter or external service must honor its abort signal, and an already accepted side effect cannot be undone. Dragging a parallel read-only operation card onto another changes the preferred start order for future independent groups; it does not reorder an active or historical workflow, and it cannot override dependency/side-effect barriers. The preference is local to the WebView profile.
-
-The five sub-agent roles are Researcher, Coder, Security Analyst, Reviewer, and Summarizer. Delegation is one level only, uses the selected model, and is limited to a read-only child-tool subset and at most four child model/tool turns. Deep Research sub-agent retrieval shares the parent task's domain restrictions and page/tool/time budgets. The parent remains responsible for integrating and reviewing the returned findings. JSON results are normalized; a model that ignores the JSON-only instruction is preserved as unstructured text.
-
-Conversation branching is available from the **Branch here** action on completed messages. Up to eight independent branches are kept per window instance, with rename/delete/switch and latest-assistant-answer comparison. Local branch snapshots retain at most 16 recent messages, trim long text, and omit binary attachment bytes. A `.runmind` file remains the full-fidelity conversation archive; research checkpoints remain attached to their original task.
-
-Workflow analytics are stored locally in the current WebView profile and show tool call counts, success rates, average tool durations, provider/model request counts, successes/failures, client-observed latency, and provider-reported token usage when available. Token reporting is optional and depends on the endpoint. Operation intent is persisted before execution; an operation left running after a WebView interruption is marked ambiguous and is never replayed silently. Only known read-only operations offer an in-app retry. These safeguards do not provide exactly-once execution for arbitrary external tools.
-
-## RunMind 1.9.0 features
-
-The 1.9.0 release extends the existing Deep Research drawer with three views: **Research**, **Review**, and **Recovery**. Research retains the existing controls and source/evidence/activity collections. Review shows model-assisted claim verdicts with source passages, exact-quote match results, uncertainty, qualitative source assessments, and user Accept/Reject/Investigate further actions. Recovery contains approximate context telemetry, selected-model diagnostics, checkpoint history/restore, and the interrupted-operation review state.
-
-Seven research templates are included: General, Technical Investigation, Product & Technology Comparison, Security Assessment, Academic Research, Website Investigation, and Troubleshooting Investigation. Applying a template fills the initial plan and adds task-specific instructions; the plan remains editable.
-
-Claim verdicts and source-quality explanations are generated by the selected model. RunMind checks only whether an exact normalized quote occurs in the bounded source text it retained. It does not independently prove entailment, factual accuracy, authority, or source independence. Hostname differences are not proof of independent reporting.
-
-Checkpoint history stores at most eight bounded snapshots per task in IndexedDB. Tool operations are recorded before execution; exact matching completed results from an interrupted, not-yet-committed batch can be reused. If an operation was started but its result was not committed, RunMind asks the user before retrying because a side effect may already have happened. This is not an exactly-once guarantee for arbitrary tools or MCP servers.
-
-Context usage is estimated from serialized conversation characters divided by four. Adaptive compaction is limited to older research tool results and only activates when the current active context limit is known. Selected-model diagnostics test discovery, a small generation request, and a harmless tool-call response; the diagnostic tool is never executed. LM Studio Native REST mode does not support these chat-completions probes in this release.
-
-## Agent file and data capabilities in 1.7.2
-
-The Agent can read supported text/source attachments by exact filename, validate attached or workspace JSON files (including bounded JSON Schema checks), read attached or workspace PDFs with PDF.js, automatically OCR pages whose extracted text is missing or suspicious, and inspect attached or workspace ZIP archives. PDF and ZIP attachments are signature-checked and bounded; binary content is retained when a `.runmind` conversation is saved and reopened. ZIP extraction remains approval-gated, CRC-checked, and writes only into a new folder inside the selected workspace. PDF reading is limited to 25 MB and 500 pages; encrypted PDFs, handwriting, low-quality scans, and complex reading order may still need manual review. CSV inference/joins and model endpoint discovery diagnosis are also available. See `FEATURE-MATRIX.md` for limits.
-
-## PDF/OCR resources and build
-
-RunMind uses PDF.js for PDF parsing and Tesseract.js for local OCR. The source overlay pins PDF.js `6.5.438`, Tesseract.js `7.0.0`, and `tesseract.js-core` `7.0.0`. English (`eng`) and Persian (`fas`, selected in RunMind as `fa_IR`) are the bundled language choices.
-
-The overlay intentionally does not contain the third-party JavaScript/WASM binaries or traineddata files. On the first build, `Prepare-RunMind-OCR.ps1` downloads the pinned packages and the two language models into `Vendor\` and `OCR\tessdata\`. This first preparation requires internet access. It does not require Node.js or npm; it uses Windows PowerShell and the built-in `tar.exe`. Once those resource folders are populated, subsequent builds skip downloads and can run offline. Both project files copy the local resources into their output directories.
-
-Use the included one-click script on Windows:
+Use the complete Windows source tree and its existing build script:
 
 ```powershell
 .\Build-Release-x64.bat
 ```
 
-For a manual build, prepare the resources first, then restore and build:
+The build script, PowerToys reference assemblies, assets, vendor resources, and OCR data must be present at the paths expected by the project files. This trimmed overlay does not include those dependencies.
 
-```powershell
-.\Prepare-RunMind-OCR.ps1
-dotnet restore .\RunMind.sln
-dotnet build .\RunMind.sln -c Release -p:Platform=x64
-```
+## Validation boundary
 
-The standalone host can be built independently after the same preparation step:
-
-```powershell
-dotnet build .\RunMind.Standalone\RunMind.Standalone.csproj -c Release -p:Platform=x64
-```
-
-Run `RunMind.exe` directly from the standalone build output. Every launch creates a separate process and chat window. Multiple standalone windows can run simultaneously; each receives a unique window instance ID. The native title bar follows the Windows app light/dark appearance preference and updates when that preference changes.
-
-### OCR languages
-
-The PDF OCR menu starts with English and Persian selected. Optional language packs are downloaded individually from the `tessdata_fast` model collection and cached in the current WebView2 profile. After a successful download, that profile can use the pack offline. Select multiple languages for mixed-language documents, for example `eng+fas`. RunMind does not automatically identify a document's language.
-
-Available language packs: French (`fra`), Spanish (`spa`), Arabic (`ara`), Chinese Simplified (`chi_sim`), Chinese Traditional (`chi_tra`), Russian (`rus`), Finnish (`fin`), German (`deu`), Italian (`ita`), Portuguese (`por`), Japanese (`jpn`), Korean (`kor`), Turkish (`tur`), and Urdu (`urd`). The PowerToys and standalone hosts use separate WebView2 profiles, so optional language packs are downloaded separately in each host. Clearing a host's WebView2 site data also clears its cached optional OCR packs.
-
-The PowerToys project requires the matching `lib\x64` reference assemblies before it can build. After building it, deploy the **entire** plugin output directory, including `Community.PowerToys.Run.Plugin.RunMind.dll`, `plugin.json`, `ChatWindow.html`, `Images\`, `Assets\Brand\Icon.svg`, `Assets\Brand\Icon.ico`, and the copied WebView2 dependencies. Restart PowerToys Run after replacing the plugin files.
-
-## Deep Research 1.8.0
-
-RunMind 1.8.0 extends the existing Deep Research side workspace; it does not add a separate research application. The existing Standard/Deep/Extensive presets, editable plan, page/tool budgets, Pause/Resume/Cancel, source collection, task history, Copy plan/results, and report export remain.
-
-New research capabilities:
-
-- `research_topic`: up to six related SearXNG queries with bounded results, URL deduplication, and preferred-domain ordering. It is offered only when SearXNG is configured.
-- `page_to_markdown`: direct HTML-to-Markdown conversion for headings, paragraphs, links, lists, blockquotes, tables, and code blocks; configured Reader fallback can supply Markdown when direct retrieval is blocked.
-- `crawl_website`: breadth-first, same-origin crawling, maximum 20 pages and depth 3.
-- `check_links`: up to 30 bounded HTTP HEAD checks. CORS/network/unsupported HEAD outcomes are reported as unverified, not broken; private/local destinations are skipped.
-- `compare_webpages`: exact trimmed-line comparison of two retrieved pages, not semantic comparison.
-- Source register: normalized URL deduplication, title/domain/author, publication/modified dates when available, excerpt, retrieval route/time, read state, and fetch failures.
-- Source policy: preferred, allowed, and blocked hostnames. Blocked hosts take precedence; an empty allowlist permits any otherwise allowed public host. Preferred hosts are ranking hints, not reputation scores.
-- Evidence register: the model can associate a claim with an exact quote from a source already read. The application checks quote presence in the bounded stored excerpt; it does not independently verify the source's authority or whether the quote logically supports the claim.
-- Live operation status and streaming tool-call previews for Ollama NDJSON and OpenAI-compatible SSE.
-- Research checkpoint snapshots in IndexedDB, periodic heartbeat persistence, and recovery of paused/interrupted or stale checkpoints in another window that shares the same WebView2 profile. Session storage remains a fallback when IndexedDB is unavailable.
-
-Research time budgets are soft boundaries: an in-flight operation may finish before no further retrieval is started and the collected evidence is synthesized. Pausing and plan edits take effect at complete tool-call-batch checkpoints. A crash during a batch resumes from the last committed transcript; exactly-once execution is not guaranteed. PowerToys and standalone use separate WebView2 profiles, so their research checkpoints do not synchronize. See `FEATURE-MATRIX.md` for detailed limits.
-
-## PowerToys Run responsiveness
-
-The plugin returns its pending result synchronously and runs model discovery/generation on a background task. For Ollama, the inline request also sends `options.num_thread` using the configurable **Ollama max CPU threads (optional)** setting. Leave it blank or set it to `0` to let Ollama choose automatically; enter `1`–`128` to pass that maximum as `options.num_thread`. This is an Ollama-only per-request limit and does not change LM Studio model settings or standalone chat.
-
-The shared chat page throttles growing-Markdown rendering to at most one update every 90 ms. This reduces browser-side rendering work but does not control CPU/GPU usage inside the model server.
-
-## PowerToys Run behavior
-
-The plugin is global and retains `llm` as its explicit action keyword:
-
-- `git bash commands` shows an immediate `Ask RunMind` result, then a completed response result after the model responds.
-- `llm git bash commands` invokes the same flow explicitly.
-- `llm` by itself does not launch a chat or generate a response. Search for **RunMind** to launch the standalone app through normal application search. The previous `LocalLLM` name is reserved by the plugin filter so it is not accidentally sent as a model prompt; use **RunMind** to launch the renamed executable.
-- Selecting the initial result before generation completes cancels the PowerToys request and opens a chat that sends the prompt. Selecting it after completion reuses the completed answer. Selecting the completed answer opens chat with the prompt and response already present.
-- Use the context menu on the completed response to copy the full Markdown answer.
-
-PowerToys Run owns the timing of immediate and background plugin results. Its settings expose separate delays for immediate plugins and background-execution plugins; keep the defaults initially, then tune them to taste. The synchronous delayed callback now starts `Task.Run` work and returns immediately. On completion, the worker calls `IPublicAPI.ChangeQuery(rawQuery, true)` so the next fast/delayed query pass can publish the finished answer. The plugin never blocks the callback waiting for a model response and does not mutate an already-returned result with streaming tokens.
-
-## WebView2 profiles and application data
-
-The hosts deliberately have separate WebView2 user-data folders:
-
-- Standalone: `%LOCALAPPDATA%\LocalLLM\Standalone\WebView2`
-- PowerToys: `%LOCALAPPDATA%\Microsoft\PowerToys\LocalLLM\PowerToys\WebView2`
-
-This avoids both hosts trying to use the same WebView2 profile concurrently. The browser stores are separate, however: `localStorage` settings, Agent task history, Deep Research checkpoints, credentials, and IndexedDB workspace directory handles do **not** synchronize between standalone and PowerToys. Within the same profile, a new window can recover a paused/interrupted or sufficiently stale research checkpoint. Ordinary chat transcripts are not automatically persisted; use Save conversation / Open conversation to persist and reopen sessions. The JavaScript application is shared; the browser profile data is not.
-
-## Cancellation behavior and boundary
-
-A new fast query cancels the prior query operation. Cancellation is propagated through model discovery, HTTP request setup, response headers, and the provider response stream. A query-generation guard prevents delayed callbacks from an older, different search from starting new work or publishing stale results. Selecting the pending result cancels the inline request before handing the prompt to chat. Settings changes and plugin disposal also cancel the active request.
-
-The PowerToys `IDelayedExecutionPlugin` interface does not provide a `CancellationToken`, query-cleared notification, or launcher-hidden/closed callback. Therefore the plugin can stop work on a new search or explicit hand-off, but it cannot observe the user pressing Escape or closing PowerToys Run while leaving the same query unchanged. No plugin-only implementation can guarantee cancellation for that missing host event.
-
-## Branding
-
-`Icon.ico` is the standalone executable/window icon. The light/dark 64px PNG exports are used by PowerToys Run. The complete supplied raster icon set is retained under `Assets/Brand/` for other UI surfaces. The chat header embeds the supplied `Icon.svg` path inline and uses `currentColor`, so its stroke follows the active UI theme.
-
-## Validation
-
-The 1.8.0 upgrade overlay does not include a validation report. Static checks cover inline JavaScript syntax, Ollama NDJSON and OpenAI-compatible SSE/JSON tool-call parsing, project XML/JSON metadata, release-version consistency, and ZIP integrity. A Windows/.NET 10 build, WebView2 IndexedDB recovery behavior, and end-to-end research tests against real SearXNG/Reader/model endpoints still need verification on Windows.
-
-### Local model server CORS
-
-The WebView2 page runs at `https://localhost`. Browser-side discovery and generation requests to Ollama/LM Studio are cross-origin, so the model server must permit the exact origin `https://localhost` (and any other origins you intentionally use). For Ollama, configure `OLLAMA_ORIGINS` to include `https://localhost` and restart the server; for LM Studio, enable its local-server CORS option / allow the WebView origin in the server's CORS configuration. The app normalizes provider URLs from `localhost` to `127.0.0.1` to avoid WebView2 virtual-host interception, but that hostname rewrite does not bypass CORS. PowerToys inline requests use .NET HTTP and are not subject to browser CORS.
-
-## Multiple standalone windows
-
-Each normal launch of `RunMind.exe` starts a new independent process and chat window. You can keep several standalone windows open alongside any number of PowerToys-launched chat windows. The standalone WebView2 profile is shared between standalone processes, while each chat receives its own window instance ID and conversation task state.
-
-
-## RunMind project and deployment names
-
-The source projects and folders are now `RunMind.Standalone` and `Community.PowerToys.Run.Plugin.RunMind`; the solution is `RunMind.sln`. The plugin assembly name is `Community.PowerToys.Run.Plugin.RunMind.dll`, and the standalone executable is `RunMind.exe`. The plugin GUID and `llm` keyword remain unchanged so PowerToys settings stay associated with the same plugin.
-
-When updating an existing installation, close PowerToys completely, remove the old deployed `Community.PowerToys.Run.Plugin.LocalLLM` plugin folder, and deploy the new `Community.PowerToys.Run.Plugin.RunMind` output folder. Do not leave both folders installed: they carry the same plugin GUID. The `%LOCALAPPDATA%\LocalLLM\...` WebView2 profile locations and browser storage keys intentionally remain unchanged to preserve existing settings, credentials and workspace permissions.
-
-## Conversation file title and Save As behavior
-
-RunMind's only native conversation format is `.runmind` (JSON with `format: "runmind"`). Other conversation formats are rejected. Opening a saved file sets the native and in-app titles from the selected file name (without extension). Saving opens the native Windows Save As dialog in both desktop hosts, pre-fills the generated conversation title, and defaults to `.runmind`. If the user changes the filename, the host writes that filename into the conversation payload and returns it to the page so the in-app and native titles stay synchronized. When the shared page is previewed outside a desktop host, it falls back to a normal browser download.
-
-When a saved file is selected, choose **Open in this window** to replace the current conversation (with a confirmation when it contains messages), or **Open in new window** to preserve the current chat and create an independent RunMind window. The host bridge accepts only two bounded operations: opening a validated conversation in a new window and saving a validated conversation through the native Windows Save As dialog. WebView2 host objects remain disabled.
+JavaScript syntax, request mapping, settings composition/persistence, XML/JSON metadata, and package integrity are checked during preparation. A Windows/.NET 10 compilation and live PowerToys, WebView2, Ollama, and LM Studio integration test must still be performed on Windows.
