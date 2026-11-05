@@ -1544,11 +1544,12 @@
       const canBranch = includeActions && !message.pending && (role === 'user' ? !!String(message.content || '').trim() : hasCompletedContent) && !activeController;
       const branchButton = canBranch ? `<button type="button" class="message-action branch-action" data-message-action="branch" data-index="${index}" title="Create an independent branch from this message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v12a4 4 0 0 0 4 4h8"/><path d="m14 15 4 4-4 4"/><path d="M6 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>Branch here</button>` : '';
       if (includeActions && hasCompletedContent) {
-        actions = `<div class="message-actions"><button type="button" class="message-action" data-message-action="copy" data-index="${index}" title="Copy response"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Copy</button>${branchButton}${index === latestAssistantIndex ? `<button type="button" class="message-action" data-message-action="regenerate" data-index="${index}" title="Regenerate using the currently selected model"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9a7 7 0 0 1 11.8-2L20 12M4 12l2.6 5a7 7 0 0 0 11.8-2"/></svg>Regenerate</button><button type="button" class="message-action" data-message-action="continue" data-index="${index}" title="Continue generating"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16l14-8Z"/></svg>Continue</button>` : ''}</div>`;
-      } else if (includeActions && role === 'user' && canBranch) {
-        const editButton = index === latestEditableUserIndex && editingMessageIndex === null && !messages.some(item => item.pending)
+        actions = `<div class="message-actions"><button type="button" class="message-action" data-message-action="copy" data-index="${index}" title="Copy response" aria-label="Copy response"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Copy</button>${branchButton}${index === latestAssistantIndex ? `<button type="button" class="message-action" data-message-action="regenerate" data-index="${index}" title="Regenerate using the currently selected model"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9a7 7 0 0 1 11.8-2L20 12M4 12l2.6 5a7 7 0 0 0 11.8-2"/></svg>Regenerate</button><button type="button" class="message-action" data-message-action="continue" data-index="${index}" title="Continue generating"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16l14-8Z"/></svg>Continue</button>` : ''}</div>`;
+      } else if (includeActions && role === 'user' && String(message.content || '').trim()) {
+        const copyPromptButton = `<button type="button" class="message-action" data-message-action="copy" data-index="${index}" title="Copy prompt" aria-label="Copy prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Copy</button>`;
+        const editButton = canBranch && index === latestEditableUserIndex && editingMessageIndex === null && !messages.some(item => item.pending)
           ? `<button type="button" class="message-action" data-message-action="edit" data-index="${index}" title="Edit and resubmit this prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>Edit prompt</button>` : '';
-        actions = `<div class="message-actions user-actions">${branchButton}${editButton}</div>`;
+        actions = `<div class="message-actions user-actions">${copyPromptButton}${branchButton}${editButton}</div>`;
       }
       const metricMarkup = renderMetricMarkup(message);
       return `<article class="message ${role}${errorClass}" data-index="${index}"><div class="message-meta"><span class="role">${label}</span><span>${escapeHtml(dateLabel(message.timestamp))}</span><span>${provider}${model}</span>${errorLabel}</div>${thinkingMarkup}<div class="message-content">${content}</div>${attachments}${metricMarkup}${actions}</article>`;
@@ -1936,12 +1937,34 @@
     $('#conversationBranchCompareClose')?.addEventListener('click', () => { conversationBranchCompareView.hidden = true; });
 
     async function handleMessageAction(action, index) {
-      // Copying an already-finished answer remains safe while a newer response streams.
-      // Editing, regeneration, and continuation would alter the active conversation, so
-      // those operations must wait until generation is idle.
-      if (activeController && action !== 'copy') { showToast('Wait for the current response to finish first.'); return; }
       const message = messages[index];
       if (!message) return;
+      // Copying either side of the conversation is safe while a newer response streams.
+      if (action === 'copy') {
+        const isUserPrompt = message.role === 'user';
+        const copyKind = isUserPrompt ? 'prompt' : 'response';
+        const ok = await copyText(String(message.content || ''));
+        if (!ok) { showToast(`Could not copy ${copyKind}.`); return; }
+        const button = transcriptInner.querySelector(`.message-action[data-message-action="copy"][data-index="${index}"]`);
+        if (button) {
+          const originalTitle = isUserPrompt ? 'Copy prompt' : 'Copy response';
+          button.classList.add('copy-success');
+          button.title = 'Copied';
+          button.setAttribute('aria-label', isUserPrompt ? 'Prompt copied' : 'Response copied');
+          const icon = button.querySelector('svg');
+          if (icon) icon.innerHTML = '<path d="m5 12 4 4L19 6"/>';
+          setTimeout(() => {
+            if (!button.isConnected) return;
+            button.classList.remove('copy-success'); button.title = originalTitle; button.setAttribute('aria-label', isUserPrompt ? 'Copy prompt' : 'Copy response');
+            const restored = button.querySelector('svg');
+            if (restored) restored.innerHTML = '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>';
+          }, 1500);
+        }
+        return;
+      }
+      // Editing, branching, regeneration, and continuation change conversation state,
+      // so they wait until the active generation is idle.
+      if (activeController) { showToast('Wait for the current response to finish first.'); return; }
       if (action === 'branch') { createConversationBranchFrom(index); return; }
       if (action === 'edit') {
         if (message.role !== 'user' || message.isContinuation) return;
@@ -1955,26 +1978,6 @@
         return;
       }
       if (message.role !== 'assistant') return;
-      if (action === 'copy') {
-        const ok = await copyText(message.content || '');
-        if (!ok) { showToast('Could not copy response.'); return; }
-        const button = transcriptInner.querySelector(`.message-action[data-message-action="copy"][data-index="${index}"]`);
-        if (button) {
-          const originalTitle = 'Copy response';
-          button.classList.add('copy-success');
-          button.title = 'Copied';
-          button.setAttribute('aria-label', 'Response copied');
-          const icon = button.querySelector('svg');
-          if (icon) icon.innerHTML = '<path d="m5 12 4 4L19 6"/>';
-          setTimeout(() => {
-            if (!button.isConnected) return;
-            button.classList.remove('copy-success'); button.title = originalTitle; button.setAttribute('aria-label', originalTitle);
-            const restored = button.querySelector('svg');
-            if (restored) restored.innerHTML = '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>';
-          }, 1500);
-        }
-        return;
-      }
       if (action === 'continue') {
         editingMessageIndex = null; draftBeforeEdit = null; editModeNotice.hidden = true;
         promptInput.value = 'Continue your previous answer from where you left off. Do not repeat the existing text unless necessary.';
@@ -3513,7 +3516,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.12' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.13' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -3533,7 +3536,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.12' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.13' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.initialized = true;

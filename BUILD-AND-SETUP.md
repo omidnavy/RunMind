@@ -2,7 +2,13 @@
 
 ## Source overlay
 
-This release package is an overlay for the complete RunMind 1.10.7 source tree (or a later compatible 1.10.x tree). It includes the standalone WPF window source and a new shared helper; merge these paths into the complete tree, retaining its Assets/lib/Vendor/OCR and build resources. The trimmed development archive used to prepare it omitted the `Assets`, `lib`, `Vendor`, `OCR`, and other supporting resources. Keep those directories from the complete project when applying the overlay.
+This release package is an overlay for the complete RunMind 1.10.12 source tree. It includes the standalone WPF window source and a new shared helper; merge these paths into the complete tree, retaining its Assets/lib/Vendor/OCR and build resources. The trimmed development archive used to prepare it omitted the `Assets`, `lib`, `Vendor`, `OCR`, and other supporting resources. Keep those directories from the complete project when applying the overlay.
+
+## RunMind 1.10.13 — copy sent prompts
+
+- Added a **Copy** action beneath text-bearing user messages in the chat transcript. It copies the original prompt text exactly as entered, including line breaks and Markdown syntax.
+- Copying is available even while another assistant response is streaming. It does not change the active prompt, branch, or generation state. Attachments are not embedded into the copied text.
+- Existing assistant-response copying, user-message editing, and branch actions remain available under their previous rules.
 
 ## RunMind 1.10.12 — QuickAI default and native window placement
 

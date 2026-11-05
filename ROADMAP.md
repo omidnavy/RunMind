@@ -1,8 +1,8 @@
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.12. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.13. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
 
-Current 1.10.12 adds the editable pre-filled QuickAI system prompt in PowerToys settings and a shared native work-area-aware startup placement helper for both PowerToys and standalone windows; the default height is reduced by 24 DIPs. Current 1.10.x UX refinements: Deep Research is a mutually exclusive toolbar flyout (not a side drawer), and Always-approved tools can be removed individually from Agent settings.
+Current 1.10.13 adds a Copy action to text-bearing user prompts in the chat transcript; original prompt text remains copyable while a response is streaming. Current 1.10.12 adds the editable pre-filled QuickAI system prompt in PowerToys settings and a shared native work-area-aware startup placement helper for both PowerToys and standalone windows; the default height is reduced by 24 DIPs. Current 1.10.x UX refinements: Deep Research is a mutually exclusive toolbar flyout (not a side drawer), and Always-approved tools can be removed individually from Agent settings.
 RunMind 1.10.5 also opens that flyout when Deep Research is enabled from the composer and replaces the blue-toned dark palette with Warm Graphite.
 RunMind 1.10.7 replaces the insufficient horizontal-only flyout adjustment with shared viewport-aware placement for all toolbar and Conversations panels, including vertical overflow and narrow-window handling.
 Current 1.10.11 prevents completed inline responses from overwriting newer PowerToys Run input by returning completed LLM results through PowerToys’ delayed query phase; the plugin no longer rewrites search-box text with `ChangeQuery`. Current 1.10.10 adds a native multiline PowerToys Run custom system prompt editor (PowerToys 0.80.0+); current 1.10.9 fixes flyout scroll restoration across all toolbar menus. Current 1.10.8 settings additions: independent PowerToys inline system instructions and sampling defaults; multiline chat-app custom instructions with preview/persistence; prompt composition across chat, Agent, Deep Research, and sub-agents; and consistent generation parameters in tool-calling paths.
@@ -155,3 +155,11 @@ Current 1.10.11 prevents completed inline responses from overwriting newer Power
 - Outputs: DOCX, XLSX, PDF, presentation, Markdown/HTML reports, charts, diagrams, document conversion.
 - Media: resize, convert, crop, metadata, QR, thumbnails, galleries.
 - Agent runtime: true streaming, pause/resume, retry, parallel execution, checkpoints, token/context monitoring, budgets, subagents, source manager, task templates, scheduled tasks, branching, analytics.
+
+
+## RunMind 1.10.13 — copy sent prompts
+
+- [x] Add a Copy action to each text-bearing user prompt, alongside existing branch/edit actions.
+- [x] Copy the original prompt text exactly, preserving line breaks and Markdown syntax rather than copying rendered HTML.
+- [x] Allow prompt copying during active response generation without changing message, branch, or generation state.
+- [x] Retain existing assistant-response copying and the previous edit/branch availability rules.

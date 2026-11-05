@@ -1,6 +1,10 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.12 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.13 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+
+## RunMind 1.10.13 — copy sent prompts
+
+- Chat transcript: each text-bearing user message has a **Copy** action that copies the exact original prompt text. It remains available during response streaming; attachment payloads are not copied. Existing assistant copy actions are unchanged.
 
 ## RunMind 1.10.12 — QuickAI defaults and native window sizing
 

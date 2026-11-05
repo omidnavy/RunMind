@@ -1,3 +1,12 @@
+## [1.10.13] — Copy sent prompts
+
+### Added
+- Added a **Copy** action to every text-bearing user message in the chat transcript, alongside the existing branch/edit actions. It copies the exact original prompt text (not rendered Markdown) and provides the same brief success feedback as assistant-response copying.
+- Prompt copying remains available while a newer assistant response is streaming; it does not alter the conversation or interrupt generation. Edit and branch actions retain their existing availability rules.
+
+### Validation
+- Source regression checks cover user and assistant copy actions, prompt text preservation, copy availability during generation, and unchanged edit/branch gating. JavaScript syntax, project XML, plugin JSON, version alignment, and ZIP integrity checked. Windows/.NET 10 compilation and live WebView2 clipboard testing still require Windows.
+
 ## [1.10.12] — PowerToys QuickAI defaults and native window sizing
 
 ### Added
