@@ -1,4 +1,4 @@
-# Build and setup — RunMind 1.10.6
+# Build and setup — RunMind 1.10.7
 
 RunMind is one Windows application with two entry points: the PowerToys Run plugin and a direct-launch standalone desktop executable. Both hosts load the same `ChatWindow.html` and JavaScript application. There is no installer, startup registration, system tray, service, daemon, or second chat implementation.
 
@@ -20,9 +20,15 @@ The dark palette is now **Warm Graphite**, using neutral charcoal surfaces, warm
 
 Standard toolbar flyouts now stay inside the visible application viewport. When a menu is opened, RunMind measures its trigger and rendered panel width, then shifts the panel horizontally only as much as needed to keep both edges within a 14 px viewport margin. The position is recalculated when the window is resized. This fixes right-edge clipping (including the MCP servers panel) without changing the normal left-anchored placement of menus that already fit.
 
+## RunMind 1.10.7 — shared viewport-aware flyout positioning
+
+All top-level flyouts now share one fixed-to-viewport placement routine, including Conversations and Deep Research. The routine clamps panels to the left/right and top/bottom of the WebView, opens above the trigger when there is insufficient room below, limits tall panels to the available viewport space with internal scrolling, and repositions open panels after window, visual viewport, or document-scroll changes. This replaces 1.10.6's horizontal-only transform adjustment, which did not cover vertical overflow or the Conversations panel and could still fail when the toolbar layout wrapped.
+
+The native desktop window's initial height is **not changed by this HTML overlay**. That outer height is set by the WPF host when it creates the chat window; the host window-construction source files are not included in this trimmed source package. Changing the WebView page height would only shrink the content area, not the actual Windows window or its title bar. The native adjustment should be made in both host window creation paths, only for a fresh default window, using the active monitor's work area and preserving user-restored window sizes.
+
 ## Installation
 
-Extract the overlay over the complete RunMind 1.10.5 source folder. Preserve the existing `Assets`, `lib`, image resources, README, and build scripts, then run `Build-Release-x64.bat` on Windows. Rebuild and deploy the PowerToys plugin or launch the standalone application.
+Extract the overlay over the complete RunMind 1.10.6 source folder. Preserve the existing `Assets`, `lib`, image resources, README, and build scripts, then run `Build-Release-x64.bat` on Windows. Rebuild and deploy the PowerToys plugin or launch the standalone application.
 
 ## RunMind 1.10.3 branch title and spacing hotfix
 

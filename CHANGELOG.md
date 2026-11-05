@@ -1,3 +1,19 @@
+## [1.10.7] — Shared viewport-aware flyout positioning
+
+### Fixed
+- Replaced the horizontal-transform-only adjustment from 1.10.6 with one shared placement routine for every top-level flyout: model connections, generation settings, context manager, model details, Deep Research, agent history/settings, OCR languages, MCP servers, and Conversations.
+- Flyouts are positioned against the WebView viewport rather than their toolbar item's containing block. This handles toolbar wrapping and narrow windows, and prevents parent-relative positioning from pushing panels off-screen.
+- Placement now clamps both horizontal edges and vertical bounds. Panels open below their trigger when there is room, otherwise above it; tall panels receive a viewport-bounded height and internal scrolling.
+- Repositions all open panels after window/visual-viewport resize and document scrolling. The Conversations panel is included in the same placement logic.
+- Hardened the geometry fallback for extremely narrow/short viewports and anchors outside the visible viewport; the result remains fully bounded and scrollable.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.7`.
+
+### Not included
+- The requested small reduction to the native chat window's initial height is not part of this overlay. It is controlled by WPF host window creation code, which is absent from the trimmed source input; changing HTML/CSS would not resize the Windows title bar or outer window. It remains a host-source follow-up for both standalone and PowerToys windows.
+
+### Validation
+- JavaScript syntax, shared flyout geometry bounds, viewport edge cases, version alignment, and ZIP integrity checked. Live Windows/WebView2 rendering and .NET 10 compilation still require validation on Windows.
+
 # Changelog
 
 ## [1.10.6] — Toolbar flyout viewport positioning hotfix
