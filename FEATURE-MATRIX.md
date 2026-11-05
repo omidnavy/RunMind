@@ -1,6 +1,18 @@
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.10 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.12 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+
+## RunMind 1.10.12 — QuickAI defaults and native window sizing
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| PowerToys settings | QuickAI starter prompt | The multiline PowerToys prompt setting is pre-filled with the user's QuickAI text. It is editable and can be cleared to disable the additional system prompt. | **Implemented**; key remains `InlineSystemPrompt`, maximum 12,000 characters. |
+| Native windows | Work-area-aware initial placement | PowerToys and standalone windows start at 1120 × 836 DIPs and are centered/clamped within the work area of the monitor under the pointer. | **Implemented**; applied once at window creation; later user resizing is not overridden. |
+| Native windows | Short-display safety | A 12-DIP margin is retained where possible; minimum dimensions are relaxed only when a monitor work area is smaller than the configured minimum. | **Implemented** |
+
+## RunMind 1.10.11 — PowerToys Run live-input preservation
+
+- The fast query path returns its pending result without network I/O and cancels superseded requests. The delayed query path waits for provider completion on PowerToys' background worker and returns the completed result directly to the host's current query generation. RunMind no longer calls `ChangeQuery`, so completed responses cannot replace newer search-box text or caret position.
 
 ## RunMind 1.10.10 — multiline PowerToys prompt setting
 
@@ -113,8 +125,8 @@ This document describes the **current RunMind 1.10.10 feature set** across its P
 |---|---|---|
 | Global search | Returns an immediate **Ask RunMind** result without waiting for the model. | **Implemented** |
 | Action keyword | `llm <prompt>` uses the same two-stage query flow. `llm` without a prompt does not return a chat result. | **Implemented** |
-| Delayed execution | Provider/model discovery and generation run asynchronously outside the PowerToys search callback. Ollama inline requests support an optional CPU thread cap; blank or `0` leaves thread selection to Ollama, while `1`–`128` sets `options.num_thread`. | **Implemented**; the cap does not apply to LM Studio or standalone chat. |
-| Completed result | RunMind requests a refreshed PowerToys result after background generation finishes. | **Implemented** |
+| Delayed execution | Provider/model discovery and generation run in PowerToys’ delayed background query phase; the synchronous plugin callback waits only in that worker and returns the result to the same host query generation. Ollama inline requests support an optional CPU thread cap; blank or `0` leaves thread selection to Ollama, while `1`–`128` sets `options.num_thread`. | **Implemented**; the fast keystroke callback remains network-free; the cap does not apply to LM Studio or standalone chat. |
+| Completed result | The delayed plugin call returns its completed result directly; PowerToys updates the result list only if that query session is still current. RunMind never changes the search-box text to refresh results. | **Implemented** |
 | Copy answer | Completed results provide a context-menu action to copy the full response. | **Implemented** |
 | Open completed answer | Opening a completed result transfers the original prompt and generated answer into chat without generating the answer again. | **Implemented** |
 | Open pending request | Opening a result while generation is in progress cancels the PowerToys request and transfers the original prompt to a chat window. The chat performs its own generation using chat settings. | **Implemented** |

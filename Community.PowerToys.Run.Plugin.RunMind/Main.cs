@@ -45,6 +45,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private const int DefaultRequestTimeoutSeconds = 600;
     private const int DefaultInlineCpuThreads = 0;
     private const int MaximumInlineSystemPromptCharacters = 12000;
+    private const string DefaultInlineSystemPrompt =
+        "SYSTEM\n\n" +
+        "You are QuickAI, a compact proactive local AI living inside \"Microsoft PowerToys Run\".\n" +
+        "The input is the user's current search-box text. It may be a single letter, partial word, application name, command, question, complete task or anything else.\n" +
+        "Answer immediately without introductions.";
 
     // The HttpClient is shared, but individual requests have their own configurable timeout.
     private static readonly HttpClient HttpClient = new()
@@ -158,10 +163,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         new()
         {
             Key = "InlineSystemPrompt",
-            DisplayLabel = "Custom system instructions (optional)",
-            DisplayDescription = "Instructions used only by PowerToys Run inline queries. Enter multiple lines directly; leave empty for no additional instructions. Maximum 12,000 characters. Does not affect the standalone chat app.",
+            DisplayLabel = "Custom system instructions (editable QuickAI default)",
+            DisplayDescription = "Pre-filled QuickAI instructions for PowerToys Run. Edit or clear them freely; an empty value disables the additional prompt. Maximum 12,000 characters. Does not affect the standalone chat app.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.MultilineTextbox,
-            TextValue = string.Empty,
+            TextValue = DefaultInlineSystemPrompt,
             TextBoxMaxLength = MaximumInlineSystemPromptCharacters,
             PlaceholderText = "Enter your PowerToys Run system instructions...",
         },
@@ -216,7 +221,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         int keepAliveSeconds = DefaultKeepAliveSeconds;
         int requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
         int inlineCpuThreads = DefaultInlineCpuThreads;
-        string inlineSystemPrompt = string.Empty;
+        string inlineSystemPrompt = DefaultInlineSystemPrompt;
         double? inlineTemperature = null;
         double? inlineTopP = null;
         int? inlineMaxOutputTokens = null;
@@ -230,7 +235,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             provider = options.FirstOrDefault(option => option.Key == "InlineProvider")?.ComboBoxValue == 1 ? 1 : 0;
             model = GetTextOption(options, "Model", model);
             thinking = GetTextOption(options, "Thinking", thinking);
-            inlineSystemPrompt = NormalizeInlineSystemPrompt(GetTextOption(options, "InlineSystemPrompt", string.Empty));
+            var inlinePromptOption = options.FirstOrDefault(option => option.Key == "InlineSystemPrompt");
+            inlineSystemPrompt = inlinePromptOption is null
+                ? DefaultInlineSystemPrompt
+                : NormalizeInlineSystemPrompt(inlinePromptOption.TextValue ?? string.Empty);
             inlineTemperature = ParseOptionalDouble(options, "InlineTemperature", 0, 2);
             inlineTopP = ParseOptionalDouble(options, "InlineTopP", 0, 1);
             inlineMaxOutputTokens = ParseOptionalInt(options, "InlineMaxOutputTokens", 1, 1000000);
@@ -318,15 +326,15 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             return new List<Result>();
         }
 
-        var operation = BeginQuery(search, query.RawQuery ?? search, model, prompt, settings);
+        var operation = BeginQuery(search, model, prompt, settings);
         return operation is null
             ? new List<Result>()
             : new List<Result> { CreatePendingResult(operation) };
     }
 
-    // PowerToys invokes this synchronous interface from its search pipeline. Never wait
-    // for model I/O here: start the work in the background and let other plugins continue.
-    // When the response is ready, ChangeQuery asks PowerToys to collect the completed result.
+    // PowerToys invokes the delayed phase from a background query worker. The fast Query()
+    // above has already returned immediately; this phase can wait for model I/O and return
+    // the completed result directly to the host's current query generation.
     public List<Result> Query(Query query, bool delayedExecution)
     {
         if (!delayedExecution || query is null)
@@ -343,24 +351,37 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var (currentModel, currentPrompt) = ParseModelAndPrompt(search, currentSettings.DefaultModel);
         if (string.IsNullOrWhiteSpace(currentPrompt)) return new List<Result>();
 
-        var operation = GetOrBeginQuery(search, query.RawQuery ?? search, currentModel, currentPrompt, currentSettings);
+        var operation = GetOrBeginQuery(search, currentModel, currentPrompt, currentSettings);
         if (operation is null) return new List<Result>();
 
-        if (operation.TryGetCompletion(out var completedResponse, out var isError))
-            return IsCurrentQuery(operation)
-                ? new List<Result> { CreateResponseResult(operation.Model, completedResponse, isError, operation.Prompt, operation.Settings) }
-                : new List<Result>();
-
-        if (operation.TryStart())
+        if (!operation.TryGetCompletion(out _, out _))
         {
-            // Task.Run ensures even synchronous cache/continuation work cannot execute on
-            // PowerToys' search dispatcher. The provider methods themselves remain async.
-            _ = Task.Run(() => ExecuteQueryAsync(operation));
+            if (operation.TryStart())
+            {
+                // PowerToys invokes IDelayedExecutionPlugin.Query from its background
+                // query phase and awaits the returned result. Keep HTTP asynchronous
+                // internally, but wait here so the host can publish this response as part
+                // of the exact query generation without rewriting the search-box text.
+                ExecuteQueryAsync(operation).GetAwaiter().GetResult();
+            }
+            else
+            {
+                // Defensive path for duplicate delayed callbacks for the same operation.
+                operation.WaitForFinish();
+            }
         }
 
-        // The fast Query() call already supplied the pending result in the normal flow.
-        // Delayed queries returning no results preserve that item while generation runs.
-        // Keep a pending result for hosts that invoke only the delayed interface.
+        if (!IsCurrentQuery(operation)) return new List<Result>();
+        if (operation.TryGetCompletion(out var completedResponse, out var isError))
+        {
+            return new List<Result>
+            {
+                CreateResponseResult(operation.Model, completedResponse, isError, operation.Prompt, operation.Settings),
+            };
+        }
+
+        // The fast Query() path already supplied the pending item in the normal flow.
+        // Return it only for hosts that invoke the delayed interface without the fast path.
         return HasFastQueryResult(search)
             ? new List<Result>()
             : new List<Result> { CreatePendingResult(operation) };
@@ -415,18 +436,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             operation.MarkFinished();
         }
 
-        if (!IsCurrentQuery(operation) || !operation.TryGetCompletion(out _, out _)) return;
-
-        try
-        {
-            // IPublicAPI dispatches this re-query to PowerToys' UI thread. We call it
-            // from this worker, never from the original synchronous Query callback.
-            _context?.API.ChangeQuery(operation.RequeryText, true);
-        }
-        catch
-        {
-            // PowerToys may be shutting down; the completed request remains harmless.
-        }
     }
 
     private bool HasFastQueryResult(string search)
@@ -438,7 +447,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
     }
 
-    private QueryOperation? BeginQuery(string search, string requeryText, string model, string prompt, SettingsSnapshot settings)
+    private QueryOperation? BeginQuery(string search, string model, string prompt, SettingsSnapshot settings)
     {
         QueryOperation? previous;
         QueryOperation operation;
@@ -450,14 +459,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 && !_activeQuery.IsCancellationRequested
                 && !_activeQuery.WasHandedOff)
             {
-                _activeQuery.UpdateRequeryText(requeryText);
                 _latestFastQuery = search;
                 _hasReceivedFastQuery = true;
                 return _activeQuery;
             }
 
             previous = _activeQuery;
-            operation = new QueryOperation(search, requeryText, model, prompt, settings);
+            operation = new QueryOperation(search, model, prompt, settings);
             _activeQuery = operation;
             _latestFastQuery = search;
             _hasReceivedFastQuery = true;
@@ -469,7 +477,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return operation;
     }
 
-    private QueryOperation? GetOrBeginQuery(string search, string requeryText, string model, string prompt, SettingsSnapshot settings)
+    private QueryOperation? GetOrBeginQuery(string search, string model, string prompt, SettingsSnapshot settings)
     {
         lock (_queryLock)
         {
@@ -484,12 +492,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 if (!string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
                     || _activeQuery.IsCancellationRequested || _activeQuery.WasHandedOff)
                     return null;
-                _activeQuery.UpdateRequeryText(requeryText);
                 return _activeQuery;
             }
 
             // Supports launcher configurations which invoke only the delayed path first.
-            var operation = new QueryOperation(search, requeryText, model, prompt, settings);
+            var operation = new QueryOperation(search, model, prompt, settings);
             _activeQuery = operation;
             return operation;
         }
@@ -1264,11 +1271,12 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var webView = CreateChatWebView();
         var appWindow = new Window
         {
-            Title = "RunMind", Width = 1120, Height = 860, MinWidth = 680, MinHeight = 520,
+            Title = "RunMind", Width = 1120, Height = 836, MinWidth = 680, MinHeight = 520,
             Icon = LoadWindowIcon(assemblyDirectory),
             WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = webView,
         };
         appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        WindowLayout.ConfigureInitialPlacement(appWindow);
         appWindow.Show();
         appWindow.Activate();
         _ = InitializeChatWebViewAsync(appWindow, webView, assemblyDirectory, JsonSerializer.Serialize(bootstrap));
@@ -1287,7 +1295,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Title = "RunMind",
             Width = 1120,
-            Height = 860,
+            Height = 836,
             MinWidth = 680,
             MinHeight = 520,
             Icon = LoadWindowIcon(Path.GetDirectoryName(typeof(Main).Assembly.Location) ?? AppContext.BaseDirectory),
@@ -1296,6 +1304,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         };
 
         appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        WindowLayout.ConfigureInitialPlacement(appWindow);
         appWindow.Show();
         appWindow.Activate();
         _ = InitializeChatWebViewAsync(appWindow, webView, navigation.FolderPath, navigation.BootstrapJson);
@@ -1327,7 +1336,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Title = "RunMind",
             Width = 1120,
-            Height = 860,
+            Height = 836,
             MinWidth = 680,
             MinHeight = 520,
             Icon = LoadWindowIcon(assemblyDirectory),
@@ -1336,6 +1345,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         };
 
         appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        WindowLayout.ConfigureInitialPlacement(appWindow);
         appWindow.Show();
         appWindow.Activate();
         _ = InitializeChatWebViewAsync(appWindow, webView, assemblyDirectory, JsonSerializer.Serialize(bootstrap));
@@ -1945,8 +1955,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private sealed class QueryOperation : IDisposable
     {
         private readonly CancellationTokenSource _cancellation = new();
+        private readonly TaskCompletionSource<bool> _finishedSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object _sync = new();
-        private string _requeryText;
         private int _started;
         private int _cancelRequested;
         private int _handedOff;
@@ -1958,20 +1968,15 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         private string _response = string.Empty;
         private bool _isError;
 
-        public QueryOperation(string search, string requeryText, string model, string prompt, SettingsSnapshot settings)
+        public QueryOperation(string search, string model, string prompt, SettingsSnapshot settings)
         {
             Search = search;
-            _requeryText = requeryText;
             Model = model;
             Prompt = prompt;
             Settings = settings;
         }
 
         public string Search { get; }
-        public string RequeryText
-        {
-            get { lock (_sync) return _requeryText; }
-        }
         public string Model { get; }
         public string Prompt { get; }
         public SettingsSnapshot Settings { get; }
@@ -1985,11 +1990,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         public bool IsCancellationRequested => Volatile.Read(ref _cancelRequested) != 0;
         public bool WasHandedOff => Volatile.Read(ref _handedOff) != 0;
 
-        public void UpdateRequeryText(string value)
-        {
-            lock (_sync) _requeryText = value;
-        }
-
         public bool TryStart()
         {
             lock (_sync)
@@ -1998,6 +1998,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 _started = 1;
                 return true;
             }
+        }
+
+        public void WaitForFinish()
+        {
+            _finishedSignal.Task.GetAwaiter().GetResult();
         }
 
         public void Cancel()
@@ -2091,6 +2096,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 _disposeRequested = true;
                 TryDisposeSourceLocked();
             }
+
+            _finishedSignal.TrySetResult(true);
         }
 
         public void Dispose()

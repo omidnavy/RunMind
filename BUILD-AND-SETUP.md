@@ -2,7 +2,21 @@
 
 ## Source overlay
 
-This release package is an overlay for the complete RunMind 1.10.7 source tree (or a later compatible 1.10.x tree). The trimmed development archive used to prepare it omitted the `Assets`, `lib`, `Vendor`, `OCR`, and other supporting resources. Keep those directories from the complete project when applying the overlay.
+This release package is an overlay for the complete RunMind 1.10.7 source tree (or a later compatible 1.10.x tree). It includes the standalone WPF window source and a new shared helper; merge these paths into the complete tree, retaining its Assets/lib/Vendor/OCR and build resources. The trimmed development archive used to prepare it omitted the `Assets`, `lib`, `Vendor`, `OCR`, and other supporting resources. Keep those directories from the complete project when applying the overlay.
+
+## RunMind 1.10.12 — QuickAI default and native window placement
+
+- PowerToys Run's multiline **Custom system instructions** setting is pre-filled with the editable QuickAI starter prompt. Users can rewrite it or clear it completely; an explicitly empty setting disables the additional instructions. The existing `InlineSystemPrompt` key is preserved.
+- New chat windows in both PowerToys and standalone start at 1120 × 836 DIPs instead of 1120 × 860 DIPs. A shared native helper selects the monitor under the pointer, converts its Windows work area to WPF DIPs, clamps the initial dimensions with a 12-DIP safety margin, and centers the window in that work area.
+- The placement helper runs once during `SourceInitialized`; it does not keep adjusting the window while the user resizes it. This release includes `Shared/WindowLayout.cs`, `RunMind.Standalone/MainWindow.xaml`, and `RunMind.Standalone/MainWindow.xaml.cs` because the native host source is required for this change.
+- The 1.10.11 PowerToys query fix is retained: delayed query work returns the completed result directly to its query generation; no `ChangeQuery` call writes text back into the search box.
+
+## RunMind 1.10.11 — PowerToys Run live-input preservation
+
+- The fast PowerToys query callback still returns an immediate pending result and cancels the previous query when the user types a newer one.
+- The delayed plugin phase runs on PowerToys' background query worker. RunMind performs the provider request there and returns the completed result directly from `IDelayedExecutionPlugin.Query`.
+- RunMind no longer calls `IPublicAPI.ChangeQuery` to refresh a response. That API changes the search-box text, which could overwrite characters typed after a fast model response. PowerToys checks the delayed task's query-session cancellation and generation before adding its results.
+- The asynchronous HTTP implementation uses `ConfigureAwait(false)` throughout the provider/model-read path, so synchronously waiting inside the delayed worker does not require the WPF UI dispatcher. The fast keystroke callback never waits for network I/O.
 
 ## RunMind 1.10.10 — multiline PowerToys Run prompt
 

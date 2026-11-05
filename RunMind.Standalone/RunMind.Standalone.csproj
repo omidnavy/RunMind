@@ -10,13 +10,14 @@
     <Product>RunMind</Product>
     <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
     <RootNamespace>RunMind.Standalone</RootNamespace>
-    <Version>1.10.10</Version>
+    <Version>1.10.12</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ConversationSaveDialog.cs" Link="Shared\ConversationSaveDialog.cs" />
     <Compile Include="..\Shared\WebView2RuntimeBootstrapper.cs" Link="Shared\WebView2RuntimeBootstrapper.cs" />
+    <Compile Include="..\Shared\WindowLayout.cs" Link="Shared\WindowLayout.cs" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <Content Include="..\Community.PowerToys.Run.Plugin.RunMind\ChatWindow.html" Link="ChatWindow.html" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" />

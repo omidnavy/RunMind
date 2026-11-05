@@ -48,6 +48,7 @@ public partial class MainWindow : Window
         Closed += OnClosed;
         Loaded += OnLoaded;
         SourceInitialized += OnSourceInitialized;
+        WindowLayout.ConfigureInitialPlacement(this);
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)

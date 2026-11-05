@@ -1,3 +1,31 @@
+## [1.10.12] — PowerToys QuickAI defaults and native window sizing
+
+### Added
+- Pre-filled the PowerToys Run multiline system-instructions setting with the editable QuickAI starter prompt. Users can freely edit it or clear it; clearing the field disables the additional prompt. The setting key and 12,000-character limit are unchanged.
+- Added a shared DPI-aware WPF window-placement helper for the PowerToys and standalone hosts. New windows are centered within the working area of the monitor under the pointer, with safe margins and size clamping for smaller work areas.
+
+### Fixed
+- Reduced the default new-chat window height from 860 to 836 DIPs (24 DIPs) in both hosts, helping keep the Windows title bar and window controls accessible on shorter displays.
+- Ensured the initial work-area adjustment runs only when a native window is created. It does not continually override subsequent user resizing.
+- Preserved the 1.10.11 PowerToys delayed-query response path: completed LLM results are returned for their original query generation without calling `ChangeQuery` or rewriting the search-box text.
+
+### Validation
+- Verified QuickAI prompt prefill, explicit-empty opt-out behavior, multiline setting type, PowerToys provider request inclusion, and query-generation ownership by source regression checks.
+- Verified all three PowerToys-created windows and the standalone main window use the shared initial placement helper; checked the 836-DIP default and work-area clamping logic with geometry cases.
+- Project XML, plugin JSON, version alignment, JavaScript syntax, and ZIP integrity checked. Windows/.NET 10 compilation and live PowerToys/WebView2 testing still require Windows.
+
+## [1.10.11] — PowerToys Run live-input preservation
+
+### Fixed
+- Fixed fast inline LLM responses replacing characters typed after the query that launched the request. RunMind no longer calls `IPublicAPI.ChangeQuery` to refresh completed answers; that API changes the actual PowerToys Run search-box text before re-querying.
+- The fast `IPlugin.Query` path still returns the immediate pending result and cancels the previous request as soon as a newer query arrives. The delayed `IDelayedExecutionPlugin.Query` phase now performs the provider request on PowerToys' background query worker and returns the completed result directly to that same host query generation.
+- PowerToys owns publication of the delayed result and checks its query-session cancellation/generation before updating the result list. Superseded queries are cancelled and their delayed results are discarded; the user's text and caret are never programmatically rewritten.
+- The provider request remains asynchronous internally. The synchronous wait exists only inside the host's delayed background phase, not in the fast keystroke callback.
+- Updated plugin, standalone, and MCP client version identifiers to `1.10.11`.
+
+### Validation
+- Source regression checks confirm there are no `ChangeQuery` calls in the PowerToys plugin path, the fast query remains network-free, and the delayed path returns completed results only for the currently owned operation. Project XML, plugin JSON, version alignment, JavaScript syntax, and ZIP integrity checked. Windows/.NET 10 compilation and live PowerToys typing tests still require Windows.
+
 ## [1.10.10] — Multiline PowerToys system prompt
 
 ### Fixed
