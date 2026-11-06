@@ -14,7 +14,25 @@ RunMind brings local and OpenAI-compatible language models to **PowerToys Run** 
 - Optional SearXNG web search, Jina Reader, custom Reader gateways, and MCP Streamable HTTP servers.
 - Multiple independent chat windows from PowerToys Run and the standalone app.
 - Save conversations as `.runmind` files using the Windows Save As dialog.
+- Select from curated light and dark appearance palettes, with independent saved choices for each mode.
 - Compare conversation branches in a full lower-workspace view, then discuss an independent **AI Branch Comparison** in a centered modal. The initial assessment instruction is pre-filled and editable; no request is sent until the user presses Send. The hidden system prompt and original comparison dossier are supplied automatically. Follow up with a selectable model, re-examine the original snapshot, copy individual messages or the full discussion, and download the comparison as Markdown without changing either branch or the main chat model.
+
+## 1.10.32 update
+
+- [x] Add System, Light, and Dark appearance modes with five curated palettes for each color scheme. Light and dark selections are remembered independently and shared between standalone RunMind and PowerToys chat windows. Palette changes apply immediately, native window title bars follow the effective mode, and the Appearance menu includes a live palette preview and reset action.
+
+## 1.10.31 update
+
+- Refine the branch-comparison action as **Compare with AI**, with a theme-aware surface, accent icon tile, and consistent label. The modal itself retains the title **AI Branch Comparison**.
+
+## 1.10.30 update
+
+- [x] Fix LM Studio generated-title handling by disabling reasoning for the short title request, preserving Nemotron conversational mode, retrying explicitly unsupported optional fields, and accepting structured OpenAI-compatible text responses.
+- [x] Make the AI Branch Comparison composer start at one line, grow automatically to five lines, and scroll for longer instructions or messages.
+
+## 1.10.29 update
+
+- [x] Fix the remaining PowerToys native-response title issue when WebView2 initializes through a replacement temporary-profile control. Apply generated titles to the active page, ignore stale events from replaced controls, verify the page update, and then synchronize the native window title.
 
 ## Requirements
 

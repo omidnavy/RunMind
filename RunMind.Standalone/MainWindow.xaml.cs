@@ -2,11 +2,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text;
-using System.Runtime.InteropServices;
-using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Interop;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using RunMind.Shared;
@@ -15,15 +12,7 @@ namespace RunMind.Standalone;
 
 public partial class MainWindow : Window
 {
-    private const int WmSettingChange = 0x001A;
-    private const int WmThemeChanged = 0x031A;
-    private const int DwmwaUseImmersiveDarkMode = 20;
-    private const int DwmwaUseImmersiveDarkModeLegacy = 19;
-
-    [DllImport("dwmapi.dll", PreserveSig = true)]
-    private static extern int DwmSetWindowAttribute(
-        IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
+    private readonly WindowThemeSynchronizer _windowThemeSynchronizer;
     private readonly WebView2 _webView = new()
     {
         DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24),
@@ -34,7 +23,6 @@ public partial class MainWindow : Window
     private bool _webViewDisposed;
     private string _initializationStage = "Prepare standalone window";
     private string _userDataFolder = "(not resolved)";
-    private HwndSource? _windowSource;
     private readonly string? _initialConversationJson;
     private readonly string? _initialConversationFileName;
 
@@ -45,51 +33,11 @@ public partial class MainWindow : Window
         _initialConversationJson = initialConversationJson;
         _initialConversationFileName = initialConversationFileName;
         InitializeComponent();
+        _windowThemeSynchronizer = new WindowThemeSynchronizer(this);
         Root.Children.Add(_webView);
         Closed += OnClosed;
         Loaded += OnLoaded;
-        SourceInitialized += OnSourceInitialized;
         WindowLayout.ConfigureInitialPlacement(this);
-    }
-
-    private void OnSourceInitialized(object? sender, EventArgs e)
-    {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        _windowSource = HwndSource.FromHwnd(hwnd);
-        _windowSource?.AddHook(OnWindowMessage);
-        ApplySystemTitleBarTheme(hwnd);
-    }
-
-    private IntPtr OnWindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        // Windows broadcasts WM_SETTINGCHANGE when the user switches the system
-        // app appearance between light and dark. WM_THEMECHANGED covers theme refreshes.
-        if (message is WmSettingChange or WmThemeChanged)
-            ApplySystemTitleBarTheme(hwnd);
-
-        return IntPtr.Zero;
-    }
-
-    private static void ApplySystemTitleBarTheme(IntPtr hwnd)
-    {
-        if (hwnd == IntPtr.Zero) return;
-
-        var prefersLight = true;
-        try
-        {
-            const string personalizeKey = @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
-            var value = Registry.GetValue(personalizeKey, "AppsUseLightTheme", 1);
-            prefersLight = value is int setting ? setting != 0 : Convert.ToInt32(value) != 0;
-        }
-        catch
-        {
-            // Keep the Windows default light caption if the preference is unavailable.
-        }
-
-        var darkMode = prefersLight ? 0 : 1;
-        var result = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref darkMode, sizeof(int));
-        if (result != 0)
-            _ = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkModeLegacy, ref darkMode, sizeof(int));
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -179,6 +127,7 @@ public partial class MainWindow : Window
                     var bootstrap = JsonSerializer.Serialize(new
                     {
                         title,
+                        appearance = AppearancePreferenceStore.CreateBootstrapValue(),
                         windowInstanceId = Guid.NewGuid().ToString("N"),
                         standalone = true,
                         generateTitleAfterFirstResponse = true,
@@ -211,6 +160,8 @@ public partial class MainWindow : Window
         if (_closing) return;
         try
         {
+            if (_windowThemeSynchronizer.TryHandleWebMessage(args.Source, args.WebMessageAsJson))
+                return;
             if (_nativePageReader.TryHandleMessage(args.Source, args.WebMessageAsJson, _webView.CoreWebView2, Dispatcher))
                 return;
             if (ConversationSaveDialog.TryHandleMessage(args.Source, args.WebMessageAsJson, this, _webView.CoreWebView2))
@@ -294,8 +245,7 @@ public partial class MainWindow : Window
     {
         _closing = true;
         _nativePageReader.Dispose();
-        _windowSource?.RemoveHook(OnWindowMessage);
-        _windowSource = null;
+        _windowThemeSynchronizer.Dispose();
         DisposeWebView();
     }
 

@@ -1,3 +1,31 @@
+## RunMind 1.10.32 — curated appearance themes
+
+This overlay is for the complete RunMind 1.10.31 source tree. It adds an Appearance menu with System, Light, and Dark modes, five selectable palettes for each color scheme, independent saved light/dark choices, a live active-palette preview, and a reset action. The existing Classic Light and Warm Graphite palettes remain the defaults. A small shared preference store keeps standalone RunMind and PowerToys-hosted chat windows aligned even though they use separate WebView2 profiles; their native title bars follow the effective mode. The previous single System/Light/Dark preference is migrated when no shared preference file exists.
+
+The plugin and standalone project versions, plugin manifest, Native Reader user-agent, and release documentation are aligned to 1.10.32. The ZIP contains changed files only and preserves original project-relative paths. Extract it over the complete 1.10.31 source tree, retaining excluded resources such as `lib`, `assets`, and `screenshots`, then build on Windows with `Build-Release-x64.bat`.
+
+## RunMind 1.10.31 — themed AI branch comparison action
+
+This overlay is for the complete RunMind 1.10.30 source tree. The comparison-workspace action is now consistently labeled **Compare with AI**; the centered discussion window keeps the title **AI Branch Comparison**. The action uses RunMind theme variables for its surface, accent icon tile, border, hover, focus, and disabled states instead of the generic filled-primary button style. The plugin and standalone project versions, plugin manifest, Native Reader user-agent, and release documentation are aligned to 1.10.31. The overlay contains changed files only and preserves the original project-relative paths. Extract it over the complete 1.10.30 source tree, retaining excluded resources such as `lib`, `assets`, and `screenshots`, then build on Windows with `Build-Release-x64.bat`.
+
+## RunMind 1.10.30 — LM Studio title handling and adaptive comparison composer
+
+This overlay is for the complete RunMind 1.10.29 source tree. LM Studio title generation now mirrors RunMind’s normal reasoning-off configuration (`reasoning_effort: none` and `chat_template_kwargs.enable_thinking: false`), retains the optional Nemotron 3.5 Bolt E4B conversational-mode setting, and retries only when the server explicitly rejects an optional request field. It reads standard string or structured text-part assistant content from OpenAI-compatible responses; an empty response produces a diagnostic rather than silently leaving the fallback title. The standalone WebView title path uses the same request settings and compatibility behavior. The AI Branch Comparison composer now starts as a single line, grows with its content to five visible lines, and scrolls internally beyond five lines; the main chat composer is unchanged.
+
+Both project versions, the plugin manifest, Native Reader user-agent, and release documentation are aligned to 1.10.30. Extract this changed-files-only overlay over the complete 1.10.29 source tree, retaining excluded resources such as `lib`, `assets`, and `screenshots`, then build on Windows with `Build-Release-x64.bat`.
+
+## RunMind 1.10.29 — reliable generated conversation-title application
+
+This overlay is for the complete RunMind 1.10.28 source tree. It fixes the remaining native-response title update path: WebView2 initialization can replace the original control with a temporary-profile fallback, so title generation now resolves the WebView2 control currently hosted by the window when checking readiness and applying the generated title. Events from replaced controls are ignored. The page must confirm that its document title changed before the native window title is synchronized; transient application failures are retried, and failures are recorded as diagnostics while the existing fallback title remains visible.
+
+The plugin and standalone project versions, plugin manifest, Native Reader user-agent, and release documentation are aligned to 1.10.29. The ZIP contains changed files only and preserves original project-relative paths. Extract it over the complete 1.10.28 source tree, retaining excluded resources such as `lib`, `assets`, and `screenshots`, then build on Windows with `Build-Release-x64.bat`.
+
+## RunMind 1.10.28 — larger AI Branch Comparison composer
+
+This overlay is for the complete RunMind 1.10.27 source tree. The AI Branch Comparison message composer now opens at five visible lines and grows automatically as the user types, up to 190 pixels; longer content then scrolls within the field. The change is isolated to the AI Branch Comparison modal. The main chat composer is unchanged.
+
+Both project version declarations, the plugin manifest, the Native Reader user-agent, and release documentation are aligned to 1.10.28. Extract this changed-files-only overlay over the complete 1.10.27 source tree, retaining excluded resources such as `lib`, `assets`, and `screenshots`, then build on Windows with `Build-Release-x64.bat`.
+
 ## RunMind 1.10.27 — conversation title update fix
 
 This overlay is for the complete RunMind 1.10.26 source tree. It fixes a timing race in the PowerToys native-response window: title generation now starts only after the chat page and WebView2 have initialized, preventing the page's fallback title from overwriting the generated title. The generated title is applied through the existing page setter and native window-title bridge. If the window closes or WebView2 fails to initialize, the extra title request is skipped.

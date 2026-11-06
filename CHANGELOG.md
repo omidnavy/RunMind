@@ -1,3 +1,62 @@
+## [1.10.32] — Curated appearance themes
+
+### Added
+- Add a dedicated Appearance menu with System, Light, and Dark modes, plus five curated light palettes and five curated dark palettes.
+- Preserve the existing Classic Light and Warm Graphite palettes as the defaults. Light and dark palette choices are stored independently and restored when the effective mode changes.
+- Add Soft Ivory, Sage Garden, Rose Clay, and Sandstone light palettes; add Obsidian, Deep Forest, Mocha, and Burgundy dark palettes.
+- Save appearance preferences in one shared per-user file under `%LOCALAPPDATA%\RunMind`, so standalone RunMind and PowerToys-hosted chat windows use the same selections despite separate WebView2 profiles.
+- Apply palette changes immediately and synchronize standalone and PowerToys chat-window native title bars with the selected effective light/dark mode.
+- Add a compact active-palette preview and a reset-to-defaults action.
+
+### Compatibility
+- Migrate the previous System/Light/Dark selection when no shared appearance preference exists. The existing light and dark colors are preserved as the starting palettes.
+
+### Validation
+- JavaScript syntax, HTML theme-selector counts, project XML, plugin manifest JSON, and overlay contents checked. Full Windows/.NET build and WebView2 runtime validation require the Windows build environment and the excluded PowerToys reference libraries.
+
+## [1.10.31] — Refine AI branch comparison action
+
+- Renamed the comparison-workspace action to **Compare with AI** and kept its label consistent before and after the first assessment; the discussion window remains titled **AI Branch Comparison**.
+- Replaced the generic filled-primary button with a purpose-built control using RunMind theme tokens for color, surfaces, borders, focus, hover, and disabled states.
+- Updated the supporting hint to describe the independent review without implying that it opens a separate discussion mode.
+
+## [1.10.30] — Fix LM Studio title generation and refine comparison composer
+
+### Fixed
+- Align the native LM Studio conversation-title request with RunMind’s regular LM Studio generation behavior: explicitly disable reasoning with `reasoning_effort: none` and `chat_template_kwargs.enable_thinking: false`, while preserving the configured Nemotron conversational-mode setting.
+- Add safe retries when an LM Studio server explicitly rejects an optional reasoning/template/token parameter. Parse both string and text-part forms of OpenAI-compatible assistant content, with support for legacy completion text; report a diagnostic when no assistant text is returned instead of silently keeping the fallback title.
+- Apply the same reasoning-off settings, compatibility fallback, and response extraction behavior to the standalone WebView title-generation path.
+
+### Changed
+- The AI Branch Comparison composer now starts at one line, grows automatically with its content up to five visible lines, and scrolls internally beyond that height. The main chat composer is unchanged.
+
+### Validation
+- Source checks verify the LM Studio title request settings and supported response shapes, plus the one-to-five-line comparison composer sizing and auto-resize behavior.
+- JavaScript syntax, project XML, plugin manifest JSON, version alignment, ZIP integrity, and clean overlay application were checked. Windows/.NET compilation and live LM Studio/WebView2 interaction require validation on Windows.
+
+## [1.10.29] — Correct generated conversation-title application
+
+### Fixed
+- Fixed the remaining PowerToys native-response title issue when WebView2 initialization replaces the original control with a temporary-profile fallback. Title generation and application now resolve the WebView2 instance currently hosted by the window instead of retaining the disposed original control.
+- Ignore queued document-title and navigation-completion events from replaced WebView2 controls so an obsolete page cannot overwrite the active window title.
+- Apply the generated title to the active chat page first, verify that the page reports the expected document title, retry transient application failures, and only then synchronize the native window title.
+- Keep the already-visible fallback title when generation or application fails, and emit a diagnostic instead of silently re-applying the fallback as though generation succeeded.
+
+### Validation
+- Source-level checks cover the temporary-profile replacement path, active-WebView resolution during readiness and title application, stale event guards, and confirmation of the page title before updating the native window title.
+- JavaScript syntax, project XML, plugin manifest JSON, version alignment, and clean-baseline overlay application were checked. Windows/.NET compilation and live WebView2/provider interaction require validation on Windows.
+
+## [1.10.28] — Expand AI Branch Comparison composer
+
+### Changed
+- Increase the AI Branch Comparison composer to show at least five lines from the outset.
+- Automatically grow the comparison composer as the user types, up to a comfortable maximum height; only longer messages then scroll inside the text field.
+- Keep the change scoped to the AI Branch Comparison modal; the main chat composer is unchanged.
+
+### Validation
+- Checked the composer markup, CSS sizing, and auto-growth/reset handlers; JavaScript syntax, project XML, plugin manifest JSON, version alignment, and overlay integrity were checked.
+- Windows/.NET compilation and live WebView2 interaction require validation on Windows.
+
 ## [1.10.27] — Apply generated conversation titles after chat initialization
 
 ### Fixed

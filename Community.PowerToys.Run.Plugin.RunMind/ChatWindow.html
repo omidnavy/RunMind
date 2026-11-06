@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="system">
+<html lang="en" data-appearance-mode="system" data-theme="system" data-color-theme="warm-graphite">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,7 +9,7 @@
   <style>
     :root {
       color-scheme: dark;
-      /* Warm Graphite: neutral charcoal surfaces, warm ivory text, and a restrained amber accent. */
+      /* Default dark palette: Warm Graphite. */
       --color-bg: #171613;
       --color-surface: #201e19;
       --color-surface-raised: #2a2721;
@@ -35,44 +35,98 @@
       --shadow-panel: 0 16px 42px rgba(0, 0, 0, .34);
       --shadow-float: 0 4px 14px rgba(0, 0, 0, .24);
     }
-    :root[data-theme="light"] {
-      color-scheme: light;
-      --color-bg: #f4f6fa;
-      --color-surface: #ffffff;
-      --color-surface-raised: #f0f2f7;
-      --color-surface-hover: #e5e9f2;
-      --color-input: #ffffff;
-      --color-text: #20232b;
-      --color-muted: #616a7a;
-      --color-accent: #3d55bf;
-      --color-accent-contrast: #ffffff;
-      --color-border: #d7dce6;
-      --color-user-bubble: #e7ebff;
-      --color-assistant-bubble: #ffffff;
-      --color-danger: #b32630;
-      --color-success: #167948;
-      --shadow-panel: 0 12px 36px rgba(34, 44, 70, .09);
-      --shadow-float: 0 3px 12px rgba(34, 44, 70, .08);
+    :root[data-theme="dark"][data-color-theme="obsidian"] {
+      color-scheme: dark;
+      --color-bg: #151515; --color-surface: #1d1d1d; --color-surface-raised: #282828;
+      --color-surface-hover: #353535; --color-input: #181818; --color-text: #efefec;
+      --color-muted: #aaa8a2; --color-accent: #d0ae78; --color-accent-contrast: #241c10;
+      --color-border: #41403b; --color-user-bubble: #30291f; --color-assistant-bubble: #1d1d1d;
+      --color-danger: #ef8982; --color-success: #91c49d;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .42); --shadow-float: 0 4px 14px rgba(0, 0, 0, .3);
     }
+    :root[data-theme="dark"][data-color-theme="deep-forest"] {
+      color-scheme: dark;
+      --color-bg: #111713; --color-surface: #18211b; --color-surface-raised: #222e25;
+      --color-surface-hover: #2d3b30; --color-input: #131b16; --color-text: #e8efe7;
+      --color-muted: #a1b1a2; --color-accent: #a2c18a; --color-accent-contrast: #182116;
+      --color-border: #3a4a3d; --color-user-bubble: #26372a; --color-assistant-bubble: #18211b;
+      --color-danger: #ed938b; --color-success: #9ccc9c;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .38); --shadow-float: 0 4px 14px rgba(0, 0, 0, .27);
+    }
+    :root[data-theme="dark"][data-color-theme="mocha"] {
+      color-scheme: dark;
+      --color-bg: #1b1512; --color-surface: #251d19; --color-surface-raised: #322720;
+      --color-surface-hover: #403128; --color-input: #1d1714; --color-text: #f0e6dc;
+      --color-muted: #b8a495; --color-accent: #d39a70; --color-accent-contrast: #28190f;
+      --color-border: #4a392f; --color-user-bubble: #3b2a21; --color-assistant-bubble: #251d19;
+      --color-danger: #ef8d81; --color-success: #9bc39a;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .42); --shadow-float: 0 4px 14px rgba(0, 0, 0, .3);
+    }
+    :root[data-theme="dark"][data-color-theme="burgundy"] {
+      color-scheme: dark;
+      --color-bg: #1a1417; --color-surface: #251c20; --color-surface-raised: #32252a;
+      --color-surface-hover: #403137; --color-input: #1d171a; --color-text: #f0e6e8;
+      --color-muted: #b6a2a8; --color-accent: #d18b9c; --color-accent-contrast: #2b171e;
+      --color-border: #4a353d; --color-user-bubble: #38252d; --color-assistant-bubble: #251c20;
+      --color-danger: #f08b85; --color-success: #9bc59f;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .42); --shadow-float: 0 4px 14px rgba(0, 0, 0, .3);
+    }
+    :root[data-theme="light"][data-color-theme="classic-light"] {
+      color-scheme: light;
+      /* Preserved original RunMind light palette. */
+      --color-bg: #f4f6fa; --color-surface: #ffffff; --color-surface-raised: #f0f2f7;
+      --color-surface-hover: #e5e9f2; --color-input: #ffffff; --color-text: #20232b;
+      --color-muted: #616a7a; --color-accent: #3d55bf; --color-accent-contrast: #ffffff;
+      --color-border: #d7dce6; --color-user-bubble: #e7ebff; --color-assistant-bubble: #ffffff;
+      --color-danger: #b32630; --color-success: #167948;
+      --shadow-panel: 0 12px 36px rgba(34, 44, 70, .09); --shadow-float: 0 3px 12px rgba(34, 44, 70, .08);
+    }
+    :root[data-theme="light"][data-color-theme="soft-ivory"] {
+      color-scheme: light;
+      --color-bg: #f7f4ec; --color-surface: #fffdf8; --color-surface-raised: #f0ece2;
+      --color-surface-hover: #e8e1d4; --color-input: #fffdf8; --color-text: #302b23;
+      --color-muted: #766d5f; --color-accent: #a26831; --color-accent-contrast: #ffffff;
+      --color-border: #ded5c5; --color-user-bubble: #f1e4d0; --color-assistant-bubble: #fffdf8;
+      --color-danger: #ae4f43; --color-success: #477b59;
+      --shadow-panel: 0 12px 36px rgba(67, 49, 28, .1); --shadow-float: 0 3px 12px rgba(67, 49, 28, .08);
+    }
+    :root[data-theme="light"][data-color-theme="sage-garden"] {
+      color-scheme: light;
+      --color-bg: #f1f5ef; --color-surface: #fbfdf9; --color-surface-raised: #e8efe6;
+      --color-surface-hover: #dce8dc; --color-input: #fcfefb; --color-text: #263329;
+      --color-muted: #627164; --color-accent: #56785b; --color-accent-contrast: #ffffff;
+      --color-border: #d1ddd0; --color-user-bubble: #e1eee0; --color-assistant-bubble: #fbfdf9;
+      --color-danger: #ae514d; --color-success: #3e7651;
+      --shadow-panel: 0 12px 36px rgba(37, 61, 42, .09); --shadow-float: 0 3px 12px rgba(37, 61, 42, .07);
+    }
+    :root[data-theme="light"][data-color-theme="rose-clay"] {
+      color-scheme: light;
+      --color-bg: #f8f1ef; --color-surface: #fffaf8; --color-surface-raised: #f2e7e3;
+      --color-surface-hover: #eadad5; --color-input: #fffaf8; --color-text: #392b2b;
+      --color-muted: #796766; --color-accent: #a65d63; --color-accent-contrast: #ffffff;
+      --color-border: #e3d1ce; --color-user-bubble: #f3e2df; --color-assistant-bubble: #fffaf8;
+      --color-danger: #ad4545; --color-success: #497457;
+      --shadow-panel: 0 12px 36px rgba(73, 43, 47, .1); --shadow-float: 0 3px 12px rgba(73, 43, 47, .08);
+    }
+    :root[data-theme="light"][data-color-theme="sandstone"] {
+      color-scheme: light;
+      --color-bg: #f5f1e9; --color-surface: #fffdf9; --color-surface-raised: #eee7dc;
+      --color-surface-hover: #e7ddce; --color-input: #fffdfa; --color-text: #342e26;
+      --color-muted: #74695c; --color-accent: #9f6536; --color-accent-contrast: #ffffff;
+      --color-border: #ddd2c1; --color-user-bubble: #f2e4d2; --color-assistant-bubble: #fffdf9;
+      --color-danger: #b34c41; --color-success: #4f7850;
+      --shadow-panel: 0 12px 36px rgba(61, 46, 29, .1); --shadow-float: 0 3px 12px rgba(61, 46, 29, .08);
+    }
+    /* Preserve a correct first paint before the WebView host supplies saved preferences. */
     @media (prefers-color-scheme: light) {
       :root[data-theme="system"] {
         color-scheme: light;
-        --color-bg: #f4f6fa;
-        --color-surface: #ffffff;
-        --color-surface-raised: #f0f2f7;
-        --color-surface-hover: #e5e9f2;
-        --color-input: #ffffff;
-        --color-text: #20232b;
-        --color-muted: #616a7a;
-        --color-accent: #3d55bf;
-        --color-accent-contrast: #ffffff;
-        --color-border: #d7dce6;
-        --color-user-bubble: #e7ebff;
-        --color-assistant-bubble: #ffffff;
-        --color-danger: #b32630;
-        --color-success: #167948;
-        --shadow-panel: 0 12px 36px rgba(34, 44, 70, .09);
-        --shadow-float: 0 3px 12px rgba(34, 44, 70, .08);
+        --color-bg: #f4f6fa; --color-surface: #ffffff; --color-surface-raised: #f0f2f7;
+        --color-surface-hover: #e5e9f2; --color-input: #ffffff; --color-text: #20232b;
+        --color-muted: #616a7a; --color-accent: #3d55bf; --color-accent-contrast: #ffffff;
+        --color-border: #d7dce6; --color-user-bubble: #e7ebff; --color-assistant-bubble: #ffffff;
+        --color-danger: #b32630; --color-success: #167948;
+        --shadow-panel: 0 12px 36px rgba(34, 44, 70, .09); --shadow-float: 0 3px 12px rgba(34, 44, 70, .08);
       }
     }
     * { box-sizing: border-box; }
@@ -108,11 +162,31 @@
     .brand h1 { margin: 0; font-size: 17px; font-weight: 680; letter-spacing: .01em; line-height: 1.3; }
     .brand p { margin: 3px 0 0; color: var(--color-muted); font-size: 12px; }
     .top-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
-    .theme-wrap { display: flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface-raised); white-space: nowrap; }
-    .theme-button { display: inline-grid; place-items: center; width: 31px; height: 31px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-muted); }
-    .theme-button:hover { color: var(--color-text); background: var(--color-surface-hover); }
-    .theme-button[aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-hover); box-shadow: inset 0 0 0 1px var(--color-border); }
-    .theme-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .appearance-menu { position: relative; }
+    .appearance-trigger { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); font-size: 12px; font-weight: 600; list-style: none; cursor: pointer; }
+    .appearance-trigger::-webkit-details-marker { display: none; }
+    .appearance-trigger:hover, .appearance-menu[open] .appearance-trigger { background: var(--color-surface-hover); }
+    .appearance-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .appearance-panel { position: absolute; z-index: 30; top: calc(100% + 9px); right: 0; width: min(340px, calc(100vw - 28px)); max-height: min(78vh, 560px); overflow: auto; padding: 15px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
+    .appearance-panel-title { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
+    .appearance-panel-note { margin: 0 0 13px; color: var(--color-muted); font-size: 11px; line-height: 1.45; }
+    .appearance-fields { display: grid; gap: 10px; }
+    .appearance-field { display: grid; gap: 4px; }
+    .appearance-field label { color: var(--color-muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .appearance-field select { width: 100%; }
+    .appearance-preview { display: flex; align-items: center; gap: 10px; margin-top: 13px; padding: 9px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); }
+    .appearance-swatches { display: flex; flex: 0 0 auto; gap: 4px; }
+    .appearance-swatch { width: 17px; height: 17px; border: 1px solid color-mix(in srgb, var(--color-text) 18%, transparent); border-radius: 50%; }
+    .appearance-swatch:nth-child(1) { background: var(--color-bg); }
+    .appearance-swatch:nth-child(2) { background: var(--color-surface); }
+    .appearance-swatch:nth-child(3) { background: var(--color-surface-raised); }
+    .appearance-swatch:nth-child(4) { background: var(--color-accent); }
+    .appearance-swatch:nth-child(5) { background: var(--color-user-bubble); }
+    .appearance-preview-copy { min-width: 0; display: grid; gap: 1px; }
+    .appearance-preview-copy strong { font-size: 11px; line-height: 1.3; }
+    .appearance-preview-copy span { color: var(--color-muted); font-size: 10px; }
+    .appearance-reset { width: 100%; margin-top: 11px; padding: 7px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: transparent; color: var(--color-muted); font-size: 11px; font-weight: 600; }
+    .appearance-reset:hover { background: var(--color-surface-hover); color: var(--color-text); }
     .conversation-menu { position: relative; }
     .conversation-trigger { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); font-size: 12px; font-weight: 600; list-style: none; cursor: pointer; }
     .conversation-trigger::-webkit-details-marker { display: none; }
@@ -416,7 +490,7 @@
     .branch-compare-context-note.warning { color:var(--color-warning, #d99b35); }
     .branch-compare-composer { display:flex; align-items:flex-end; gap:8px; padding:6px 7px 6px 12px; border:1px solid var(--color-border); border-radius:14px; background:var(--color-input); box-shadow:var(--shadow-float); }
     .branch-compare-composer:focus-within { border-color:color-mix(in srgb,var(--color-accent) 65%,var(--color-border)); }
-    .branch-compare-composer textarea { display:block; flex:1 1 auto; width:100%; min-width:0; min-height:42px; max-height:130px; resize:vertical; padding:8px 2px; border:0; outline:0; background:transparent; color:var(--color-text); font:12px/1.5 var(--font-ui); }
+    .branch-compare-composer textarea { display:block; flex:1 1 auto; width:100%; min-width:0; min-height:34px; max-height:106px; resize:none; overflow-y:hidden; padding:8px 2px; border:0; outline:0; background:transparent; color:var(--color-text); font:12px/1.5 var(--font-ui); }
     .branch-compare-composer textarea:focus { border:0; box-shadow:none; }
     .branch-compare-send { display:inline-grid; place-items:center; width:35px; height:35px; flex:0 0 35px; border:0; border-radius:50%; background:var(--color-text); color:var(--color-bg); }
     .branch-compare-send:disabled { opacity:.35; }
@@ -429,7 +503,13 @@
     .branch-compare-ai-toolbar label { display:flex; align-items:center; gap:8px; color:var(--color-muted); font-size:10px; font-weight:650; }
     .branch-compare-ai-toolbar select { width:min(340px,40vw); min-width:180px; height:32px; padding:0 9px; font-size:11px; }
     .branch-compare-ai-toolbar .button { min-height:32px; padding:5px 12px; font-size:10px; }
-    .branch-compare-ai-trigger svg { width:14px; height:14px; margin-right:5px; vertical-align:-2px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .branch-compare-ai-trigger { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:42px; padding:6px 16px 6px 8px; border:1px solid color-mix(in srgb,var(--color-accent) 42%,var(--color-border)); border-radius:var(--radius-md); background:color-mix(in srgb,var(--color-accent) 8%,var(--color-surface-raised)); color:var(--color-text); font:700 11px/1.2 var(--font-ui); letter-spacing:.01em; box-shadow:0 1px 2px rgba(0,0,0,.08); transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,transform .14s ease; }
+    .branch-compare-ai-trigger:hover:not(:disabled) { border-color:color-mix(in srgb,var(--color-accent) 72%,var(--color-border)); background:color-mix(in srgb,var(--color-accent) 15%,var(--color-surface-raised)); box-shadow:var(--shadow-float); transform:translateY(-1px); }
+    .branch-compare-ai-trigger:active:not(:disabled) { transform:translateY(0); }
+    .branch-compare-ai-trigger:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; }
+    .branch-compare-ai-trigger:disabled { opacity:.5; cursor:not-allowed; box-shadow:none; }
+    .branch-compare-ai-trigger-icon { display:grid; place-items:center; width:28px; height:28px; flex:0 0 28px; border:1px solid color-mix(in srgb,var(--color-accent) 24%,var(--color-border)); border-radius:8px; background:color-mix(in srgb,var(--color-accent) 16%,var(--color-surface)); color:var(--color-accent); }
+    .branch-compare-ai-trigger-icon svg { display:block; width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
     .branch-compare-ai-hint { flex:1 1 240px; color:var(--color-muted); font-size:9px; line-height:1.45; text-align:right; }
     @media (max-width:760px) {
       .branch-compare-workspace-head { align-items:flex-start; flex-direction:column; }
@@ -699,17 +779,51 @@
           </div>
         </div>
         <div class="top-actions">
-          <div class="theme-wrap" role="group" aria-label="Color theme">
-            <button type="button" class="theme-button" data-theme-choice="system" aria-label="Use system theme" title="System theme" aria-pressed="true">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-            </button>
-            <button type="button" class="theme-button" data-theme-choice="light" aria-label="Use light theme" title="Light theme" aria-pressed="false">
+          <details class="appearance-menu" id="appearanceMenu">
+            <summary class="appearance-trigger" aria-label="Appearance settings" title="Choose appearance mode and color palettes">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg>
-            </button>
-            <button type="button" class="theme-button" data-theme-choice="dark" aria-label="Use dark theme" title="Dark theme" aria-pressed="false">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.7 8.7 0 1 0 20.5 14.2Z"/></svg>
-            </button>
-          </div>
+              <span>Appearance</span>
+            </summary>
+            <div class="appearance-panel" role="group" aria-label="Appearance preferences">
+              <h2 class="appearance-panel-title">Appearance</h2>
+              <p class="appearance-panel-note">Choose when RunMind follows Windows, then keep a separate favorite palette for Light and Dark mode.</p>
+              <div class="appearance-fields">
+                <div class="appearance-field">
+                  <label for="appearanceMode">Appearance mode</label>
+                  <select id="appearanceMode" aria-label="Appearance mode">
+                    <option value="system">System — follow Windows</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
+                <div class="appearance-field">
+                  <label for="lightThemeSelect">Light color theme</label>
+                  <select id="lightThemeSelect" aria-label="Light color theme">
+                    <option value="classic-light">Classic Light</option>
+                    <option value="soft-ivory">Soft Ivory</option>
+                    <option value="sage-garden">Sage Garden</option>
+                    <option value="rose-clay">Rose Clay</option>
+                    <option value="sandstone">Sandstone</option>
+                  </select>
+                </div>
+                <div class="appearance-field">
+                  <label for="darkThemeSelect">Dark color theme</label>
+                  <select id="darkThemeSelect" aria-label="Dark color theme">
+                    <option value="warm-graphite">Warm Graphite</option>
+                    <option value="obsidian">Obsidian</option>
+                    <option value="deep-forest">Deep Forest</option>
+                    <option value="mocha">Mocha</option>
+                    <option value="burgundy">Burgundy</option>
+                  </select>
+                </div>
+              </div>
+              <div class="appearance-preview" aria-live="polite">
+                <div class="appearance-swatches" aria-hidden="true"><span class="appearance-swatch"></span><span class="appearance-swatch"></span><span class="appearance-swatch"></span><span class="appearance-swatch"></span><span class="appearance-swatch"></span></div>
+                <div class="appearance-preview-copy"><strong id="appearancePreviewName">Warm Graphite</strong><span id="appearancePreviewMode">Active palette · Dark</span></div>
+              </div>
+              <button type="button" class="appearance-reset" id="resetAppearance">Reset appearance to defaults</button>
+            </div>
+          </details>
           <details class="conversation-menu" id="conversationMenu">
             <summary class="conversation-trigger" aria-label="Conversations" title="Save, open, or export conversations">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5H11l-4.5 3v-3.1A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z"/><path d="M8 9h8M8 12h5"/></svg><span class="conversation-trigger-label">Conversations</span>
@@ -1008,8 +1122,8 @@
           </article>
         </div>
         <footer class="branch-compare-controls">
-          <button type="button" class="button primary branch-compare-ai-trigger" id="conversationBranchCompareAi" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 16 .9 2.1L22 19l-2.1.9L19 22l-.9-2.1L16 19l2.1-.9L19 16Z"/></svg><span id="conversationBranchCompareAiButtonLabel">AI Branch Comparison</span></button>
-          <span class="branch-compare-ai-hint">The discussion is independent of both branches and remains available while this comparison session is open.</span>
+          <button type="button" class="branch-compare-ai-trigger" id="conversationBranchCompareAi" disabled><span class="branch-compare-ai-trigger-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 5v5a3 3 0 0 0 3 3h4a3 3 0 0 1 3 3v3"/><path d="m13.5 16 3.5 3 3.5-3"/><path d="M7 5h.01M7 5l-2-2M7 5l2-2"/><path d="M17 4v3M15.5 5.5h3"/></svg></span><span id="conversationBranchCompareAiButtonLabel">Compare with AI</span></button>
+          <span class="branch-compare-ai-hint">Get an independent review without changing either branch or your main chat.</span>
         </footer>
       </section>
       <div class="modal-backdrop branch-compare-modal" id="conversationBranchCompareAiResult" hidden>
@@ -1038,7 +1152,7 @@
               <span class="branch-compare-context-note" id="conversationBranchCompareContextNote">Original branch responses and discussion history are retained.</span>
             </div>
             <form class="branch-compare-composer" id="conversationBranchCompareForm">
-              <textarea id="conversationBranchCompareInput" rows="2" aria-label="Initial assessment instruction or follow-up message" placeholder="Edit the prepared assessment instruction or ask a follow-up…" disabled></textarea>
+              <textarea id="conversationBranchCompareInput" rows="1" aria-label="Initial assessment instruction or follow-up message" placeholder="Edit the prepared assessment instruction or ask a follow-up…" disabled></textarea>
               <button type="submit" class="branch-compare-send" id="conversationBranchCompareSend" title="Send follow-up" aria-label="Send follow-up" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/></svg></button>
             </form>
           </footer>
@@ -2458,12 +2572,23 @@
       conversationBranchCompareAiStatus.textContent = text;
       conversationBranchCompareAiStatusRow.dataset.state = state;
     }
+    function resizeBranchComparisonComposer() {
+      const input = conversationBranchCompareInput;
+      if (!input) return;
+      const minHeight = 34;
+      const maxHeight = 106;
+      input.style.height = 'auto';
+      const contentHeight = input.scrollHeight;
+      input.style.height = `${Math.min(Math.max(contentHeight, minHeight), maxHeight)}px`;
+      input.style.overflowY = contentHeight > maxHeight ? 'auto' : 'hidden';
+    }
     function openBranchComparisonAiModal() {
       conversationBranchCompareAiResult.hidden = false;
       conversationBranchCompareAiDialog?.focus();
       if (conversationBranchCompareInput && activeBranchCompareSession && !branchCompareController) {
         conversationBranchCompareInput.value = String(activeBranchCompareSession.draft ?? '');
       }
+      resizeBranchComparisonComposer();
       renderBranchComparisonDiscussion();
       updateBranchComparisonAiAvailability();
       conversationBranchCompareInput?.focus();
@@ -2644,7 +2769,7 @@
       const hasMessages = !!activeBranchCompareSession?.messages?.length;
       const hasInitialAssessment = !!activeBranchCompareSession?.messages?.some(message => message.kind === 'assessment' && !message.error && !message.cancelled && String(message.content || '').trim());
       if (conversationBranchCompareAiButton) conversationBranchCompareAiButton.disabled = !hasSession || !hasModel || running;
-      if (conversationBranchCompareAiButtonLabel) conversationBranchCompareAiButtonLabel.textContent = hasInitialAssessment ? 'Open AI Discussion' : 'AI Branch Comparison';
+      if (conversationBranchCompareAiButtonLabel) conversationBranchCompareAiButtonLabel.textContent = 'Compare with AI';
       if (conversationBranchCompareModel) conversationBranchCompareModel.disabled = running;
       if (conversationBranchCompareAiStop) conversationBranchCompareAiStop.hidden = !running;
       if (conversationBranchCompareAiCopy) conversationBranchCompareAiCopy.disabled = !hasMessages;
@@ -2760,6 +2885,7 @@
       const kind = hasInitialAssessment ? 'followup' : 'initial';
       activeBranchCompareSession.draft = '';
       conversationBranchCompareInput.value = '';
+      resizeBranchComparisonComposer();
       updateBranchComparisonAiAvailability();
       await runBranchComparisonGeneration({ userText: value, kind });
     }
@@ -2801,6 +2927,7 @@
     });
     conversationBranchCompareInput?.addEventListener('input', () => {
       if (activeBranchCompareSession) activeBranchCompareSession.draft = conversationBranchCompareInput.value;
+      resizeBranchComparisonComposer();
       updateBranchComparisonAiAvailability();
     });
     conversationBranchCompareInput?.addEventListener('keydown', event => {
@@ -3020,10 +3147,97 @@
         ? `Your preferences are included alongside RunMind's core instructions. The core instructions and mode-specific workflow take precedence whenever there is a conflict.\n\nYour custom preference block:\n${prompt}\n\nThese preferences cannot authorize tools or override RunMind's built-in operational requirements.`
         : 'No custom system instructions are configured. RunMind will use its built-in instructions and the selected mode’s workflow.';
     }
+    const appearanceModeSelect = $('#appearanceMode');
+    const lightThemeSelect = $('#lightThemeSelect');
+    const darkThemeSelect = $('#darkThemeSelect');
+    const appearancePreviewName = $('#appearancePreviewName');
+    const appearancePreviewMode = $('#appearancePreviewMode');
+    const resetAppearanceButton = $('#resetAppearance');
+    const APPEARANCE_DEFAULTS = Object.freeze({ mode: 'system', lightTheme: 'classic-light', darkTheme: 'warm-graphite' });
+    const APPEARANCE_THEME_NAMES = Object.freeze({
+      'classic-light': 'Classic Light', 'soft-ivory': 'Soft Ivory', 'sage-garden': 'Sage Garden', 'rose-clay': 'Rose Clay', sandstone: 'Sandstone',
+      'warm-graphite': 'Warm Graphite', obsidian: 'Obsidian', 'deep-forest': 'Deep Forest', mocha: 'Mocha', burgundy: 'Burgundy'
+    });
+    const systemColorScheme = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    let currentAppearance = { ...APPEARANCE_DEFAULTS };
+    function normalizeAppearance(value) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+      const mode = ['system', 'light', 'dark'].includes(value.mode) ? value.mode : APPEARANCE_DEFAULTS.mode;
+      const lightTheme = Object.hasOwn(APPEARANCE_THEME_NAMES, value.lightTheme) && ['classic-light', 'soft-ivory', 'sage-garden', 'rose-clay', 'sandstone'].includes(value.lightTheme)
+        ? value.lightTheme : APPEARANCE_DEFAULTS.lightTheme;
+      const darkTheme = Object.hasOwn(APPEARANCE_THEME_NAMES, value.darkTheme) && ['warm-graphite', 'obsidian', 'deep-forest', 'mocha', 'burgundy'].includes(value.darkTheme)
+        ? value.darkTheme : APPEARANCE_DEFAULTS.darkTheme;
+      return { mode, lightTheme, darkTheme };
+    }
+    function effectiveAppearanceTheme() {
+      return currentAppearance.mode === 'system'
+        ? (systemColorScheme?.matches ? 'dark' : 'light')
+        : currentAppearance.mode;
+    }
+    function updateAppearanceControls() {
+      appearanceModeSelect.value = currentAppearance.mode;
+      lightThemeSelect.value = currentAppearance.lightTheme;
+      darkThemeSelect.value = currentAppearance.darkTheme;
+      const effective = effectiveAppearanceTheme();
+      const themeId = effective === 'dark' ? currentAppearance.darkTheme : currentAppearance.lightTheme;
+      appearancePreviewName.textContent = APPEARANCE_THEME_NAMES[themeId];
+      appearancePreviewMode.textContent = `${currentAppearance.mode === 'system' ? 'Following Windows' : 'Selected mode'} · ${effective === 'dark' ? 'Dark' : 'Light'}`;
+    }
+    function applyAppearance() {
+      const effective = effectiveAppearanceTheme();
+      const themeId = effective === 'dark' ? currentAppearance.darkTheme : currentAppearance.lightTheme;
+      document.documentElement.dataset.appearanceMode = currentAppearance.mode;
+      document.documentElement.dataset.theme = effective;
+      document.documentElement.dataset.colorTheme = themeId;
+      updateAppearanceControls();
+    }
+    function postAppearancePreference() {
+      try {
+        window.chrome?.webview?.postMessage({
+          type: 'runmind.appearanceChanged',
+          mode: currentAppearance.mode,
+          lightTheme: currentAppearance.lightTheme,
+          darkTheme: currentAppearance.darkTheme
+        });
+      } catch (_) { /* The browser preview has no native host; local preferences still work. */ }
+    }
+    function commitAppearance() {
+      applyAppearance();
+      savePreferences();
+      postAppearancePreference();
+    }
+    appearanceModeSelect.addEventListener('change', () => {
+      currentAppearance.mode = ['system', 'light', 'dark'].includes(appearanceModeSelect.value) ? appearanceModeSelect.value : 'system';
+      commitAppearance();
+    });
+    lightThemeSelect.addEventListener('change', () => {
+      currentAppearance.lightTheme = ['classic-light', 'soft-ivory', 'sage-garden', 'rose-clay', 'sandstone'].includes(lightThemeSelect.value)
+        ? lightThemeSelect.value : APPEARANCE_DEFAULTS.lightTheme;
+      commitAppearance();
+    });
+    darkThemeSelect.addEventListener('change', () => {
+      currentAppearance.darkTheme = ['warm-graphite', 'obsidian', 'deep-forest', 'mocha', 'burgundy'].includes(darkThemeSelect.value)
+        ? darkThemeSelect.value : APPEARANCE_DEFAULTS.darkTheme;
+      commitAppearance();
+    });
+    resetAppearanceButton.addEventListener('click', () => {
+      currentAppearance = { ...APPEARANCE_DEFAULTS };
+      commitAppearance();
+    });
+    if (systemColorScheme) {
+      const onSystemColorSchemeChanged = () => {
+        if (currentAppearance.mode === 'system') applyAppearance();
+      };
+      if (typeof systemColorScheme.addEventListener === 'function') systemColorScheme.addEventListener('change', onSystemColorSchemeChanged);
+      else if (typeof systemColorScheme.addListener === 'function') systemColorScheme.addListener(onSystemColorSchemeChanged);
+    }
     function savePreferences() {
       const settings = generationSettings();
       const saved = {
-        theme: document.documentElement.dataset.theme || 'system',
+        theme: currentAppearance.mode,
+        appearanceMode: currentAppearance.mode,
+        lightTheme: currentAppearance.lightTheme,
+        darkTheme: currentAppearance.darkTheme,
         selectedModelKey: currentModelKey() || preferredModelKey,
         thinkEnabled: !!thinkToggle.checked,
         lmStudioApiMode: settingLmStudioApiMode.value === 'native' ? 'native' : 'openai',
@@ -3036,10 +3250,16 @@
     }
     function applySavedPreferences() {
       const saved = loadPreferences();
-      if (['system', 'light', 'dark'].includes(saved.theme)) {
-        document.documentElement.dataset.theme = saved.theme;
-        document.querySelectorAll('[data-theme-choice]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.themeChoice === saved.theme)));
-      }
+      const hostAppearance = normalizeAppearance(BOOT.appearance);
+      const savedAppearance = normalizeAppearance({
+        mode: saved.appearanceMode ?? saved.theme,
+        lightTheme: saved.lightTheme,
+        darkTheme: saved.darkTheme
+      });
+      currentAppearance = hostAppearance || savedAppearance || { ...APPEARANCE_DEFAULTS };
+      applyAppearance();
+      // Migrate the previous single mode selector to the shared user preference file.
+      if (!hostAppearance && savedAppearance) postAppearancePreference();
       if (saved.selectedModelKey) preferredModelKey = String(saved.selectedModelKey);
       const generation = saved.generation && typeof saved.generation === 'object' ? saved.generation : {};
       const values = [
@@ -7890,7 +8110,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     // Deep Research is a distinct JavaScript-only execution mode. It reuses the
     // selected model, existing tool adapters, inline approvals, and MCP client.
     function toolbarFlyoutMenus() {
-      return [...document.querySelectorAll('.toolbar-menu, .conversation-menu')];
+      return [...document.querySelectorAll('.toolbar-menu, .conversation-menu, .appearance-menu')];
     }
     function syncResearchPanelState() {
       researchPanelOpen = !!researchWorkspaceMenu?.open;
@@ -7933,9 +8153,9 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     }
     function positionToolbarFlyout(menu) {
       if (!menu?.open) return;
-      // One placement path covers toolbar panels, the Conversations panel, and
+      // One placement path covers toolbar panels, Conversations, Appearance, and
       // the larger Deep Research workspace. No flyout relies on its parent row.
-      const panel = menu.querySelector(':scope > .toolbar-panel, :scope > .conversation-panel');
+      const panel = menu.querySelector(':scope > .toolbar-panel, :scope > .conversation-panel, :scope > .appearance-panel');
       const trigger = menu.querySelector(':scope > summary');
       if (!panel || !trigger) return;
 
@@ -9606,6 +9826,15 @@ ${toolActivityDetail}`;
     function allMessages() { return messages.filter(m => !m.pending); }
     let conversationDisplayTitle = '';
     let titleGenerationController = null;
+    function extractOpenAITitleText(response) {
+      const choice = response?.choices?.[0];
+      const content = choice?.message?.content;
+      if (typeof content === 'string') return content;
+      if (Array.isArray(content)) {
+        return content.map(part => typeof part === 'string' ? part : (typeof part?.text === 'string' ? part.text : (typeof part?.content === 'string' ? part.content : ''))).join('');
+      }
+      return typeof choice?.text === 'string' ? choice.text : '';
+    }
     async function generateInitialConversationTitle(selection, prompt, responseText) {
       const userPrompt = String(prompt || '').slice(0, 1800);
       const answer = String(responseText || '').slice(0, 1800);
@@ -9621,15 +9850,49 @@ ${toolActivityDetail}`;
           payload = { model: selection.model, prompt: titlePrompt, stream: false, think: false, keep_alive: Number(BOOT.keepAliveSeconds ?? 300), options: { temperature: 0.2, num_predict: 32 } };
         } else {
           url = `${normalizeBase(selection.connection?.baseUrl || BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1')}/chat/completions`;
-          payload = { model: selection.model, messages: [{ role: 'system', content: 'You generate short, accurate conversation titles. Return only a title.' }, { role: 'user', content: titlePrompt }], stream: false, temperature: 0.2, max_tokens: 32 };
+          payload = {
+            model: selection.model,
+            messages: [{ role: 'system', content: 'You generate short, accurate conversation titles. Return only a title.' }, { role: 'user', content: titlePrompt }],
+            stream: false, temperature: 0.2, max_tokens: 32,
+            reasoning_effort: 'none',
+            chat_template_kwargs: {
+              enable_thinking: false,
+              ...(isNemotron35BoltE4BModel(selection.model) ? { conversational_mode: generationSettings().conversational_mode === true } : {})
+            }
+          };
         }
-        const response = await fetch(url, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...modelAuthorizationHeaders(selection.connection) }, body: JSON.stringify(payload) });
-        const raw = await readBoundedResponseText(response, 128 * 1024);
-        if (!response.ok) throw new Error(`Title generation HTTP ${response.status}: ${raw.slice(0, 300)}`);
+        let response, raw;
+        if (selection.provider === 'lmstudio') {
+          const optionalTitleParameters = [
+            { key: 'reasoning_effort', pattern: /(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)[^\n]{0,120}reasoning_effort|reasoning_effort[^\n]{0,120}(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)/i },
+            { key: 'chat_template_kwargs', pattern: /(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)[^\n]{0,120}(?:chat_template_kwargs|enable_thinking|conversational_mode)|(?:chat_template_kwargs|enable_thinking|conversational_mode)[^\n]{0,120}(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)/i },
+            { key: 'max_tokens', pattern: /(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)[^\n]{0,120}max_tokens|max_tokens[^\n]{0,120}(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)/i }
+          ];
+          for (let attempt = 0; attempt <= optionalTitleParameters.length; attempt++) {
+            response = await fetch(url, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...modelAuthorizationHeaders(selection.connection) }, body: JSON.stringify(payload) });
+            raw = await readBoundedResponseText(response, 128 * 1024);
+            if (response.ok) break;
+            const rejected = [400, 422].includes(response.status)
+              ? optionalTitleParameters.find(item => Object.prototype.hasOwnProperty.call(payload, item.key) && item.pattern.test(raw))
+              : null;
+            if (!rejected) throw new Error(`Title generation HTTP ${response.status}: ${raw.slice(0, 300)}`);
+            delete payload[rejected.key];
+          }
+        } else {
+          response = await fetch(url, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...modelAuthorizationHeaders(selection.connection) }, body: JSON.stringify(payload) });
+          raw = await readBoundedResponseText(response, 128 * 1024);
+          if (!response.ok) throw new Error(`Title generation HTTP ${response.status}: ${raw.slice(0, 300)}`);
+        }
+        if (!response?.ok) throw new Error('Title generation failed after LM Studio compatibility retries.');
         const parsed = JSON.parse(raw);
         let title = selection.provider === 'ollama'
           ? (parsed.response || '')
-          : (parsed.choices?.[0]?.message?.content || '');
+          : extractOpenAITitleText(parsed);
+        if (selection.provider === 'lmstudio' && !String(title || '').trim()) {
+          const choice = parsed?.choices?.[0];
+          const messageFields = choice?.message && typeof choice.message === 'object' ? Object.keys(choice.message).join(',') : 'missing';
+          throw new Error(`LM Studio title response contained no assistant text (finish_reason: ${choice?.finish_reason || 'missing'}; message fields: ${messageFields}).`);
+        }
         title = String(title).replace(/[\r\n]+/g, ' ').trim().replace(/^["'` ]+|["'` ]+$/g, '');
         title = title.replace(/^(?:title|conversation title)\s*:\s*/i, '').replace(/\s+/g, ' ').trim();
         if (title.length > 64) title = `${title.slice(0, 61).trimEnd()}…`;
@@ -10061,14 +10324,6 @@ ${toolActivityDetail}`;
       }
     }
 
-    document.querySelectorAll('[data-theme-choice]').forEach(button => {
-      button.addEventListener('click', () => {
-        const theme = button.dataset.themeChoice;
-        document.documentElement.dataset.theme = theme;
-        document.querySelectorAll('[data-theme-choice]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
-        savePreferences();
-      });
-    });
     transcriptInner.addEventListener('click', event => { const button = event.target.closest('[data-message-action]'); if (button) void handleMessageAction(button.dataset.messageAction, Number(button.dataset.index)); });
     transcriptInner.addEventListener('toggle', event => {
       const details = event.target;
@@ -10228,7 +10483,7 @@ ${toolActivityDetail}`;
       if (target instanceof Node) {
         for (const menu of toolbarFlyoutMenus()) {
           if (!menu.open) continue;
-          const panel = menu.querySelector(':scope > .toolbar-panel, :scope > .conversation-panel');
+          const panel = menu.querySelector(':scope > .toolbar-panel, :scope > .conversation-panel, :scope > .appearance-panel');
           if (panel && (panel === target || panel.contains(target))) return;
         }
       }

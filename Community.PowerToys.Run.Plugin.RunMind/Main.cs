@@ -67,6 +67,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     // Reuse WebView2 environments across chat windows to avoid profile/process races.
     private static readonly SemaphoreSlim WebView2EnvironmentLock = new(1, 1);
     private static readonly ConditionalWeakTable<WebView2, object> DisposedWebViews = new();
+    private static readonly ConditionalWeakTable<Window, WindowThemeSynchronizer> WindowThemeSynchronizers = new();
     private static CoreWebView2Environment? _localAppDataWebView2Environment;
     private static CoreWebView2Environment? _temporaryWebView2Environment;
 
@@ -1303,6 +1304,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var bootstrap = new
         {
             title = CreateFallbackConversationTitle(prompt),
+            appearance = AppearancePreferenceStore.CreateBootstrapValue(),
             windowInstanceId = Guid.NewGuid().ToString("N"),
             initialModel = model,
             initialProvider = settings.Provider == 1 ? "lmstudio" : "ollama",
@@ -1377,11 +1379,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         // InitializeChatWebViewAsync handles its own errors. Do not spend another model
         // request if the window was closed or WebView2 did not finish initializing.
         var pageReady = await appWindow.Dispatcher.InvokeAsync(() =>
-            appWindow.IsVisible && webView.CoreWebView2 is not null).Task.ConfigureAwait(false);
+            appWindow.IsVisible
+            && appWindow.Content is WebView2 activeWebView
+            && activeWebView.CoreWebView2 is not null).Task.ConfigureAwait(false);
         if (!pageReady) return;
 
         await GenerateAndApplyConversationTitleAsync(
-            appWindow, webView, model, prompt, responseText, settings, fallbackTitle).ConfigureAwait(false);
+            appWindow, model, prompt, responseText, settings, fallbackTitle).ConfigureAwait(false);
     }
 
     private void ShowSavedConversationWindow(string assemblyDirectory, string conversationJson, string fileName)
@@ -1396,6 +1400,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var bootstrap = new
         {
             title = string.IsNullOrWhiteSpace(title) ? "RunMind Chat" : title,
+            appearance = AppearancePreferenceStore.CreateBootstrapValue(),
             windowInstanceId = Guid.NewGuid().ToString("N"),
             initialConversation,
             initialConversationFileName = fileName,
@@ -1506,7 +1511,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     private async Task GenerateAndApplyConversationTitleAsync(
         Window appWindow,
-        WebView2 webView,
         string model,
         string prompt,
         string responseText,
@@ -1534,9 +1538,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 {
                     var readyScriptTask = await dispatcher.InvokeAsync(() =>
                     {
-                        if (!appWindow.IsVisible || webView.CoreWebView2 is null)
+                        // InitializeChatWebViewAsync can replace the original control with
+                        // a fresh WebView2 instance when it retries using a temporary profile.
+                        // Always target the control currently hosted by the window.
+                        if (!appWindow.IsVisible || appWindow.Content is not WebView2 activeWebView
+                            || activeWebView.CoreWebView2 is null)
                             return Task.FromResult("false");
-                        return webView.CoreWebView2.ExecuteScriptAsync(
+                        return activeWebView.CoreWebView2.ExecuteScriptAsync(
                             "window.__runMindInitialized === true && typeof window.setConversationTitle === 'function'");
                     }).Task.ConfigureAwait(false);
                     var ready = await readyScriptTask.ConfigureAwait(false);
@@ -1575,32 +1583,150 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 return;
             }
-            catch
+            catch (Exception ex)
             {
-                title = fallbackTitle;
+                // The fallback title is already visible. Keep it rather than silently
+                // re-applying it, and retain a diagnostic explaining why generation failed.
+                System.Diagnostics.Trace.WriteLine($"RunMind conversation title generation failed: {ex}");
+                return;
             }
 
-            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || lifetime.IsCancellationRequested)
+            if (string.IsNullOrWhiteSpace(title)
+                || string.Equals(title, fallbackTitle, StringComparison.Ordinal)
+                || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished
+                || lifetime.IsCancellationRequested)
                 return;
 
             var serializedTitle = JsonSerializer.Serialize(title);
+            var expectedDocumentTitle = $"RunMind — {title}";
+            var applied = false;
+
+            // Resolve the currently hosted WebView on every attempt. A failed WebView2
+            // initialization can replace the original control with a temporary-profile
+            // control; applying the result to the disposed original leaves the UI unchanged.
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || lifetime.IsCancellationRequested)
+                    return;
+
+                try
+                {
+                    var applyTitleTask = await dispatcher.InvokeAsync(() =>
+                    {
+                        if (!appWindow.IsVisible || appWindow.Content is not WebView2 activeWebView
+                            || activeWebView.CoreWebView2 is null)
+                            return Task.FromResult(string.Empty);
+
+                        return activeWebView.CoreWebView2.ExecuteScriptAsync(
+                            $"(() => {{ if (typeof window.setConversationTitle !== 'function') return ''; window.setConversationTitle({serializedTitle}); return document.title; }})()");
+                    }).Task.ConfigureAwait(false);
+                    var scriptResult = await applyTitleTask.ConfigureAwait(false);
+                    string? appliedDocumentTitle = null;
+                    try { appliedDocumentTitle = JsonSerializer.Deserialize<string>(scriptResult); }
+                    catch (JsonException) { /* The page did not return a JSON string. */ }
+                    applied = string.Equals(appliedDocumentTitle, expectedDocumentTitle, StringComparison.Ordinal);
+                    if (applied) break;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.WriteLine($"RunMind could not apply the generated conversation title (attempt {attempt + 1}): {ex.Message}");
+                }
+
+                if (attempt < 4)
+                {
+                    try { await Task.Delay(200, lifetime.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { return; }
+                }
+            }
+
+            if (!applied)
+            {
+                System.Diagnostics.Trace.WriteLine("RunMind generated a conversation title, but the active chat page did not confirm applying it.");
+                return;
+            }
+
+            // Keep the native window title synchronized with the confirmed page title.
             await dispatcher.InvokeAsync(() =>
             {
-                if (appWindow.IsVisible) appWindow.Title = $"RunMind — {title}";
+                if (appWindow.IsVisible) appWindow.Title = expectedDocumentTitle;
             }).Task.ConfigureAwait(false);
-
-            var setTitleTask = await dispatcher.InvokeAsync(() =>
-            {
-                if (!appWindow.IsVisible || webView.CoreWebView2 is null)
-                    return Task.FromResult(string.Empty);
-                return webView.CoreWebView2.ExecuteScriptAsync($"window.setConversationTitle({serializedTitle});");
-            }).Task.ConfigureAwait(false);
-            await setTitleTask.ConfigureAwait(false);
         }
         finally
         {
             appWindow.Closed -= closedHandler;
         }
+    }
+
+    private static string ExtractOpenAIChatCompletionText(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("choices", out var choices)
+            || choices.ValueKind != JsonValueKind.Array
+            || choices.GetArrayLength() == 0)
+            return string.Empty;
+
+        var choice = choices[0];
+        var output = new StringBuilder();
+        if (choice.ValueKind == JsonValueKind.Object
+            && choice.TryGetProperty("message", out var message)
+            && message.ValueKind == JsonValueKind.Object
+            && message.TryGetProperty("content", out var content))
+        {
+            AppendOpenAITextParts(content, output);
+        }
+
+        // A few OpenAI-compatible servers still expose legacy completion text here.
+        if (output.Length == 0 && choice.ValueKind == JsonValueKind.Object
+            && choice.TryGetProperty("text", out var legacyText)
+            && legacyText.ValueKind == JsonValueKind.String)
+            output.Append(legacyText.GetString());
+
+        return output.ToString();
+    }
+
+    private static void AppendOpenAITextParts(JsonElement value, StringBuilder output)
+    {
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.String:
+                output.Append(value.GetString());
+                break;
+            case JsonValueKind.Array:
+                foreach (var part in value.EnumerateArray())
+                    AppendOpenAITextParts(part, output);
+                break;
+            case JsonValueKind.Object:
+                if (value.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String)
+                    output.Append(text.GetString());
+                else if (value.TryGetProperty("content", out var nestedContent))
+                    AppendOpenAITextParts(nestedContent, output);
+                break;
+        }
+    }
+
+    private static string TryReadOpenAIFinishReason(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("choices", out var choices)
+            && choices.ValueKind == JsonValueKind.Array
+            && choices.GetArrayLength() > 0
+            && choices[0].ValueKind == JsonValueKind.Object
+            && choices[0].TryGetProperty("finish_reason", out var finishReason))
+            return finishReason.ValueKind == JsonValueKind.String ? finishReason.GetString() ?? "unknown" : finishReason.ToString();
+        return "missing";
+    }
+
+    private static string TryReadOpenAIMessageFieldNames(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("choices", out var choices)
+            && choices.ValueKind == JsonValueKind.Array
+            && choices.GetArrayLength() > 0
+            && choices[0].ValueKind == JsonValueKind.Object
+            && choices[0].TryGetProperty("message", out var message)
+            && message.ValueKind == JsonValueKind.Object)
+            return string.Join(",", message.EnumerateObject().Select(property => property.Name));
+        return "missing";
     }
 
     private static async Task<string> GenerateConversationTitleAsync(
@@ -1619,27 +1745,89 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
         if (settings.Provider == 1)
         {
-            var payload = new
+            var payload = new Dictionary<string, object>(StringComparer.Ordinal)
             {
-                model,
-                messages = new[]
+                ["model"] = model,
+                ["messages"] = new object[]
                 {
                     new { role = "system", content = "You generate short, accurate conversation titles. Return only a title." },
                     new { role = "user", content = titlePrompt },
                 },
-                stream = false,
-                temperature = 0.2,
-                max_tokens = 32,
+                ["stream"] = false,
+                ["temperature"] = 0.2,
+                ["max_tokens"] = 32,
+                // As with the normal LM Studio chat path, don't spend this short
+                // title-generation budget on reasoning tokens.
+                ["reasoning_effort"] = "none",
             };
-            using var request = new HttpRequestMessage(HttpMethod.Post, BuildLMStudioUri(settings.LMStudioBaseUrl, "chat/completions"))
+            // LM Studio templates can expose thinking controls through
+            // chat_template_kwargs. Disable thinking for this short one-off request;
+            // preserve the optional Nemotron conversational-mode preference too.
+            var chatTemplateParameters = new Dictionary<string, object>(StringComparer.Ordinal)
             {
-                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
+                ["enable_thinking"] = false,
             };
-            using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
-            if (!result.IsSuccessStatusCode) throw new HttpRequestException($"LM Studio title request returned HTTP {(int)result.StatusCode}.");
-            var responseBytes = await ReadBoundedContentBytesAsync(result.Content, 512 * 1024, timeout.Token).ConfigureAwait(false);
+            if (IsNemotron35BoltE4BModel(model))
+                chatTemplateParameters["conversational_mode"] = settings.InlineConversationalMode;
+            payload["chat_template_kwargs"] = chatTemplateParameters;
+
+            byte[]? responseBytes = null;
+            var optionalTitleParameters = new (string Key, string Pattern)[]
+            {
+                ("reasoning_effort", @"(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)[^\r\n]{0,120}reasoning_effort|reasoning_effort[^\r\n]{0,120}(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)"),
+                ("chat_template_kwargs", @"(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)[^\r\n]{0,120}(?:chat_template_kwargs|enable_thinking|conversational_mode)|(?:chat_template_kwargs|enable_thinking|conversational_mode)[^\r\n]{0,120}(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)"),
+                ("max_tokens", @"(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)[^\r\n]{0,120}max_tokens|max_tokens[^\r\n]{0,120}(?:unknown|unsupported|unrecognized|unexpected|not supported|does not support)"),
+            };
+
+            for (var attempt = 0; attempt <= optionalTitleParameters.Length; attempt++)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, BuildLMStudioUri(settings.LMStudioBaseUrl, "chat/completions"))
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
+                };
+                using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+                if (result.IsSuccessStatusCode)
+                {
+                    responseBytes = await ReadBoundedContentBytesAsync(result.Content, 512 * 1024, timeout.Token).ConfigureAwait(false);
+                    break;
+                }
+
+                var errorBody = await ReadBoundedContentTextAsync(result.Content, 64 * 1024, timeout.Token).ConfigureAwait(false);
+                string? rejectedParameter = null;
+                if ((int)result.StatusCode is 400 or 422)
+                {
+                    foreach (var optionalParameter in optionalTitleParameters)
+                    {
+                        if (payload.ContainsKey(optionalParameter.Key)
+                            && System.Text.RegularExpressions.Regex.IsMatch(errorBody, optionalParameter.Pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        {
+                            rejectedParameter = optionalParameter.Key;
+                            break;
+                        }
+                    }
+                }
+
+                if (rejectedParameter is not null)
+                {
+                    payload.Remove(rejectedParameter);
+                    continue;
+                }
+
+                var detail = string.IsNullOrWhiteSpace(errorBody) ? string.Empty : $" Response: {TrimForError(errorBody)}";
+                throw new HttpRequestException($"LM Studio title request returned HTTP {(int)result.StatusCode}.{detail}", null, result.StatusCode);
+            }
+
+            if (responseBytes is null)
+                throw new InvalidDataException("LM Studio title request did not return a response after compatibility retries.");
             using var document = JsonDocument.Parse(responseBytes);
-            return document.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
+            var title = ExtractOpenAIChatCompletionText(document.RootElement);
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                var finishReason = TryReadOpenAIFinishReason(document.RootElement);
+                var messageFields = TryReadOpenAIMessageFieldNames(document.RootElement);
+                throw new InvalidDataException($"LM Studio title response contained no assistant text (finish_reason: {finishReason}; message fields: {messageFields}).");
+            }
+            return title;
         }
         else
         {
@@ -1672,6 +1860,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         bool useTemporaryUserDataFolder = false,
         Exception? primaryInitializationException = null)
     {
+        var windowThemeSynchronizer = WindowThemeSynchronizers.GetValue(appWindow, static window => new WindowThemeSynchronizer(window));
         string userDataFolder = "(not resolved)";
         string stage = "Resolve WebView2 user-data folder";
         try
@@ -1706,6 +1895,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             core.Settings.AreHostObjectsAllowed = false;
             core.WebMessageReceived += (_, messageArgs) =>
             {
+                if (windowThemeSynchronizer.TryHandleWebMessage(messageArgs.Source, messageArgs.WebMessageAsJson))
+                    return;
                 if (nativePageReader.TryHandleMessage(
                     messageArgs.Source, messageArgs.WebMessageAsJson, core, appWindow.Dispatcher))
                     return;
@@ -1717,7 +1908,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             };
             core.DocumentTitleChanged += (_, _) =>
             {
-                if (!appWindow.IsVisible) return;
+                // An initialization retry can leave the original control's events queued.
+                // Only the WebView2 currently hosted in this window owns its native title.
+                if (!appWindow.IsVisible || !ReferenceEquals(appWindow.Content, webView)) return;
                 var documentTitle = core.DocumentTitle;
                 if (!string.IsNullOrWhiteSpace(documentTitle) && documentTitle.Length <= 100)
                     appWindow.Title = documentTitle;
@@ -1775,7 +1968,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             };
             core.NavigationCompleted += async (_, e) =>
             {
-                if (!appWindow.IsVisible) return;
+                if (!appWindow.IsVisible || !ReferenceEquals(appWindow.Content, webView)) return;
                 if (!e.IsSuccess)
                 {
                     if (ReferenceEquals(appWindow.Content, webView)) appWindow.Content = null;
@@ -1957,6 +2150,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var bootstrap = new
         {
             title,
+            appearance = AppearancePreferenceStore.CreateBootstrapValue(),
             windowInstanceId = Guid.NewGuid().ToString("N"),
             initialModel = model,
             initialProvider = settings.Provider == 1 ? "lmstudio" : "ollama",

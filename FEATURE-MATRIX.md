@@ -1,3 +1,32 @@
+## 1.10.32 updates
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| Appearance | Appearance mode | System follows Windows; Light and Dark are explicit overrides. Changes apply immediately. | **Implemented** |
+| Appearance | Curated color palettes | Five independently selectable Light palettes and five Dark palettes. Classic Light and Warm Graphite preserve the existing defaults. | **Implemented** |
+| Appearance | Shared preferences | Palette choices persist in one per-user file and are shared by standalone and PowerToys-hosted chat windows. | **Implemented** |
+| Appearance | Native window caption | Standalone and PowerToys chat window title bars follow the effective light/dark mode and update when Windows appearance changes in System mode. | **Implemented** |
+
+## 1.10.31 updates
+
+- [x] Use a consistent **Compare with AI** action label and a branch-comparison button styled with the active RunMind theme.
+
+## 1.10.30 updates
+
+- [x] Align LM Studio title generation with the normal reasoning-off request settings (`reasoning_effort: none`, `enable_thinking: false`), preserve Nemotron conversational mode, and retry explicit optional-parameter rejections.
+- [x] Extract assistant text from standard string or structured OpenAI-compatible message content, and report a diagnostic when no assistant text is returned.
+- [x] Make the AI Branch Comparison composer single-line when empty, auto-grow to five visible lines, then scroll internally; leave the main chat composer unchanged.
+
+## 1.10.29 updates
+
+- [x] Resolve the active WebView2 control after initialization, including when initialization falls back to a replacement temporary-profile control, before applying a generated conversation title.
+- [x] Ignore title/navigation events from replaced WebView2 controls; verify the generated title is visible in the active page before synchronizing the native window title.
+- [x] Retry transient title-application failures and record diagnostics while preserving the already-visible fallback title on failure.
+
+## 1.10.28 updates
+
+- [x] Give the AI Branch Comparison composer five visible lines by default and grow it automatically up to its maximum height before internal scrolling; leave the main chat composer unchanged.
+
 ## 1.10.27 updates
 
 - [x] Apply the PowerToys native-response conversation title only after WebView2 and the chat page finish initializing, so the initial fallback title cannot overwrite the generated title.
