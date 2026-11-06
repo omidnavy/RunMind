@@ -25,13 +25,30 @@ public partial class MainWindow : Window
     private string _userDataFolder = "(not resolved)";
     private readonly string? _initialConversationJson;
     private readonly string? _initialConversationFileName;
+    private bool _freshConversationForNextNavigation;
+    private string? _freshConversationProvider;
+    private string? _freshConversationModel;
+    private string? _freshConversationConnectionId;
+    private bool? _freshConversationThinkEnabled;
 
-    public MainWindow() : this(null, null) { }
+    public MainWindow() : this(null, null, false, null, null, null, null) { }
 
-    private MainWindow(string? initialConversationJson, string? initialConversationFileName)
+    private MainWindow(
+        string? initialConversationJson,
+        string? initialConversationFileName,
+        bool startFreshConversation,
+        string? initialProvider,
+        string? initialModel,
+        string? initialConnectionId,
+        bool? initialThinkEnabled)
     {
         _initialConversationJson = initialConversationJson;
         _initialConversationFileName = initialConversationFileName;
+        _freshConversationForNextNavigation = startFreshConversation;
+        _freshConversationProvider = initialProvider;
+        _freshConversationModel = initialModel;
+        _freshConversationConnectionId = initialConnectionId;
+        _freshConversationThinkEnabled = initialThinkEnabled;
         InitializeComponent();
         _windowThemeSynchronizer = new WindowThemeSynchronizer(this);
         Root.Children.Add(_webView);
@@ -76,8 +93,8 @@ public partial class MainWindow : Window
             _initializationStage = "Configure standalone WebView2 navigation";
             var core = _webView.CoreWebView2;
             core.SetVirtualHostNameToFolderMapping("localhost", appFolder, CoreWebView2HostResourceAccessKind.DenyCors);
-            // Accept only two bounded native operations: Save As and opening a validated
-            // conversation in a separate window. No host objects are exposed.
+            // Accept only bounded native operations: Save As, validated conversation-window
+            // requests, and starting a new conversation. No host objects are exposed.
             core.Settings.IsWebMessageEnabled = true;
             core.Settings.AreHostObjectsAllowed = false;
             core.WebMessageReceived += OnWebMessageReceived;
@@ -114,14 +131,16 @@ public partial class MainWindow : Window
                 }
                 try
                 {
+                    var freshConversation = _freshConversationForNextNavigation;
+                    _freshConversationForNextNavigation = false;
                     JsonElement? initialConversation = null;
-                    if (!string.IsNullOrWhiteSpace(_initialConversationJson))
+                    if (!freshConversation && !string.IsNullOrWhiteSpace(_initialConversationJson))
                     {
                         using var sessionDocument = JsonDocument.Parse(_initialConversationJson);
                         initialConversation = sessionDocument.RootElement.Clone();
                     }
 
-                    var title = string.IsNullOrWhiteSpace(_initialConversationFileName)
+                    var title = freshConversation || string.IsNullOrWhiteSpace(_initialConversationFileName)
                         ? "New chat"
                         : Path.GetFileNameWithoutExtension(_initialConversationFileName);
                     var bootstrap = JsonSerializer.Serialize(new
@@ -130,10 +149,19 @@ public partial class MainWindow : Window
                         appearance = AppearancePreferenceStore.CreateBootstrapValue(),
                         windowInstanceId = Guid.NewGuid().ToString("N"),
                         standalone = true,
+                        freshConversation,
                         generateTitleAfterFirstResponse = true,
+                        initialProvider = freshConversation ? _freshConversationProvider : null,
+                        initialModel = freshConversation ? _freshConversationModel : null,
+                        initialConnectionId = freshConversation ? _freshConversationConnectionId : null,
+                        initialThink = freshConversation ? _freshConversationThinkEnabled : null,
                         initialConversation,
-                        initialConversationFileName = _initialConversationFileName,
+                        initialConversationFileName = freshConversation ? null : _initialConversationFileName,
                     });
+                    _freshConversationProvider = null;
+                    _freshConversationModel = null;
+                    _freshConversationConnectionId = null;
+                    _freshConversationThinkEnabled = null;
                     await core.ExecuteScriptAsync($"window.initializeRunMind({bootstrap});");
                 }
                 catch (Exception ex)
@@ -181,13 +209,53 @@ public partial class MainWindow : Window
             var root = messageDocument.RootElement;
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("type", out var type)
-                || type.ValueKind != JsonValueKind.String
-                || type.GetString() != "runmind.openConversationInNewWindow"
-                || !root.TryGetProperty("conversation", out var conversation)
-                || conversation.ValueKind != JsonValueKind.Object)
+                || type.ValueKind != JsonValueKind.String)
                 return;
 
-            if (!IsSupportedConversation(conversation))
+            var messageType = type.GetString();
+            var provider = root.TryGetProperty("provider", out var providerElement)
+                && providerElement.ValueKind == JsonValueKind.String
+                && providerElement.GetString() is "ollama" or "lmstudio"
+                    ? providerElement.GetString()
+                    : null;
+            var model = root.TryGetProperty("model", out var modelElement)
+                && modelElement.ValueKind == JsonValueKind.String
+                    ? modelElement.GetString()?.Trim()
+                    : null;
+            if (string.IsNullOrWhiteSpace(model) || model.Length > 512) model = null;
+            var connectionId = root.TryGetProperty("connectionId", out var connectionElement)
+                && connectionElement.ValueKind == JsonValueKind.String
+                    ? connectionElement.GetString()?.Trim()
+                    : null;
+            if (string.IsNullOrWhiteSpace(connectionId) || connectionId.Length > 128) connectionId = null;
+            bool? thinkEnabled = root.TryGetProperty("thinkEnabled", out var thinkElement)
+                && thinkElement.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? thinkElement.GetBoolean()
+                    : null;
+
+            if (messageType == "runmind.newConversationInCurrentWindow")
+            {
+                _freshConversationForNextNavigation = true;
+                _freshConversationProvider = provider;
+                _freshConversationModel = model;
+                _freshConversationConnectionId = connectionId;
+                _freshConversationThinkEnabled = thinkEnabled;
+                _webView.CoreWebView2.Navigate($"https://localhost/ChatWindow.html?fresh={Guid.NewGuid():N}");
+                return;
+            }
+
+            if (messageType == "runmind.newConversationInNewWindow")
+            {
+                var newWindow = new MainWindow(null, null, true, provider, model, connectionId, thinkEnabled);
+                newWindow.Show();
+                newWindow.Activate();
+                return;
+            }
+
+            if (messageType != "runmind.openConversationInNewWindow"
+                || !root.TryGetProperty("conversation", out var conversation)
+                || conversation.ValueKind != JsonValueKind.Object
+                || !IsSupportedConversation(conversation))
                 return;
 
             var fileName = root.TryGetProperty("fileName", out var fileNameElement) && fileNameElement.ValueKind == JsonValueKind.String
@@ -197,13 +265,13 @@ public partial class MainWindow : Window
             if (fileName.Length > 255) fileName = fileName[..255];
             if (!fileName.EndsWith(".runmind", StringComparison.OrdinalIgnoreCase)) return;
 
-            var child = new MainWindow(conversation.GetRawText(), fileName);
+            var child = new MainWindow(conversation.GetRawText(), fileName, false, null, null, null, null);
             child.Show();
             child.Activate();
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"RunMind could not open a conversation in a new window: {ex}");
+            Debug.WriteLine($"RunMind could not handle a conversation window request: {ex}");
         }
     }
 

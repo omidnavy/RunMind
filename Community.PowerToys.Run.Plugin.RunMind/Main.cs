@@ -10,6 +10,7 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -1426,6 +1427,136 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         _ = InitializeChatWebViewAsync(appWindow, webView, assemblyDirectory, JsonSerializer.Serialize(bootstrap));
     }
 
+    private void ShowNewConversationWindow(string assemblyDirectory, string? provider, string? model, string? connectionId, bool? thinkEnabled)
+    {
+        var htmlPath = Path.Combine(assemblyDirectory, "ChatWindow.html");
+        if (!File.Exists(htmlPath))
+            throw new FileNotFoundException("ChatWindow.html was not found beside the RunMind plugin assembly.", htmlPath);
+
+        var bootstrap = new
+        {
+            title = "New chat",
+            appearance = AppearancePreferenceStore.CreateBootstrapValue(),
+            windowInstanceId = Guid.NewGuid().ToString("N"),
+            freshConversation = true,
+            generateTitleAfterFirstResponse = true,
+            initialProvider = provider,
+            initialModel = model,
+            initialConnectionId = connectionId,
+            initialThink = thinkEnabled,
+        };
+
+        var webView = CreateChatWebView();
+        var appWindow = new Window
+        {
+            Title = "RunMind",
+            Width = 1120,
+            Height = 836,
+            MinWidth = 680,
+            MinHeight = 520,
+            Icon = LoadWindowIcon(assemblyDirectory),
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Content = webView,
+        };
+
+        appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        WindowLayout.ConfigureInitialPlacement(appWindow);
+        appWindow.Show();
+        appWindow.Activate();
+        _ = InitializeChatWebViewAsync(appWindow, webView, assemblyDirectory, JsonSerializer.Serialize(bootstrap));
+    }
+
+    private bool TryHandleNewConversationMessage(
+        string source,
+        string messageJson,
+        string assemblyDirectory,
+        Action<string?, string?, string?, bool?> resetCurrentWindow)
+    {
+        try
+        {
+            if (!Uri.TryCreate(source, UriKind.Absolute, out var sourceUri)
+                || sourceUri.Scheme != Uri.UriSchemeHttps
+                || !sourceUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || !sourceUri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (string.IsNullOrWhiteSpace(messageJson) || Encoding.UTF8.GetByteCount(messageJson) > 16 * 1024)
+                return false;
+
+            using var document = JsonDocument.Parse(messageJson);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("type", out var typeElement)
+                || typeElement.ValueKind != JsonValueKind.String)
+                return false;
+
+            var type = typeElement.GetString();
+            if (type is not ("runmind.newConversationInCurrentWindow" or "runmind.newConversationInNewWindow"))
+                return false;
+
+            var provider = root.TryGetProperty("provider", out var providerElement)
+                && providerElement.ValueKind == JsonValueKind.String
+                && providerElement.GetString() is "ollama" or "lmstudio"
+                    ? providerElement.GetString()
+                    : null;
+            var model = root.TryGetProperty("model", out var modelElement)
+                && modelElement.ValueKind == JsonValueKind.String
+                    ? modelElement.GetString()?.Trim()
+                    : null;
+            if (string.IsNullOrWhiteSpace(model) || model.Length > 512) model = null;
+            var connectionId = root.TryGetProperty("connectionId", out var connectionElement)
+                && connectionElement.ValueKind == JsonValueKind.String
+                    ? connectionElement.GetString()?.Trim()
+                    : null;
+            if (string.IsNullOrWhiteSpace(connectionId) || connectionId.Length > 128) connectionId = null;
+            bool? thinkEnabled = root.TryGetProperty("thinkEnabled", out var thinkElement)
+                && thinkElement.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? thinkElement.GetBoolean()
+                    : null;
+
+            if (type == "runmind.newConversationInNewWindow")
+            {
+                DispatchToUi(
+                    () => ShowNewConversationWindow(assemblyDirectory, provider, model, connectionId, thinkEnabled),
+                    "Could not open a new RunMind conversation window");
+            }
+            else
+            {
+                DispatchToUi(
+                    () => resetCurrentWindow(provider, model, connectionId, thinkEnabled),
+                    "Could not start a new conversation in this window");
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _context?.API.ShowMsg("Could not start a new conversation", ex.Message);
+            return true;
+        }
+    }
+
+    private static string CreateFreshConversationBootstrap(string currentBootstrapJson, string? provider, string? model, string? connectionId, bool? thinkEnabled)
+    {
+        var bootstrap = JsonNode.Parse(currentBootstrapJson) as JsonObject ?? new JsonObject();
+        foreach (var property in new[]
+        {
+            "prompt", "response", "isError", "initialConversation", "initialConversationFileName",
+            "autoSendPromptText", "initialProvider", "initialModel", "initialConnectionId", "initialThink", "initialTitleGenerated"
+        })
+            bootstrap.Remove(property);
+
+        bootstrap["title"] = "New chat";
+        bootstrap["appearance"] = JsonNode.Parse(JsonSerializer.Serialize(AppearancePreferenceStore.CreateBootstrapValue()));
+        bootstrap["windowInstanceId"] = Guid.NewGuid().ToString("N");
+        bootstrap["freshConversation"] = true;
+        bootstrap["generateTitleAfterFirstResponse"] = true;
+        if (provider is "ollama" or "lmstudio") bootstrap["initialProvider"] = provider;
+        if (!string.IsNullOrWhiteSpace(model) && model.Length <= 512) bootstrap["initialModel"] = model;
+        if (!string.IsNullOrWhiteSpace(connectionId) && connectionId.Length <= 128) bootstrap["initialConnectionId"] = connectionId;
+        if (thinkEnabled.HasValue) bootstrap["initialThink"] = thinkEnabled.Value;
+        return bootstrap.ToJsonString();
+    }
+
     private void HandleOpenConversationInNewWindow(string source, string messageJson, string assemblyDirectory)
     {
         try
@@ -1888,11 +2019,12 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 CoreWebView2HostResourceAccessKind.DenyCors);
 
             // Expose only the bounded native public-page reader, conversation Save As,
-            // and validated open-in-new-window operations. General host objects stay disabled.
+            // validated conversation-window operations, and new-conversation requests. General host objects stay disabled.
             var nativePageReader = new NativePageReader();
             appWindow.Closed += (_, _) => nativePageReader.Dispose();
             core.Settings.IsWebMessageEnabled = true;
             core.Settings.AreHostObjectsAllowed = false;
+            var activeBootstrapJson = bootstrapJson;
             core.WebMessageReceived += (_, messageArgs) =>
             {
                 if (windowThemeSynchronizer.TryHandleWebMessage(messageArgs.Source, messageArgs.WebMessageAsJson))
@@ -1900,11 +2032,22 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 if (nativePageReader.TryHandleMessage(
                     messageArgs.Source, messageArgs.WebMessageAsJson, core, appWindow.Dispatcher))
                     return;
-                if (!ConversationSaveDialog.TryHandleMessage(
+                if (ConversationSaveDialog.TryHandleMessage(
                     messageArgs.Source, messageArgs.WebMessageAsJson, appWindow, core))
-                {
-                    HandleOpenConversationInNewWindow(messageArgs.Source, messageArgs.WebMessageAsJson, appFolderPath);
-                }
+                    return;
+
+                if (TryHandleNewConversationMessage(
+                    messageArgs.Source,
+                    messageArgs.WebMessageAsJson,
+                    appFolderPath,
+                    (provider, model, connectionId, thinkEnabled) =>
+                    {
+                        activeBootstrapJson = CreateFreshConversationBootstrap(activeBootstrapJson, provider, model, connectionId, thinkEnabled);
+                        core.Navigate($"https://localhost/ChatWindow.html?fresh={Guid.NewGuid():N}");
+                    }))
+                    return;
+
+                HandleOpenConversationInNewWindow(messageArgs.Source, messageArgs.WebMessageAsJson, appFolderPath);
             };
             core.DocumentTitleChanged += (_, _) =>
             {
@@ -1986,7 +2129,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 {
                     // This one-way call supplies only the original query/result and settings.
                     // All model discovery and subsequent chat turns stay in page JavaScript.
-                    await core.ExecuteScriptAsync("window.initializeRunMind(" + bootstrapJson + ");");
+                    await core.ExecuteScriptAsync("window.initializeRunMind(" + activeBootstrapJson + ");");
                 }
                 catch (Exception ex)
                 {

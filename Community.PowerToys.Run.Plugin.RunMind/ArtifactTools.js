@@ -365,7 +365,7 @@
     });
     objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
     objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
-    const infoId = add(`<< /Title <${pdfBytesHex(title).hex}> /Author <${pdfBytesHex(String(options.author || 'RunMind').slice(0, 120)).hex}> /Creator <${pdfBytesHex('RunMind 2.0.0').hex}> >>`);
+    const infoId = add(`<< /Title <${pdfBytesHex(title).hex}> /Author <${pdfBytesHex(String(options.author || 'RunMind').slice(0, 120)).hex}> /Creator <${pdfBytesHex('RunMind 2.0.1').hex}> >>`);
     let document = '%PDF-1.4\n%RunMind\n';
     const offsets = [0];
     objects.forEach((object, index) => {

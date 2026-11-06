@@ -1,4 +1,4 @@
-## RunMind 2.0.0 — data, document, and media tools
+## RunMind 2.0.1 — data, document, and media tools
 
 This release is an overlay for the complete RunMind 1.10.34 source tree. It adds bounded JSON transforms, CSV/TSV delimiter inference and dataset validation, searchable recursive same-host sitemap traversal, local DOCX/XLSX/PDF generation, Markdown/HTML report improvements, advanced SVG charts, editable Mermaid diagrams, offline QR SVGs, HTML image galleries, and structural artifact verification. Generated files use the existing workspace approval flow and are never allowed to overwrite existing files.
 

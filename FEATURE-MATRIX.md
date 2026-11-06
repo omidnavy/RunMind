@@ -320,7 +320,7 @@ This document describes the **current RunMind 2.0.0 feature set** across its Pow
 
 | Feature | Current behavior | Status / limits |
 |---|---|---|
-| New conversation | Starts with an empty chat and a default RunMind title. | **Implemented** |
+| New conversation | Starts a fresh chat from the Conversations menu in the current window or a separate window. The separate-window option leaves the current conversation untouched; replacing the current chat offers Save, Discard, or Cancel first. | **Implemented** |
 | Generated titles | The first prompt supplies an immediate fallback title; after a successful response, the shared title generator can create a more descriptive title using the initial prompt and answer. | **Implemented**; title generation depends on the configured model/provider succeeding. |
 | Saved-chat title | Opening a saved conversation uses its saved filename as the conversation/window title. | **Implemented** |
 | Save dialog | Both native desktop hosts open the Windows Save As dialog with a suggested conversation filename pre-filled. | **Implemented**; browser-only previews use a download fallback. |

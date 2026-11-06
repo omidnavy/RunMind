@@ -18,7 +18,7 @@ RunMind is available in two forms:
 - Use **Deep Research** for structured investigations with editable plans, source collection, evidence notes, checkpoints, and report export.
 - Connect external **Model Context Protocol (MCP)** servers over Streamable HTTP to make their tools, resources, and prompts available to RunMind.
 - Create and manage conversation branches, compare branch responses with AI, and continue a separate discussion about a comparison without changing the original branches.
-- Save and reopen conversations in RunMind's `.runmind` format.
+- Start a fresh conversation in the current or a separate window, and save or reopen conversations in RunMind's `.runmind` format.
 - Choose from curated light and dark palettes, use Windows System appearance, and move or resize open toolbar flyouts.
 
 ## Built-in capabilities and tool catalog

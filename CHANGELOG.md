@@ -1,3 +1,21 @@
+## [2.0.1] — New conversation workflow
+
+### Added
+- Add **New conversation** at the top of the Conversations flyout.
+- Reuse the existing Open Conversation destination chooser for both actions, allowing a new conversation to start in the current window or a separate window.
+- Opening a new window leaves the current chat and any in-progress work untouched. The new window inherits the exact selected provider/model connection, current Think setting, and shared appearance/preferences while receiving a fresh conversation identity.
+- Starting in the current window asks before replacing existing conversation content: **Save & continue**, **Discard & continue**, or **Cancel**. Save As cancellation or failure leaves the current chat in place.
+- Give each new conversation a fresh window-scoped storage identity so previous messages, branch histories, workflow state, research checkpoints, and comparison sessions are not loaded into it. Existing saved files and prior window-scoped records are not deleted.
+
+### Safety and behavior
+- Stop active chat generation, research, summarization, and tool-retry work only after the user confirms replacing the current window. Cancelling the confirmation leaves active work running.
+- `.runmind` Save & continue preserves the saved message/branch content supported by the existing format. Unsent composer text, pending attachments, and AI Branch Comparison discussion/drafts are not part of that file; the confirmation explains this before replacement.
+- Provider/model selection and appearance preferences remain unchanged; the new conversation gets a fresh title and identity.
+
+### Validation
+- JavaScript syntax and new-conversation flow checks; C# project XML and plugin manifest validation; PowerToys/standalone host-message and bootstrap-path source checks; release-version alignment; and changed-files-only overlay application against the supplied 2.0.0 archive.
+- Windows/.NET compilation and live WebView2/PowerToys integration were not run in this environment because the required Windows build environment and excluded PowerToys reference libraries are unavailable.
+
 ## [2.0.0] — Data, documents, and media capabilities
 
 ### Added

@@ -198,6 +198,7 @@
     .conversation-panel select { display: block; width: 100%; margin-bottom: 10px; }
     .session-file-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-bottom: 12px; }
     .session-file-actions .button { width: 100%; min-width: 0; min-height: 40px; padding: 7px 8px; font-size: 11px; line-height: 1.35; white-space: normal; }
+    .session-file-actions .new-conversation-button { grid-column: 1 / -1; }
     .session-file-divider { border-top: 1px solid var(--color-border); margin: 0 0 12px; }
     .conversation-panel .button { width: 100%; min-height: 40px; white-space: normal; }
     #exportButton { min-height: 42px; }
@@ -896,7 +897,7 @@
             <div class="conversation-panel">
               <p class="conversation-panel-title">Saved conversations</p>
               <p class="conversation-panel-note">Save this chat as a resumable .runmind file, or open a conversation you saved earlier.</p>
-              <div class="session-file-actions"><button type="button" class="button" id="saveSessionButton">Save conversation</button><button type="button" class="button" id="openSessionButton">Open conversation</button><input id="sessionFileInput" type="file" accept=".runmind" hidden></div>
+              <div class="session-file-actions"><button type="button" class="button primary new-conversation-button" id="newConversationButton">New conversation</button><button type="button" class="button" id="saveSessionButton">Save conversation</button><button type="button" class="button" id="openSessionButton">Open conversation</button><input id="sessionFileInput" type="file" accept=".runmind" hidden></div>
               <div class="session-file-divider"></div>
               <p class="conversation-panel-title">Export a copy</p>
               <p class="conversation-panel-note">Create a readable transcript or a file for another chat tool.</p>
@@ -1313,6 +1314,17 @@
       </div>
     </section>
   </div>
+  <div class="modal-backdrop" id="newConversationUnsavedModal" hidden>
+    <section class="warning-dialog" role="dialog" aria-modal="true" aria-labelledby="newConversationUnsavedTitle" aria-describedby="newConversationUnsavedMessage" tabindex="-1">
+      <h2 id="newConversationUnsavedTitle">Start a new conversation?</h2>
+      <p id="newConversationUnsavedMessage">The current conversation has not been saved. Save it before starting a new one, discard it, or cancel.</p>
+      <div class="warning-actions">
+        <button type="button" class="button" id="newConversationUnsavedCancel">Cancel</button>
+        <button type="button" class="button danger" id="newConversationUnsavedDiscard">Discard &amp; continue</button>
+        <button type="button" class="button primary" id="newConversationUnsavedSave">Save &amp; continue</button>
+      </div>
+    </section>
+  </div>
   <div class="toast" id="toast" role="status" hidden></div>
   <script src="ArtifactTools.js"></script>
   <script>
@@ -1341,8 +1353,14 @@
     const exportFormat = $('#exportFormat');
     const sessionFileInput = $('#sessionFileInput');
     const openSessionDestinationModal = $('#openSessionDestinationModal');
+    const openSessionDestinationTitle = $('#openSessionDestinationTitle');
     const openSessionDestinationMessage = $('#openSessionDestinationMessage');
     const openSessionDestinationFileName = $('#openSessionDestinationFileName');
+    const newConversationUnsavedModal = $('#newConversationUnsavedModal');
+    const newConversationUnsavedMessage = $('#newConversationUnsavedMessage');
+    const newConversationUnsavedSave = $('#newConversationUnsavedSave');
+    const newConversationUnsavedDiscard = $('#newConversationUnsavedDiscard');
+    const newConversationUnsavedCancel = $('#newConversationUnsavedCancel');
     const openSessionDestinationCancel = $('#openSessionDestinationCancel');
     const openSessionDestinationNew = $('#openSessionDestinationNew');
     const openSessionDestinationCurrent = $('#openSessionDestinationCurrent');
@@ -1589,15 +1607,30 @@
     let defaultThinkingOpen = true;
     let pendingAttachments = [];
     let activeController = null;
+    let activeControllerCompletion = Promise.resolve();
+    let activeControllerCompletionResolver = null;
     let activeMetricsHandle = null;
     let activeAssistantMessage = null;
     let toastHandle = null;
     let attachmentConfirmResolver = null;
     let openSessionDestinationResolver = null;
+    let newConversationUnsavedResolver = null;
     let saveConversationScopeResolver = null;
     let branchStorageWarningShown = false;
-    const pendingNativeSaveRequests = new Set();
+    const pendingNativeSaveRequests = new Map();
     let isConfirmingAttachments = false;
+
+    function beginActiveController(controller) {
+      activeController = controller;
+      activeControllerCompletion = new Promise(resolve => { activeControllerCompletionResolver = resolve; });
+    }
+    function finishActiveController(controller) {
+      if (activeController !== controller) return;
+      activeController = null;
+      const finish = activeControllerCompletionResolver;
+      activeControllerCompletionResolver = null;
+      if (finish) finish();
+    }
     let modelLists = { ollama: [], lmstudio: [] };
     const MODEL_CONNECTIONS_KEY = 'local-llm.model-connections.v1';
     let modelConnections = [];
@@ -3139,15 +3172,55 @@
       if (resolve) resolve(!!confirmed);
       if (!activeController) promptInput.focus();
     }
-    function requestOpenSessionDestination(fileName) {
-      openSessionDestinationFileName.textContent = String(fileName || 'Conversation.runmind');
-      openSessionDestinationMessage.textContent = messages.length
-        ? 'Open in this window to replace the current chat, or open in a new window to keep this chat intact.'
-        : 'Choose whether to open this conversation here or in a separate window.';
+    function requestConversationDestination(options = {}) {
+      openSessionDestinationTitle.textContent = options.title || 'Open saved conversation';
+      openSessionDestinationMessage.textContent = options.message || 'Choose where to open this conversation.';
+      openSessionDestinationFileName.textContent = String(options.fileName || '');
+      openSessionDestinationFileName.hidden = !options.fileName;
+      openSessionDestinationNew.textContent = options.newLabel || 'Open in new window';
+      openSessionDestinationCurrent.textContent = options.currentLabel || 'Open in this window';
       openSessionDestinationModal.hidden = false;
       openSessionDestinationModal.querySelector('.warning-dialog')?.focus();
       openSessionDestinationCurrent.focus();
       return new Promise(resolve => { openSessionDestinationResolver = resolve; });
+    }
+    function requestOpenSessionDestination(fileName) {
+      return requestConversationDestination({
+        title: 'Open saved conversation', fileName,
+        message: messages.length
+          ? 'Open in this window to replace the current chat, or open in a new window to keep this chat intact.'
+          : 'Choose whether to open this conversation here or in a separate window.',
+        currentLabel: 'Open in this window', newLabel: 'Open in new window'
+      });
+    }
+    function requestNewConversationDestination() {
+      return requestConversationDestination({
+        title: 'New conversation',
+        message: 'Start a fresh conversation in the current window, or open it in a separate window and keep this conversation here.',
+        currentLabel: 'New in this window', newLabel: 'New window'
+      });
+    }
+    function requestNewConversationUnsavedChoice(canSave, details = {}) {
+      newConversationUnsavedSave.hidden = !canSave;
+      const notes = [];
+      if (details.hasUnsentContent) notes.push('Unsent composer text and pending attachments are not included in .runmind files and will be discarded.');
+      if (details.hasBranchComparison) notes.push('The AI Branch Comparison discussion and its draft are not included in .runmind files. Copy or download them first if you need to keep them.');
+      const note = notes.length ? ` ${notes.join(' ')}` : '';
+      newConversationUnsavedMessage.textContent = canSave
+        ? `The current conversation will be replaced. Save its messages and branches as a .runmind file, discard it, or cancel.${note}`
+        : `The current window contains unsaved work that cannot be included in a .runmind conversation file. Discard it and start a new conversation, or cancel.${note}`;
+      newConversationUnsavedModal.hidden = false;
+      newConversationUnsavedModal.querySelector('.warning-dialog')?.focus();
+      (canSave ? newConversationUnsavedSave : newConversationUnsavedDiscard).focus();
+      return new Promise(resolve => { newConversationUnsavedResolver = resolve; });
+    }
+    function finishNewConversationUnsavedChoice(choice) {
+      if (newConversationUnsavedModal.hidden) return;
+      newConversationUnsavedModal.hidden = true;
+      const resolve = newConversationUnsavedResolver;
+      newConversationUnsavedResolver = null;
+      if (resolve) resolve(['save', 'discard'].includes(choice) ? choice : null);
+      if (!activeController) promptInput.focus();
     }
     function finishOpenSessionDestination(destination) {
       if (openSessionDestinationModal.hidden) return;
@@ -3833,7 +3906,7 @@
       const allOptions = [...modelSelect.querySelectorAll('option')].filter(option => !option.disabled && option.dataset.model);
       const matchedPrior = allOptions.find(option => option.value === prior);
       const initialProvider = BOOT.initialProvider === 'lmstudio' ? 'lmstudio' : 'ollama';
-      const initialConnectionId = initialProvider === 'lmstudio' ? 'default-lmstudio' : 'default-ollama';
+      const initialConnectionId = String(BOOT.initialConnectionId || (initialProvider === 'lmstudio' ? 'default-lmstudio' : 'default-ollama'));
       const seeded = allOptions.find(option => option.dataset.serverId === initialConnectionId
         && option.dataset.provider === initialProvider && option.dataset.model === BOOT.initialModel)
         || allOptions.find(option => option.dataset.provider === initialProvider && option.dataset.model === BOOT.initialModel);
@@ -4459,7 +4532,7 @@
       const selection = selectedModel();
       if (!selection || !PROVIDERS[selection.provider]) { showToast('Select an available model before summarizing.'); return; }
       const controller = new AbortController();
-      activeController = controller;
+      beginActiveController(controller);
       summarizeHistoryButton.disabled = true;
       sendButton.disabled = true; promptInput.disabled = true; attachButton.disabled = true; thinkButton.disabled = true; refreshButton.disabled = true;
       stopButton.hidden = false;
@@ -4488,7 +4561,7 @@
         if (error?.name === 'AbortError') showToast('Conversation summarization stopped.');
         else showToast(`Could not summarize conversation: ${error?.message || String(error)}`);
       } finally {
-        activeController = null;
+        finishActiveController(controller);
         summarizeHistoryButton.disabled = false;
         sendButton.disabled = false; promptInput.disabled = false; attachButton.disabled = false; thinkButton.disabled = false; refreshButton.disabled = false;
         stopButton.hidden = true;
@@ -6207,7 +6280,7 @@
         }
       }
       if (content) parts.push(content);
-      parts.push(`---\n\nGenerated by RunMind 2.0.0 · ${new Date().toISOString()}`);
+      parts.push(`---\n\nGenerated by RunMind 2.0.1 · ${new Date().toISOString()}`);
       return parts.join('\n\n') + '\n';
     }
 
@@ -6678,7 +6751,7 @@
         return;
       }
       const controller = new AbortController();
-      activeController = controller; stopButton.hidden = false; sendButton.disabled = true; promptInput.disabled = true;
+      beginActiveController(controller); stopButton.hidden = false; sendButton.disabled = true; promptInput.disabled = true;
       attachButton.disabled = true; thinkButton.disabled = true; refreshButton.disabled = true;
       setStatus(`Retrying read-only operation · ${previous.name}…`);
       const retryMessage = { role: 'assistant', content: '' };
@@ -6701,7 +6774,7 @@
       } catch (error) {
         showToast(error?.name === 'AbortError' ? 'Operation retry stopped.' : `Retry failed: ${error?.message || String(error)}`);
       } finally {
-        activeController = null; stopButton.hidden = true; sendButton.disabled = false; promptInput.disabled = false;
+        finishActiveController(controller); stopButton.hidden = true; sendButton.disabled = false; promptInput.disabled = false;
         attachButton.disabled = false; thinkButton.disabled = false; refreshButton.disabled = false;
         activeToolDefinitions = originalDefinitions;
         setStatus(`Connected · ${selection.provider === 'lmstudio' ? 'LM Studio' : 'Ollama'} · ${selection.model}`, 'good');
@@ -9266,6 +9339,9 @@ ${dataset.rows.length - rows.length} duplicate row(s) removed`, risky: true }, s
           request.onsuccess = () => resolve(request.result || null); request.onerror = () => reject(request.error);
         });
         if (stored) return stored;
+        // A deliberately new conversation must not inherit a paused task from another window.
+        // Ordinary new host windows retain the existing cross-window recovery behavior.
+        if (BOOT.freshConversation === true) return null;
         // A fresh host window gets a new instance ID. If it has no private checkpoint,
         // offer the most recent paused/interrupted or clearly stale task for recovery.
         const recovered = await new Promise((resolve, reject) => {
@@ -10343,14 +10419,15 @@ ${toolActivityDetail}`;
       const assistantMessage = { role: 'assistant', content: task.assistantContent || '', thinking: '', thinkingOpen: true, timestamp: Date.now(), provider: selection.provider, connectionName: selection.serverName || selection.connection?.name || '', model: selection.model, pending: true, metrics: { startedAt: Date.now(), elapsedMs: 0, timeToFirstTokenMs: null, tokenCount: null, tokensPerSecond: null, approximateRate: false } };
       if (!messages.some(item => item.role === 'user' && item.content === task.prompt)) messages.push({ role: 'user', content: task.prompt, timestamp: Date.parse(task.startedAt) || Date.now(), provider: selection.provider, connectionName: selection.serverName || selection.connection?.name || '', model: selection.model });
       messages.push(assistantMessage); renderMessages();
-      activeAssistantMessage = assistantMessage; researchLastAssistantMessage = assistantMessage; activeController = new AbortController();
+      const controller = new AbortController();
+      activeAssistantMessage = assistantMessage; researchLastAssistantMessage = assistantMessage; beginActiveController(controller);
       sendButton.disabled = true; promptInput.disabled = true; attachButton.disabled = true; thinkButton.disabled = true; refreshButton.disabled = true; stopButton.hidden = false;
-      try { await runDeepResearch(selection, [], assistantMessage, activeController.signal, task); assistantMessage.pending = false; setStatus('Deep Research completed.', 'good'); }
+      try { await runDeepResearch(selection, [], assistantMessage, controller.signal, task); assistantMessage.pending = false; setStatus('Deep Research completed.', 'good'); }
       catch (error) { assistantMessage.pending = false; if (error?.name !== 'AbortError') { assistantMessage.error = true; assistantMessage.content += `\n\nResearch resumed but failed: ${error?.message || String(error)}`; setStatus('Deep Research failed.', 'bad'); } }
       finally {
         task.allowUncertainToolReplay = false;
         await persistResearchTask();
-        activeController = null; activeAssistantMessage = null; assistantMessage.pending = false;
+        finishActiveController(controller); activeAssistantMessage = null; assistantMessage.pending = false;
         sendButton.disabled = false; promptInput.disabled = false; attachButton.disabled = false; thinkButton.disabled = false; refreshButton.disabled = false; stopButton.hidden = true;
         renderMessages(); renderResearchTask(); saveAgentTaskHistory();
       }
@@ -10472,7 +10549,8 @@ ${toolActivityDetail}`;
       messages.push(assistantMessage);
       renderMessages();
       activeAssistantMessage = assistantMessage;
-      activeController = new AbortController();
+      const controller = new AbortController();
+      beginActiveController(controller);
       activeMetricsHandle = setInterval(() => {
         if (activeAssistantMessage) {
           updateGenerationMetrics(activeAssistantMessage);
@@ -10519,16 +10597,16 @@ ${toolActivityDetail}`;
         let output;
         const connectedMcpEnabled = [...mcpRuntime.entries()].some(([id, runtime]) => mcpServers.get(id)?.enabled && (runtime.tools.length || runtime.resources.length || runtime.prompts.length));
         if (deepResearchEnabled) {
-          await runDeepResearch(selection, requestMessages, assistantMessage, activeController.signal);
+          await runDeepResearch(selection, requestMessages, assistantMessage, controller.signal);
           output = { content: assistantMessage.content };
         } else if (agentModeEnabled || (mcpModeEnabled && connectedMcpEnabled)) {
-          await runAgent(selection, requestMessages, assistantMessage, activeController.signal);
+          await runAgent(selection, requestMessages, assistantMessage, controller.signal);
           output = { content: assistantMessage.content };
         } else {
           if (mcpModeEnabled && !connectedMcpEnabled) showToast('MCP access is enabled, but no enabled MCP server is connected. Sending as normal chat.');
           const providerAdapter = PROVIDERS[selection.provider];
           if (!providerAdapter) throw new Error(`Unsupported provider: ${selection.provider}`);
-          output = await providerAdapter.generate({ model: selection.model, messages: requestMessages, controller: activeController, onToken, onThinking, onMetrics, settings: settingsForRequest, thinkingEnabled: thinkForRequest, previousResponseId, connection: selection.connection, lmStudioApiMode: selection.lmStudioApiMode });
+          output = await providerAdapter.generate({ model: selection.model, messages: requestMessages, controller, onToken, onThinking, onMetrics, settings: settingsForRequest, thinkingEnabled: thinkForRequest, previousResponseId, connection: selection.connection, lmStudioApiMode: selection.lmStudioApiMode });
         }
         if (output && typeof output === 'object') {
           assistantMessage.providerResponseId = output.responseId || null;
@@ -10557,7 +10635,7 @@ ${toolActivityDetail}`;
           assistantMessage.metrics.tokensPerSecond = assistantMessage.metrics.tokenCount / elapsedSeconds;
           assistantMessage.metrics.approximateRate = true;
         }
-        activeController = null; activeAssistantMessage = null; assistantMessage.pending = false;
+        finishActiveController(controller); activeAssistantMessage = null; assistantMessage.pending = false;
         generationStallWarningActive = false;
         if (shouldSaveAgentTask) saveAgentTaskHistory();
         // Keep the user-granted folder handle for this WebView session until explicitly cleared.
@@ -10670,7 +10748,10 @@ ${toolActivityDetail}`;
         if (titleGenerationController === controller) titleGenerationController = null;
       }
     }
-    window.addEventListener('pagehide', () => { titleGenerationController?.abort(); activeController?.abort(); });
+    window.addEventListener('pagehide', () => {
+      titleGenerationController?.abort(); activeController?.abort();
+      branchCompareController?.abort(); researchDiagnosticsController?.abort();
+    });
     function createFallbackConversationTitle(prompt) {
       const value = String(prompt || '').split(/\s+/).filter(Boolean).join(' ').trim().replace(/[.!?]+$/, '');
       if (!value) return 'RunMind Chat';
@@ -10721,25 +10802,30 @@ ${toolActivityDetail}`;
     function handleNativeSaveResult(event) {
       const result = event?.data;
       if (!result || result.type !== 'runmind.saveConversationResult'
-        || typeof result.requestId !== 'string' || !pendingNativeSaveRequests.delete(result.requestId)) return;
-      if (result.cancelled) return;
+        || typeof result.requestId !== 'string') return;
+      const resolve = pendingNativeSaveRequests.get(result.requestId);
+      if (!resolve) return;
+      pendingNativeSaveRequests.delete(result.requestId);
+      if (result.cancelled) { resolve(false); return; }
       if (!result.success) {
         showToast(`Could not save conversation: ${result.error || 'The save operation failed.'}`);
+        resolve(false);
         return;
       }
       const fileName = String(result.fileName || 'Conversation.runmind');
       setConversationTitle(conversationFileTitle(fileName));
       showToast(`Conversation saved as ${fileName}.`);
+      resolve(true);
     }
     window.chrome?.webview?.addEventListener('message', handleNativeSaveResult);
     async function saveSessionFile() {
-      if (messages.some(message => message.pending)) { showToast('Stop or wait for the current response before saving.'); return; }
-      if (!allMessages().length) { showToast('Send a message before saving a conversation.'); return; }
+      if (messages.some(message => message.pending)) { showToast('Stop or wait for the current response before saving.'); return false; }
+      if (!allMessages().length) { showToast('Send a message before saving a conversation.'); return false; }
       const scope = conversationBranches.length > 1 ? await requestSaveConversationScope() : 'active';
-      if (!scope) return;
+      if (!scope) return false;
       if (scope === 'all' && !conversationBranchHistoryComplete) {
         showToast('All branches was not saved because RunMind could not verify the complete branch history. Restore the full archive or save the active branch only.');
-        return;
+        return false;
       }
       if (scope === 'active' && !conversationBranchHistoryComplete)
         showToast('Only the locally available active-branch history will be saved; some older legacy messages or attachment bytes may already be missing.');
@@ -10747,28 +10833,30 @@ ${toolActivityDetail}`;
       const suggestedTitle = filenameSafe(conversationTitle());
       let payload;
       try { payload = portableConversation({ includeBranches: scope === 'all' }); }
-      catch (error) { showToast(`Could not prepare the conversation file: ${error?.message || error}`); return; }
+      catch (error) { showToast(`Could not prepare the conversation file: ${error?.message || error}`); return false; }
       const serializedPayload = JSON.stringify(payload);
       const payloadBytes = new TextEncoder().encode(serializedPayload).byteLength;
-      if (payloadBytes > 50 * 1024 * 1024) { showToast(`This conversation is ${formatBytes(payloadBytes)}. RunMind conversation files are limited to 50 MB.`); return; }
+      if (payloadBytes > 50 * 1024 * 1024) { showToast(`This conversation is ${formatBytes(payloadBytes)}. RunMind conversation files are limited to 50 MB.`); return false; }
       const bridge = window.chrome?.webview;
       if (bridge && typeof bridge.postMessage === 'function') {
         const requestId = `save-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-        pendingNativeSaveRequests.add(requestId);
-        try {
-          bridge.postMessage({
-            type: 'runmind.saveConversation',
-            requestId,
-            fileName: `${suggestedTitle}.runmind`,
-            conversation: payload,
-          });
-          $('#conversationMenu').open = false;
-          return;
-        } catch (error) {
-          pendingNativeSaveRequests.delete(requestId);
-          showToast(`Could not open the save dialog: ${error?.message || error}`);
-          return;
-        }
+        const saved = await new Promise(resolve => {
+          pendingNativeSaveRequests.set(requestId, resolve);
+          try {
+            bridge.postMessage({
+              type: 'runmind.saveConversation',
+              requestId,
+              fileName: `${suggestedTitle}.runmind`,
+              conversation: payload,
+            });
+            $('#conversationMenu').open = false;
+          } catch (error) {
+            pendingNativeSaveRequests.delete(requestId);
+            showToast(`Could not open the save dialog: ${error?.message || error}`);
+            resolve(false);
+          }
+        });
+        return saved;
       }
 
       // Browser-only fallback for previewing the shared page outside a desktop host.
@@ -10777,6 +10865,7 @@ ${toolActivityDetail}`;
       downloadFile(`${suggestedTitle}.runmind`, serializedPayload, 'application/json;charset=utf-8');
       $('#conversationMenu').open = false;
       showToast(`Conversation downloaded as ${suggestedTitle}.runmind${scope === 'all' ? ' with all branches' : ' with the active branch only'}.`);
+      return true;
     }
     function conversationFileTitle(fileName) {
       const value = String(fileName || '').replace(/\.runmind$/i, '').replace(/\s+/g, ' ').trim();
@@ -10985,6 +11074,74 @@ ${toolActivityDetail}`;
         conversation: data,
       });
     }
+    function postNewConversationHostMessage(destination) {
+      const bridge = window.chrome?.webview;
+      if (!bridge || typeof bridge.postMessage !== 'function')
+        throw new Error('Starting a new conversation in a desktop window is only available in the RunMind desktop hosts.');
+      const selection = selectedModel();
+      bridge.postMessage({
+        type: destination === 'new' ? 'runmind.newConversationInNewWindow' : 'runmind.newConversationInCurrentWindow',
+        provider: selection?.provider || null,
+        model: selection?.model || null,
+        connectionId: selection?.connectionId || null,
+        thinkEnabled: !!thinkToggle.checked
+      });
+    }
+    function hasCurrentConversationWork() {
+      return allMessages().length > 0 || !!promptInput.value.trim() || pendingAttachments.length > 0
+        || contextSummaryDirty || (Array.isArray(conversationBranches) && conversationBranches.length > 1)
+        || !!activeBranchCompareSession;
+    }
+    async function stopActiveWorkForNewConversation() {
+      const controller = activeController;
+      if (!controller) return;
+      const completion = activeControllerCompletion;
+      showToast('Stopping current work before starting a new conversation…');
+      controller.abort();
+      if (pendingAgentApproval) pendingAgentApproval.finish(false);
+      await completion;
+    }
+    async function startNewConversationInCurrentWindow() {
+      let choice = 'discard';
+      if (hasCurrentConversationWork()) {
+        const canSave = allMessages().length > 0;
+        const hasUnsentContent = !!promptInput.value.trim() || pendingAttachments.length > 0 || editingMessageIndex !== null || !!draftBeforeEdit;
+        const choiceResult = await requestNewConversationUnsavedChoice(canSave, {
+          hasUnsentContent,
+          hasBranchComparison: !!activeBranchCompareSession
+        });
+        if (!choiceResult) return;
+        choice = choiceResult;
+      }
+      // Do not interrupt a generation, research run, or tool operation until the user
+      // confirms replacing the current window. Cancel leaves the current work untouched.
+      await stopActiveWorkForNewConversation();
+      if (choice === 'save') {
+        const saved = await saveSessionFile();
+        if (!saved) return;
+      }
+      try {
+        postNewConversationHostMessage('current');
+        $('#conversationMenu').open = false;
+      } catch (error) {
+        showToast(error?.message || 'Could not start a new conversation.');
+      }
+    }
+    async function startNewConversation() {
+      const destination = await requestNewConversationDestination();
+      if (!destination) return;
+      if (destination === 'new') {
+        try {
+          postNewConversationHostMessage('new');
+          $('#conversationMenu').open = false;
+          showToast('Opening a new conversation in a separate window.');
+        } catch (error) {
+          showToast(error?.message || 'Could not open a new conversation window.');
+        }
+        return;
+      }
+      await startNewConversationInCurrentWindow();
+    }
     async function openSessionFile(file, options = {}) {
       if (!file) return;
       const fileName = String(file.name || '');
@@ -11191,12 +11348,17 @@ ${toolActivityDetail}`;
     openSessionDestinationNew.addEventListener('click', () => finishOpenSessionDestination('new'));
     openSessionDestinationCancel.addEventListener('click', () => finishOpenSessionDestination(null));
     openSessionDestinationModal.addEventListener('click', event => { if (event.target === openSessionDestinationModal) finishOpenSessionDestination(null); });
+    newConversationUnsavedSave.addEventListener('click', () => finishNewConversationUnsavedChoice('save'));
+    newConversationUnsavedDiscard.addEventListener('click', () => finishNewConversationUnsavedChoice('discard'));
+    newConversationUnsavedCancel.addEventListener('click', () => finishNewConversationUnsavedChoice(null));
+    newConversationUnsavedModal.addEventListener('click', event => { if (event.target === newConversationUnsavedModal) finishNewConversationUnsavedChoice(null); });
     exportFormat.addEventListener('change', () => { if (exportFormat.value === 'print') { exportConversation(); exportFormat.value = ''; } });
     $('#exportButton').addEventListener('click', () => {
       exportConversation();
       if (exportFormat.value && exportFormat.value !== 'print') $('#conversationMenu').open = false;
     });
-    $('#saveSessionButton').addEventListener('click', saveSessionFile);
+    $('#newConversationButton').addEventListener('click', () => { void startNewConversation(); });
+    $('#saveSessionButton').addEventListener('click', () => { void saveSessionFile(); });
     $('#saveConversationScopeCancel').addEventListener('click', () => finishSaveConversationScope(null));
     $('#saveConversationScopeContinue').addEventListener('click', () => {
       const scope = document.querySelector('input[name="saveConversationScope"]:checked')?.value || 'all';
@@ -11222,6 +11384,7 @@ ${toolActivityDetail}`;
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
       if (!$('#saveConversationScopeModal').hidden) { finishSaveConversationScope(null); return; }
+      if (!newConversationUnsavedModal.hidden) { finishNewConversationUnsavedChoice(null); return; }
       if (!openSessionDestinationModal.hidden) { finishOpenSessionDestination(null); return; }
       if (!researchPanel.hidden) { closeResearchWorkspace(); return; }
       if (!agentFolderAccessRequest.hidden) { agentFolderAccessCancel.click(); return; }
