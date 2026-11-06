@@ -1,3 +1,9 @@
+## 1.10.23 updates
+
+- [x] Side-by-side branch previews stay within a bounded, independently scrollable comparison panel so the chat transcript and composer retain their layout space.
+- [x] AI branch assessments open in a fixed modal with its own scrollable result area; long output does not expand the chat page. Close, backdrop click, Escape, and Stop are supported.
+- [x] The 1.10.22 comparison model selection, fixed prompt, provider routing, streaming, and branch-history isolation remain unchanged.
+
 ## 1.10.22 updates
 
 - [x] Existing branch side-by-side comparison can request a model-generated assessment using a predefined RunMind template.

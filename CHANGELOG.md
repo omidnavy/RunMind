@@ -1,3 +1,18 @@
+## [1.10.23] — Contained AI branch comparison
+
+### Fixed
+- Kept the side-by-side branch preview bounded to its own scrollable area, with shorter independently scrollable response panes. Opening a comparison no longer consumes the chat transcript's available height.
+- Moved the model-generated assessment into a fixed modal with a dedicated scrollable result region. Long or streaming assessments no longer expand the page layout or push the message composer out of view.
+- Added Close, backdrop-click, and Escape dismissal for the assessment modal. Closing it stops an in-flight comparison; the Stop control remains available inside the modal.
+
+### Unchanged behavior
+- The independent comparison-model selector, fixed RunMind assessment template, provider adapters, selected branch inputs, streaming, and non-persistence behavior are unchanged.
+- The assessment still uses only each branch's latest user request and latest assistant response. It does not alter either branch or the main chat model.
+
+### Validation
+- JavaScript syntax, modal and comparison event wiring, bounded layout CSS, project XML, plugin JSON, version alignment, ZIP integrity, and clean-baseline overlay application checked.
+- Full Windows/.NET build and live WebView2 visual testing still require Windows.
+
 ## [1.10.22] — AI-assisted conversation branch comparison
 
 ### Added

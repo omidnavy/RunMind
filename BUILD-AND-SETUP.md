@@ -1,3 +1,9 @@
+## RunMind 1.10.23 — contained branch comparison assessment
+
+This update is an overlay for the complete RunMind 1.10.22 source tree. It bounds the inline branch preview and moves the AI assessment into a fixed, independently scrollable modal. The plugin and standalone versions, plugin manifest, Native Reader user-agent, and release documentation are updated to 1.10.23. The ZIP preserves original project-relative paths and contains changed files only. Extract it over the complete 1.10.22 source tree, retaining all excluded resources such as `Assets`, `lib`, `Vendor`, OCR language packs, images, and screenshots, then build on Windows with `Build-Release-x64.bat`.
+
+The comparison request, prompt, selected model behavior, provider routing, and branch-isolation rules are unchanged. Closing the assessment modal stops an active comparison. The modal's content scrolls independently and does not alter the chat page's layout height.
+
 ## RunMind 1.10.22 — AI-assisted branch comparison
 
 This update is an overlay for the complete RunMind 1.10.21 source tree. It adds model-assisted assessment to the existing branch comparison view, updates the plugin and standalone project versions, the plugin manifest, the Native Reader user-agent version, and release documentation. The ZIP preserves original project-relative paths and contains changed files only. Extract it over the complete 1.10.21 source tree, retaining all excluded resources such as `Assets`, `lib`, `Vendor`, `OCR`, images, and screenshots, then build on Windows with `Build-Release-x64.bat`.

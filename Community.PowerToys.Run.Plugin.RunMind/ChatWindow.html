@@ -326,23 +326,28 @@
     .conversation-branchbar label { display:flex; align-items:center; gap:7px; color:var(--color-muted); font-size:10px; }
     .conversation-branchbar select { min-width:130px; max-width:min(48vw,260px); height:29px; padding:0 8px; font-size:10px; }
     .conversation-branchbar .button { min-height:28px; padding:4px 8px; font-size:10px; }
-    .conversation-branch-compare { border-bottom:1px solid var(--color-border); padding:9px 12px; background:var(--color-surface-raised); }
+    .conversation-branch-compare { flex:0 1 auto; min-height:0; max-height:min(36vh, 330px); overflow-y:auto; overscroll-behavior:contain; border-bottom:1px solid var(--color-border); padding:9px 12px; background:var(--color-surface-raised); }
     .conversation-branch-compare[hidden] { display:none !important; }
     .branch-compare-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; font-size:11px; }
     .branch-compare-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
     .branch-compare-columns > div { min-width:0; border:1px solid var(--color-border); border-radius:var(--radius-sm); padding:8px; background:var(--color-surface); }
     .branch-compare-columns strong { display:block; margin-bottom:6px; font-size:10px; }
-    .branch-compare-columns pre { max-height:230px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:10px/1.5 var(--font-mono,monospace); color:var(--color-muted); margin:0; }
+    .branch-compare-columns pre { max-height:min(17vh, 155px); min-height:54px; overflow:auto; overscroll-behavior:contain; white-space:pre-wrap; overflow-wrap:anywhere; font:10px/1.5 var(--font-mono,monospace); color:var(--color-muted); margin:0; }
     .branch-compare-ai-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin:9px 0 7px; }
     .branch-compare-ai-toolbar label { display:flex; align-items:center; gap:6px; color:var(--color-muted); font-size:10px; }
     .branch-compare-ai-toolbar select { min-width:180px; max-width:min(56vw,340px); height:29px; padding:0 8px; font-size:10px; }
     .branch-compare-ai-toolbar .button { min-height:29px; padding:4px 9px; font-size:10px; }
     .branch-compare-ai-hint { flex-basis:100%; color:var(--color-muted); font-size:9px; line-height:1.4; }
-    .branch-compare-ai-result { margin-top:9px; padding:9px 10px; border:1px solid var(--color-border); border-radius:var(--radius-sm); background:var(--color-surface); }
-    .branch-compare-ai-result[hidden] { display:none !important; }
-    .branch-compare-ai-result-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; font-size:10px; }
-    .branch-compare-ai-result-status { color:var(--color-muted); font-size:9px; }
-    .branch-compare-ai-content { max-height:420px; overflow:auto; font-size:11px; line-height:1.55; overflow-wrap:anywhere; }
+    .branch-compare-ai-modal { z-index:50; }
+    .branch-compare-ai-modal[hidden] { display:none !important; }
+    .branch-compare-ai-dialog { display:flex; flex-direction:column; width:min(960px,100%); height:min(74vh,700px); max-height:calc(100vh - 40px); min-height:160px; min-width:0; overflow:hidden; padding:0; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface); color:var(--color-text); box-shadow:var(--shadow-panel); }
+    .branch-compare-ai-result-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 auto; padding:12px 15px; border-bottom:1px solid var(--color-border); font-size:12px; }
+    .branch-compare-ai-result-meta { display:flex; flex-direction:column; gap:3px; min-width:0; }
+    .branch-compare-ai-result-status { color:var(--color-muted); font-size:10px; font-weight:400; overflow-wrap:anywhere; }
+    .branch-compare-ai-result-actions { display:flex; align-items:center; gap:7px; flex:0 0 auto; }
+    .branch-compare-ai-result-actions .button { min-height:29px; padding:4px 9px; font-size:10px; }
+    .branch-compare-ai-content { flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain; padding:13px 16px 17px; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+    @media (max-width:560px) { .branch-compare-ai-modal { padding:10px; } .branch-compare-ai-dialog { width:100%; height:calc(100vh - 20px); max-height:calc(100vh - 20px); } .branch-compare-ai-result-head { padding:10px; } .branch-compare-ai-result-actions { gap:5px; } .branch-compare-ai-content { padding:10px; } }
     .branch-compare-ai-content > :first-child { margin-top:0; }
     .branch-compare-ai-content > :last-child { margin-bottom:0; }
     .branch-compare-ai-content pre { overflow:auto; padding:8px; border-radius:var(--radius-xs); background:var(--color-surface-raised); }
@@ -873,19 +878,29 @@
         <div class="branch-compare-ai-toolbar">
           <label for="conversationBranchCompareModel">AI model <select id="conversationBranchCompareModel" aria-label="Model for AI branch comparison"><option value="">No model available</option></select></label>
           <button type="button" class="button primary" id="conversationBranchCompareAi" disabled>Ask model to compare</button>
-          <button type="button" class="button" id="conversationBranchCompareAiStop" hidden>Stop</button>
           <span class="branch-compare-ai-hint">Uses each branch’s latest user request and latest assistant response. The selected model does not change your main chat model.</span>
         </div>
-        <section class="branch-compare-ai-result" id="conversationBranchCompareAiResult" hidden aria-live="polite">
-          <div class="branch-compare-ai-result-head"><strong>AI assessment</strong><span class="branch-compare-ai-result-status" id="conversationBranchCompareAiStatus"></span></div>
-          <div class="branch-compare-ai-content" id="conversationBranchCompareAiContent"></div>
-        </section>
         <p class="research-note">The side-by-side view shows the latest assistant responses. AI assessment additionally includes the latest user request preceding each response; it does not submit either full branch history.</p>
       </section>
       <main class="transcript" id="transcript" aria-label="Conversation">
         <div class="transcript-inner" id="transcriptInner"></div>
       </main>
       <button type="button" class="jump-to-latest" id="jumpToLatest" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M6 14l6 6 6-6"/></svg>Jump to latest</button>
+    </div>
+    <div class="modal-backdrop branch-compare-ai-modal" id="conversationBranchCompareAiResult" hidden>
+      <section class="branch-compare-ai-dialog" role="dialog" aria-modal="true" aria-labelledby="conversationBranchCompareAiTitle" tabindex="-1">
+        <header class="branch-compare-ai-result-head">
+          <div class="branch-compare-ai-result-meta">
+            <strong id="conversationBranchCompareAiTitle">AI branch assessment</strong>
+            <span class="branch-compare-ai-result-status" id="conversationBranchCompareAiStatus" aria-live="polite"></span>
+          </div>
+          <div class="branch-compare-ai-result-actions">
+            <button type="button" class="button" id="conversationBranchCompareAiStop" hidden>Stop</button>
+            <button type="button" class="button" id="conversationBranchCompareAiClose">Close</button>
+          </div>
+        </header>
+        <div class="branch-compare-ai-content" id="conversationBranchCompareAiContent"></div>
+      </section>
     </div>
     <section class="agent-approval" id="agentApproval" role="dialog" aria-live="assertive" aria-labelledby="agentApprovalTitle" hidden>
       <div class="agent-approval-head"><span class="agent-approval-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 3.8 18h16.4L12 3Z"/><path d="M12 9v4M12 16h.01"/></svg></span><div><div class="agent-approval-title" id="agentApprovalTitle">Permission required</div><div class="agent-approval-subtitle" id="agentApprovalSubtitle">Review this action before it runs</div></div></div>
@@ -2176,6 +2191,7 @@
       lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
       editingMessageIndex = null; draftBeforeEdit = null; editModeNotice.hidden = true;
       cancelBranchComparisonAi('Comparison stopped because a new branch was created.');
+      conversationBranchCompareAiResult.hidden = true;
       conversationBranchCompareView.hidden = true;
       saveActiveConversationBranch(); renderMessages(false); renderConversationBranchBar();
       showToast(`Created branch “${branch.name}”. The original conversation remains unchanged.`);
@@ -2191,6 +2207,7 @@
       lmStudioNativeResponseId = null; lmStudioNativeModelKey = null;
       editingMessageIndex = null; draftBeforeEdit = null; editModeNotice.hidden = true;
       cancelBranchComparisonAi('Comparison stopped because the active branch changed.');
+      conversationBranchCompareAiResult.hidden = true;
       conversationBranchCompareView.hidden = true;
       promptInput.value = ''; pendingAttachments = []; renderPendingAttachments();
       renderMessages(false); renderConversationBranchBar(); updateContextManagerUI();
@@ -2214,6 +2231,7 @@
         : '';
       if (!window.confirm(`Delete branch “${branch.name}”? Its transcript will be removed.${childNote}`)) return;
       cancelBranchComparisonAi('Comparison stopped because a branch was deleted.');
+      conversationBranchCompareAiResult.hidden = true;
       conversationBranchCompareView.hidden = true;
       // Preserve descendants if a parent branch is deleted. Its direct children
       // become roots; deeper lineage below those branches remains intact.
@@ -2342,6 +2360,7 @@
       let streamedText = '';
       conversationBranchCompareAiResult.hidden = false;
       conversationBranchCompareAiContent.textContent = '';
+      conversationBranchCompareAiResult.querySelector('.branch-compare-ai-dialog')?.focus();
       conversationBranchCompareAiStatus.textContent = `Comparing with ${selection.serverName} · ${selection.model}…`;
       updateBranchComparisonAiAvailability();
       try {
@@ -2402,6 +2421,7 @@
     conversationBranchDelete?.addEventListener('click', deleteConversationBranch);
     conversationBranchCompareSelect?.addEventListener('change', () => {
       cancelBranchComparisonAi('Comparison stopped because the selected branches changed.');
+      conversationBranchCompareAiResult.hidden = true;
       conversationBranchCompareView.hidden = true;
       renderConversationBranchBar();
     });
@@ -2409,8 +2429,24 @@
     conversationBranchCompareModel?.addEventListener('change', updateBranchComparisonAiAvailability);
     conversationBranchCompareAiButton?.addEventListener('click', runAiBranchComparison);
     conversationBranchCompareAiStop?.addEventListener('click', () => cancelBranchComparisonAi());
+    const closeBranchComparisonAiModal = () => {
+      cancelBranchComparisonAi('Comparison stopped.');
+      conversationBranchCompareAiResult.hidden = true;
+      if (!conversationBranchCompareView.hidden) conversationBranchCompareAiButton?.focus();
+    };
+    $('#conversationBranchCompareAiClose')?.addEventListener('click', closeBranchComparisonAiModal);
+    conversationBranchCompareAiResult?.addEventListener('click', event => {
+      if (event.target === conversationBranchCompareAiResult) closeBranchComparisonAiModal();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && conversationBranchCompareAiResult && !conversationBranchCompareAiResult.hidden) {
+        event.preventDefault();
+        closeBranchComparisonAiModal();
+      }
+    });
     $('#conversationBranchCompareClose')?.addEventListener('click', () => {
       cancelBranchComparisonAi('Comparison stopped.');
+      conversationBranchCompareAiResult.hidden = true;
       conversationBranchCompareView.hidden = true;
     });
 

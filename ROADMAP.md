@@ -1,3 +1,9 @@
+## 1.10.23 completed
+
+- [x] Contain the branch preview within a bounded comparison area with independent scrolling.
+- [x] Present the AI assessment in a fixed, internally scrollable modal so it cannot displace the chat composer.
+- [x] Stop an active assessment when the modal is closed or the comparison context changes.
+
 ## 1.10.22 completed
 
 - [x] Add model-assisted comparison to the existing branch comparison view, with a predefined neutral assessment template and a streamed, cancellable result.
@@ -15,10 +21,10 @@
 - [x] Separate OpenAI-compatible protocol identity from optional LM Studio metadata capability.
 - [x] Preserve user-defined connection names throughout message display and conversation serialization.
 
-Current 1.10.22 adds model-assisted branch comparison. Current 1.10.21 corrects Native Reader handling for public hostnames whose local DNS answers contain only non-public addresses, allowing the application-level remote fallback chain to run without connecting to those addresses.
+Current 1.10.23 contains branch comparison previews and opens AI assessments in a bounded modal; 1.10.22 adds model-assisted branch comparison. Current 1.10.21 corrects Native Reader handling for public hostnames whose local DNS answers contain only non-public addresses, allowing the application-level remote fallback chain to run without connecting to those addresses.
 # Remaining implementation backlog
 
-This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.22. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
+This file preserves the full feature wishlist discussed for RunMind. This backlog is updated to reflect RunMind 1.10.23. Checked items describe the implemented bounded capability; unchecked items remain future work. See `FEATURE-MATRIX.md` for current behavior and limits.
 
 Current 1.10.21 keeps Reader failover inside the application and treats DNS answers containing only non-public addresses for an otherwise public hostname as a recoverable Native Reader failure. Current 1.10.20 preserves connection aliases in message identity and conversation serialization. Current 1.10.18 prioritizes the configured custom Reader gateway before Jina when native retrieval fails, adds the optional model-specific Nemotron 3.5 Bolt E4B conversational-mode setting, and makes full branch-workspace saving the default with an active-branch-only escape hatch. Current 1.10.17 adds native-first public webpage reading in both desktop hosts, with the configured remote Reader retained as fallback. Current 1.10.16 preserves literal underscores and asterisks embedded in identifiers during Markdown rendering. Current 1.10.15 restores the requested `Branch N` labels for generic child branches and migrates saved auto-generated `Alternative N` labels back to `Branch N`. Current 1.10.14 refines the editable PowerToys QuickAI starter prompt. Current 1.10.13 adds a Copy action to text-bearing user prompts in the chat transcript; original prompt text remains copyable while a response is streaming. Current 1.10.12 adds the editable pre-filled QuickAI system prompt in PowerToys settings and a shared native work-area-aware startup placement helper for both PowerToys and standalone windows; the default height is reduced by 24 DIPs. Current 1.10.x UX refinements: Deep Research is a mutually exclusive toolbar flyout (not a side drawer), and Always-approved tools can be removed individually from Agent settings.
 RunMind 1.10.5 also opens that flyout when Deep Research is enabled from the composer and replaces the blue-toned dark palette with Warm Graphite.
