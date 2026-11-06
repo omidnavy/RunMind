@@ -1,3 +1,17 @@
+## RunMind 1.10.22 — AI-assisted branch comparison
+
+This update is an overlay for the complete RunMind 1.10.21 source tree. It adds model-assisted assessment to the existing branch comparison view, updates the plugin and standalone project versions, the plugin manifest, the Native Reader user-agent version, and release documentation. The ZIP preserves original project-relative paths and contains changed files only. Extract it over the complete 1.10.21 source tree, retaining all excluded resources such as `Assets`, `lib`, `Vendor`, `OCR`, images, and screenshots, then build on Windows with `Build-Release-x64.bat`.
+
+The comparison action uses the latest assistant response and immediately preceding user request from each of the two selected branches. Its dedicated model selector defaults to the active chat model, but changing it affects only that comparison request. The fixed RunMind comparison prompt is sent as a separate one-off generation request without Agent/Deep Research tools. Results stream into the comparison view and can be cancelled; they are not appended to either branch or saved conversation history.
+
+## RunMind 1.10.21 — Reader DNS fallback correction
+
+This update is an overlay for the complete RunMind 1.10.20 source tree. It carries the shared `ChatWindow.html` Reader orchestration fix, updates `Shared/NativePageReader.cs`, both project version declarations, the plugin manifest version, and the release documentation. The ZIP preserves the original project-relative paths and contains changed files only. Extract it over the complete source tree, then build on Windows with `Build-Release-x64.bat`.
+
+A public hostname that resolves locally only to non-public IP addresses now causes a recoverable Native Reader failure. The Native Reader never connects to those addresses; RunMind proceeds to the configured Custom Reader and then Jina, or directly to Jina when no custom gateway is configured. Explicit private/local URL targets and unsafe redirects remain blocked. Fallback is completed inside RunMind before any result is returned to the model.
+
+The ZIP is an overlay, not a complete project archive. Preserve all existing `Assets`, `lib`, `Vendor`, `OCR`, build scripts, and other unchanged resources.
+
 ## RunMind 1.10.20
 
 Custom OpenAI-compatible connections do not probe LM Studio-specific `/api/v1/models` or legacy `/api/v0/models` endpoints unless **Use LM Studio native metadata API** is explicitly enabled. The built-in LM Studio connection retains this capability. Message headers show the selected connection alias; older saved messages without that metadata use the legacy provider label.
@@ -6,7 +20,7 @@ Custom OpenAI-compatible connections do not probe LM Studio-specific `/api/v1/mo
 
 - Corrected the Nemotron Conversational Mode checkbox layout: compact checkbox, aligned label, full-width explanatory text.
 - Native Reader now filters mixed DNS answers and connects only to globally routable IPs instead of rejecting an entire public hostname because a separate answer is private/reserved.
-- DNS responses containing no public address remain blocked as an SSRF protection. The diagnostic identifies the hostname and suggests checking local DNS/VPN/DNS filtering.
+- At 1.10.19, DNS responses with no public address were still treated as hard blocks. RunMind 1.10.21 changes public-host-only non-public DNS responses into recoverable Native failures while continuing to refuse local connections to those addresses.
 
 Overlay this release on the complete RunMind 1.10.18 source tree. Preserve `Assets`, `lib`, `Vendor`, `OCR`, and other omitted resources. Rebuild on Windows with `Build-Release-x64.bat`.
 
@@ -45,8 +59,6 @@ The ZIP is a source overlay. Extract over the complete project tree so `Assets`,
 # RunMind build and setup notes
 
 ## Source overlay
-
-This release package is an overlay for the complete RunMind 1.10.17 source tree. It contains the updated shared chat UI, both native WPF host files, the shared `NativePageReader.cs`, project/plugin version metadata, and release documentation. The trimmed development archive used to prepare this release omitted native host code and supporting resources, so this overlay restores the required host source files but still relies on the complete project for `Assets`, `lib`, `Vendor`, `OCR`, build scripts, and other resources. Merge the included paths into the complete tree before building.
 
 ## RunMind 1.10.15 — Branch naming correction
 

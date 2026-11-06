@@ -1,3 +1,33 @@
+## [1.10.22] — AI-assisted conversation branch comparison
+
+### Added
+- Added **Ask model to compare** to the existing side-by-side branch comparison view. The assessment uses the latest assistant response in each branch and includes the latest user request preceding each response for context.
+- Added an independent model selector for branch comparison. It defaults to the currently selected chat model, lists discovered models across configured Ollama and OpenAI-compatible connections, and lets the user choose a different model without changing the main chat selection.
+- Added a fixed RunMind comparison template that evaluates relevance, correctness where assessable, completeness, reasoning care, clarity, usefulness, and actionable detail. The result streams into the comparison panel, supports cancellation, and is rendered as Markdown.
+
+### Behavior and limits
+- AI comparison is a separate one-off provider generation request with no Agent/Deep Research tools, no custom conversation-history injection, and no writes to either branch. Its result is not appended to the transcript or persisted as a conversation message.
+- The comparison sends only the latest associated user request and latest assistant response from each branch, with bounded text lengths; it does not submit complete branch histories or model reasoning/thinking output.
+- The independent model choice does not modify the globally selected chat model or saved chat settings. Ollama and OpenAI-compatible provider adapters are reused.
+
+### Validation
+- JavaScript syntax, branch-comparison UI wiring, independent-model selection, provider-adapter request shape, cancellation paths, version alignment, project XML, plugin JSON, and overlay ZIP integrity checked. Windows/.NET 10 compilation and live WebView2/provider testing still require Windows.
+
+## [1.10.21] — Reader fallback on public-host DNS filtering
+
+### Fixed
+- Corrected Native Reader handling when a syntactically public hostname (for example, `github.com`) resolves locally only to non-public IP addresses. This condition is now reported as a Native retrieval failure, not `NATIVE_DESTINATION_BLOCKED`, so the application continues through the configured **Custom Reader → Jina Reader** fallback chain (or directly to Jina when no custom gateway is configured).
+- The Native Reader still never connects to non-public DNS answers. It filters all candidate socket addresses and makes no local connection when no globally routable answer exists. The original hostname is passed to the configured remote Reader, which performs its own resolution.
+- Preserved hard security stops for explicit private/loopback/link-local/reserved IP literals, local and special-use hostnames, credential-bearing URLs, disallowed research domains, and unsafe redirects. These are not forwarded to remote Readers.
+- Kept fallback orchestration inside RunMind's shared webpage retrieval pipeline. The model receives the retrieved content after a Reader succeeds, or one consolidated failure after all configured Readers fail; it is not asked to orchestrate retries itself.
+
+### Diagnostics
+- Native DNS-only-private failures retain a useful hostname-level reason without exposing resolved IP addresses. Existing console diagnostics record each remote fallback attempt and its outcome.
+
+### Validation
+- Source regression checks cover DNS-only-private answers taking the recoverable Native-failure path, no connection to non-public candidates, explicit private/local URL hard stops, and Custom → Jina / direct-to-Jina ordering.
+- Project/plugin version alignment, JavaScript syntax, project XML, and ZIP integrity checked. Windows/.NET compilation and live WebView2/network integration remain to be tested on Windows.
+
 ## [1.10.20] — Connection capabilities and message identity
 
 ### Added

@@ -1,3 +1,14 @@
+## 1.10.22 updates
+
+- [x] Existing branch side-by-side comparison can request a model-generated assessment using a predefined RunMind template.
+- [x] The comparison model selector defaults to the currently selected chat model and can independently select any discovered Ollama or OpenAI-compatible model without changing the main chat selection.
+- [x] The assessment compares the latest assistant response and its preceding user request from each branch, streams into the comparison view, and can be cancelled. It does not modify branch histories or add a conversation message.
+
+## 1.10.21 updates
+
+- [x] A public hostname that resolves locally only to non-public DNS addresses is treated as a recoverable Native Reader failure. No private address is contacted; RunMind continues to the configured Custom Reader and then Jina, or directly to Jina when no custom gateway is configured.
+- [x] Fallback is orchestrated inside the application before the result is returned to the model. Explicit private/local URL targets and unsafe redirects remain hard security stops.
+
 ## 1.10.20 updates
 
 - [x] Custom OpenAI-compatible connections can explicitly opt into LM Studio native metadata endpoints; built-in LM Studio keeps metadata discovery enabled.
@@ -7,7 +18,7 @@
 ## RunMind 1.10.19 fixes
 
 - Nemotron Conversational Mode now uses a dedicated compact checkbox row spanning the full Generation Settings grid; the explanatory text is no longer squeezed into one half-column.
-- Native Reader accepts mixed DNS answers when at least one globally routable address exists, but connects only to the public candidates. If DNS returns no public candidate, the request remains blocked.
+- Native Reader accepts mixed DNS answers when at least one globally routable address exists, but connects only to the public candidates. In 1.10.19, a public hostname resolving only to non-public addresses was treated as a hard block; 1.10.21 changes that case to a recoverable Native failure so the configured remote Reader fallback can run without connecting to any non-public address.
 
 ## RunMind 1.10.18 — Reader routing, Nemotron conversational mode, and branch-aware saves
 

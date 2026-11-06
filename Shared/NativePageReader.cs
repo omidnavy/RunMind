@@ -185,7 +185,7 @@ public sealed class NativePageReader : IDisposable
             await EnsurePublicDestinationAsync(current, timeout.Token).ConfigureAwait(false);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, current);
-            request.Headers.UserAgent.ParseAdd("RunMind-Native-Reader/1.10.19");
+            request.Headers.UserAgent.ParseAdd("RunMind-Native-Reader/1.10.22");
             request.Headers.Accept.ParseAdd("text/html,application/xhtml+xml,application/json,text/plain,application/xml,text/xml;q=0.9,*/*;q=0.5");
             request.Headers.AcceptLanguage.ParseAdd("en-US,en;q=0.8");
 
@@ -258,9 +258,22 @@ public sealed class NativePageReader : IDisposable
         // (for example, because of split-horizon DNS, DNS filtering, or NAT64).
         // Never connect to a non-public answer, but don't reject a public hostname
         // merely because one additional A/AAAA answer is non-public.
+        // A DNS outage or empty answer is a retrieval failure, not an SSRF
+        // destination block. The JavaScript Reader pipeline must be allowed to
+        // try the configured custom gateway and then Jina in that case.
+        if (addresses.Length == 0)
+            throw new HttpRequestException($"DNS resolution for '{context.DnsEndPoint.Host}' returned no IP addresses.");
+
+        // Never connect to private, loopback, link-local, or reserved DNS answers.
+        // For a syntactically public hostname, however, a DNS response containing
+        // only non-public addresses is a Native retrieval failure rather than an
+        // input-URL security block. This lets the application try its configured
+        // Custom Reader and then Jina, which resolve the original hostname from
+        // their own network. Private IP literals and local/special-use hostnames
+        // are still rejected by ValidateTarget before this callback is reached.
         addresses = addresses.Where(IsPublicAddress).Distinct().ToArray();
         if (addresses.Length == 0)
-            throw new NativeReaderBlockedException("The Native Reader blocked this host because DNS returned no globally routable IP addresses. Check whether local DNS, a VPN, or a DNS filter is rewriting the hostname.");
+            throw new HttpRequestException($"The Native Reader could not safely connect to '{context.DnsEndPoint.Host}' because DNS returned only non-public IP addresses. No connection was made; the configured remote Reader fallback may retry the original public hostname.");
 
         Exception? lastError = null;
         foreach (var address in addresses)
@@ -295,11 +308,22 @@ public sealed class NativePageReader : IDisposable
         else
             addresses = await Dns.GetHostAddressesAsync(uri.DnsSafeHost, cancellationToken).ConfigureAwait(false);
 
+        // An empty answer (or a DNS exception above) is an ordinary resolution
+        // failure. Return it as NATIVE_READER_FAILED so the remote Reader chain
+        // can run. A non-empty answer containing only non-public addresses is a
+        // genuine destination block and must not be sent to a remote Reader.
+        if (addresses.Length == 0)
+            throw new HttpRequestException($"DNS resolution for '{uri.DnsSafeHost}' returned no IP addresses.");
+
         // A mixed DNS response is acceptable only when at least one public
         // address exists. ConnectPublicAddressAsync independently filters the
         // actual socket candidates, so private answers are never connected to.
+        // If a public hostname resolves only to non-public answers, fail this
+        // local attempt normally so the JavaScript orchestrator can continue to
+        // the configured remote Readers. Literal private IPs and local/special
+        // hostnames have already been rejected by ValidateTarget above.
         if (!addresses.Any(IsPublicAddress))
-            throw new NativeReaderBlockedException($"The Native Reader blocked '{uri.DnsSafeHost}' because DNS returned no globally routable IP addresses. Check whether local DNS, a VPN, or a DNS filter is rewriting the hostname.");
+            throw new HttpRequestException($"The Native Reader could not safely retrieve '{uri.DnsSafeHost}' because DNS returned only non-public IP addresses. No connection was made; the configured remote Reader fallback may retry the original public hostname.");
     }
 
     private static void ValidateTarget(Uri uri)
