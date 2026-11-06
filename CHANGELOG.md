@@ -1,3 +1,18 @@
+## [1.10.34] — Spacious, movable and resizable flyouts
+
+### Changed
+- Increase the default working width of toolbar, Appearance, Conversations, OCR, Context Manager, and Deep Research panels while keeping each panel bounded by the current WebView viewport.
+- Replace trigger-gap height clamping with viewport-aware placement. If a panel cannot fit above or below its trigger, it opens as a centered floating panel using the full available viewport instead of being squeezed into a narrow scroll area.
+- Add a visible top drag grip and a bottom-right resize grip to every toolbar, Conversations, Appearance, and Deep Research flyout. Dragging and resizing are constrained to the visible viewport, with keyboard arrow-key support on both controls.
+- Keep moved/resized geometry only while that flyout is open. Closing it, opening another flyout, or pressing Escape returns it to its default size and anchor; no geometry is persisted.
+- Widen the Conversations panel and make its Save/Open action buttons wrap safely so **Export copy** remains fully visible when the panel content fits the window.
+- Keep internal scrolling for genuinely long content, such as long settings lists and previews; ordinary panels no longer gain an outer scrollbar solely because their trigger is near a viewport edge.
+
+### Validation
+- JavaScript syntax, project XML, plugin manifest JSON, version alignment, and changed-files-only overlay application checked.
+- Chromium layout and interaction checks cover all 11 flyouts, drag/resize, close-and-reopen reset, and the Conversations export button in a compact 620 × 420 viewport. No runtime errors or unnecessary outer scrolling were observed for panels whose content fits.
+- Windows/.NET compilation and live WebView2/PowerToys interaction require the Windows build environment and excluded PowerToys reference libraries; they were not run here.
+
 ## [1.10.33] — Reliability and performance hardening
 
 ### Fixed

@@ -17,6 +17,12 @@ RunMind brings local and OpenAI-compatible language models to **PowerToys Run** 
 - Select from curated light and dark appearance palettes, with independent saved choices for each mode.
 - Compare conversation branches in a full lower-workspace view, then discuss an independent **AI Branch Comparison** in a centered modal. The initial assessment instruction is pre-filled and editable; no request is sent until the user presses Send. The hidden system prompt and original comparison dossier are supplied automatically. Follow up with a selectable model, re-examine the original snapshot, copy individual messages or the full discussion, and download the comparison as Markdown without changing either branch or the main chat model.
 
+## 1.10.34 update
+
+- [x] Give toolbar, Appearance, Conversations, OCR, Context Manager, and Deep Research panels larger default working areas and viewport-aware placement instead of shrinking them to the trigger gap.
+- [x] Make every flyout draggable and resizable while open; keep its position and size temporary and reset them on close.
+- [x] Widen the Conversations panel and ensure Save/Open and Export actions remain usable in compact windows.
+
 ## 1.10.33 update
 
 - [x] Improve long-chat rendering efficiency without changing active-message streaming updates.
@@ -96,6 +102,8 @@ The WebView2 chat page uses the origin `https://localhost`. The model server mus
 Save a chat to open the Windows Save As dialog with its generated title pre-filled and `.runmind` selected. The final filename becomes the conversation title. RunMind's native conversation format is `.runmind`; other conversation formats are not supported.
 
 When opening a saved chat, choose **Open in this window** to replace the current conversation or **Open in new window** to keep the current chat intact.
+
+Toolbar flyouts can be dragged using the grip at the top and resized from the bottom-right corner. These adjustments last only while the flyout is open; closing it resets its default position and size.
 
 Standalone and PowerToys use separate WebView2 profiles, so their settings, credentials, Agent task history, and Deep Research checkpoints are separate. API keys and MCP tokens are stored in the local WebView2 profile and are not encrypted by RunMind.
 

@@ -1,3 +1,9 @@
+## RunMind 1.10.34 — spacious, movable and resizable flyouts
+
+This overlay is for the complete RunMind 1.10.33 source tree. It gives the toolbar, Appearance, Conversations, OCR, Context Manager, and Deep Research flyouts larger default working areas and places them against the full safe WebView viewport instead of shrinking them to the space immediately beside their trigger. Every flyout can be moved using the grip at the top and resized using the bottom-right grip. Position and size are temporary for the open lifetime only and reset on close; they are never saved. The Conversations panel is wider and its Save/Open buttons wrap without clipping the Export copy action. Long content still scrolls when it genuinely exceeds the viewport.
+
+The plugin and standalone project versions, plugin manifest, Native Reader user-agent, and release documentation are aligned to 1.10.34. The ZIP contains changed files only and preserves original project-relative paths. Extract it over the complete 1.10.33 source tree, retaining excluded resources such as `lib`, `assets`, and `screenshots`, then build on Windows with `Build-Release-x64.bat`.
+
 ## RunMind 1.10.33 — reliability and performance hardening
 
 This overlay is for the complete RunMind 1.10.32 source tree. It improves transcript rendering, CSV statistics and delimiter validation, bounds workspace searches, waits for IndexedDB transaction commits, detects duplicate attachment names, and revalidates workspace files after approval before edit/delete/restore operations. The unused research wrapper is removed. It preserves the existing streaming DOM patching and backup behavior. File-system revalidation is best-effort because the browser File System Access API does not expose atomic cross-process create-if-absent.

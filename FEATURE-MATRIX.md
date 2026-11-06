@@ -1,3 +1,11 @@
+## 1.10.34 updates
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| UI | Flyout sizing and placement | Flyouts use larger content-appropriate default widths and the full safe viewport; they are not shortened to fit only the gap next to the trigger. Long content scrolls only when it exceeds the available viewport. | **Implemented** |
+| UI | Temporary flyout positioning | All toolbar, Conversations, Appearance, and Deep Research flyouts can be dragged by the top grip and resized from the bottom-right grip. Geometry is clamped to the viewport and resets when the flyout closes; no preferences are persisted. | **Implemented** |
+| Conversations | Export panel layout | The Conversations flyout has a wider default layout and responsive Save/Open buttons; Export copy remains visible when the content fits the available viewport. | **Implemented** |
+
 ## 1.10.33 updates
 
 | Area | Feature | Current behavior | Status / limits |
