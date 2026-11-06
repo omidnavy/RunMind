@@ -1,3 +1,23 @@
+## 1.10.27 updates
+
+- [x] Apply the PowerToys native-response conversation title only after WebView2 and the chat page finish initializing, so the initial fallback title cannot overwrite the generated title.
+- [x] Skip the title-generation request when the window closes or WebView2 initialization fails.
+
+## 1.10.26 updates
+
+- [x] Opening **AI Branch Comparison** prepares the discussion without automatically calling a model.
+- [x] The initial assessment instruction is pre-filled in the composer and remains editable; the user explicitly presses **Send** to begin the assessment.
+- [x] The System prompt and immutable original comparison dossier remain hidden and are supplied automatically as separate model messages.
+- [x] The submitted instruction becomes the first visible user message and is included in per-message copy and complete Markdown export; the composer then supports normal follow-ups.
+
+## 1.10.25 updates
+
+- [x] Branch comparison replaces the complete lower application workspace below the header, including branch controls, transcript, chat composer, and compose toolbar; **Back to chat** restores the normal chat layout.
+- [x] The centered **AI Branch Comparison** modal provides a persistent in-session discussion, follow-up chat, independent model switching, and explicit re-examination of the original branch responses.
+- [x] Each discussion is bound to an immutable snapshot of the original branch requests/responses and metadata. Reopening an unchanged comparison restores its discussion; changed branch content creates a new discussion.
+- [x] Copy individual user/assistant messages, copy the complete discussion as Markdown, and download the full comparison dossier and discussion as a `.md` file. The export retains complete branch responses, the initial assessment, and assistant model/provider attribution.
+- [x] The comparison discussion uses no Agent, Deep Research, or tools. Complete dossier and message history remain in memory for the app session; the UI shows an approximate context-size estimate instead of silently discarding messages.
+
 ## 1.10.23 updates
 
 - [x] Side-by-side branch previews stay within a bounded, independently scrollable comparison panel so the chat transcript and composer retain their layout space.
@@ -52,7 +72,7 @@
 
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.19 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.26 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
 ## RunMind 1.10.15 — generated branch-label correction
 
@@ -126,7 +146,7 @@ This document describes the **current RunMind 1.10.19 feature set** across its P
 | Sub-agents | Specialized roles | Researcher, Coder, Security Analyst, Reviewer, and Summarizer delegate roles are available through the parent agent. | **Implemented with limits**; one level only, selected model, at most four child model/tool turns, read-only child tools. |
 | Sub-agents | Structured results | Child results are normalized to summary, findings, sources, uncertainties, and limitations. | **Implemented with limits**; when the model does not return valid JSON, its text is preserved as an unstructured summary. |
 | Conversation | Branching | Branch from a completed message, switch, rename, delete, return to Original, and compare latest assistant responses. | **Implemented with limits**; eight branches per window, last 16 messages per local snapshot, bounded text, binary attachments omitted; `.runmind` remains the full archive. |
-| Conversation UX | Branch manager visibility and layout | Branch controls are collapsed by default, accessible through a compact **Branches** toggle when multiple branches exist, and can be explicitly closed. | **Implemented**; branch manager and comparison view use full-width rows above the transcript. |
+| Conversation UX | Branch manager visibility and layout | Branch controls are collapsed by default, accessible through a compact **Branches** toggle when multiple branches exist, and can be explicitly closed. | **Implemented**; the comparison view takes over the entire area below the app header, including the composer. |
 | Analytics | Local workflow analytics | Per-tool invocations, success rate, average duration; provider/model requests, failures, average latency, and reported tokens. | **Implemented with limits**; stored per WebView profile; provider tokens appear only when reported. |
 | Recovery | Operation intent/retry | Operation intent is persisted before execution; interrupted operations are identified; known read-only operations can be retried after user confirmation when outcome is ambiguous. | **Implemented with limits**; not an exactly-once guarantee for arbitrary external operations. |
 

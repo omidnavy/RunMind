@@ -1351,11 +1351,37 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         WindowLayout.ConfigureInitialPlacement(appWindow);
         appWindow.Show();
         appWindow.Activate();
-        _ = InitializeChatWebViewAsync(appWindow, webView, navigation.FolderPath, navigation.BootstrapJson);
-        if (!isError)
-        {
-            _ = GenerateAndApplyConversationTitleAsync(appWindow, webView, model, safePrompt, response, settings, fallbackTitle);
-        }
+        // The page's initialization sets its fallback title. Run title generation only
+        // after that initialization has completed; starting both tasks concurrently can
+        // let the fallback title overwrite a generated title when the model responds first.
+        _ = InitializeNativeResponseWindowAsync(
+            appWindow, webView, navigation.FolderPath, navigation.BootstrapJson,
+            model, safePrompt, response, settings, fallbackTitle, !isError);
+    }
+
+    private async Task InitializeNativeResponseWindowAsync(
+        Window appWindow,
+        WebView2 webView,
+        string appFolderPath,
+        string bootstrapJson,
+        string model,
+        string prompt,
+        string responseText,
+        SettingsSnapshot settings,
+        string fallbackTitle,
+        bool generateTitle)
+    {
+        await InitializeChatWebViewAsync(appWindow, webView, appFolderPath, bootstrapJson);
+        if (!generateTitle) return;
+
+        // InitializeChatWebViewAsync handles its own errors. Do not spend another model
+        // request if the window was closed or WebView2 did not finish initializing.
+        var pageReady = await appWindow.Dispatcher.InvokeAsync(() =>
+            appWindow.IsVisible && webView.CoreWebView2 is not null).Task.ConfigureAwait(false);
+        if (!pageReady) return;
+
+        await GenerateAndApplyConversationTitleAsync(
+            appWindow, webView, model, prompt, responseText, settings, fallbackTitle).ConfigureAwait(false);
     }
 
     private void ShowSavedConversationWindow(string assemblyDirectory, string conversationJson, string fileName)
@@ -1493,6 +1519,52 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
         try
         {
+            var dispatcher = appWindow.Dispatcher;
+            var pageReady = false;
+
+            // The title setter exists as soon as the HTML script is parsed, before
+            // initializeRunMind has finished and applied the fallback title. Wait for
+            // the explicit completion signal so the generated title cannot be overwritten.
+            for (var attempt = 0; attempt < 120; attempt++)
+            {
+                if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || lifetime.IsCancellationRequested)
+                    return;
+
+                try
+                {
+                    var readyScriptTask = await dispatcher.InvokeAsync(() =>
+                    {
+                        if (!appWindow.IsVisible || webView.CoreWebView2 is null)
+                            return Task.FromResult("false");
+                        return webView.CoreWebView2.ExecuteScriptAsync(
+                            "window.__runMindInitialized === true && typeof window.setConversationTitle === 'function'");
+                    }).Task.ConfigureAwait(false);
+                    var ready = await readyScriptTask.ConfigureAwait(false);
+                    if (string.Equals(ready, "true", StringComparison.OrdinalIgnoreCase))
+                    {
+                        pageReady = true;
+                        break;
+                    }
+                }
+                catch
+                {
+                    // Navigation, WebView disposal, or window closure can race readiness checks.
+                }
+
+                try
+                {
+                    await Task.Delay(250, lifetime.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+                {
+                    return;
+                }
+            }
+
+            // Do not spend a title-generation request if the chat page never became ready.
+            if (!pageReady || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || lifetime.IsCancellationRequested)
+                return;
+
             string title;
             try
             {
@@ -1508,58 +1580,22 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 title = fallbackTitle;
             }
 
-            try
+            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || lifetime.IsCancellationRequested)
+                return;
+
+            var serializedTitle = JsonSerializer.Serialize(title);
+            await dispatcher.InvokeAsync(() =>
             {
-                // Window and WebView2 access is always performed on the owning dispatcher.
-                var dispatcher = appWindow.Dispatcher;
-                if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
-                var isVisible = await dispatcher.InvokeAsync(() => appWindow.IsVisible).Task.ConfigureAwait(false);
-                if (!isVisible || lifetime.IsCancellationRequested) return;
+                if (appWindow.IsVisible) appWindow.Title = $"RunMind — {title}";
+            }).Task.ConfigureAwait(false);
 
-                await dispatcher.InvokeAsync(() =>
-                {
-                    if (appWindow.IsVisible) appWindow.Title = $"RunMind — {title}";
-                }).Task.ConfigureAwait(false);
-
-                var serializedTitle = JsonSerializer.Serialize(title);
-                // The document may still be loading. Retry briefly until its one-way title
-                // setter exists. Every WebView2 access is dispatched to its owning STA thread.
-                for (var attempt = 0; attempt < 120; attempt++)
-                {
-                    if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || lifetime.IsCancellationRequested)
-                        return;
-
-                    try
-                    {
-                        var readyScriptTask = await dispatcher.InvokeAsync(() =>
-                        {
-                            if (!appWindow.IsVisible) return Task.FromResult("false");
-                            return webView.CoreWebView2.ExecuteScriptAsync("typeof window.setConversationTitle === 'function'");
-                        }).Task.ConfigureAwait(false);
-                        var ready = await readyScriptTask.ConfigureAwait(false);
-                        if (string.Equals(ready, "true", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var setTitleTask = await dispatcher.InvokeAsync(() =>
-                            {
-                                if (!appWindow.IsVisible) return Task.CompletedTask;
-                                return webView.CoreWebView2.ExecuteScriptAsync($"window.setConversationTitle({serializedTitle});");
-                            }).Task.ConfigureAwait(false);
-                            await setTitleTask.ConfigureAwait(false);
-                            return;
-                        }
-                    }
-                    catch
-                    {
-                        // Navigation, WebView disposal, or window closure can race title work.
-                    }
-
-                    await Task.Delay(250, lifetime.Token).ConfigureAwait(false);
-                }
-            }
-            catch
+            var setTitleTask = await dispatcher.InvokeAsync(() =>
             {
-                // The stable caption and prompt-derived in-app title remain usable.
-            }
+                if (!appWindow.IsVisible || webView.CoreWebView2 is null)
+                    return Task.FromResult(string.Empty);
+                return webView.CoreWebView2.ExecuteScriptAsync($"window.setConversationTitle({serializedTitle});");
+            }).Task.ConfigureAwait(false);
+            await setTitleTask.ConfigureAwait(false);
         }
         finally
         {

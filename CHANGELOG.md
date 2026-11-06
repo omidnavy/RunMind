@@ -1,3 +1,69 @@
+## [1.10.27] — Apply generated conversation titles after chat initialization
+
+### Fixed
+- Fixed a race in the PowerToys native-response window where the title-generation request could finish before WebView2 initialized. The page's subsequent fallback-title initialization could then overwrite the generated title.
+- Wait for the chat page to finish initializing before starting the title request, and skip the extra request if the window closes or WebView2 initialization fails.
+- Preserve the generated title in both the WebView conversation heading and the native window title.
+
+### Validation
+- Source-level checks verified that title generation is sequenced after successful WebView2 initialization and that the existing JavaScript title setter and native `DocumentTitleChanged` bridge remain connected.
+- JavaScript syntax, project XML, plugin manifest JSON, version alignment, and overlay integrity were checked. Windows/.NET compilation and live provider/WebView2 behavior require validation on Windows.
+
+## [1.10.26] — User-controlled initial AI branch assessment
+
+### Changed
+- Opening **AI Branch Comparison** now prepares the discussion without automatically making a model request.
+- The initial assessment instruction is pre-filled in the message composer so users can review, edit, extend, or replace it before sending.
+- The system prompt and immutable original comparison dossier remain hidden and are still supplied automatically with the user's submitted instruction.
+- The edited instruction is recorded as the first user message and included in message copy and Markdown export. The same composer continues to support follow-up discussion after the first assessment.
+- The initial assessment is generated only after the user explicitly presses Send; model selection and the main chat model remain independent.
+
+### Validation
+- Embedded JavaScript syntax, HTML structure/IDs, project XML, plugin manifest JSON, version alignment, and overlay integrity were checked.
+- The initial-send request path was checked to confirm that the submitted composer text is used verbatim as the initial user instruction, with the system prompt and dossier kept as separate hidden messages.
+- Windows/.NET compilation and live WebView2/provider interaction require validation on Windows.
+
+## [1.10.25] — Persistent AI branch comparison discussion
+
+### Added
+- Expanded the branch comparison workspace to take over the complete area below the application header, including the transcript, branch controls, composer, and chat toolbar. The header remains visible; **Back to chat** restores the normal conversation layout.
+- Turned **AI Branch Comparison** into a centered discussion modal. The initial assessment and follow-up conversation remain available when the modal is closed and reopened during the same app session.
+- Bound discussion history to an immutable comparison snapshot containing both original requests, complete branch responses, branch names, and available model/provider attribution. Re-comparing unchanged snapshots restores their existing discussion; changed responses or requests create a separate discussion.
+- Added follow-up chat using the independently selected comparison model. Model changes do not affect the main chat model, and the discussion uses no tools, agents, or Deep Research.
+- Added **Re-examine branches** to request a fresh assessment against the original complete dossier while retaining prior discussion messages.
+- Added per-message Copy actions, **Copy discussion**, and a local **Download Markdown** export containing the original requests, both complete branch responses, the initial assessment, and the ordered follow-up discussion with assistant model/provider attribution.
+- Added an approximate discussion-context estimate. RunMind retains the complete dossier and discussion history rather than silently dropping older messages.
+- Changed the generation Stop control to a red square; the separate X remains the Close control.
+
+### Unchanged behavior
+- The comparison-model selector defaults to the current chat model, remains independent of the main model selection, and continues to use the existing Ollama and OpenAI-compatible provider adapters.
+- Comparison sessions are in-memory and last for the lifetime of the current RunMind page session. They are not added to branch transcripts or conversation saves.
+
+### Validation
+- JavaScript syntax, comparison workspace/modal markup and event wiring, snapshot/session restoration paths, copy/export formatting, version alignment, project XML, plugin JSON, and clean-baseline overlay application checked.
+- Full Windows/.NET compilation and live WebView2/provider visual/integration testing still require Windows.
+
+## [1.10.24] — Reimagined branch comparison workspace
+
+### Changed
+- Reworked branch comparison into a dedicated workspace that temporarily uses the conversation viewport instead of squeezing the transcript. The chat composer remains anchored in its normal position.
+- Expanded the two selected branch responses into equal-width, independently scrollable panels with formatted Markdown, using the available workspace height.
+- Kept the AI result in a separate **AI Branch Comparison** modal, styled with RunMind's existing theme colors, surfaces, borders, typography, and controls rather than an embedded-page appearance.
+
+### Added
+- Added a Copy control to copy the generated AI branch comparison as Markdown/plain text.
+- Replaced text-based Stop and Close controls with compact X icon buttons; both have accessible labels and tooltips. Stop cancels generation without dismissing the modal; Close, backdrop click, and Escape dismiss it and cancel an active request.
+- Added modal status styling for running, completed, and failed comparisons, while keeping the result area independently scrollable.
+
+### Unchanged behavior
+- The independent comparison-model selector still defaults to the selected chat model. Choosing another model affects only the comparison request.
+- The fixed RunMind comparison prompt, provider adapters, streaming, and branch-history isolation remain unchanged.
+- Only each branch's latest user request and latest assistant response are sent. The result is not inserted into either branch or the saved transcript.
+
+### Validation
+- JavaScript syntax and HTML structure, unique element IDs, comparison-workspace/modal transitions, Copy/Stop/Close wiring, project XML, plugin JSON, version alignment, and clean-baseline overlay application checked.
+- Full Windows/.NET build and live WebView2/provider testing still require Windows.
+
 ## [1.10.23] — Contained AI branch comparison
 
 ### Fixed

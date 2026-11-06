@@ -1,4 +1,16 @@
-## RunMind 1.10.23 — contained branch comparison assessment
+## RunMind 1.10.27 — conversation title update fix
+
+This overlay is for the complete RunMind 1.10.26 source tree. It fixes a timing race in the PowerToys native-response window: title generation now starts only after the chat page and WebView2 have initialized, preventing the page's fallback title from overwriting the generated title. The generated title is applied through the existing page setter and native window-title bridge. If the window closes or WebView2 fails to initialize, the extra title request is skipped.
+
+The plugin and standalone project versions, plugin manifest, Native Reader user-agent, and release documentation are aligned to 1.10.27. The ZIP contains changed files only and preserves original project-relative paths. Extract it over the complete 1.10.26 source tree, retaining excluded resources such as `lib`, `assets`, and `screenshots`, then build on Windows with `Build-Release-x64.bat`.
+
+## RunMind 1.10.26 — editable AI branch assessment prompt
+
+This update is an overlay for the complete RunMind 1.10.25 source tree. Branch comparison now takes over the full workspace below the application header, including the transcript, composer, and toolbar. The centered **AI Branch Comparison** modal provides a separate discussion tied to an immutable snapshot of the original request and both branch responses. Closing the modal or returning to chat preserves that discussion for the lifetime of the page session; a changed comparison snapshot receives a separate discussion.
+
+The initial assessment and follow-up discussion use the independent comparison-model selector and existing provider adapters without tools or agent workflows. Follow-ups retain the snapshot and preceding discussion; **Re-examine branches** explicitly requests a fresh assessment against the original branch responses. Each message and the assessment can be copied, the full discussion can be copied, and the complete comparison dossier plus discussion can be downloaded as Markdown. Context size is estimated for display; the original dossier and discussion are retained rather than silently discarded.
+
+The plugin and standalone project versions, plugin manifest, Native Reader user-agent, and release documentation are aligned to 1.10.26. The ZIP preserves original project-relative paths and contains changed files only. Extract it over the complete 1.10.25 source tree, retain excluded resources such as `lib`, `assets`, and `screenshots`, then build on Windows with `Build-Release-x64.bat`. Opening AI Branch Comparison now pre-fills an editable initial instruction; no model request is made until Send is pressed.
 
 This update is an overlay for the complete RunMind 1.10.22 source tree. It bounds the inline branch preview and moves the AI assessment into a fixed, independently scrollable modal. The plugin and standalone versions, plugin manifest, Native Reader user-agent, and release documentation are updated to 1.10.23. The ZIP preserves original project-relative paths and contains changed files only. Extract it over the complete 1.10.22 source tree, retaining all excluded resources such as `Assets`, `lib`, `Vendor`, OCR language packs, images, and screenshots, then build on Windows with `Build-Release-x64.bat`.
 

@@ -14,7 +14,7 @@ RunMind brings local and OpenAI-compatible language models to **PowerToys Run** 
 - Optional SearXNG web search, Jina Reader, custom Reader gateways, and MCP Streamable HTTP servers.
 - Multiple independent chat windows from PowerToys Run and the standalone app.
 - Save conversations as `.runmind` files using the Windows Save As dialog.
-- Compare conversation branches side by side and ask a selected model for a structured assessment in a scrollable modal without changing either branch or displacing the chat composer.
+- Compare conversation branches in a full lower-workspace view, then discuss an independent **AI Branch Comparison** in a centered modal. The initial assessment instruction is pre-filled and editable; no request is sent until the user presses Send. The hidden system prompt and original comparison dossier are supplied automatically. Follow up with a selectable model, re-examine the original snapshot, copy individual messages or the full discussion, and download the comparison as Markdown without changing either branch or the main chat model.
 
 ## Requirements
 
