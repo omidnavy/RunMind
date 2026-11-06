@@ -1,3 +1,15 @@
+## 1.10.33 updates
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| Rendering | Transcript render pass | Latest assistant and editable-user indexes are computed once per full render; streaming continues to patch only the active message. | **Implemented** |
+| CSV | Numeric summaries | Blank cells are excluded, min/max/mean use iterative calculations, and duplicate headings retain separate indexed summaries. | **Implemented** |
+| CSV | Delimiter and duplicate heading safety | Delimiters must be one character; export quotes values containing that delimiter; ambiguous named-column operations stop with an explicit error. | **Implemented** |
+| Workspace | Bounded search | Search has independent result, file-scan, per-file content, and cumulative content-byte budgets; common generated/dependency directories are skipped and oversized-file skips are reported. | **Implemented** |
+| Persistence | IndexedDB commit handling | Workspace and branch operations resolve only after their transactions complete; failed workspace database opens can be retried. | **Implemented** |
+| Workspace | Post-approval revalidation | Edit, delete, and restore compare the approved file snapshot again before backup and mutation. The browser API does not provide atomic cross-process create-if-absent. | **Implemented with API limitation** |
+| Attachments | Filename ambiguity | Repeated filenames across conversation messages are reported as ambiguous instead of silently selecting the newest attachment. | **Implemented** |
+
 ## 1.10.32 updates
 
 | Area | Feature | Current behavior | Status / limits |
@@ -101,7 +113,7 @@
 
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.26 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 1.10.33 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
 ## RunMind 1.10.15 — generated branch-label correction
 

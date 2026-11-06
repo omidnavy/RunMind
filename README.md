@@ -17,6 +17,14 @@ RunMind brings local and OpenAI-compatible language models to **PowerToys Run** 
 - Select from curated light and dark appearance palettes, with independent saved choices for each mode.
 - Compare conversation branches in a full lower-workspace view, then discuss an independent **AI Branch Comparison** in a centered modal. The initial assessment instruction is pre-filled and editable; no request is sent until the user presses Send. The hidden system prompt and original comparison dossier are supplied automatically. Follow up with a selectable model, re-examine the original snapshot, copy individual messages or the full discussion, and download the comparison as Markdown without changing either branch or the main chat model.
 
+## 1.10.33 update
+
+- [x] Improve long-chat rendering efficiency without changing active-message streaming updates.
+- [x] Correct CSV numeric summaries for blank cells and duplicate headings; avoid argument-limit failures and enforce one-character delimiters.
+- [x] Bound workspace searches and skip common generated/dependency directories.
+- [x] Wait for IndexedDB transaction commits, recover from failed workspace DB initialization, and reject ambiguous duplicate attachment filenames.
+- [x] Revalidate workspace files after approval before editing, deleting, or restoring, and create backups from the revalidated snapshot.
+
 ## 1.10.32 update
 
 - [x] Add System, Light, and Dark appearance modes with five curated palettes for each color scheme. Light and dark selections are remembered independently and shared between standalone RunMind and PowerToys chat windows. Palette changes apply immediately, native window title bars follow the effective mode, and the Appearance menu includes a live palette preview and reset action.

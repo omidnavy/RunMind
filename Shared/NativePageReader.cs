@@ -185,7 +185,7 @@ public sealed class NativePageReader : IDisposable
             await EnsurePublicDestinationAsync(current, timeout.Token).ConfigureAwait(false);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, current);
-            request.Headers.UserAgent.ParseAdd("RunMind-Native-Reader/1.10.32");
+            request.Headers.UserAgent.ParseAdd("RunMind-Native-Reader/1.10.33");
             request.Headers.Accept.ParseAdd("text/html,application/xhtml+xml,application/json,text/plain,application/xml,text/xml;q=0.9,*/*;q=0.5");
             request.Headers.AcceptLanguage.ParseAdd("en-US,en;q=0.8");
 

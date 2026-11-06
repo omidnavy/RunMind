@@ -1,3 +1,24 @@
+## [1.10.33] — Reliability and performance hardening
+
+### Fixed
+- Reduce full transcript rendering from repeated per-message array scans to one linear pass that computes the latest assistant/editable-user indexes and pending-message state once per render. Streaming continues to patch only the active message.
+- Exclude blank CSV cells from numeric statistics, calculate minimum/maximum/mean iteratively without argument spreading, and preserve statistics for duplicate column headings using explicit column indexes.
+- Validate CSV delimiters consistently as exactly one character rather than silently truncating multi-character values. CSV export now quotes values containing the selected delimiter. Named column operations report ambiguous duplicate headings; whole-row deduplication still handles duplicate headings correctly.
+- Bound workspace traversal independently by result count, scanned-file count, per-file content size, and cumulative content bytes. Skip common dependency, build, cache, and backup directories; avoid returning unrelated directory entries during searches.
+- Resolve workspace-handle and conversation-branch IndexedDB actions only after transaction completion, and reset the cached workspace database promise after an open failure.
+- Detect duplicate attachment filenames across the entire conversation instead of silently selecting the newest matching attachment.
+- Revalidate edit, delete, and restore destination snapshots after user approval. Backups are created from the revalidated file, and operations stop if the file changed while approval was pending.
+- Remove the unused `openResearchWorkspace()` wrapper; research panel visibility remains controlled by the existing shared state functions.
+
+### Compatibility and safety notes
+- Workspace search now returns scan counts and a truncation reason alongside its results so budget-limited searches are visible to the agent.
+- File snapshot revalidation compares metadata and content in bounded chunks. The File System Access API does not provide an atomic cross-process create-if-absent primitive, so simultaneous independent writers can still race between the final existence check and file creation.
+- Existing streaming DOM patching, backup creation, and destructive-operation approval remain in place. Backup retention and transcript virtualization are intentionally unchanged.
+
+### Validation
+- Source-level regression checks cover rendering complexity, CSV edge cases, traversal budgets, IndexedDB completion semantics, duplicate attachment detection, and post-approval file revalidation.
+- JavaScript syntax, project XML, plugin manifest JSON, version alignment, and overlay integrity checked. Windows/.NET compilation and live WebView2/PowerToys workspace operations require the Windows build environment and excluded PowerToys reference libraries.
+
 ## [1.10.32] — Curated appearance themes
 
 ### Added

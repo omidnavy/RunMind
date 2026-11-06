@@ -1625,7 +1625,7 @@
         request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(WORKSPACE_DB_STORE)) request.result.createObjectStore(WORKSPACE_DB_STORE); };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error || new Error('Could not open workspace storage.'));
-      });
+      }).catch(error => { workspaceDbPromise = null; throw error; });
       return workspaceDbPromise;
     }
     async function workspaceDbAction(mode, action, value) {
@@ -1634,8 +1634,11 @@
         const transaction = db.transaction(WORKSPACE_DB_STORE, mode);
         const store = transaction.objectStore(WORKSPACE_DB_STORE);
         const request = action === 'get' ? store.get(WORKSPACE_HANDLE_KEY) : action === 'put' ? store.put(value, WORKSPACE_HANDLE_KEY) : store.delete(WORKSPACE_HANDLE_KEY);
-        request.onsuccess = () => resolve(request.result);
+        let result;
+        request.onsuccess = () => { result = request.result; };
         request.onerror = () => reject(request.error || new Error('Workspace storage operation failed.'));
+        transaction.oncomplete = () => resolve(result);
+        transaction.onerror = () => reject(transaction.error || request.error || new Error('Workspace storage transaction failed.'));
         transaction.onabort = () => reject(transaction.error || new Error('Workspace storage transaction aborted.'));
       });
     }
@@ -1890,7 +1893,19 @@
       const d = new Date(value || Date.now());
       return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
     }
-    function renderMessageMarkup(message, index, includeActions = true) {
+    function getMessageRenderContext(sourceMessages) {
+      let latestAssistantIndex = -1;
+      let latestEditableUserIndex = -1;
+      let hasPendingMessage = false;
+      for (let index = 0; index < sourceMessages.length; index++) {
+        const item = sourceMessages[index];
+        if (item.role === 'assistant') latestAssistantIndex = index;
+        if (item.role === 'user' && !item.isContinuation) latestEditableUserIndex = index;
+        if (item.pending) hasPendingMessage = true;
+      }
+      return { latestAssistantIndex, latestEditableUserIndex, hasPendingMessage };
+    }
+    function renderMessageMarkup(message, index, includeActions = true, renderContext = null) {
       const role = message.role === 'user' ? 'user' : 'assistant';
       const label = role === 'user' ? 'You' : 'Assistant';
       const providerLabel = message.connectionName || (message.provider === 'lmstudio' ? 'LM Studio' : message.provider === 'ollama' ? 'Ollama' : '');
@@ -1909,8 +1924,7 @@
       const attachments = Array.isArray(message.attachments) && message.attachments.length
         ? `<div class="message-attachments">${message.attachments.map(file => `<div class="message-attachment">${file.dataUrl && String(file.type || '').startsWith('image/') ? `<img src="${escapeHtml(file.dataUrl)}" alt="">` : ''}<span class="message-attachment-name">${escapeHtml(file.name || 'Attachment')}</span><span>${escapeHtml(formatBytes(file.size || 0))}</span></div>`).join('')}</div>`
         : '';
-      const latestAssistantIndex = messages.reduce((latest, item, i) => item.role === 'assistant' ? i : latest, -1);
-      const latestEditableUserIndex = messages.reduce((latest, item, i) => item.role === 'user' && !item.isContinuation ? i : latest, -1);
+      const { latestAssistantIndex, latestEditableUserIndex, hasPendingMessage } = renderContext || getMessageRenderContext(messages);
       const hasCompletedContent = role === 'assistant' && !message.pending && String(message.content || '').trim().length > 0;
       let actions = '';
       const canBranch = includeActions && !message.pending && (role === 'user' ? !!String(message.content || '').trim() : hasCompletedContent) && !activeController;
@@ -1919,7 +1933,7 @@
         actions = `<div class="message-actions"><button type="button" class="message-action" data-message-action="copy" data-index="${index}" title="Copy response" aria-label="Copy response"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Copy</button>${branchButton}${index === latestAssistantIndex ? `<button type="button" class="message-action" data-message-action="regenerate" data-index="${index}" title="Regenerate using the currently selected model"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9a7 7 0 0 1 11.8-2L20 12M4 12l2.6 5a7 7 0 0 0 11.8-2"/></svg>Regenerate</button><button type="button" class="message-action" data-message-action="continue" data-index="${index}" title="Continue generating"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16l14-8Z"/></svg>Continue</button>` : ''}</div>`;
       } else if (includeActions && role === 'user' && String(message.content || '').trim()) {
         const copyPromptButton = `<button type="button" class="message-action" data-message-action="copy" data-index="${index}" title="Copy prompt" aria-label="Copy prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Copy</button>`;
-        const editButton = canBranch && index === latestEditableUserIndex && editingMessageIndex === null && !messages.some(item => item.pending)
+        const editButton = canBranch && index === latestEditableUserIndex && editingMessageIndex === null && !hasPendingMessage
           ? `<button type="button" class="message-action" data-message-action="edit" data-index="${index}" title="Edit and resubmit this prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>Edit prompt</button>` : '';
         actions = `<div class="message-actions user-actions">${copyPromptButton}${branchButton}${editButton}</div>`;
       }
@@ -1969,8 +1983,9 @@
     }
     function renderMessages(keepScroll = true) {
       const wasNearBottom = isTranscriptNearBottom();
+      const renderContext = getMessageRenderContext(messages);
       transcriptInner.innerHTML = messages.length
-        ? messages.map(renderMessageMarkup).join('')
+        ? messages.map((message, index) => renderMessageMarkup(message, index, true, renderContext)).join('')
         : '<div class="empty-state"><strong>Your conversation starts here</strong>Send a message to the selected local model.</div>';
       addCodeCopyButtons(transcriptInner);
       if (keepScroll && wasNearBottom) transcript.scrollTop = transcript.scrollHeight;
@@ -1983,6 +1998,7 @@
       const message = messages[index];
       if (!message) return;
       const wasNearBottom = isTranscriptNearBottom();
+      const renderContext = getMessageRenderContext(messages);
       let article = transcriptInner.querySelector(`article.message[data-index="${index}"]`);
 
       // Create the message shell once. During streaming, patch its content in
@@ -1991,7 +2007,7 @@
       // tokens are arriving without losing focus or the current disclosure state.
       if (!article) {
         const holder = document.createElement('div');
-        holder.innerHTML = renderMessageMarkup(message, index);
+        holder.innerHTML = renderMessageMarkup(message, index, true, renderContext);
         article = holder.firstElementChild;
         const empty = transcriptInner.querySelector('.empty-state');
         if (empty) empty.remove();
@@ -1999,7 +2015,7 @@
         addCodeCopyButtons(article);
       } else {
         const holder = document.createElement('div');
-        holder.innerHTML = renderMessageMarkup(message, index);
+        holder.innerHTML = renderMessageMarkup(message, index, true, renderContext);
         const fresh = holder.firstElementChild;
         const freshThinking = fresh.querySelector('.message-thinking');
         let currentThinking = article.querySelector('.message-thinking');
@@ -2166,8 +2182,11 @@
         const transaction = db.transaction(CONVERSATION_BRANCH_DB_STORE, mode);
         const store = transaction.objectStore(CONVERSATION_BRANCH_DB_STORE);
         const request = action === 'get' ? store.get(conversationBranchStorageKey) : store.put(value);
-        request.onsuccess = () => resolve(request.result);
+        let result;
+        request.onsuccess = () => { result = request.result; };
         request.onerror = () => reject(request.error || new Error('Conversation branch storage operation failed.'));
+        transaction.oncomplete = () => resolve(result);
+        transaction.onerror = () => reject(transaction.error || request.error || new Error('Conversation branch storage transaction failed.'));
         transaction.onabort = () => reject(transaction.error || new Error('Conversation branch storage transaction aborted.'));
       });
     }
@@ -4483,7 +4502,7 @@
         );
       }
       if (agentDirectoryHandle) tools.push(
-        { type: 'function', function: { name: 'search_files', description: 'Search names and optionally UTF-8 text within the selected workspace. Bounded by depth and result count.', parameters: { type: 'object', properties: { query: { type: 'string' }, search_content: { type: 'boolean' }, max_depth: { type: 'integer' }, max_results: { type: 'integer' } }, required: ['query'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'search_files', description: 'Search file names and optionally UTF-8 file contents in the selected workspace. Bounded by depth, result count, 2,500 scanned files, 512 KB per content-search file, and 10 MB cumulative content reads. Skips common dependency, build, cache, and backup directories; reports when a scan is truncated.', parameters: { type: 'object', properties: { query: { type: 'string' }, search_content: { type: 'boolean' }, max_depth: { type: 'integer' }, max_results: { type: 'integer' } }, required: ['query'], additionalProperties: false } } },
         { type: 'function', function: { name: 'file_info', description: 'Get file size, MIME type, last modified time, and name for a workspace file.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'edit_file', description: 'Replace the full UTF-8 text contents of an existing workspace file. Requires explicit approval and automatically saves the previous contents in .runmind-backups so the change can be restored.', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path','content'], additionalProperties: false } } },
         { type: 'function', function: { name: 'restore_file_backup', description: 'Restore a file from a backup returned by edit_file or delete_file. Requires explicit approval; if the destination exists, its current contents are first saved as another recovery point.', parameters: { type: 'object', properties: { backup_path: { type: 'string' }, path: { type: 'string' } }, required: ['backup_path','path'], additionalProperties: false } } },
@@ -4494,7 +4513,7 @@
         { type: 'function', function: { name: 'rename_file', description: 'Rename a file within its current folder. New name must not exist. Requires approval.', parameters: { type: 'object', properties: { path: { type: 'string' }, new_name: { type: 'string' } }, required: ['path','new_name'], additionalProperties: false } } },
         { type: 'function', function: { name: 'checksum_file', description: 'Calculate the SHA-256 checksum of a workspace file.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'compare_files', description: 'Compare two UTF-8 text files and report whether they differ and the first differing line.', parameters: { type: 'object', properties: { path_a: { type: 'string' }, path_b: { type: 'string' } }, required: ['path_a','path_b'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'project_overview', description: 'Create a bounded overview of files and folders in the selected project workspace.', parameters: { type: 'object', properties: { max_depth: { type: 'integer' }, max_results: { type: 'integer' } }, additionalProperties: false } } },
+        { type: 'function', function: { name: 'project_overview', description: 'Create a bounded overview of files and folders in the selected project workspace. Skips common dependency, build, cache, and backup directories, and reports when its file-scan or result budget is reached.', parameters: { type: 'object', properties: { max_depth: { type: 'integer' }, max_results: { type: 'integer' } }, additionalProperties: false } } },
         { type: 'function', function: { name: 'validate_json', description: 'Parse and validate a UTF-8 JSON file, reporting its top-level type and basic structure. path may be a workspace-relative path or the exact filename of a file attached to this conversation.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'validate_json_schema', description: 'Validate a JSON data file against a JSON Schema. data_path and schema_path may refer to workspace-relative paths or exact attached filenames. Provide either schema_path or schema (an inline schema object). Supports local $ref, types, properties, required, arrays, numeric/string constraints, formats, and logical combinators; reports exact JSON paths.', parameters: { type: 'object', properties: { data_path: { type: 'string' }, schema_path: { type: 'string' }, schema: { type: 'object', additionalProperties: true } }, required: ['data_path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'read_pdf', description: 'Read a PDF in the workspace or attached to this conversation (up to 25 MB). Uses PDF.js for Unicode-aware text extraction and automatically OCRs pages with missing, suspicious, or unreadable text using the languages selected in PDF OCR settings. path may be the exact attached filename. Reports OCR pages and low-confidence pages; language detection is not automatic.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
@@ -4510,7 +4529,7 @@
         { type: 'function', function: { name: 'compare_datasets', description: 'Compare two CSV datasets by headers and row contents.', parameters: { type: 'object', properties: { path_a: { type: 'string' }, path_b: { type: 'string' }, delimiter: { type: 'string' } }, required: ['path_a','path_b'], additionalProperties: false } } },
         { type: 'function', function: { name: 'generate_statistics', description: 'Generate descriptive numeric statistics for columns in a CSV file.', parameters: { type: 'object', properties: { path: { type: 'string' }, delimiter: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'find_duplicates', description: 'Find files with identical SHA-256 content inside the selected workspace. Limited to 300 files and 100 MB per file.', parameters: { type: 'object', properties: { max_depth: { type: 'integer' }, max_files: { type: 'integer' } }, additionalProperties: false } } },
-        { type: 'function', function: { name: 'compare_folders', description: 'Compare two folders by relative file paths and sizes. Reports missing, added, and size-changed files.', parameters: { type: 'object', properties: { folder_a: { type: 'string' }, folder_b: { type: 'string' }, max_depth: { type: 'integer' } }, required: ['folder_a','folder_b'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'compare_folders', description: 'Compare two folders by relative file paths and sizes. Scans at most 5,000 files per folder, skips common dependency/build/cache directories, and reports when either scan is truncated.', parameters: { type: 'object', properties: { folder_a: { type: 'string' }, folder_b: { type: 'string' }, max_depth: { type: 'integer' } }, required: ['folder_a','folder_b'], additionalProperties: false } } },
         { type: 'function', function: { name: 'create_markdown_report', description: 'Create a Markdown report file in the selected workspace after explicit approval. Existing files are not overwritten.', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path','content'], additionalProperties: false } } },
         { type: 'function', function: { name: 'create_html_report', description: 'Create a self-contained HTML report file in the selected workspace after explicit approval. Content is escaped unless supplied as a complete HTML document.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' } }, required: ['path','content'], additionalProperties: false } } },
         { type: 'function', function: { name: 'image_metadata', description: 'Read basic image metadata including dimensions, MIME type, and size for a workspace image.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
@@ -5096,14 +5115,17 @@
     function findConversationAttachment(path) {
       const requested = String(path || '').trim();
       if (!requested || requested.includes('/') || requested.includes('\\')) return null;
+      const matches = [];
       for (let index = messages.length - 1; index >= 0; index--) {
         const message = messages[index];
         if (message?.role !== 'user' || !Array.isArray(message.attachments)) continue;
-        const matches = message.attachments.filter(file => (typeof file?.text === 'string' || typeof file?.dataUrl === 'string') && String(file?.name || '').toLowerCase() === requested.toLowerCase());
-        if (matches.length > 1) throw new Error(`More than one attachment is named '${requested}'. Use a unique filename so the correct file can be selected.`);
-        if (matches.length === 1) return matches[0];
+        matches.push(...message.attachments.filter(file =>
+          (typeof file?.text === 'string' || typeof file?.dataUrl === 'string')
+          && String(file?.name || '').toLowerCase() === requested.toLowerCase()
+        ));
       }
-      return null;
+      if (matches.length > 1) throw new Error(`More than one conversation attachment is named '${requested}'. Use a unique filename so the correct file can be selected.`);
+      return matches[0] || null;
     }
     function fileFromConversationAttachment(attachment) {
       if (typeof attachment.text === 'string') return new File([attachment.text], attachment.name, { type: attachment.type || 'text/plain' });
@@ -5131,6 +5153,20 @@
       if (['application/pdf', 'application/zip'].includes(String(result.file.type || '').toLowerCase())) throw new Error(`'${path}' is a binary attachment. Use the PDF or ZIP tool for this file.`);
       return { ...result, text: await result.file.text() };
     }
+    async function workspaceFilesMatchSnapshot(expected, current) {
+      if (!expected || !current || expected.size !== current.size || expected.lastModified !== current.lastModified || String(expected.type || '') !== String(current.type || '')) return false;
+      const chunkSize = 1024 * 1024;
+      for (let offset = 0; offset < expected.size; offset += chunkSize) {
+        const [expectedBytes, currentBytes] = await Promise.all([
+          expected.slice(offset, Math.min(offset + chunkSize, expected.size)).arrayBuffer(),
+          current.slice(offset, Math.min(offset + chunkSize, current.size)).arrayBuffer()
+        ]);
+        const a = new Uint8Array(expectedBytes), b = new Uint8Array(currentBytes);
+        if (a.length !== b.length) return false;
+        for (let index = 0; index < a.length; index++) if (a[index] !== b[index]) return false;
+      }
+      return true;
+    }
     async function writeWorkspaceFile(path, blob, overwrite = false) {
       const parts = safeRelativePath(path); const name = parts.pop();
       const dir = await getDirectoryAtPath(agentDirectoryHandle, parts.join('/'));
@@ -5156,7 +5192,13 @@
       catch (error) { try { await writable.abort(); } catch (_) {} throw error; }
       return { backupPath: `.runmind-backups/${name}`, originalPath: path, bytes: file.size, mimeType: file.type || 'application/octet-stream', operation, createdAt: new Date().toISOString() };
     }
+    function normalizeCsvDelimiter(delimiter = ',') {
+      const value = String(delimiter ?? ',');
+      if (value.length !== 1 || value === '"' || value === '\r' || value === '\n') throw new Error('CSV delimiter must be one character other than a quote or newline.');
+      return value;
+    }
     function parseCsvRows(source, delimiter = ',') {
+      delimiter = normalizeCsvDelimiter(delimiter);
       const text = String(source || '').replace(/^\uFEFF/, '');
       const rows = []; let row = [], cell = '', quoted = false;
       for (let i = 0; i < text.length; i++) {
@@ -5171,30 +5213,54 @@
       if (cell.length || row.length) { row.push(cell.replace(/\r$/, '')); rows.push(row); }
       return rows.filter(item => item.some(value => value !== ''));
     }
-    function csvEscape(value) { const text = value == null ? '' : String(value); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
+    function csvEscape(value, delimiter = ',') { const text = value == null ? '' : String(value); return text.includes(delimiter) || /["\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
     function summarizeCsv(path, source, delimiter = ',') {
       const rows = parseCsvRows(source, delimiter);
       if (!rows.length) return { path, columns: [], rowCount: 0, numericSummary: {} };
       const headers = rows[0].map((value, index) => String(value || `column_${index + 1}`).trim());
       const data = rows.slice(1);
-      const numericSummary = {};
+      const numericSummary = Object.create(null);
       headers.forEach((header, column) => {
-        const values = data.map(row => Number(String(row[column] ?? '').trim())).filter(Number.isFinite);
-        if (values.length >= Math.max(2, Math.floor(data.length * .5))) numericSummary[header] = { count: values.length, min: Math.min(...values), max: Math.max(...values), mean: values.reduce((a,b)=>a+b,0) / values.length };
+        let count = 0, min = Infinity, max = -Infinity, mean = 0;
+        for (const row of data) {
+          const raw = String(row[column] ?? '').trim();
+          if (!raw) continue;
+          const value = Number(raw);
+          if (!Number.isFinite(value)) continue;
+          count++;
+          if (value < min) min = value;
+          if (value > max) max = value;
+          mean = mean * ((count - 1) / count) + value / count;
+        }
+        if (count >= Math.max(2, Math.floor(data.length * .5))) {
+          const baseKey = header || `column_${column + 1}`;
+          let summaryKey = baseKey;
+          if (Object.prototype.hasOwnProperty.call(numericSummary, summaryKey)) summaryKey = `${baseKey} [column ${column + 1}]`;
+          let suffix = 2;
+          while (Object.prototype.hasOwnProperty.call(numericSummary, summaryKey)) summaryKey = `${baseKey} [column ${column + 1}, ${suffix++}]`;
+          numericSummary[summaryKey] = { columnIndex: column, column: header, count, min, max, mean };
+        }
       });
       return { path, columns: headers, rowCount: data.length, sample: data.slice(0, 5), numericSummary };
     }
-    function csvRowsToText(rows, delimiter = ',') { return rows.map(row => row.map(csvEscape).join(delimiter)).join('\r\n'); }
+    function csvRowsToText(rows, delimiter = ',') {
+      delimiter = normalizeCsvDelimiter(delimiter);
+      return rows.map(row => row.map(value => csvEscape(value, delimiter)).join(delimiter)).join('\r\n');
+    }
     function csvDataset(path, source, delimiter = ',') {
+      delimiter = normalizeCsvDelimiter(delimiter);
       const rows = parseCsvRows(source, delimiter);
       if (!rows.length) throw new Error(`CSV file '${path}' is empty.`);
       const headers = rows[0].map((value, index) => String(value || `column_${index + 1}`).trim());
       return { headers, rows: rows.slice(1), delimiter };
     }
     function datasetColumnIndex(headers, requested) {
-      const index = headers.findIndex(item => item.toLowerCase() === String(requested || '').toLowerCase());
-      if (index < 0) throw new Error(`CSV column '${requested}' was not found. Available columns: ${headers.join(', ')}`);
-      return index;
+      const wanted = String(requested || '').toLowerCase();
+      const matches = [];
+      headers.forEach((item, index) => { if (item.toLowerCase() === wanted) matches.push(index); });
+      if (!matches.length) throw new Error(`CSV column '${requested}' was not found. Available columns: ${headers.join(', ')}`);
+      if (matches.length > 1) throw new Error(`CSV column '${requested}' appears more than once (columns ${matches.map(index => index + 1).join(', ')}). Select a unique column name.`);
+      return matches[0];
     }
     async function sha256File(file) {
       if (file.size > 100 * 1024 * 1024) throw new Error(`'${file.name}' exceeds the 100 MB checksum limit.`);
@@ -5203,29 +5269,61 @@
     }
     async function walkWorkspace(root, options = {}, signal) {
       const rawDepth = Number(options.maxDepth ?? 3), rawResults = Number(options.maxResults ?? 200);
+      const rawFiles = Number(options.maxFilesScanned ?? 2500), rawBytes = Number(options.maxBytesRead ?? 10 * 1024 * 1024);
       const maxDepth = Number.isFinite(rawDepth) ? Math.max(0, Math.min(8, Math.floor(rawDepth))) : 3;
       const maxResults = Number.isFinite(rawResults) ? Math.max(1, Math.min(1000, Math.floor(rawResults))) : 200;
-      const query = String(options.query || '').toLowerCase();
+      const maxFilesScanned = Number.isFinite(rawFiles) ? Math.max(1, Math.min(10000, Math.floor(rawFiles))) : 2500;
+      const maxBytesRead = Number.isFinite(rawBytes) ? Math.max(0, Math.min(100 * 1024 * 1024, Math.floor(rawBytes))) : 10 * 1024 * 1024;
+      const maxFileBytes = Math.max(1, Math.min(2 * 1024 * 1024, Number(options.maxFileBytes) || 512 * 1024));
+      const query = String(options.query || '').trim().toLowerCase();
       const includeContent = !!options.searchContent;
       const results = [];
+      const skippedDirectories = new Set(['.git', '.hg', '.svn', '.runmind-backups', '.cache', 'node_modules', 'vendor', 'bin', 'obj', 'dist', 'build', 'out', 'target', '.next', '.nuxt', '.venv', 'venv', '__pycache__', 'coverage']);
+      let filesScanned = 0, contentBytesRead = 0, oversizedFilesSkipped = 0, truncated = false, stopReason = '';
+      const stop = reason => { truncated = true; if (!stopReason) stopReason = reason; };
       async function visit(dir, prefix, depth) {
-        if (signal?.aborted || results.length >= maxResults || depth > maxDepth) return;
+        if (signal?.aborted) { stop('cancelled'); return; }
+        if (results.length >= maxResults) { stop('result limit reached'); return; }
+        if (filesScanned >= maxFilesScanned) { stop('file-scan budget reached'); return; }
+        if (depth > maxDepth) return;
         for await (const [name, handle] of dir.entries()) {
-          if (signal?.aborted || results.length >= maxResults) return;
+          if (signal?.aborted) { stop('cancelled'); return; }
+          if (results.length >= maxResults) { stop('result limit reached'); return; }
+          if (filesScanned >= maxFilesScanned) { stop('file-scan budget reached'); return; }
           const path = prefix ? `${prefix}/${name}` : name;
-          if (handle.kind === 'directory') { results.push({ path, type: 'directory' }); await visit(handle, path, depth + 1); }
-          else {
-            let match = !query || name.toLowerCase().includes(query);
-            let info = { path, type: 'file' };
-            if (includeContent && query && !match) {
-              try { const file = await handle.getFile(); if (file.size <= 512 * 1024 && /\.(txt|md|csv|json|xml|html|js|ts|css|py|cs|log|ya?ml)$/i.test(name)) match = (await file.text()).toLowerCase().includes(query); } catch (_) {}
-            }
-            if (match) { try { const file = await handle.getFile(); info.size = file.size; info.lastModified = file.lastModified; } catch (_) {} results.push(info); }
+          if (handle.kind === 'directory') {
+            if (skippedDirectories.has(name.toLowerCase())) continue;
+            if (!query) results.push({ path, type: 'directory' });
+            if (results.length < maxResults) await visit(handle, path, depth + 1);
+            continue;
+          }
+          filesScanned++;
+          let file = null;
+          let match = !query || name.toLowerCase().includes(query);
+          if (includeContent && query && !match && /\.(txt|md|csv|json|xml|html|js|ts|css|py|cs|log|ya?ml)$/i.test(name)) {
+            try {
+              file = await handle.getFile();
+              if (file.size > maxFileBytes) {
+                oversizedFilesSkipped++;
+                stop('per-file content limit reached');
+              } else if (contentBytesRead + file.size <= maxBytesRead) {
+                contentBytesRead += file.size;
+                match = (await file.text()).toLowerCase().includes(query);
+              } else {
+                stop('content-byte budget reached');
+              }
+            } catch (_) {}
+          }
+          if (match) {
+            try {
+              file ||= await handle.getFile();
+              results.push({ path, type: 'file', size: file.size, lastModified: file.lastModified });
+            } catch (_) { results.push({ path, type: 'file' }); }
           }
         }
       }
       await visit(root, '', 0);
-      return results.slice(0, maxResults);
+      return { results: results.slice(0, maxResults), filesScanned, contentBytesRead, oversizedFilesSkipped, truncated, stopReason };
     }
     function xmlElementsByName(documentNode, localName) { return [...documentNode.getElementsByTagName('*')].filter(node => String(node.localName || node.nodeName).toLowerCase() === String(localName).toLowerCase()); }
     function xmlChildText(node, localNames) {
@@ -6755,12 +6853,15 @@
         case 'edit_file': {
           const content = String(args.content ?? ''); if (content.length > 2 * 1024 * 1024) throw new Error('Edited text is limited to 2 MB.');
           const prior = await readWorkspaceText(args.path, 2 * 1024 * 1024);
+          if (prior.source !== 'workspace' || !prior.handle) throw new Error('Only files in the selected workspace can be edited; conversation attachments are read-only.');
           const approved = await requireAgentApproval({ title: 'Replace file contents?', subtitle: 'File edit · an automatic backup will be created first', detail: `${args.path}\n\nOld size: ${prior.file.size} bytes\nNew size: ${new Blob([content]).size} bytes\n\n${content.slice(0, 2200)}`, risky: true }, signal);
           if (!approved) return { cancelled: true };
-          const backup = await createWorkspaceBackup(args.path, prior.file, 'edit');
+          const currentFile = await prior.handle.getFile();
+          if (!(await workspaceFilesMatchSnapshot(prior.file, currentFile))) throw new Error(`'${args.path}' changed while approval was pending. Nothing was modified; review the current file and retry.`);
+          const backup = await createWorkspaceBackup(args.path, currentFile, 'edit');
           const writable = await prior.handle.createWritable({ keepExistingData: false });
           try { await writable.write(content); await writable.close(); } catch (error) { try { await writable.abort(); } catch (_) {} throw error; }
-          return { edited: args.path, previousBytes: prior.file.size, bytes: new Blob([content]).size, backup };
+          return { edited: args.path, previousBytes: currentFile.size, bytes: new Blob([content]).size, backup };
         }
         case 'restore_file_backup': {
           const backupPath = String(args.backup_path || '').replace(/\\/g, '/');
@@ -6777,8 +6878,17 @@
           catch (error) { if (error?.name !== 'NotFoundError') throw error; }
           const approved = await requireAgentApproval({ title: 'Restore file backup?', subtitle: existingFile ? 'The current destination will also be backed up before replacement' : 'Restore backup to a new file', detail: `${backupPath}\n→ ${destination}\n${backupFile.size.toLocaleString()} bytes`, risky: true }, signal);
           if (!approved) return { cancelled: true };
-          const recoveryPoint = existingFile ? await createWorkspaceBackup(destination, existingFile, 'before-restore') : null;
-          const written = await writeWorkspaceFile(destination, backupFile, !!existingFile);
+          let currentDestination = null;
+          try {
+            const currentHandle = await parent.getFileHandle(name);
+            currentDestination = await currentHandle.getFile();
+            if (!existingFile || !(await workspaceFilesMatchSnapshot(existingFile, currentDestination))) throw new Error(`'${destination}' changed while approval was pending. Nothing was restored; review the current destination and retry.`);
+          } catch (error) {
+            if (error?.name !== 'NotFoundError') throw error;
+            if (existingFile) throw new Error(`'${destination}' was removed while approval was pending. Nothing was restored; retry the operation.`);
+          }
+          const recoveryPoint = currentDestination ? await createWorkspaceBackup(destination, currentDestination, 'before-restore') : null;
+          const written = await writeWorkspaceFile(destination, backupFile, !!currentDestination);
           return { restored: destination, from: backupPath, bytes: written.bytes, recoveryPoint };
         }
         case 'delete_file': {
@@ -6786,8 +6896,10 @@
           const file = await handle.getFile();
           const approved = await requireAgentApproval({ title: 'Delete this file?', subtitle: 'An automatic backup will be created first', detail: `${args.path}\n${file.size.toLocaleString()} bytes`, risky: true }, signal);
           if (!approved) return { cancelled: true };
-          const backup = await createWorkspaceBackup(args.path, file, 'delete');
-          await dir.removeEntry(name); return { deleted: args.path, bytes: file.size, backup };
+          const currentFile = await handle.getFile();
+          if (!(await workspaceFilesMatchSnapshot(file, currentFile))) throw new Error(`'${args.path}' changed while approval was pending. Nothing was deleted; review the current file and retry.`);
+          const backup = await createWorkspaceBackup(args.path, currentFile, 'delete');
+          await dir.removeEntry(name); return { deleted: args.path, bytes: currentFile.size, backup };
         }
         case 'create_folder': {
           const parts = safeRelativePath(args.path); const name = parts.pop(); const parent = await getDirectoryAtPath(agentDirectoryHandle, parts.join('/'));
@@ -6832,8 +6944,9 @@
           return { identical: false, firstDifferentLine: line + 1, left: aa[line] ?? null, right: bb[line] ?? null, leftLines: aa.length, rightLines: bb.length };
         }
         case 'project_overview': {
-          const items = await walkWorkspace(agentDirectoryHandle, { maxDepth: args.max_depth ?? 3, maxResults: args.max_results ?? 300 }, signal);
-          return { root: agentDirectoryHandle.name || 'workspace', itemCount: items.length, files: items.filter(item => item.type === 'file').length, folders: items.filter(item => item.type === 'directory').length, items };
+          const scan = await walkWorkspace(agentDirectoryHandle, { maxDepth: args.max_depth ?? 3, maxResults: args.max_results ?? 300 }, signal);
+          const items = scan.results;
+          return { root: agentDirectoryHandle.name || 'workspace', itemCount: items.length, files: items.filter(item => item.type === 'file').length, folders: items.filter(item => item.type === 'directory').length, filesScanned: scan.filesScanned, truncated: scan.truncated, stopReason: scan.stopReason || undefined, items };
         }
         case 'validate_json': {
           const input = await readWorkspaceText(args.path); const value = JSON.parse(input.text);
@@ -6902,16 +7015,16 @@ Path traversal, symlinks, encrypted files and unsupported compression are reject
         }
         case 'analyze_csv': {
           const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
-          const delimiter = String(args.delimiter || ',').slice(0,1) || ',';
+          const delimiter = normalizeCsvDelimiter(args.delimiter || ',');
           return summarizeCsv(args.path, text, delimiter);
         }
         case 'generate_statistics': {
           const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
-          return summarizeCsv(args.path, text, String(args.delimiter || ',').slice(0,1) || ',');
+          return summarizeCsv(args.path, text, normalizeCsvDelimiter(args.delimiter || ','));
         }
         case 'filter_dataset': {
           const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
-          const delimiter = String(args.delimiter || ',').slice(0,1) || ',';
+          const delimiter = normalizeCsvDelimiter(args.delimiter || ',');
           const dataset = csvDataset(args.path, text, delimiter);
           const index = datasetColumnIndex(dataset.headers, args.column);
           const wanted = String(args.value ?? '').toLowerCase();
@@ -6940,10 +7053,11 @@ ${rows.length} of ${dataset.rows.length} rows retained`, risky: true }, signal);
         }
         case 'deduplicate_dataset': {
           const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
-          const delimiter = String(args.delimiter || ',').slice(0,1) || ',';
+          const delimiter = normalizeCsvDelimiter(args.delimiter || ',');
           const dataset = csvDataset(args.path, text, delimiter);
-          const columns = Array.isArray(args.columns) && args.columns.length ? args.columns : dataset.headers;
-          const indexes = columns.map(column => datasetColumnIndex(dataset.headers, column));
+          const indexes = Array.isArray(args.columns) && args.columns.length
+            ? args.columns.map(column => datasetColumnIndex(dataset.headers, column))
+            : dataset.headers.map((_, index) => index);
           const seen = new Set(); const rows = dataset.rows.filter(row => { const key = JSON.stringify(indexes.map(index => row[index] ?? '')); if (seen.has(key)) return false; seen.add(key); return true; });
           const approved = await requireAgentApproval({ title: 'Save deduplicated dataset?', subtitle: 'Create new CSV · source remains unchanged', detail: `${args.path}
 → ${args.destination}
@@ -6954,7 +7068,7 @@ ${dataset.rows.length - rows.length} duplicate row(s) removed`, risky: true }, s
         }
         case 'merge_csv': {
           if (!Array.isArray(args.paths) || args.paths.length < 2 || args.paths.length > 20) throw new Error('Provide between 2 and 20 CSV paths.');
-          const delimiter = String(args.delimiter || ',').slice(0,1) || ','; let headers = null; const allRows = [];
+          const delimiter = normalizeCsvDelimiter(args.delimiter || ','); let headers = null; const allRows = [];
           for (const path of args.paths) { const { text } = await readWorkspaceText(path, 10 * 1024 * 1024); const data = csvDataset(path, text, delimiter); if (!headers) headers = data.headers; else if (JSON.stringify(headers) !== JSON.stringify(data.headers)) throw new Error(`CSV headers do not match in '${path}'.`); allRows.push(...data.rows); if (allRows.length > 200000) throw new Error('Merged dataset exceeds the 200,000-row safety limit.'); }
           const approved = await requireAgentApproval({ title: 'Merge CSV datasets?', subtitle: 'Create new CSV · source files remain unchanged', detail: `${args.paths.join('\n')}\n→ ${args.destination}\n${allRows.length} data rows`, risky: true }, signal);
           if (!approved) return { cancelled: true };
@@ -6962,24 +7076,24 @@ ${dataset.rows.length - rows.length} duplicate row(s) removed`, risky: true }, s
           return { saved: written.path, sourceFiles: args.paths.length, rows: allRows.length, columns: headers.length };
         }
         case 'compare_datasets': {
-          const delimiter = String(args.delimiter || ',').slice(0,1) || ',';
+          const delimiter = normalizeCsvDelimiter(args.delimiter || ',');
           const left = csvDataset(args.path_a, (await readWorkspaceText(args.path_a, 10 * 1024 * 1024)).text, delimiter);
           const right = csvDataset(args.path_b, (await readWorkspaceText(args.path_b, 10 * 1024 * 1024)).text, delimiter);
           const leftSet = new Set(left.rows.map(row => JSON.stringify(row))); const rightSet = new Set(right.rows.map(row => JSON.stringify(row)));
           return { headersMatch: JSON.stringify(left.headers) === JSON.stringify(right.headers), leftRows: left.rows.length, rightRows: right.rows.length, onlyInA: [...leftSet].filter(row => !rightSet.has(row)).length, onlyInB: [...rightSet].filter(row => !leftSet.has(row)).length, headerA: left.headers, headerB: right.headers };
         }
         case 'find_duplicates': {
-          const items = await walkWorkspace(agentDirectoryHandle, { maxDepth: args.max_depth ?? 5, maxResults: Math.min(300, args.max_files ?? 300) }, signal);
-          const files = items.filter(item => item.type === 'file').slice(0, 300); const byHash = new Map();
+          const scan = await walkWorkspace(agentDirectoryHandle, { maxDepth: args.max_depth ?? 5, maxResults: Math.min(300, args.max_files ?? 300), maxFilesScanned: 5000 }, signal);
+          const files = scan.results.filter(item => item.type === 'file').slice(0, 300); const byHash = new Map();
           for (const item of files) { if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError'); try { const { handle } = await getFileAtPath(agentDirectoryHandle, item.path); const file = await handle.getFile(); const hash = await sha256File(file); if (!byHash.has(hash)) byHash.set(hash, []); byHash.get(hash).push({ path: item.path, bytes: file.size }); } catch (error) { if (error?.name === 'AbortError') throw error; } }
-          return { filesScanned: files.length, duplicateGroups: [...byHash.entries()].filter(([, group]) => group.length > 1).map(([sha256, files]) => ({ sha256, files })) };
+          return { filesScanned: files.length, workspaceFilesScanned: scan.filesScanned, scanTruncated: scan.truncated, scanStopReason: scan.stopReason || undefined, duplicateGroups: [...byHash.entries()].filter(([, group]) => group.length > 1).map(([sha256, files]) => ({ sha256, files })) };
         }
         case 'compare_folders': {
-          const a = await walkWorkspace(await getDirectoryAtPath(agentDirectoryHandle, args.folder_a), { maxDepth: args.max_depth ?? 5, maxResults: 500 }, signal);
-          const b = await walkWorkspace(await getDirectoryAtPath(agentDirectoryHandle, args.folder_b), { maxDepth: args.max_depth ?? 5, maxResults: 500 }, signal);
-          const left = new Map(a.filter(item => item.type === 'file').map(item => [item.path, item.size])); const right = new Map(b.filter(item => item.type === 'file').map(item => [item.path, item.size]));
+          const a = await walkWorkspace(await getDirectoryAtPath(agentDirectoryHandle, args.folder_a), { maxDepth: args.max_depth ?? 5, maxResults: 500, maxFilesScanned: 5000 }, signal);
+          const b = await walkWorkspace(await getDirectoryAtPath(agentDirectoryHandle, args.folder_b), { maxDepth: args.max_depth ?? 5, maxResults: 500, maxFilesScanned: 5000 }, signal);
+          const left = new Map(a.results.filter(item => item.type === 'file').map(item => [item.path, item.size])); const right = new Map(b.results.filter(item => item.type === 'file').map(item => [item.path, item.size]));
           const onlyA = [...left.keys()].filter(path => !right.has(path)); const onlyB = [...right.keys()].filter(path => !left.has(path)); const sizeChanged = [...left.keys()].filter(path => right.has(path) && left.get(path) !== right.get(path)).map(path => ({ path, sizeA: left.get(path), sizeB: right.get(path) }));
-          return { folderA: args.folder_a, folderB: args.folder_b, onlyInA: onlyA, onlyInB: onlyB, sizeChanged, note: 'Files with equal sizes are not guaranteed to have equal contents.' };
+          return { folderA: args.folder_a, folderB: args.folder_b, onlyInA: onlyA, onlyInB: onlyB, sizeChanged, scanTruncated: a.truncated || b.truncated, scan: { folderA: { filesScanned: a.filesScanned, stopReason: a.stopReason || null }, folderB: { filesScanned: b.filesScanned, stopReason: b.stopReason || null } }, note: 'Files with equal sizes are not guaranteed to have equal contents.' };
         }
         case 'create_markdown_report': {
           const content = String(args.content || ''); if (content.length > 2 * 1024 * 1024) throw new Error('Report content exceeds 2 MB.');
@@ -7532,17 +7646,16 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       return output;
     }
     async function inferCsvSchema(args) {
-      const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024); const dataset = csvDataset(args.path, text, args.delimiter || ',');
+      const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024); const dataset = csvDataset(args.path, text, normalizeCsvDelimiter(args.delimiter || ','));
       const rows = dataset.rows.slice(0, 10000); const fields = dataset.headers.map((name, index) => {
         const values = rows.map(row => String(row[index] ?? '').trim()).filter(value => value !== '');
         const type = values.length ? values.every(value => /^(?:true|false)$/i.test(value)) ? 'boolean' : values.every(value => /^[-+]?\d+$/.test(value)) ? 'integer' : values.every(value => value !== '' && Number.isFinite(Number(value))) ? 'number' : values.every(value => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`))) ? 'date' : 'string' : 'null';
-        return { name, inferredType: type, nullable: values.length < rows.length, nonEmptyValues: values.length, uniqueValues: new Set(values).size, sample: [...new Set(values)].slice(0, 5) };
+        return { name, columnIndex: index, inferredType: type, nullable: values.length < rows.length, nonEmptyValues: values.length, uniqueValues: new Set(values).size, sample: [...new Set(values)].slice(0, 5) };
       });
       return { path: args.path, rowsAnalyzed: rows.length, totalRows: dataset.rows.length, columns: fields, note: 'Inference is heuristic and uses at most the first 10,000 data rows. Review before using the result as a validation contract.' };
     }
     async function joinCsvDatasets(args, signal) {
-      const delimiterA = String(args.delimiter_a || args.delimiter || ','); const delimiterB = String(args.delimiter_b || args.delimiter || ',');
-      if (delimiterA.length !== 1 || delimiterB.length !== 1) throw new Error('Each CSV delimiter must be a single character.');
+      const delimiterA = normalizeCsvDelimiter(args.delimiter_a || args.delimiter || ','); const delimiterB = normalizeCsvDelimiter(args.delimiter_b || args.delimiter || ',');
       const aText = await readWorkspaceText(args.path_a, 10 * 1024 * 1024); const bText = await readWorkspaceText(args.path_b, 10 * 1024 * 1024);
       const a = csvDataset(args.path_a, aText.text, delimiterA), b = csvDataset(args.path_b, bText.text, delimiterB);
       const keyA = datasetColumnIndex(a.headers, args.key_a), keyB = datasetColumnIndex(b.headers, args.key_b); const joinType = String(args.join_type || 'inner').toLowerCase();
@@ -8217,10 +8330,6 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
     function updateResearchPanelPosition() {
       if (!researchPanelOpen || !researchWorkspaceButton?.isConnected) return;
       positionToolbarFlyout(researchWorkspaceMenu);
-    }
-    function openResearchWorkspace() {
-      // Workspace visibility is presentation only. The composer toggle controls execution mode.
-      setResearchPanelOpen(true);
     }
     function setDeepResearchMode(enabled) {
       if (enabled && agentModeEnabled) setAgentMode(false);
@@ -10302,7 +10411,9 @@ ${toolActivityDetail}`;
       @media print{body{padding:0;background:#fff;color:#111}.message,.message.user{background:#fff;color:#111;break-inside:avoid;box-shadow:none}.message-content pre{white-space:pre-wrap;overflow:visible}.message-content pre code{white-space:pre-wrap}.message-thinking:not([open])>.thinking-body{display:block!important}.copy-code{display:none}}
     `;
     function standaloneHtmlExport() {
-      const body = allMessages().map((message, index) => renderMessageMarkup(message, index, false)).join('\n');
+      const exportMessages = allMessages();
+      const renderContext = getMessageRenderContext(exportMessages);
+      const body = exportMessages.map((message, index) => renderMessageMarkup(message, index, false, renderContext)).join('\n');
       const title = escapeHtml(conversationTitle());
       const copyHelper = `(function(){document.querySelectorAll('pre').forEach(function(pre){var b=document.createElement('button');b.type='button';b.className='copy-code';b.textContent='Copy code';b.addEventListener('click',function(){var c=pre.querySelector('code');var t=(c||pre).textContent||'';var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();b.textContent=ok?'Copied':'Copy failed';setTimeout(function(){b.textContent='Copy code'},1400)});pre.appendChild(b)})})();`;
       return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${standaloneCss}</style></head><body><main><h1 class="export-title">${title}</h1><div class="export-note">Standalone transcript export · no provider connection or plugin bridge</div>${body}</main><script>${copyHelper}<\/script></body></html>`;

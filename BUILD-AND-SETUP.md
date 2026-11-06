@@ -1,3 +1,9 @@
+## RunMind 1.10.33 — reliability and performance hardening
+
+This overlay is for the complete RunMind 1.10.32 source tree. It improves transcript rendering, CSV statistics and delimiter validation, bounds workspace searches, waits for IndexedDB transaction commits, detects duplicate attachment names, and revalidates workspace files after approval before edit/delete/restore operations. The unused research wrapper is removed. It preserves the existing streaming DOM patching and backup behavior. File-system revalidation is best-effort because the browser File System Access API does not expose atomic cross-process create-if-absent.
+
+The plugin and standalone project versions, plugin manifest, Native Reader user-agent, and release documentation are aligned to 1.10.33. The ZIP contains changed files only and preserves original project-relative paths. Extract it over the complete 1.10.32 source tree, retaining excluded resources such as `lib`, `assets`, and `screenshots`, then build on Windows with `Build-Release-x64.bat`.
+
 ## RunMind 1.10.32 — curated appearance themes
 
 This overlay is for the complete RunMind 1.10.31 source tree. It adds an Appearance menu with System, Light, and Dark modes, five selectable palettes for each color scheme, independent saved light/dark choices, a live active-palette preview, and a reset action. The existing Classic Light and Warm Graphite palettes remain the defaults. A small shared preference store keeps standalone RunMind and PowerToys-hosted chat windows aligned even though they use separate WebView2 profiles; their native title bars follow the effective mode. The previous single System/Light/Dark preference is migrated when no shared preference file exists.
