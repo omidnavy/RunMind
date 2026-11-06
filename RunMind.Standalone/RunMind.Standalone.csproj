@@ -10,7 +10,7 @@
     <Product>RunMind</Product>
     <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
     <RootNamespace>RunMind.Standalone</RootNamespace>
-    <Version>1.10.34</Version>
+    <Version>2.0.0</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
@@ -23,6 +23,7 @@
     <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <Content Include="..\Community.PowerToys.Run.Plugin.RunMind\ChatWindow.html" Link="ChatWindow.html" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Community.PowerToys.Run.Plugin.RunMind\ArtifactTools.js" Link="ArtifactTools.js" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" />
     <Content Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\Assets\Brand\Icon.svg" Link="Assets\Brand\Icon.svg" CopyToOutputDirectory="PreserveNewest" />

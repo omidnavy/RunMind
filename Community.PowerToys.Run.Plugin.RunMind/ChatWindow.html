@@ -1314,6 +1314,7 @@
     </section>
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
+  <script src="ArtifactTools.js"></script>
   <script>
     'use strict';
     let BOOT = {};
@@ -4547,7 +4548,7 @@
         { type: 'function', function: { name: 'extract_links', description: 'Extract HTTP/HTTPS links from a web page. This is not a recursive crawl.', parameters: { type: 'object', properties: { url: { type: 'string' }, max_links: { type: 'integer' } }, required: ['url'], additionalProperties: false } } },
         { type: 'function', function: { name: 'extract_metadata', description: 'Extract page title, description, canonical URL, Open Graph, and selected meta tags.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'], additionalProperties: false } } },
         { type: 'function', function: { name: 'extract_tables', description: 'Extract bounded HTML tables from a web page as headers and row arrays.', parameters: { type: 'object', properties: { url: { type: 'string' }, max_tables: { type: 'integer' }, max_rows: { type: 'integer' } }, required: ['url'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'read_sitemap', description: 'Read a sitemap.xml and return a bounded list of page URLs and last-modified dates.', parameters: { type: 'object', properties: { url: { type: 'string' }, max_urls: { type: 'integer' } }, required: ['url'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'read_sitemap', description: 'Traverse a sitemap.xml or sitemap index recursively on the same hostname, deduplicate URLs, and optionally search URL/last-modified metadata. Bounded to 20 sitemap documents and 2,000 URLs.', parameters: { type: 'object', properties: { url: { type: 'string' }, query: { type: 'string' }, max_urls: { type: 'integer' }, max_sitemaps: { type: 'integer' } }, required: ['url'], additionalProperties: false } } },
         { type: 'function', function: { name: 'read_rss_feed', description: 'Read a public RSS or Atom feed and return recent items.', parameters: { type: 'object', properties: { url: { type: 'string' }, max_items: { type: 'integer' } }, required: ['url'], additionalProperties: false } } },
         { type: 'function', function: { name: 'page_to_markdown', description: 'Fetch a public webpage and return clean readable Markdown with title, publication metadata when available, and retrieval route. Desktop hosts use the local C# Native Reader first, then the configured external Reader fallback. Does not save a file.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'], additionalProperties: false } } },
         { type: 'function', function: { name: 'check_links', description: 'Read a webpage, extract a bounded set of links, and check their HTTP reachability. Cross-origin/CORS failures are reported as unverified, not broken. Maximum 30 links.', parameters: { type: 'object', properties: { url: { type: 'string' }, max_links: { type: 'integer' } }, required: ['url'], additionalProperties: false } } },
@@ -4586,7 +4587,7 @@
         { type: 'function', function: { name: 'extract_archive', description: 'Extract a ZIP archive from the workspace or conversation attachments into a NEW workspace folder after approval. path may be the exact attached filename; destination is a workspace-relative folder. Rejects path traversal, symlinks, encrypted entries, unsupported compression, duplicates, and oversized archives. Existing destination folders are never overwritten.', parameters: { type: 'object', properties: { path: { type: 'string' }, destination: { type: 'string' } }, required: ['path','destination'], additionalProperties: false } } },
         { type: 'function', function: { name: 'infer_dataset_schema', description: 'Infer CSV column types, nullability, uniqueness, and samples using up to 10,000 rows. The result is heuristic and should be reviewed.', parameters: { type: 'object', properties: { path: { type: 'string' }, delimiter: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'join_datasets', description: 'Join two CSV files by selected key columns using inner, left, or full join. Writes a new CSV after approval; existing files are never overwritten and output is limited to 100,000 rows.', parameters: { type: 'object', properties: { path_a: { type: 'string' }, path_b: { type: 'string' }, key_a: { type: 'string' }, key_b: { type: 'string' }, join_type: { type: 'string', enum: ['inner','left','full'] }, destination: { type: 'string' }, delimiter: { type: 'string' }, delimiter_a: { type: 'string' }, delimiter_b: { type: 'string' } }, required: ['path_a','path_b','key_a','key_b','destination'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'transform_json', description: 'Transform a JSON file in memory: pretty, minify, or sort_keys. This does not modify the source file.', parameters: { type: 'object', properties: { path: { type: 'string' }, mode: { type: 'string', enum: ['pretty','minify','sort_keys'] } }, required: ['path','mode'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'transform_json', description: 'Transform JSON without changing the source: pretty, minify, sort_keys, pick_fields, omit_fields, rename_keys, flatten, unflatten, filter_array, or map_values. Advanced modes use fields, mapping, separator, array_path, field, operator, value, values, or operation as appropriate. Optionally save to a new destination after approval.', parameters: { type: 'object', properties: { path: { type: 'string' }, mode: { type: 'string', enum: ['pretty','minify','sort_keys','pick_fields','omit_fields','rename_keys','flatten','unflatten','filter_array','map_values'] }, fields: { type: 'array', items: { type: 'string' } }, mapping: { type: 'object', additionalProperties: { type: 'string' } }, separator: { type: 'string' }, array_path: { type: 'string' }, field: { type: 'string' }, operator: { type: 'string', enum: ['equals','not_equals','contains','gt','gte','lt','lte','empty','not_empty','one_of'] }, value: {}, values: { type: 'array', items: {} }, operation: { type: 'string', enum: ['trim','lowercase','uppercase','to_number','to_string','null_to_empty'] }, destination: { type: 'string' } }, required: ['path','mode'], additionalProperties: false } } },
         { type: 'function', function: { name: 'analyze_csv', description: 'Analyze a CSV file: columns, row count, sample rows, and numeric summaries.', parameters: { type: 'object', properties: { path: { type: 'string' }, delimiter: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'filter_dataset', description: 'Filter CSV rows by a column value and save the result to a new file. Supported operators: equals, not_equals, contains, gt, gte, lt, lte, empty, not_empty.', parameters: { type: 'object', properties: { path: { type: 'string' }, destination: { type: 'string' }, column: { type: 'string' }, operator: { type: 'string', enum: ['equals','not_equals','contains','gt','gte','lt','lte','empty','not_empty'] }, value: { type: 'string' }, delimiter: { type: 'string' } }, required: ['path','destination','column','operator'], additionalProperties: false } } },
         { type: 'function', function: { name: 'deduplicate_dataset', description: 'Remove duplicate CSV rows (or rows matching selected columns) and save to a new file.', parameters: { type: 'object', properties: { path: { type: 'string' }, destination: { type: 'string' }, columns: { type: 'array', items: { type: 'string' } }, delimiter: { type: 'string' } }, required: ['path','destination'], additionalProperties: false } } },
@@ -4595,16 +4596,23 @@
         { type: 'function', function: { name: 'generate_statistics', description: 'Generate descriptive numeric statistics for columns in a CSV file.', parameters: { type: 'object', properties: { path: { type: 'string' }, delimiter: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'find_duplicates', description: 'Find files with identical SHA-256 content inside the selected workspace. Limited to 300 files and 100 MB per file.', parameters: { type: 'object', properties: { max_depth: { type: 'integer' }, max_files: { type: 'integer' } }, additionalProperties: false } } },
         { type: 'function', function: { name: 'compare_folders', description: 'Compare two folders by relative file paths and sizes. Scans at most 5,000 files per folder, skips common dependency/build/cache directories, and reports when either scan is truncated.', parameters: { type: 'object', properties: { folder_a: { type: 'string' }, folder_b: { type: 'string' }, max_depth: { type: 'integer' } }, required: ['folder_a','folder_b'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'create_markdown_report', description: 'Create a Markdown report file in the selected workspace after explicit approval. Existing files are not overwritten.', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path','content'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'create_html_report', description: 'Create a self-contained HTML report file in the selected workspace after explicit approval. Content is escaped unless supplied as a complete HTML document.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' } }, required: ['path','content'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'create_markdown_report', description: 'Create a Markdown report file in the selected workspace after explicit approval. Existing files are not overwritten.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, summary: { type: 'string' }, include_toc: { type: 'boolean' }, content: { type: 'string' } }, required: ['path','content'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'create_html_report', description: 'Create a self-contained HTML report in the selected workspace after approval. Markdown content is rendered safely; a complete HTML document is retained as supplied. Optional summary and table of contents are supported.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, summary: { type: 'string' }, include_toc: { type: 'boolean' }, content: { type: 'string' } }, required: ['path','content'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'create_docx', description: 'Create a Microsoft Word DOCX document from bounded Markdown content. Supports headings, paragraphs, bold/italic/code, ordered and unordered lists, and simple pipe tables. Creates a new file after approval; never overwrites.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, author: { type: 'string' }, content: { type: 'string' } }, required: ['path','content'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'create_xlsx', description: 'Create an Excel XLSX workbook with up to 10 worksheets, header styling, frozen header rows, filters, and typed text/number/boolean cells. Provide sheets with name, headers, and rows (arrays of cell values). Strings are stored as text, never as formulas. New file only; approval required.', parameters: { type: 'object', properties: { path: { type: 'string' }, sheets: { type: 'array', minItems: 1, maxItems: 10, items: { type: 'object', properties: { name: { type: 'string' }, headers: { type: 'array', items: { type: 'string' } }, rows: { type: 'array', items: { type: 'array', items: {} } } }, required: ['name','headers','rows'], additionalProperties: false } } }, required: ['path','sheets'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'create_pdf', description: 'Create a paginated text PDF from Markdown content. Supports headings, paragraphs, lists, tables rendered as text, links, and common Western European characters. Does not render embedded images or complex page layouts. New file only; approval required.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, author: { type: 'string' }, content: { type: 'string' } }, required: ['path','content'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'generate_qr_code', description: 'Generate an offline SVG QR code from text or a URL. Supports UTF-8 payloads up to 106 bytes (QR version 5, error correction L); use a short URL for larger content. New file only; approval required.', parameters: { type: 'object', properties: { path: { type: 'string' }, text: { type: 'string' }, foreground: { type: 'string' }, background: { type: 'string' } }, required: ['path','text'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'create_image_gallery', description: 'Create a standalone HTML image gallery from workspace images. The gallery references the original image files by relative path rather than embedding copies. Supports PNG, JPEG, WebP, and GIF; maximum 200 images. New file only; approval required.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, images: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'object', properties: { path: { type: 'string' }, caption: { type: 'string' }, alt: { type: 'string' } }, required: ['path'], additionalProperties: false } } }, required: ['path','images'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'verify_artifact', description: 'Inspect a generated or existing workspace artifact and verify its basic structure. Supports DOCX, XLSX, PDF, SVG, HTML, Mermaid, Markdown, JSON, CSV, and TSV. Reports limitations rather than claiming full semantic correctness.', parameters: { type: 'object', properties: { path: { type: 'string' }, format: { type: 'string', enum: ['auto','docx','xlsx','pdf','svg','html','json','csv','tsv','mermaid','markdown'] }, delimiter: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'validate_dataset', description: 'Validate a CSV or TSV dataset using required_columns, unique_columns, and per-column rules. Rules support not_empty, is_number, min, max, equals, not_equals, contains, one_of, is_email, and is_url. Returns bounded row-level issues without modifying the source.', parameters: { type: 'object', properties: { path: { type: 'string' }, delimiter: { type: 'string' }, required_columns: { type: 'array', items: { type: 'string' } }, unique_columns: { type: 'array', items: { type: 'string' } }, rules: { type: 'array', items: { type: 'object', properties: { column: { type: 'string' }, operator: { type: 'string', enum: ['not_empty','is_number','min','max','equals','not_equals','contains','one_of','is_email','is_url'] }, value: { type: 'string' }, values: { type: 'array', items: { type: 'string' } } }, required: ['column','operator'], additionalProperties: false } }, max_issues: { type: 'integer' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'image_metadata', description: 'Read basic image metadata including dimensions, MIME type, and size for a workspace image.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'read_image', description: 'Attach a workspace image to the next model turn for visual analysis. Requires a vision-capable selected model; supported PNG, JPEG, WebP, and GIF files up to 8 MB.', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
         { type: 'function', function: { name: 'resize_image', description: 'Resize a workspace image to fit within maximum dimensions without enlarging it. Saves a new image after approval.', parameters: { type: 'object', properties: { path: { type: 'string' }, destination: { type: 'string' }, max_width: { type: 'integer' }, max_height: { type: 'integer' }, output_type: { type: 'string', enum: ['image/png','image/jpeg','image/webp'] }, quality: { type: 'number' } }, required: ['path','destination'], additionalProperties: false } } },
         { type: 'function', function: { name: 'convert_image', description: 'Convert a workspace image to PNG, JPEG, or WebP. Saves a new image after approval.', parameters: { type: 'object', properties: { path: { type: 'string' }, destination: { type: 'string' }, output_type: { type: 'string', enum: ['image/png','image/jpeg','image/webp'] }, quality: { type: 'number' } }, required: ['path','destination'], additionalProperties: false } } },
         { type: 'function', function: { name: 'crop_image', description: 'Crop a workspace image using pixel coordinates and save a new image after approval.', parameters: { type: 'object', properties: { path: { type: 'string' }, destination: { type: 'string' }, x: { type: 'integer' }, y: { type: 'integer' }, width: { type: 'integer' }, height: { type: 'integer' }, output_type: { type: 'string', enum: ['image/png','image/jpeg','image/webp'] }, quality: { type: 'number' } }, required: ['path','destination','x','y','width','height'], additionalProperties: false } } },
         { type: 'function', function: { name: 'generate_thumbnail', description: 'Create a WebP thumbnail within 256×256 pixels from a workspace image. Saves a new image after approval.', parameters: { type: 'object', properties: { path: { type: 'string' }, destination: { type: 'string' } }, required: ['path','destination'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'create_chart', description: 'Create a simple bar or line chart as a self-contained SVG file from labels and non-negative values.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, type: { type: 'string', enum: ['bar','line'] }, labels: { type: 'array', items: { type: 'string' } }, values: { type: 'array', items: { type: 'number' } } }, required: ['path','labels','values'], additionalProperties: false } } },
-        { type: 'function', function: { name: 'create_diagram', description: 'Create a simple vertical flow diagram as an SVG file. Edge from/to values are zero-based node indexes.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, nodes: { type: 'array', items: { type: 'string' } }, edges: { type: 'array', items: { type: 'object', properties: { from: { type: 'integer' }, to: { type: 'integer' } }, required: ['from','to'], additionalProperties: false } } }, required: ['path','nodes','edges'], additionalProperties: false } } }
+        { type: 'function', function: { name: 'create_chart', description: 'Create a self-contained SVG bar, line, pie, or doughnut chart. Supports negative values for bar/line charts and multiple named series for grouped bars or multi-line charts. Provide labels plus values or series.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, type: { type: 'string', enum: ['bar','line','pie','doughnut'] }, labels: { type: 'array', minItems: 1, maxItems: 40, items: { type: 'string' } }, values: { type: 'array', items: { type: 'number' } }, series: { type: 'array', maxItems: 8, items: { type: 'object', properties: { name: { type: 'string' }, values: { type: 'array', items: { type: 'number' } } }, required: ['name','values'], additionalProperties: false } } }, required: ['path','labels'], additionalProperties: false } } },
+        { type: 'function', function: { name: 'create_diagram', description: 'Create a flow diagram as SVG and editable Mermaid source by default. Edge from/to values are zero-based node indexes; direction may be TD, TB, LR, RL, or BT. Choose format svg, mermaid, or both.', parameters: { type: 'object', properties: { path: { type: 'string' }, title: { type: 'string' }, nodes: { type: 'array', maxItems: 16, items: { type: 'string' } }, edges: { type: 'array', maxItems: 40, items: { type: 'object', properties: { from: { type: 'integer' }, to: { type: 'integer' } }, required: ['from','to'], additionalProperties: false } }, direction: { type: 'string', enum: ['TD','TB','LR','RL','BT'] }, format: { type: 'string', enum: ['svg','mermaid','both'] } }, required: ['path','nodes','edges'], additionalProperties: false } } }
       );
       return tools;
     }
@@ -5935,153 +5943,450 @@
         throw readerError;
       }
     }
-    function buildChartSvg(args) {
-      const labels = Array.isArray(args.labels) ? args.labels.slice(0,30).map(value => String(value).slice(0,50)) : [];
-      const values = Array.isArray(args.values) ? args.values.slice(0,30).map(Number) : [];
-      if (!labels.length || labels.length !== values.length || values.some(value => !Number.isFinite(value) || value < 0)) throw new Error('Provide 1–30 labels and matching non-negative numeric values.');
-      const width = 900, height = 440, left = 72, right = 34, top = 64, bottom = 92, plotW = width - left - right, plotH = height - top - bottom;
-      const max = Math.max(1, ...values) * 1.12, title = escapeHtml(String(args.title || 'Chart').slice(0,120));
-      const y = value => top + plotH - (value / max) * plotH;
-      const labelsSvg = labels.map((label, i) => `<text x="${left + (i + .5) * plotW / labels.length}" y="${height - bottom + 24}" text-anchor="middle" font-size="12">${escapeHtml(label)}</text>`).join('');
-      const grid = Array.from({length:5},(_,i)=>{ const value=max*i/4, yy=y(value); return `<line x1="${left}" y1="${yy}" x2="${width-right}" y2="${yy}" stroke="#888" opacity=".22"/><text x="${left-10}" y="${yy+4}" text-anchor="end" font-size="11" fill="#777">${value.toFixed(1)}</text>`; }).join('');
-      const type = args.type === 'line' ? 'line' : 'bar'; let marks = '';
-      if (type === 'bar') {
-        const slot = plotW / labels.length, barW = Math.max(4, slot * .68);
-        marks = values.map((value,i)=>{const xx=left+i*slot+(slot-barW)/2, yy=y(value); return `<rect x="${xx}" y="${yy}" width="${barW}" height="${top+plotH-yy}" rx="3" fill="#438ad7"/><text x="${xx+barW/2}" y="${yy-7}" text-anchor="middle" font-size="11">${value}</text>`;}).join('');
-      } else {
-        const points = values.map((value,i)=>`${left+(i+.5)*plotW/labels.length},${y(value)}`).join(' ');
-        marks = `<polyline points="${points}" fill="none" stroke="#438ad7" stroke-width="3" stroke-linejoin="round"/>` + values.map((value,i)=>`<circle cx="${left+(i+.5)*plotW/labels.length}" cy="${y(value)}" r="4" fill="#438ad7"><title>${escapeHtml(labels[i])}: ${value}</title></circle>`).join('');
+    function resolveCsvDelimiter(path, requested, source) {
+      if (requested !== undefined && requested !== null && String(requested) !== '') return normalizeCsvDelimiter(requested);
+      if (/\.tsv$/i.test(String(path || ''))) return '\t';
+      const sampleLimit = 128 * 1024;
+      let sample = String(source || '').slice(0, sampleLimit);
+      if (sample.length < String(source || '').length) sample = sample.slice(0, Math.max(0, sample.lastIndexOf('\n')));
+      const candidates = [',', '\t', ';', '|'];
+      let best = { delimiter: ',', score: 0 };
+      for (const delimiter of candidates) {
+        try {
+          const rows = parseCsvRows(sample, delimiter).slice(0, 25);
+          if (rows.length < 2) continue;
+          const counts = rows.map(row => row.length).filter(count => count > 1);
+          if (!counts.length) continue;
+          const frequency = new Map();
+          for (const count of counts) frequency.set(count, (frequency.get(count) || 0) + 1);
+          const [columns, matching] = [...frequency.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0];
+          const consistency = matching / rows.length;
+          const score = (columns - 1) * consistency;
+          if (score > best.score) best = { delimiter, score };
+        } catch (_) {}
       }
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${title}"><rect width="100%" height="100%" fill="#fff"/><text x="${left}" y="34" font-size="22" font-weight="600">${title}</text>${grid}${marks}${labelsSvg}<line x1="${left}" y1="${top+plotH}" x2="${width-right}" y2="${top+plotH}" stroke="#777"/></svg>`;
+      return best.delimiter;
     }
-    function buildDiagramSvg(args) {
-      const nodes = Array.isArray(args.nodes) ? args.nodes.slice(0,16).map(value => String(value).slice(0,90)) : [];
-      const edges = Array.isArray(args.edges) ? args.edges.slice(0,40) : [];
-      if (!nodes.length) throw new Error('Provide at least one node label.');
-      const width = 760, nodeW = 300, nodeH = 58, gap = 56, height = Math.max(140, 50 + nodes.length * (nodeH + gap));
-      const centers = nodes.map((_,i)=>({x:width/2,y:50+i*(nodeH+gap)+nodeH/2}));
-      const edgeSvg = edges.map(edge=>{
-        const from=Number(edge?.from),to=Number(edge?.to); if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to<0||from>=nodes.length||to>=nodes.length||from===to) return '';
-        const a=centers[from],b=centers[to], startY=a.y+nodeH/2, endY=b.y-nodeH/2;
-        return `<path d="M ${a.x} ${startY} L ${a.x} ${(startY+endY)/2} L ${b.x} ${(startY+endY)/2} L ${b.x} ${endY}" fill="none" stroke="#777" stroke-width="2" marker-end="url(#arrow)"/>`;
-      }).join('');
-      const nodeSvg=nodes.map((label,i)=>{const c=centers[i];return `<rect x="${c.x-nodeW/2}" y="${c.y-nodeH/2}" width="${nodeW}" height="${nodeH}" rx="9" fill="#edf4fc" stroke="#438ad7" stroke-width="1.5"/><text x="${c.x}" y="${c.y+5}" text-anchor="middle" font-size="15" fill="#1d2b3a">${escapeHtml(label)}</text>`;}).join('');
-      const title=escapeHtml(String(args.title||'Diagram').slice(0,120));
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${title}"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#777"/></marker></defs><text x="${width/2}" y="28" text-anchor="middle" font-size="20" font-weight="600">${title}</text>${edgeSvg}${nodeSvg}</svg>`;
+
+    function safeJsonPath(pathValue) {
+      const parts = String(pathValue || '').split('.').filter(Boolean);
+      if (parts.some(part => ['__proto__', 'prototype', 'constructor'].includes(part))) throw new Error('JSON paths cannot address prototype-related keys.');
+      return parts;
     }
-    async function transformWorkspaceImage(args, mode, signal) {
-      if (!agentDirectoryHandle) throw new Error('No task folder selected.');
-      const source = await getFileAtPath(agentDirectoryHandle, args.path);
-      const file = await source.handle.getFile();
-      if (file.size > 25 * 1024 * 1024) throw new Error('Image files larger than 25 MB are not processed.');
-      if (!/^image\/(png|jpeg|webp|gif|bmp)$/i.test(file.type || '')) throw new Error('The selected file is not a supported browser-decodable image.');
-      const bitmap = await createImageBitmap(file);
-      try {
-        if (mode === 'metadata') return { path: args.path, name: file.name, type: file.type, bytes: file.size, width: bitmap.width, height: bitmap.height, aspectRatio: Number((bitmap.width / bitmap.height).toFixed(5)) };
-        let sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height;
-        if (mode === 'crop') {
-          sx = Math.max(0, Math.floor(Number(args.x))); sy = Math.max(0, Math.floor(Number(args.y)));
-          sw = Math.floor(Number(args.width)); sh = Math.floor(Number(args.height));
-          if (![sx,sy,sw,sh].every(Number.isFinite) || sw < 1 || sh < 1 || sx + sw > bitmap.width || sy + sh > bitmap.height) throw new Error('Crop coordinates must define a positive rectangle within the source image.');
-        }
-        const rawMaxWidth = Number(args.max_width || (mode === 'thumbnail' ? 256 : 1600));
-        const rawMaxHeight = Number(args.max_height || (mode === 'thumbnail' ? 256 : 1600));
-        const maxWidth = mode === 'resize' || mode === 'thumbnail' ? (Number.isFinite(rawMaxWidth) ? Math.max(1, Math.min(8192, Math.floor(rawMaxWidth))) : 1600) : sw;
-        const maxHeight = mode === 'resize' || mode === 'thumbnail' ? (Number.isFinite(rawMaxHeight) ? Math.max(1, Math.min(8192, Math.floor(rawMaxHeight))) : 1600) : sh;
-        const scale = mode === 'resize' || mode === 'thumbnail' ? Math.min(1, maxWidth / sw, maxHeight / sh) : 1;
-        const width = Math.max(1, Math.round(sw * scale)), height = Math.max(1, Math.round(sh * scale));
-        const outputType = String(args.output_type || 'image/webp').toLowerCase();
-        if (!['image/png','image/jpeg','image/webp'].includes(outputType)) throw new Error('Output type must be image/png, image/jpeg, or image/webp.');
-        const extension = outputType === 'image/png' ? '.png' : outputType === 'image/jpeg' ? '.jpg' : '.webp';
-        let destination = String(args.destination || '').trim();
-        if (!destination) throw new Error('A destination path is required.');
-        if (!/\.[a-z0-9]{1,8}$/i.test(destination)) destination += extension;
-        else if (!destination.toLowerCase().endsWith(extension)) throw new Error(`Destination extension must match the selected output format (${extension}).`);
-        const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
-        const context = canvas.getContext('2d'); if (!context) throw new Error('Canvas 2D is unavailable in this WebView.');
-        if (outputType === 'image/jpeg') { context.fillStyle = '#ffffff'; context.fillRect(0, 0, width, height); }
-        context.drawImage(bitmap, sx, sy, sw, sh, 0, 0, width, height);
-        const rawQuality = Number(args.quality ?? 0.88);
-        const quality = Number.isFinite(rawQuality) ? Math.max(0.5, Math.min(1, rawQuality)) : 0.88;
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, outputType, quality));
-        if (!blob) throw new Error('The browser could not encode the requested image format.');
-        if (signal?.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-        const approved = await requireAgentApproval({ title: mode === 'crop' ? 'Save cropped image?' : mode === 'convert' ? 'Save converted image?' : 'Save processed image?', subtitle: 'New image file · source remains unchanged · no overwrite', detail: `${args.path} (${bitmap.width}×${bitmap.height})\n→ ${destination} (${width}×${height}, ${blob.type}, ${blob.size.toLocaleString()} bytes)`, risky: true }, signal);
-        if (!approved) return { cancelled: true };
-        const written = await writeWorkspaceFile(destination, blob, false);
-        return { source: args.path, saved: written.path, width, height, type: blob.type, bytes: written.bytes };
-      } finally { bitmap.close?.(); }
+    function readJsonPath(value, pathValue) {
+      let current = value;
+      for (const part of safeJsonPath(pathValue)) {
+        if (current == null || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, part)) return undefined;
+        current = current[part];
+      }
+      return current;
     }
-    async function regexTestInWorker(args, signal) {
-      const pattern = String(args.pattern ?? '');
-      const input = String(args.text ?? '');
-      const flags = String(args.flags ?? '');
-      if (!pattern || pattern.length > 512) throw new Error('Regex pattern must contain between 1 and 512 characters.');
-      if (input.length > 100000) throw new Error('Regex input text is limited to 100,000 characters.');
-      if (!/^(?:[imsu]*)$/.test(flags) || new Set(flags).size !== flags.length) throw new Error('Only unique i, m, s, and u regex flags are supported.');
-      if (signal?.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      if (typeof Worker !== 'function' || typeof URL.createObjectURL !== 'function') throw new Error('This WebView does not support isolated regex workers.');
-      const workerSource = `
-        self.onmessage = event => {
-          try {
-            const { pattern, input, flags } = event.data;
-            const expression = new RegExp(pattern, flags + 'g');
-            const matches = [];
-            let total = 0;
-            for (const match of input.matchAll(expression)) {
-              total++;
-              if (matches.length < 100) {
-                matches.push({
-                  text: String(match[0]).slice(0, 1000),
-                  index: match.index,
-                  captures: match.slice(1, 21).map(value => value == null ? null : String(value).slice(0, 500)),
-                  groups: match.groups ? Object.fromEntries(Object.entries(match.groups).slice(0, 20).map(([key, value]) => [key, value == null ? null : String(value).slice(0, 500)])) : undefined
-                });
-              }
-              if (total >= 1000) break;
+    function writeJsonPath(value, pathValue, nextValue) {
+      const parts = safeJsonPath(pathValue);
+      if (!parts.length) throw new Error('A non-empty JSON field path is required.');
+      let current = value;
+      for (const part of parts.slice(0, -1)) {
+        if (!current[part] || typeof current[part] !== 'object' || Array.isArray(current[part])) current[part] = {};
+        current = current[part];
+      }
+      current[parts.at(-1)] = nextValue;
+    }
+    function transformJsonValue(value, args) {
+      const mode = String(args.mode || 'pretty');
+      const sort = input => Array.isArray(input) ? input.map(sort) : input && typeof input === 'object' ? Object.fromEntries(Object.keys(input).sort().map(key => [key, sort(input[key])])) : input;
+      const safeKey = key => {
+        const value = String(key);
+        if (['__proto__', 'prototype', 'constructor'].includes(value)) throw new Error(`JSON key '${value}' is not allowed in structural transforms.`);
+        return value;
+      };
+      if (mode === 'pretty' || mode === 'minify') return value;
+      if (mode === 'sort_keys') return sort(value);
+      if (mode === 'pick_fields' || mode === 'omit_fields') {
+        const fields = new Set((Array.isArray(args.fields) ? args.fields : []).map(safeKey));
+        if (!fields.size) throw new Error(`${mode} requires a non-empty fields array.`);
+        const apply = item => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+          const output = {};
+          for (const [key, entry] of Object.entries(item)) if (mode === 'pick_fields' ? fields.has(key) : !fields.has(key)) Object.defineProperty(output, key, { value: entry, enumerable: true, configurable: true, writable: true });
+          return output;
+        };
+        return Array.isArray(value) ? value.map(apply) : apply(value);
+      }
+      if (mode === 'rename_keys') {
+        const mapping = args.mapping && typeof args.mapping === 'object' && !Array.isArray(args.mapping) ? args.mapping : {};
+        if (!Object.keys(mapping).length) throw new Error('rename_keys requires a non-empty mapping object.');
+        const apply = item => {
+          if (Array.isArray(item)) return item.map(apply);
+          if (!item || typeof item !== 'object') return item;
+          const output = {};
+          const targets = new Set();
+          for (const [key, entry] of Object.entries(item)) {
+            const target = safeKey(mapping[key] || key);
+            if (targets.has(target)) throw new Error(`Renaming would create duplicate key '${target}'.`);
+            targets.add(target);
+            Object.defineProperty(output, target, { value: apply(entry), enumerable: true, configurable: true, writable: true });
+          }
+          return output;
+        };
+        return apply(value);
+      }
+      if (mode === 'flatten') {
+        const separator = String(args.separator || '.').slice(0, 3);
+        if (!separator) throw new Error('flatten separator cannot be empty.');
+        const output = {};
+        const visit = (item, prefix) => {
+          if (item && typeof item === 'object' && !Array.isArray(item)) {
+            const entries = Object.entries(item);
+            if (!entries.length && prefix) Object.defineProperty(output, prefix, { value: {}, enumerable: true, configurable: true, writable: true });
+            for (const [key, entry] of entries) {
+              safeKey(key);
+              const next = prefix ? `${prefix}${separator}${key}` : key;
+              visit(entry, next);
             }
-            self.postMessage({ ok: true, total, matches, truncated: total > matches.length });
-          } catch (error) {
-            self.postMessage({ ok: false, error: error && error.message ? error.message : String(error) });
+          } else {
+            if (Object.prototype.hasOwnProperty.call(output, prefix)) throw new Error(`Flattening creates a duplicate key '${prefix}'.`);
+            Object.defineProperty(output, prefix, { value: item, enumerable: true, configurable: true, writable: true });
           }
         };
-      `;
-      const workerUrl = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
-      let worker;
-      try { worker = new Worker(workerUrl); }
-      catch (error) { URL.revokeObjectURL(workerUrl); throw error; }
-      return await new Promise((resolve, reject) => {
-        let settled = false;
-        const cleanup = () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          signal?.removeEventListener('abort', onAbort);
-          worker.terminate();
-          URL.revokeObjectURL(workerUrl);
-        };
-        const onAbort = () => {
-          cleanup();
-          reject(new DOMException('Task cancelled.', 'AbortError'));
-        };
-        const timeout = setTimeout(() => {
-          cleanup();
-          reject(new Error('Regex execution exceeded the 750 ms safety limit and was terminated.'));
-        }, 750);
-        worker.onmessage = event => {
-          const result = event.data || {};
-          cleanup();
-          if (!result.ok) reject(new Error(`Invalid regular expression: ${result.error || 'unknown error'}`));
-          else resolve({ pattern, flags, inputLength: input.length, matchCount: result.total, matches: result.matches, truncated: result.truncated, executionLimitMs: 750 });
-        };
-        worker.onerror = event => {
-          cleanup();
-          reject(new Error(`Regex worker failed: ${event.message || 'unknown worker error'}`));
-        };
-        signal?.addEventListener('abort', onAbort, { once: true });
-        if (signal?.aborted) return onAbort();
-        worker.postMessage({ pattern, input, flags });
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('flatten requires a JSON object at the root.');
+        visit(value, '');
+        return output;
+      }
+      if (mode === 'unflatten') {
+        const separator = String(args.separator || '.').slice(0, 3);
+        if (!separator) throw new Error('unflatten separator cannot be empty.');
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('unflatten requires a JSON object at the root.');
+        const output = {};
+        for (const [key, entry] of Object.entries(value)) {
+          const parts = key.split(separator).map(safeKey);
+          if (!parts.length || parts.some(part => !part)) throw new Error(`Invalid flattened key '${key}'.`);
+          let current = output;
+          for (const part of parts.slice(0, -1)) {
+            if (current[part] == null) current[part] = {};
+            if (typeof current[part] !== 'object' || Array.isArray(current[part])) throw new Error(`Unflattening conflicts at '${part}'.`);
+            current = current[part];
+          }
+          const last = parts.at(-1);
+          if (Object.prototype.hasOwnProperty.call(current, last)) throw new Error(`Unflattening creates a duplicate key '${key}'.`);
+          current[last] = entry;
+        }
+        return output;
+      }
+      if (mode === 'filter_array' || mode === 'map_values') {
+        const arrayPath = String(args.array_path || '');
+        const array = arrayPath ? readJsonPath(value, arrayPath) : value;
+        if (!Array.isArray(array)) throw new Error(`'${arrayPath || '(root)'}' must refer to a JSON array.`);
+        const output = JSON.parse(JSON.stringify(value));
+        const target = arrayPath ? readJsonPath(output, arrayPath) : output;
+        const field = String(args.field || '');
+        if (!field) throw new Error(`${mode} requires a field path.`);
+        if (mode === 'filter_array') {
+          const operator = String(args.operator || 'equals');
+          const wanted = args.value;
+          const allowed = Array.isArray(args.values) ? args.values : [wanted];
+          const matches = item => {
+            const current = readJsonPath(item, field);
+            const left = current == null ? '' : String(current);
+            const right = wanted == null ? '' : String(wanted);
+            switch (operator) {
+              case 'equals': return left === right;
+              case 'not_equals': return left !== right;
+              case 'contains': return left.toLowerCase().includes(right.toLowerCase());
+              case 'gt': return Number.isFinite(Number(current)) && Number(current) > Number(wanted);
+              case 'gte': return Number.isFinite(Number(current)) && Number(current) >= Number(wanted);
+              case 'lt': return Number.isFinite(Number(current)) && Number(current) < Number(wanted);
+              case 'lte': return Number.isFinite(Number(current)) && Number(current) <= Number(wanted);
+              case 'empty': return !left.trim();
+              case 'not_empty': return !!left.trim();
+              case 'one_of': return allowed.some(value => String(value) === left);
+              default: throw new Error(`Unsupported JSON filter operator '${operator}'.`);
+            }
+          };
+          const filtered = target.filter(matches);
+          if (!arrayPath) return filtered;
+          writeJsonPath(output, arrayPath, filtered);
+          return output;
+        }
+        const operation = String(args.operation || 'trim');
+        for (const item of target) {
+          const current = readJsonPath(item, field);
+          if (current === undefined) continue;
+          let next = current;
+          if (operation === 'trim') next = typeof current === 'string' ? current.trim() : current;
+          else if (operation === 'lowercase') next = typeof current === 'string' ? current.toLowerCase() : current;
+          else if (operation === 'uppercase') next = typeof current === 'string' ? current.toUpperCase() : current;
+          else if (operation === 'to_number') { next = current === '' || current == null ? null : Number(current); if (next !== null && !Number.isFinite(next)) throw new Error(`Field '${field}' contains a value that cannot be converted to a number.`); }
+          else if (operation === 'to_string') next = current == null ? '' : String(current);
+          else if (operation === 'null_to_empty') next = current == null ? '' : current;
+          else throw new Error(`Unsupported JSON map operation '${operation}'.`);
+          writeJsonPath(item, field, next);
+        }
+        return output;
+      }
+      throw new Error(`Unsupported JSON transform mode '${mode}'.`);
+    }
+
+    async function validateDataset(args) {
+      const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
+      const delimiter = resolveCsvDelimiter(args.path, args.delimiter, text);
+      const dataset = csvDataset(args.path, text, delimiter);
+      const issues = [];
+      const maxIssues = Math.max(1, Math.min(200, Math.floor(Number(args.max_issues) || 50)));
+      const addIssue = (row, column, rule, message) => { if (issues.length < maxIssues) issues.push({ row, column, rule, message }); };
+      const requiredColumns = Array.isArray(args.required_columns) ? args.required_columns : [];
+      const indexes = new Map();
+      for (const column of requiredColumns) {
+        try { indexes.set(column, datasetColumnIndex(dataset.headers, column)); }
+        catch (error) { addIssue(0, column, 'required_column', error.message); }
+      }
+      const uniqueIndexes = [];
+      for (const column of (Array.isArray(args.unique_columns) ? args.unique_columns : [])) {
+        try { uniqueIndexes.push({ column, index: datasetColumnIndex(dataset.headers, column), seen: new Set() }); }
+        catch (error) { addIssue(0, column, 'unique_column', error.message); }
+      }
+      const rules = Array.isArray(args.rules) ? args.rules.slice(0, 100) : [];
+      const compiled = [];
+      for (const rule of rules) {
+        try { compiled.push({ ...rule, index: datasetColumnIndex(dataset.headers, rule.column) }); }
+        catch (error) { addIssue(0, rule?.column || '', 'rule_column', error.message); }
+      }
+      const rowsChecked = Math.min(dataset.rows.length, 100000);
+      for (let rowIndex = 0; rowIndex < rowsChecked; rowIndex++) {
+        const row = dataset.rows[rowIndex];
+        for (const item of uniqueIndexes) {
+          const value = String(row[item.index] ?? '').trim();
+          if (!value) continue;
+          if (item.seen.has(value)) addIssue(rowIndex + 2, item.column, 'unique', `Duplicate value '${value.slice(0, 100)}'.`);
+          else item.seen.add(value);
+        }
+        for (const rule of compiled) {
+          const raw = String(row[rule.index] ?? '').trim();
+          const expected = rule.value == null ? '' : String(rule.value);
+          const number = Number(raw);
+          const values = Array.isArray(rule.values) ? rule.values.map(String) : [expected];
+          let valid = true;
+          switch (String(rule.operator || 'not_empty')) {
+            case 'not_empty': valid = !!raw; break;
+            case 'is_number': valid = !!raw && Number.isFinite(number); break;
+            case 'min': valid = !!raw && Number.isFinite(number) && number >= Number(rule.value); break;
+            case 'max': valid = !!raw && Number.isFinite(number) && number <= Number(rule.value); break;
+            case 'equals': valid = raw === expected; break;
+            case 'not_equals': valid = raw !== expected; break;
+            case 'contains': valid = raw.toLowerCase().includes(expected.toLowerCase()); break;
+            case 'one_of': valid = values.includes(raw); break;
+            case 'is_email': valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw); break;
+            case 'is_url': { try { const url = new URL(raw); valid = ['http:', 'https:'].includes(url.protocol); } catch (_) { valid = false; } break; }
+            default: addIssue(0, rule.column, 'unknown_rule', `Unsupported validation operator '${rule.operator}'.`); valid = true;
+          }
+          if (!valid) addIssue(rowIndex + 2, rule.column, rule.operator, `Value '${raw.slice(0, 100)}' failed ${rule.operator}${expected ? ` (${expected})` : ''}.`);
+          if (issues.length >= maxIssues) break;
+        }
+        if (issues.length >= maxIssues) break;
+      }
+      return { path: args.path, delimiter: delimiter === '\t' ? 'TAB' : delimiter, rows: dataset.rows.length, rowsChecked, columns: dataset.headers, valid: issues.length === 0 && rowsChecked === dataset.rows.length, issueCount: issues.length, issues, issuesTruncated: issues.length >= maxIssues, rowsTruncated: rowsChecked < dataset.rows.length, note: 'Validation is deterministic for the supplied rules. No source file was modified.' };
+    }
+
+    function reportMarkdown(args) {
+      const content = String(args.content || '');
+      const title = String(args.title || '').trim().slice(0, 200);
+      const summary = String(args.summary || '').trim().slice(0, 1000);
+      const parts = [];
+      if (title) parts.push(`# ${title}`);
+      if (summary) parts.push(`> **Summary:** ${summary}`);
+      if (args.include_toc) {
+        const headings = content.split(/\r?\n/).map(line => line.match(/^(#{1,6})\s+(.+)$/)).filter(Boolean);
+        if (headings.length) {
+          const slugCounts = new Map();
+          const rows = headings.slice(0, 100).map(match => {
+            const label = match[2].trim();
+            let slug = label.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section';
+            const count = (slugCounts.get(slug) || 0) + 1; slugCounts.set(slug, count); if (count > 1) slug += `-${count}`;
+            return `${'  '.repeat(Math.max(0, match[1].length - 1))}- [${label}](#${slug})`;
+          });
+          parts.push(`## Contents\n\n${rows.join('\n')}`);
+        }
+      }
+      if (content) parts.push(content);
+      parts.push(`---\n\nGenerated by RunMind 2.0.0 · ${new Date().toISOString()}`);
+      return parts.join('\n\n') + '\n';
+    }
+
+    function markdownReportHtml(content) {
+      const rendered = renderMarkdown(content);
+      const document = new DOMParser().parseFromString(`<body>${rendered}</body>`, 'text/html');
+      const headings = [...document.body.querySelectorAll('h1,h2,h3,h4,h5,h6')];
+      const counts = new Map();
+      for (const heading of headings) {
+        const base = heading.textContent.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section';
+        const count = (counts.get(base) || 0) + 1; counts.set(base, count);
+        heading.id = count > 1 ? `${base}-${count}` : base;
+      }
+      const toc = headings.length ? `<nav class="report-toc"><strong>Contents</strong><ol>${headings.map(heading => `<li class="level-${heading.tagName.slice(1)}"><a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.textContent)}</a></li>`).join('')}</ol></nav>` : '';
+      return { html: document.body.innerHTML, toc };
+    }
+
+    function galleryRelativePath(outputPath, imagePath) {
+      const from = safeRelativePath(outputPath).slice(0, -1);
+      const to = safeRelativePath(imagePath);
+      let common = 0;
+      while (common < from.length && common < to.length && from[common].toLowerCase() === to[common].toLowerCase()) common++;
+      const parts = [...new Array(from.length - common).fill('..'), ...to.slice(common)];
+      return parts.map(part => part === '..' ? '..' : encodeURIComponent(part)).join('/');
+    }
+    async function buildImageGalleryHtml(args, outputPath) {
+      if (!agentDirectoryHandle) throw new Error('Select a workspace folder before creating an image gallery.');
+      const images = Array.isArray(args.images) ? args.images : [];
+      if (!images.length || images.length > 200) throw new Error('Image galleries require between 1 and 200 images.');
+      const cards = [];
+      let totalImageBytes = 0;
+      for (const item of images) {
+        const path = String(item?.path || '').trim();
+        if (!path) throw new Error('Every gallery image requires a workspace-relative path.');
+        const { file, source } = await readTaskFile(path, 25 * 1024 * 1024);
+        if (source !== 'workspace') throw new Error(`Gallery image '${path}' must be inside the selected workspace, not a conversation attachment.`);
+        totalImageBytes += file.size;
+        if (totalImageBytes > 100 * 1024 * 1024) throw new Error('Image galleries are limited to 100 MB of source images in total.');
+        const extension = path.split('.').pop().toLowerCase();
+        const mime = String(file.type || '').toLowerCase();
+        const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+        const inferred = ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' })[extension];
+        if (!(allowed.includes(mime) || (!mime && allowed.includes(inferred)))) throw new Error(`'${path}' is not a supported PNG, JPEG, WebP, or GIF image.`);
+        const signature = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+        const png = signature.length >= 8 && signature[0] === 0x89 && signature[1] === 0x50 && signature[2] === 0x4E && signature[3] === 0x47;
+        const jpeg = signature[0] === 0xFF && signature[1] === 0xD8 && signature[2] === 0xFF;
+        const gif = String.fromCharCode(...signature.slice(0, 6)).match(/^GIF8[79]a$/);
+        const webp = String.fromCharCode(...signature.slice(0, 4)) === 'RIFF' && String.fromCharCode(...signature.slice(8, 12)) === 'WEBP';
+        if (!(png || jpeg || gif || webp)) throw new Error(`'${path}' does not have a valid supported image signature.`);
+        const href = galleryRelativePath(outputPath, path);
+        const alt = String(item?.alt || item?.caption || file.name).slice(0, 240);
+        const caption = String(item?.caption || file.name).slice(0, 500);
+        cards.push(`<figure><a href="${href}" target="_blank" rel="noopener noreferrer"><img src="${href}" alt="${escapeHtml(alt)}" loading="lazy"></a><figcaption>${escapeHtml(caption)}</figcaption></figure>`);
+      }
+      const title = escapeHtml(String(args.title || 'Image gallery').slice(0, 200));
+      return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>:root{color-scheme:light dark}*{box-sizing:border-box}body{margin:0;padding:32px;font:15px/1.5 system-ui,sans-serif;background:#f4f6f8;color:#202833}main{max-width:1500px;margin:auto}h1{margin:0 0 24px}.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px}figure{margin:0;padding:10px;background:white;border:1px solid #d7dee7;border-radius:12px;box-shadow:0 3px 14px #17212b12}img{display:block;width:100%;height:220px;object-fit:contain;background:#eef1f5;border-radius:7px}figcaption{padding:10px 3px 2px;overflow-wrap:anywhere;color:#465364}@media(prefers-color-scheme:dark){body{background:#202326;color:#eee}figure{background:#2c3034;border-color:#454b52}img{background:#191c1f}figcaption{color:#d3d8df}}@media(max-width:560px){body{padding:18px}.gallery{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}img{height:160px}}</style></head><body><main><h1>${title}</h1><div class="gallery">${cards.join('')}</div></main></body></html>`;
+    }
+
+    async function verifyWorkspaceArtifact(path, requestedFormat = 'auto', signal, requestedDelimiter = '') {
+      const { file } = await readTaskFile(path, 50 * 1024 * 1024);
+      const extension = String(path).split('.').pop().toLowerCase();
+      const format = requestedFormat && requestedFormat !== 'auto' ? requestedFormat : ({ docx: 'docx', xlsx: 'xlsx', pdf: 'pdf', svg: 'svg', html: 'html', htm: 'html', json: 'json', csv: 'csv', tsv: 'tsv', mmd: 'mermaid', md: 'markdown' })[extension] || 'binary';
+      const checks = [];
+      const pass = (name, detail) => checks.push({ name, passed: true, detail });
+      if (format === 'docx' || format === 'xlsx') {
+        const archive = await parseWorkspaceZip({ path }, signal);
+        const entries = new Map(archive.entries.map(entry => [entry.path, entry]));
+        const required = format === 'docx' ? ['[Content_Types].xml', '_rels/.rels', 'word/document.xml'] : ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml'];
+        for (const name of required) if (!entries.has(name)) throw new Error(`${format.toUpperCase()} package is missing required entry '${name}'.`);
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const requiredXml = format === 'docx' ? ['word/document.xml', 'word/styles.xml', 'word/numbering.xml', '[Content_Types].xml'] : ['xl/workbook.xml', '[Content_Types].xml'];
+        for (const name of requiredXml) if (!entries.has(name)) throw new Error(`Package XML '${name}' is missing.`);
+        const xmlParts = archive.entries.filter(entry => /\.(?:xml|rels)$/i.test(entry.path));
+        for (const entry of xmlParts) {
+          const body = await decompressZipEntry(bytes, entry, signal);
+          const document = new DOMParser().parseFromString(new TextDecoder().decode(body), 'application/xml');
+          if (document.querySelector('parsererror') || !document.documentElement) throw new Error(`Package XML '${entry.path}' is invalid.`);
+          pass(`XML ${entry.path}`, document.documentElement.localName || document.documentElement.nodeName);
+        }
+        if (format === 'xlsx' && !xmlParts.some(entry => /^xl\/worksheets\/sheet\d+\.xml$/i.test(entry.path))) throw new Error('XLSX workbook contains no worksheet XML.');
+        pass('ZIP structure', `${archive.entryCount} entries, CRC-32 checked for every XML/relationship part`);
+        return { valid: true, format, size: file.size, checks, note: 'Structural validation only; this does not prove visual layout or every Office application feature.' };
+      }
+      if (format === 'pdf') {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const text = new TextDecoder('latin1').decode(bytes);
+        if (!/^%PDF-1\.[0-7]/.test(text) || !/%%EOF\s*$/.test(text) || !/startxref\s+\d+/.test(text)) throw new Error('PDF header, cross-reference pointer, or EOF marker is missing.');
+        const pages = (text.match(/\/Type\s*\/Page\b/g) || []).length;
+        if (!pages) throw new Error('PDF contains no page objects.');
+        pass('PDF structure', `${pages} page object(s), header and EOF markers present`);
+      } else if (format === 'svg' || format === 'html') {
+        const text = await file.text();
+        const document = new DOMParser().parseFromString(text, format === 'svg' ? 'image/svg+xml' : 'text/html');
+        if (format === 'svg' && (document.querySelector('parsererror') || document.documentElement.localName !== 'svg')) throw new Error('SVG document is not well-formed or has no svg root.');
+        if (format === 'html' && document.documentElement.localName.toLowerCase() !== 'html') throw new Error('HTML document has no html root.');
+        pass(`${format.toUpperCase()} document`, `Root element: ${document.documentElement.localName}`);
+      } else if (format === 'mermaid') {
+        const text = await file.text();
+        if (!/^flowchart\s+(?:TD|TB|LR|RL|BT)\s*\r?\n/.test(text) || !/\bN\d+\s*\[/.test(text)) throw new Error('Mermaid source must contain a supported flowchart declaration and at least one node.');
+        pass('Mermaid source', 'Flowchart declaration and node definitions found');
+      } else if (format === 'markdown') {
+        const text = await file.text();
+        if (!text.trim()) throw new Error('Markdown artifact is empty.');
+        pass('Markdown document', `${text.length.toLocaleString()} readable characters`);
+      } else if (format === 'json') {
+        JSON.parse(await file.text());
+        pass('JSON syntax', 'JSON.parse completed without errors');
+      } else if (format === 'csv' || format === 'tsv') {
+        const text = await file.text();
+        const delimiter = requestedDelimiter ? normalizeCsvDelimiter(requestedDelimiter) : format === 'tsv' ? '\t' : resolveCsvDelimiter(path, '', text);
+        const rows = parseCsvRows(text, delimiter);
+        if (!rows.length) throw new Error('Dataset contains no rows.');
+        pass('Delimited data', `${Math.max(0, rows.length - 1)} data row(s), ${rows[0].length} column(s)`);
+      } else {
+        pass('File readability', 'File exists and is readable; no format-specific validator is available.');
+      }
+      return { valid: true, format, size: file.size, checks, note: 'Structural validation only; content correctness remains a separate review.' };
+    }
+
+    async function saveGeneratedArtifact(path, blob, format, title, detail, signal) {
+      if (!agentDirectoryHandle) throw new Error('Select a workspace folder before creating files.');
+      const approved = await requireAgentApproval({ title, subtitle: `New ${format.toUpperCase()} file · existing files are never overwritten`, detail: `${path}\n${detail || `${blob.size.toLocaleString()} bytes`}`, risky: true }, signal);
+      if (!approved) return { cancelled: true, message: 'User declined artifact creation.' };
+      const written = await writeWorkspaceFile(path, blob, false);
+      try {
+        const verification = await verifyWorkspaceArtifact(path, format, signal);
+        return { created: written.path, bytes: written.bytes, format: format.toUpperCase(), verified: !!verification.valid, verification };
+      } catch (error) {
+        return { created: written.path, bytes: written.bytes, format: format.toUpperCase(), verified: false, verificationError: error?.message || String(error), warning: 'The file was written, but automatic structural verification did not complete.' };
+      }
+    }
+
+    async function assertNewWorkspacePath(path) {
+      const parts = safeRelativePath(path);
+      const name = parts.pop();
+      const directory = await getDirectoryAtPath(agentDirectoryHandle, parts.join('/'));
+      try { await directory.getFileHandle(name, { create: false }); throw new Error(`File '${path}' already exists; overwriting is disabled.`); }
+      catch (error) { if (error?.name !== 'NotFoundError') throw error; }
+    }
+
+    function buildChartSvg(args) {
+      if (!window.RunMindArtifactTools?.buildChartSvg) throw new Error('The local chart generator did not load.');
+      return window.RunMindArtifactTools.buildChartSvg(args);
+    }
+    function buildDiagramSvg(args) {
+      const nodes = Array.isArray(args.nodes) ? args.nodes.map(value => String(value).slice(0, 90)) : [];
+      const edges = Array.isArray(args.edges) ? args.edges : [];
+      if (!nodes.length || nodes.length > 16) throw new Error('Provide between 1 and 16 node labels.');
+      if (edges.length > 40) throw new Error('Diagrams support at most 40 connections.');
+      const direction = ['TD', 'TB', 'LR', 'RL', 'BT'].includes(String(args.direction || '').toUpperCase()) ? String(args.direction).toUpperCase() : 'TD';
+      const horizontal = direction === 'LR' || direction === 'RL';
+      const columns = horizontal ? Math.min(4, nodes.length) : 1;
+      const rows = Math.ceil(nodes.length / columns);
+      const nodeW = horizontal ? 250 : 320, nodeH = 70, gapX = 70, gapY = 65;
+      const width = horizontal ? 100 + columns * (nodeW + gapX) : 760;
+      const height = 100 + rows * (nodeH + gapY);
+      const centers = nodes.map((_, index) => {
+        let row = horizontal ? Math.floor(index / columns) : index;
+        let column = horizontal ? index % columns : 0;
+        if (direction === 'RL') column = columns - 1 - column;
+        if (direction === 'BT') row = rows - 1 - row;
+        return { x: horizontal ? 50 + column * (nodeW + gapX) + nodeW / 2 : width / 2, y: 65 + row * (nodeH + gapY) + nodeH / 2 };
       });
+      const edgeSvg = edges.map(edge => {
+        const from = Number(edge?.from), to = Number(edge?.to);
+        if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= nodes.length || to >= nodes.length || from === to) throw new Error('Every diagram edge must connect two different, valid zero-based node indexes.');
+        const a = centers[from], b = centers[to], dx = b.x - a.x, dy = b.y - a.y;
+        const scaleA = Math.min((nodeW / 2) / Math.max(1, Math.abs(dx)), (nodeH / 2) / Math.max(1, Math.abs(dy)));
+        const scaleB = Math.min((nodeW / 2) / Math.max(1, Math.abs(dx)), (nodeH / 2) / Math.max(1, Math.abs(dy)));
+        const sx = a.x + dx * scaleA, sy = a.y + dy * scaleA;
+        const ex = b.x - dx * scaleB, ey = b.y - dy * scaleB;
+        return `<path d="M ${sx.toFixed(1)} ${sy.toFixed(1)} L ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="#778395" stroke-width="2.2" marker-end="url(#arrow)"/>`;
+      }).join('');
+      const nodeSvg = nodes.map((label, index) => {
+        const center = centers[index];
+        return `<g><rect x="${center.x - nodeW / 2}" y="${center.y - nodeH / 2}" width="${nodeW}" height="${nodeH}" rx="10" fill="#edf3fb" stroke="#607fae" stroke-width="1.5"/><text x="${center.x}" y="${center.y + 5}" text-anchor="middle" font-size="15" fill="#23364d">${escapeHtml(label)}</text></g>`;
+      }).join('');
+      const title = escapeHtml(String(args.title || 'Diagram').slice(0, 120));
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${title}"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#778395"/></marker></defs><text x="${width / 2}" y="30" text-anchor="middle" font-size="21" font-weight="600" fill="#23364d">${title}</text>${edgeSvg}${nodeSvg}</svg>`;
     }
 
     function evaluateSafeArithmetic(source) {
@@ -6105,13 +6410,13 @@
       'current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf',
       'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file',
       'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'validate_json',
-      'transform_json', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders',
+      'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders',
       'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap',
       'read_rss_feed', 'page_to_markdown', 'compare_webpages'
     ]);
     const WORKFLOW_READ_APPROVAL_TOOLS = new Set([
       'fetch_webpage','web_search','research_topic','list_files','read_file','search_files','file_info','checksum_file',
-      'compare_files','project_overview','validate_json','validate_json_schema','read_pdf','inspect_archive',
+      'compare_files','project_overview','validate_json','validate_json_schema','validate_dataset','verify_artifact','read_pdf','inspect_archive',
       'infer_dataset_schema','analyze_csv','compare_datasets','generate_statistics','compare_folders','read_image',
       'image_metadata','extract_links','extract_metadata','extract_tables','read_sitemap','read_rss_feed',
       'page_to_markdown','check_links','compare_webpages','crawl_website'
@@ -6683,7 +6988,7 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'validate_json', 'transform_json', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic']);
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic']);
       if (name.startsWith('mcp_')) return await executeMcpTool(name, args, signal);
       if (readOnlyTools.has(name) && !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
         const detail = name === 'web_search' ? String(args.query || '') : name === 'fetch_webpage' ? String(args.url || '') : name === 'read_file' || name === 'list_files' ? String(args.path || '(selected folder root)') : JSON.stringify(args);
@@ -6837,12 +7142,67 @@
           return { url: page.url, ...(page.nativeFailure ? { native_reader_failure: page.nativeFailure } : {}), tableCount: page.document.querySelectorAll('table').length, tables };
         }
         case 'read_sitemap': {
-          const page = await fetchWebDocument(args.url, signal, 'application/xml,text/xml,*/*');
-          const maximum = Math.max(1, Math.min(500, Number(args.max_urls) || 100));
-          const isIndex = xmlElementsByName(page.document, 'sitemap').some(node => String(node.parentNode?.localName || '').toLowerCase() === 'sitemapindex');
-          const urls = xmlElementsByName(page.document, 'url').filter(node => String(node.parentNode?.localName || '').toLowerCase() === 'urlset').slice(0, maximum).map(node => ({ url: xmlChildText(node, ['loc']), lastModified: xmlChildText(node, ['lastmod']), changeFrequency: xmlChildText(node, ['changefreq']), priority: xmlChildText(node, ['priority']) })).filter(item => /^https?:\/\//i.test(item.url));
-          const childSitemaps = isIndex ? xmlElementsByName(page.document, 'sitemap').slice(0, maximum).map(node => xmlChildText(node, ['loc'])).filter(Boolean) : [];
-          return { url: page.url, ...(page.nativeFailure ? { native_reader_failure: page.nativeFailure } : {}), type: isIndex ? 'sitemap-index' : 'urlset', urls, childSitemaps };
+          let rootUrl;
+          try { rootUrl = new URL(String(args.url || '').trim()); } catch (_) { throw new Error('Provide a valid absolute sitemap URL.'); }
+          if (!['http:', 'https:'].includes(rootUrl.protocol)) throw new Error('Sitemap URLs must use HTTP or HTTPS.');
+          rootUrl.hash = '';
+          const host = rootUrl.hostname.toLowerCase();
+          const maximumUrls = Math.max(1, Math.min(2000, Math.floor(Number(args.max_urls) || 250)));
+          const maximumSitemaps = Math.max(1, Math.min(20, Math.floor(Number(args.max_sitemaps) || 10)));
+          const maximumScanned = Math.max(maximumUrls, Math.min(50000, maximumUrls * 25));
+          const query = String(args.query || '').trim().toLowerCase();
+          const queue = [rootUrl.href]; const queued = new Set(queue); const visitedSitemaps = new Set(); const seenUrls = new Set();
+          const urls = []; const errors = []; let scannedUrls = 0, crossHostSitemapsSkipped = 0, urlsetCount = 0, indexCount = 0;
+          let nativeFailure = '';
+          while (queue.length && visitedSitemaps.size < maximumSitemaps && scannedUrls < maximumScanned && urls.length < maximumUrls) {
+            if (signal?.aborted) throw new DOMException('Task cancelled.', 'AbortError');
+            const sitemapUrl = queue.shift();
+            if (visitedSitemaps.has(sitemapUrl)) continue;
+            visitedSitemaps.add(sitemapUrl);
+            try {
+              const page = await fetchWebDocument(sitemapUrl, signal, 'application/xml,text/xml,*/*');
+              nativeFailure ||= page.nativeFailure || '';
+              const finalHostname = (() => { try { return new URL(page.url || sitemapUrl).hostname.toLowerCase(); } catch (_) { return ''; } })();
+              if (finalHostname !== host) throw new Error(`Sitemap redirected outside the starting hostname (${finalHostname || 'unknown'}).`);
+              const document = page.document;
+              const rootName = String(document.documentElement?.localName || '').toLowerCase();
+              if (rootName === 'sitemapindex') {
+                indexCount++;
+                const children = xmlElementsByName(document, 'sitemap').filter(node => String(node.parentNode?.localName || '').toLowerCase() === 'sitemapindex');
+                for (const node of children) {
+                  const location = xmlChildText(node, ['loc']);
+                  if (!location) continue;
+                  let child;
+                  try { child = new URL(location, page.url || sitemapUrl); } catch (_) { continue; }
+                  if (!['http:', 'https:'].includes(child.protocol)) continue;
+                  if (child.hostname.toLowerCase() !== host) { crossHostSitemapsSkipped++; continue; }
+                  child.hash = '';
+                  if (!queued.has(child.href) && !visitedSitemaps.has(child.href) && queue.length + visitedSitemaps.size < maximumSitemaps) { queued.add(child.href); queue.push(child.href); }
+                }
+              } else if (rootName === 'urlset') {
+                urlsetCount++;
+                for (const node of xmlElementsByName(document, 'url').filter(item => String(item.parentNode?.localName || '').toLowerCase() === 'urlset')) {
+                  if (scannedUrls >= maximumScanned || urls.length >= maximumUrls) break;
+                  scannedUrls++;
+                  const item = { url: xmlChildText(node, ['loc']), lastModified: xmlChildText(node, ['lastmod']), changeFrequency: xmlChildText(node, ['changefreq']), priority: xmlChildText(node, ['priority']) };
+                  let target;
+                  try { target = new URL(item.url, page.url || sitemapUrl); } catch (_) { continue; }
+                  if (!['http:', 'https:'].includes(target.protocol) || target.hostname.toLowerCase() !== host) continue;
+                  target.hash = ''; item.url = target.href;
+                  if (seenUrls.has(item.url)) continue;
+                  seenUrls.add(item.url);
+                  if (!query || `${item.url} ${item.lastModified} ${item.changeFrequency} ${item.priority}`.toLowerCase().includes(query)) urls.push(item);
+                }
+              } else {
+                throw new Error(`Unsupported sitemap root element '${rootName || '(missing)'}'.`);
+              }
+            } catch (error) {
+              if (error?.name === 'AbortError') throw error;
+              if (visitedSitemaps.size === 1) throw error;
+              errors.push({ sitemap: sitemapUrl, error: String(error?.message || error).slice(0, 500) });
+            }
+          }
+          return { url: rootUrl.href, type: indexCount ? 'sitemap-index' : 'urlset', hostname: host, query: query || null, sitemapsRead: visitedSitemaps.size, sitemapsQueued: queued.size, urlsetsRead: urlsetCount, scannedUrls, matchingUrls: urls.length, urls, crossHostSitemapsSkipped, errors, truncated: queue.length > 0 || scannedUrls >= maximumScanned || urls.length >= maximumUrls, ...(nativeFailure ? { native_reader_failure: nativeFailure } : {}), limits: { maxSitemaps: maximumSitemaps, maxMatchingUrls: maximumUrls, maxScannedUrls: maximumScanned } };
         }
         case 'read_rss_feed': {
           const page = await fetchWebDocument(args.url, signal, 'application/rss+xml,application/atom+xml,application/xml,text/xml,*/*');
@@ -7073,23 +7433,32 @@ Path traversal, symlinks, encrypted files and unsupported compression are reject
         case 'infer_dataset_schema': return await inferCsvSchema(args);
         case 'join_datasets': return await joinCsvDatasets(args, signal);
         case 'transform_json': {
-          const { text } = await readWorkspaceText(args.path); const value = JSON.parse(text);
-          const sort = input => Array.isArray(input) ? input.map(sort) : input && typeof input === 'object' ? Object.fromEntries(Object.keys(input).sort().map(key => [key, sort(input[key])])) : input;
-          const transformed = args.mode === 'minify' ? JSON.stringify(value) : JSON.stringify(args.mode === 'sort_keys' ? sort(value) : value, null, args.mode === 'pretty' || args.mode === 'sort_keys' ? 2 : 0);
-          return { path: args.path, mode: args.mode, content: transformed.slice(0, 100000), truncated: transformed.length > 100000 };
+          const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
+          const value = JSON.parse(text);
+          const transformedValue = transformJsonValue(value, args);
+          const transformed = JSON.stringify(transformedValue, null, args.mode === 'pretty' || args.mode === 'sort_keys' ? 2 : args.mode === 'minify' ? 0 : 2);
+          if (transformed.length > 10 * 1024 * 1024) throw new Error('Transformed JSON exceeds the 10 MB output limit.');
+          if (args.destination) {
+            const path = String(args.destination).trim();
+            if (!path) throw new Error('Destination path cannot be empty.');
+            return await saveGeneratedArtifact(path, new Blob([transformed], { type: 'application/json;charset=utf-8' }), 'json', 'Save transformed JSON?', `${args.path} → ${path}\n${transformed.length.toLocaleString()} characters`, signal);
+          }
+          return { path: args.path, mode: args.mode, content: transformed.slice(0, 100000), characters: transformed.length, truncated: transformed.length > 100000 };
         }
+        case 'validate_dataset': return await validateDataset(args);
+        case 'verify_artifact': return await verifyWorkspaceArtifact(args.path, args.format || 'auto', signal, args.delimiter || '');
         case 'analyze_csv': {
           const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
-          const delimiter = normalizeCsvDelimiter(args.delimiter || ',');
+          const delimiter = resolveCsvDelimiter(args.path, args.delimiter, text);
           return summarizeCsv(args.path, text, delimiter);
         }
         case 'generate_statistics': {
           const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
-          return summarizeCsv(args.path, text, normalizeCsvDelimiter(args.delimiter || ','));
+          return summarizeCsv(args.path, text, resolveCsvDelimiter(args.path, args.delimiter, text));
         }
         case 'filter_dataset': {
           const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
-          const delimiter = normalizeCsvDelimiter(args.delimiter || ',');
+          const delimiter = resolveCsvDelimiter(args.path, args.delimiter, text);
           const dataset = csvDataset(args.path, text, delimiter);
           const index = datasetColumnIndex(dataset.headers, args.column);
           const wanted = String(args.value ?? '').toLowerCase();
@@ -7118,7 +7487,7 @@ ${rows.length} of ${dataset.rows.length} rows retained`, risky: true }, signal);
         }
         case 'deduplicate_dataset': {
           const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
-          const delimiter = normalizeCsvDelimiter(args.delimiter || ',');
+          const delimiter = resolveCsvDelimiter(args.path, args.delimiter, text);
           const dataset = csvDataset(args.path, text, delimiter);
           const indexes = Array.isArray(args.columns) && args.columns.length
             ? args.columns.map(column => datasetColumnIndex(dataset.headers, column))
@@ -7133,17 +7502,19 @@ ${dataset.rows.length - rows.length} duplicate row(s) removed`, risky: true }, s
         }
         case 'merge_csv': {
           if (!Array.isArray(args.paths) || args.paths.length < 2 || args.paths.length > 20) throw new Error('Provide between 2 and 20 CSV paths.');
-          const delimiter = normalizeCsvDelimiter(args.delimiter || ','); let headers = null; const allRows = [];
-          for (const path of args.paths) { const { text } = await readWorkspaceText(path, 10 * 1024 * 1024); const data = csvDataset(path, text, delimiter); if (!headers) headers = data.headers; else if (JSON.stringify(headers) !== JSON.stringify(data.headers)) throw new Error(`CSV headers do not match in '${path}'.`); allRows.push(...data.rows); if (allRows.length > 200000) throw new Error('Merged dataset exceeds the 200,000-row safety limit.'); }
+          let outputDelimiter = args.delimiter ? normalizeCsvDelimiter(args.delimiter) : ''; let headers = null; const allRows = [];
+          for (const path of args.paths) { const { text } = await readWorkspaceText(path, 10 * 1024 * 1024); const delimiter = args.delimiter ? outputDelimiter : resolveCsvDelimiter(path, '', text); if (!outputDelimiter) outputDelimiter = delimiter; const data = csvDataset(path, text, delimiter); if (!headers) headers = data.headers; else if (JSON.stringify(headers) !== JSON.stringify(data.headers)) throw new Error(`CSV headers do not match in '${path}'.`); allRows.push(...data.rows); if (allRows.length > 200000) throw new Error('Merged dataset exceeds the 200,000-row safety limit.'); }
           const approved = await requireAgentApproval({ title: 'Merge CSV datasets?', subtitle: 'Create new CSV · source files remain unchanged', detail: `${args.paths.join('\n')}\n→ ${args.destination}\n${allRows.length} data rows`, risky: true }, signal);
           if (!approved) return { cancelled: true };
-          const written = await writeWorkspaceFile(args.destination, new Blob([csvRowsToText([headers, ...allRows], delimiter)], { type: 'text/csv;charset=utf-8' }), false);
+          const written = await writeWorkspaceFile(args.destination, new Blob([csvRowsToText([headers, ...allRows], outputDelimiter)], { type: 'text/csv;charset=utf-8' }), false);
           return { saved: written.path, sourceFiles: args.paths.length, rows: allRows.length, columns: headers.length };
         }
         case 'compare_datasets': {
-          const delimiter = normalizeCsvDelimiter(args.delimiter || ',');
-          const left = csvDataset(args.path_a, (await readWorkspaceText(args.path_a, 10 * 1024 * 1024)).text, delimiter);
-          const right = csvDataset(args.path_b, (await readWorkspaceText(args.path_b, 10 * 1024 * 1024)).text, delimiter);
+          const leftText = await readWorkspaceText(args.path_a, 10 * 1024 * 1024); const rightText = await readWorkspaceText(args.path_b, 10 * 1024 * 1024);
+          const delimiter = args.delimiter ? normalizeCsvDelimiter(args.delimiter) : resolveCsvDelimiter(args.path_a, '', leftText.text);
+          const rightDelimiter = args.delimiter ? delimiter : resolveCsvDelimiter(args.path_b, '', rightText.text);
+          const left = csvDataset(args.path_a, leftText.text, delimiter);
+          const right = csvDataset(args.path_b, rightText.text, rightDelimiter);
           const leftSet = new Set(left.rows.map(row => JSON.stringify(row))); const rightSet = new Set(right.rows.map(row => JSON.stringify(row)));
           return { headersMatch: JSON.stringify(left.headers) === JSON.stringify(right.headers), leftRows: left.rows.length, rightRows: right.rows.length, onlyInA: [...leftSet].filter(row => !rightSet.has(row)).length, onlyInB: [...rightSet].filter(row => !leftSet.has(row)).length, headerA: left.headers, headerB: right.headers };
         }
@@ -7161,30 +7532,71 @@ ${dataset.rows.length - rows.length} duplicate row(s) removed`, risky: true }, s
           return { folderA: args.folder_a, folderB: args.folder_b, onlyInA: onlyA, onlyInB: onlyB, sizeChanged, scanTruncated: a.truncated || b.truncated, scan: { folderA: { filesScanned: a.filesScanned, stopReason: a.stopReason || null }, folderB: { filesScanned: b.filesScanned, stopReason: b.stopReason || null } }, note: 'Files with equal sizes are not guaranteed to have equal contents.' };
         }
         case 'create_markdown_report': {
-          const content = String(args.content || ''); if (content.length > 2 * 1024 * 1024) throw new Error('Report content exceeds 2 MB.');
-          const approved = await requireAgentApproval({ title: 'Create Markdown report?', subtitle: 'New workspace file · no overwrite', detail: `${args.path}
-${content.slice(0, 2500)}`, risky: true }, signal);
-          if (!approved) return { cancelled: true };
-          return { created: (await writeWorkspaceFile(args.path, new Blob([content], { type: 'text/markdown;charset=utf-8' }), false)).path };
+          const content = reportMarkdown(args);
+          if (content.length > 2 * 1024 * 1024) throw new Error('Report content exceeds 2 MB.');
+          return await saveGeneratedArtifact(args.path, new Blob([content], { type: 'text/markdown;charset=utf-8' }), 'markdown', 'Create Markdown report?', `${content.length.toLocaleString()} characters`, signal);
         }
         case 'create_html_report': {
           const content = String(args.content || ''); if (content.length > 2 * 1024 * 1024) throw new Error('Report content exceeds 2 MB.');
           const title = String(args.title || 'Research report').slice(0, 200);
-          const isDocument = /<!doctype html|<html[\s>]/i.test(content);
-          const html = isDocument ? content : `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:980px;margin:40px auto;padding:0 24px;color:#222}pre{overflow:auto;background:#f4f4f4;padding:14px;border-radius:8px}</style></head><body><h1>${escapeHtml(title)}</h1><pre>${escapeHtml(content)}</pre></body></html>`;
-          const approved = await requireAgentApproval({ title: 'Create HTML report?', subtitle: 'New workspace file · no overwrite', detail: `${args.path}
-${content.slice(0, 2000)}`, risky: true }, signal);
-          if (!approved) return { cancelled: true };
-          return { created: (await writeWorkspaceFile(args.path, new Blob([html], { type: 'text/html;charset=utf-8' }), false)).path };
+          let html = content;
+          if (!/<!doctype html|<html[\s>]/i.test(content)) {
+            const enriched = `${args.summary ? `> **Summary:** ${String(args.summary).slice(0, 1000)}\n\n` : ''}${content}`;
+            const rendered = markdownReportHtml(enriched);
+            html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{font:16px/1.65 system-ui,sans-serif;max-width:1040px;margin:40px auto;padding:0 26px;color:#202833}h1,h2,h3{line-height:1.25;margin-top:1.6em}pre{overflow:auto;background:#f3f5f8;padding:14px;border-radius:8px}code{font-family:ui-monospace,monospace;background:#f1f2f4;padding:2px 4px;border-radius:4px}pre code{background:none;padding:0}table{border-collapse:collapse;width:100%;display:block;overflow:auto}th,td{border:1px solid #d8dee7;padding:8px;text-align:left}th{background:#f1f4f8}.report-toc{background:#f5f7fa;padding:16px 22px;border-radius:10px}.report-toc ol{padding-left:22px}.report-toc .level-3{margin-left:14px}.report-toc .level-4{margin-left:28px}blockquote{border-left:3px solid #8295ad;margin-left:0;padding-left:16px;color:#536174}img{max-width:100%}a{color:#4056b8}footer{margin-top:48px;padding-top:16px;border-top:1px solid #d8dee7;color:#718096;font-size:12px}@media(prefers-color-scheme:dark){body{background:#202326;color:#e8ebef}pre,code,.report-toc{background:#2b3036}th{background:#303740}td,th{border-color:#4b5562}blockquote{color:#c0cad6}}</style></head><body><h1>${escapeHtml(title)}</h1>${args.include_toc ? rendered.toc : ''}${rendered.html}<footer>Generated by RunMind · ${new Date().toISOString()}</footer></body></html>`;
+          }
+          return await saveGeneratedArtifact(args.path, new Blob([html], { type: 'text/html;charset=utf-8' }), 'html', 'Create HTML report?', `${html.length.toLocaleString()} characters`, signal);
         }
-        case 'create_chart':
+        case 'create_docx': {
+          let path = String(args.path || '').trim(); if (!path) throw new Error('A DOCX destination path is required.'); if (!/\.docx$/i.test(path)) path += '.docx';
+          const bytes = window.RunMindArtifactTools.createDocx(args);
+          return await saveGeneratedArtifact(path, new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), 'docx', 'Create Word document?', `${bytes.length.toLocaleString()} bytes · Markdown content`, signal);
+        }
+        case 'create_xlsx': {
+          let path = String(args.path || '').trim(); if (!path) throw new Error('An XLSX destination path is required.'); if (!/\.xlsx$/i.test(path)) path += '.xlsx';
+          const bytes = window.RunMindArtifactTools.createXlsx(args);
+          return await saveGeneratedArtifact(path, new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'xlsx', 'Create Excel workbook?', `${args.sheets.length} worksheet(s) · ${bytes.length.toLocaleString()} bytes`, signal);
+        }
+        case 'create_pdf': {
+          let path = String(args.path || '').trim(); if (!path) throw new Error('A PDF destination path is required.'); if (!/\.pdf$/i.test(path)) path += '.pdf';
+          const result = window.RunMindArtifactTools.createPdf(args);
+          const saved = await saveGeneratedArtifact(path, new Blob([result.bytes], { type: 'application/pdf' }), 'pdf', 'Create PDF document?', `${result.pages} page(s) · ${result.bytes.length.toLocaleString()} bytes`, signal);
+          return { ...saved, pages: result.pages, unsupportedCharactersReplaced: result.replacements, ...(result.replacements ? { warning: `${result.replacements} unsupported character(s) were replaced because the lightweight PDF writer uses built-in fonts.` } : {}) };
+        }
+        case 'generate_qr_code': {
+          let path = String(args.path || '').trim(); if (!path) throw new Error('A QR destination path is required.'); if (!/\.svg$/i.test(path)) path += '.svg';
+          const result = window.RunMindArtifactTools.createQrSvg(args);
+          const saved = await saveGeneratedArtifact(path, new Blob([result.svg], { type: 'image/svg+xml;charset=utf-8' }), 'svg', 'Create QR code?', `${result.bytes} payload bytes · QR version ${result.version}`, signal);
+          return { ...saved, qrVersion: result.version, modules: result.modules, payloadBytes: result.bytes, errorCorrection: result.errorCorrection };
+        }
+        case 'create_image_gallery': {
+          let path = String(args.path || '').trim(); if (!path) throw new Error('A gallery destination path is required.'); if (!/\.html?$/i.test(path)) path += '.html';
+          const html = await buildImageGalleryHtml(args, path);
+          return await saveGeneratedArtifact(path, new Blob([html], { type: 'text/html;charset=utf-8' }), 'html', 'Create image gallery?', `${args.images.length} image(s) · ${html.length.toLocaleString()} characters`, signal);
+        }
+        case 'create_chart': {
+          let path = String(args.path || '').trim(); if (!path) throw new Error('An SVG destination path is required.'); if (!/\.svg$/i.test(path)) path += '.svg';
+          const svg = buildChartSvg(args);
+          return await saveGeneratedArtifact(path, new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), 'svg', 'Create chart?', `${svg.length.toLocaleString()} SVG characters`, signal);
+        }
         case 'create_diagram': {
-          const svg = name === 'create_chart' ? buildChartSvg(args) : buildDiagramSvg(args);
-          let path = String(args.path || '').trim(); if (!path) throw new Error('An SVG destination path is required.');
-          if (!/\.svg$/i.test(path)) path += '.svg';
-          const approved = await requireAgentApproval({ title: name === 'create_chart' ? 'Create SVG chart?' : 'Create SVG diagram?', subtitle: 'New workspace file · no overwrite', detail: `${path}\n${svg.length.toLocaleString()} characters`, risky: true }, signal);
+          let base = String(args.path || '').trim(); if (!base) throw new Error('A diagram destination path is required.');
+          base = base.replace(/\.(?:svg|mmd)$/i, '');
+          const format = ['svg','mermaid','both'].includes(String(args.format || 'both').toLowerCase()) ? String(args.format || 'both').toLowerCase() : 'both';
+          const paths = format === 'svg' ? [`${base}.svg`] : format === 'mermaid' ? [`${base}.mmd`] : [`${base}.svg`, `${base}.mmd`];
+          const svg = format === 'mermaid' ? '' : buildDiagramSvg(args);
+          const mermaid = format === 'svg' ? '' : window.RunMindArtifactTools.buildMermaid(args);
+          for (const path of paths) await assertNewWorkspacePath(path);
+          const approved = await requireAgentApproval({ title: 'Create editable diagram?', subtitle: `New ${format === 'both' ? 'SVG and Mermaid' : format.toUpperCase()} file(s) · existing files will not be overwritten`, detail: paths.join('\n') + `\n${args.nodes.length} nodes · ${args.edges.length} connections`, risky: true }, signal);
           if (!approved) return { cancelled: true };
-          return { created: (await writeWorkspaceFile(path, new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), false)).path, format: 'SVG' };
+          const created = [];
+          try {
+            if (svg) { const written = await writeWorkspaceFile(paths[0], new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), false); created.push({ path: written.path, format: 'svg', verified: (await verifyWorkspaceArtifact(written.path, 'svg', signal)).valid }); }
+            if (mermaid) { const path = paths[paths.length - 1]; const written = await writeWorkspaceFile(path, new Blob([mermaid], { type: 'text/plain;charset=utf-8' }), false); const verification = await verifyWorkspaceArtifact(written.path, 'mermaid', signal); created.push({ path: written.path, format: 'mermaid', editable: true, verified: verification.valid }); }
+          } catch (error) {
+            throw new Error(`Diagram creation partially completed (${created.map(item => item.path).join(', ')}). ${error?.message || error}`);
+          }
+          return { created, format, message: 'Mermaid source is editable; SVG is the rendered preview.' };
         }
         case 'image_metadata': return await transformWorkspaceImage(args, 'metadata', signal);
         case 'read_image': return await readWorkspaceImageForModel(args);
@@ -7711,7 +8123,7 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       return output;
     }
     async function inferCsvSchema(args) {
-      const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024); const dataset = csvDataset(args.path, text, normalizeCsvDelimiter(args.delimiter || ','));
+      const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024); const dataset = csvDataset(args.path, text, resolveCsvDelimiter(args.path, args.delimiter, text));
       const rows = dataset.rows.slice(0, 10000); const fields = dataset.headers.map((name, index) => {
         const values = rows.map(row => String(row[index] ?? '').trim()).filter(value => value !== '');
         const type = values.length ? values.every(value => /^(?:true|false)$/i.test(value)) ? 'boolean' : values.every(value => /^[-+]?\d+$/.test(value)) ? 'integer' : values.every(value => value !== '' && Number.isFinite(Number(value))) ? 'number' : values.every(value => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`))) ? 'date' : 'string' : 'null';
@@ -7720,8 +8132,8 @@ ${content.slice(0, 2000)}`, risky: true }, signal);
       return { path: args.path, rowsAnalyzed: rows.length, totalRows: dataset.rows.length, columns: fields, note: 'Inference is heuristic and uses at most the first 10,000 data rows. Review before using the result as a validation contract.' };
     }
     async function joinCsvDatasets(args, signal) {
-      const delimiterA = normalizeCsvDelimiter(args.delimiter_a || args.delimiter || ','); const delimiterB = normalizeCsvDelimiter(args.delimiter_b || args.delimiter || ',');
       const aText = await readWorkspaceText(args.path_a, 10 * 1024 * 1024); const bText = await readWorkspaceText(args.path_b, 10 * 1024 * 1024);
+      const delimiterA = resolveCsvDelimiter(args.path_a, args.delimiter_a || args.delimiter, aText.text); const delimiterB = resolveCsvDelimiter(args.path_b, args.delimiter_b || args.delimiter, bText.text);
       const a = csvDataset(args.path_a, aText.text, delimiterA), b = csvDataset(args.path_b, bText.text, delimiterB);
       const keyA = datasetColumnIndex(a.headers, args.key_a), keyB = datasetColumnIndex(b.headers, args.key_b); const joinType = String(args.join_type || 'inner').toLowerCase();
       if (!['inner','left','full'].includes(joinType)) throw new Error('join_type must be inner, left, or full.');

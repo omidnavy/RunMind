@@ -1,65 +1,204 @@
 # RunMind
 
-RunMind brings local and OpenAI-compatible language models to **PowerToys Run** and a standalone Windows chat app. It includes chat, Agent Mode, Deep Research, web search, and MCP tools.
-
+**A local-first AI workspace for Windows.** RunMind connects local language models and OpenAI-compatible providers to a chat application that can research the web, work with files, analyze data, create documents and visual assets, and coordinate multi-step tasks—with user approval for operations that change your workspace.
 
 ![Screenshot](screenshots/Screenshot-1.png)
 
-## Features
+RunMind is available in two forms:
 
-- Ollama, LM Studio, and additional OpenAI-compatible model servers.
-- Multiple model connections with optional API keys and custom authentication headers.
-- Agent Mode with workspace files, tool use, and user-approved actions.
-- Deep Research with editable plans, sources, checkpoints, and report export.
-- Optional SearXNG web search, Jina Reader, custom Reader gateways, and MCP Streamable HTTP servers.
-- Multiple independent chat windows from PowerToys Run and the standalone app.
-- Save conversations as `.runmind` files using the Windows Save As dialog.
-- Select from curated light and dark appearance palettes, with independent saved choices for each mode.
-- Compare conversation branches in a full lower-workspace view, then discuss an independent **AI Branch Comparison** in a centered modal. The initial assessment instruction is pre-filled and editable; no request is sent until the user presses Send. The hidden system prompt and original comparison dossier are supplied automatically. Follow up with a selectable model, re-examine the original snapshot, copy individual messages or the full discussion, and download the comparison as Markdown without changing either branch or the main chat model.
+- **Standalone Windows app** — a full chat window that can be launched independently, with support for multiple windows.
+- **PowerToys Run plugin** — start a RunMind conversation directly from PowerToys Run using `llm <prompt>` or search for RunMind.
 
-## 1.10.34 update
+## What you can do with RunMind
 
-- [x] Give toolbar, Appearance, Conversations, OCR, Context Manager, and Deep Research panels larger default working areas and viewport-aware placement instead of shrinking them to the trigger gap.
-- [x] Make every flyout draggable and resizable while open; keep its position and size temporary and reset them on close.
-- [x] Widen the Conversations panel and ensure Save/Open and Export actions remain usable in compact windows.
+- Chat with local models hosted by Ollama or LM Studio, or connect additional OpenAI-compatible endpoints.
+- Switch between configured providers and models, including custom API keys and authentication headers.
+- Ask questions, work through code and technical problems, inspect images and documents, and use model tool-calling capabilities.
+- Use **Agent Mode** for multi-step tasks that combine web research, workspace files, data processing, and artifact creation.
+- Use **Deep Research** for structured investigations with editable plans, source collection, evidence notes, checkpoints, and report export.
+- Connect external **Model Context Protocol (MCP)** servers over Streamable HTTP to make their tools, resources, and prompts available to RunMind.
+- Create and manage conversation branches, compare branch responses with AI, and continue a separate discussion about a comparison without changing the original branches.
+- Save and reopen conversations in RunMind's `.runmind` format.
+- Choose from curated light and dark palettes, use Windows System appearance, and move or resize open toolbar flyouts.
 
-## 1.10.33 update
+## Built-in capabilities and tool catalog
 
-- [x] Improve long-chat rendering efficiency without changing active-message streaming updates.
-- [x] Correct CSV numeric summaries for blank cells and duplicate headings; avoid argument-limit failures and enforce one-character delimiters.
-- [x] Bound workspace searches and skip common generated/dependency directories.
-- [x] Wait for IndexedDB transaction commits, recover from failed workspace DB initialization, and reject ambiguous duplicate attachment filenames.
-- [x] Revalidate workspace files after approval before editing, deleting, or restoring, and create backups from the revalidated snapshot.
+RunMind exposes tools to Agent Mode and, where applicable, Deep Research. Tools that access local files require a user-selected workspace folder. Mutating operations—such as creating, editing, moving, or deleting files—require approval and follow the application's no-overwrite and backup safeguards. Some web-search tools appear only when the corresponding search service is configured; MCP tools depend on connected servers.
 
-## 1.10.32 update
+### Planning, reasoning support, and diagnostics
 
-- [x] Add System, Light, and Dark appearance modes with five curated palettes for each color scheme. Light and dark selections are remembered independently and shared between standalone RunMind and PowerToys chat windows. Palette changes apply immediately, native window title bars follow the effective mode, and the Appearance menu includes a live palette preview and reset action.
+| Tool | What it does |
+|---|---|
+| `current_datetime` | Returns the computer's current local date and time. |
+| `update_plan` | Creates or updates a concise task plan with pending, active, and completed steps. |
+| `calculate` | Evaluates basic arithmetic expressions, including parentheses, percentages, and exponentiation. |
+| `regex_test` | Tests JavaScript regular expressions in an isolated worker with a hard timeout. |
+| `diagnose_connection` | Checks the selected model connection, model discovery, selected-model availability, and likely configuration or CORS issues. |
+| `delegate_subagent` | Delegates a bounded, read-only subtask to a Researcher, Coder, Security Analyst, Reviewer, or Summarizer sub-agent. |
 
-## 1.10.31 update
+### Web research and website inspection
 
-- Refine the branch-comparison action as **Compare with AI**, with a theme-aware surface, accent icon tile, and consistent label. The modal itself retains the title **AI Branch Comparison**.
+| Tool | What it does |
+|---|---|
+| `fetch_webpage` | Reads the exact supplied URL using the native Reader and configured Reader fallbacks. |
+| `page_to_markdown` | Retrieves a webpage as clean Markdown with available page metadata. |
+| `web_search` | Searches the web through a configured SearXNG endpoint. |
+| `research_topic` | Runs a bounded multi-query web investigation and deduplicates results by URL. |
+| `extract_links` | Extracts HTTP/HTTPS links from a webpage. |
+| `extract_metadata` | Reads page title, description, canonical URL, Open Graph data, and selected metadata. |
+| `extract_tables` | Extracts bounded HTML tables into headers and row data. |
+| `read_sitemap` | Recursively traverses same-host sitemap indexes, deduplicates URLs, and searches URL and sitemap metadata. |
+| `read_rss_feed` | Reads recent items from public RSS and Atom feeds. |
+| `check_links` | Checks the reachability of a bounded set of links; CORS failures are reported as unverified rather than broken. |
+| `compare_webpages` | Compares readable text from two webpages and reports shared and differing passages. |
+| `crawl_website` | Performs a bounded, same-origin breadth-first crawl of a website. |
 
-## 1.10.30 update
+### Workspace and file operations
 
-- [x] Fix LM Studio generated-title handling by disabling reasoning for the short title request, preserving Nemotron conversational mode, retrying explicitly unsupported optional fields, and accepting structured OpenAI-compatible text responses.
-- [x] Make the AI Branch Comparison composer start at one line, grow automatically to five lines, and scroll for longer instructions or messages.
+| Tool | What it does |
+|---|---|
+| `request_folder_access` | Requests that the user select a local workspace folder before file operations. |
+| `list_files` | Lists files and folders in the selected workspace. |
+| `search_files` | Searches workspace filenames and, optionally, bounded UTF-8 file contents. |
+| `read_file` | Reads a UTF-8 text file. |
+| `create_file` | Creates a new text file without overwriting an existing file. |
+| `download_webpage` | Downloads webpage content through the Reader pipeline and saves it locally. |
+| `download_file` | Downloads original response bytes for a direct file URL, preserving the original file rather than extracting webpage text. |
+| `file_info` | Returns file size, MIME type, last-modified time, and name. |
+| `edit_file` | Replaces a text file after approval and creates a recovery backup. |
+| `restore_file_backup` | Restores a previous backup after approval. |
+| `delete_file` | Deletes a file after approval and creates a recovery backup. |
+| `create_folder` | Creates a workspace folder after approval. |
+| `copy_file` | Copies a file to a new path after approval. |
+| `move_file` | Moves a file to a new path after approval. |
+| `rename_file` | Renames a file after approval. |
+| `checksum_file` | Calculates a file's SHA-256 checksum. |
+| `compare_files` | Compares two UTF-8 text files and identifies the first differing line. |
+| `project_overview` | Builds a bounded overview of a project workspace. |
+| `find_duplicates` | Finds files with identical SHA-256 content within configured scan limits. |
+| `compare_folders` | Compares two folders by relative file paths and sizes. |
 
-## 1.10.29 update
+### Documents, archives, and structured data
 
-- [x] Fix the remaining PowerToys native-response title issue when WebView2 initializes through a replacement temporary-profile control. Apply generated titles to the active page, ignore stale events from replaced controls, verify the page update, and then synchronize the native window title.
+| Tool | What it does |
+|---|---|
+| `read_pdf` | Extracts PDF text and can OCR pages with missing or suspicious text using the languages selected in PDF OCR settings. |
+| `inspect_archive` | Inspects ZIP entries, sizes, compression, encryption, and safety-limit violations without extracting the archive. |
+| `extract_archive` | Extracts a supported ZIP archive into a new workspace folder after approval, with path-traversal and archive-safety checks. |
+| `validate_json` | Parses a JSON file and reports its top-level type and basic structure. |
+| `validate_json_schema` | Validates JSON data against an inline or file-based JSON Schema, including local `$ref` and common schema constraints. |
+| `transform_json` | Pretty-prints, minifies, sorts keys, picks or omits fields, renames keys, flattens or unflattens objects, filters arrays, and maps values. |
+| `infer_dataset_schema` | Infers CSV column types, nullability, uniqueness, and sample values. |
+| `analyze_csv` | Reports CSV columns, row count, sample rows, and numeric summaries. |
+| `generate_statistics` | Calculates descriptive numeric statistics for CSV columns. |
+| `validate_dataset` | Validates CSV/TSV required and unique columns and applies per-column rules such as numeric ranges, membership, email, and URL checks. |
+| `filter_dataset` | Filters CSV rows by column values and writes a new dataset. |
+| `deduplicate_dataset` | Removes duplicate CSV rows or duplicates based on selected columns. |
+| `merge_csv` | Appends CSV files with matching headers. |
+| `join_datasets` | Joins two CSV datasets using selected keys and an inner, left, or full join. |
+| `compare_datasets` | Compares CSV headers and row contents. |
+
+### Reports, documents, charts, and diagrams
+
+| Tool | What it does |
+|---|---|
+| `create_markdown_report` | Creates a Markdown report in the workspace after approval. |
+| `create_html_report` | Creates a standalone HTML report with safe Markdown rendering, optional summary, and table of contents. |
+| `create_docx` | Creates a Microsoft Word document from a supported Markdown subset, including headings, lists, emphasis, code, and simple tables. |
+| `create_xlsx` | Creates multi-sheet Excel workbooks with typed cells, styled headers, frozen header rows, and filters. Text values are stored as text, not formulas. |
+| `create_pdf` | Creates a paginated, text-focused PDF from Markdown content. |
+| `create_chart` | Creates editable SVG bar, line, pie, and doughnut charts, including multiple data series. |
+| `create_diagram` | Creates flow diagrams as SVG and editable Mermaid source. |
+| `verify_artifact` | Checks the basic structure of generated or existing DOCX, XLSX, PDF, SVG, HTML, Mermaid, Markdown, JSON, CSV, and TSV artifacts. |
+
+### Images and media
+
+| Tool | What it does |
+|---|---|
+| `image_metadata` | Reads image dimensions, MIME type, and file size. |
+| `read_image` | Attaches a workspace image to the next model turn for visual analysis by a vision-capable model. |
+| `resize_image` | Resizes an image to fit within specified maximum dimensions. |
+| `convert_image` | Converts an image to PNG, JPEG, or WebP. |
+| `crop_image` | Crops an image using pixel coordinates. |
+| `generate_thumbnail` | Creates a WebP thumbnail up to 256 × 256 pixels. |
+| `generate_qr_code` | Generates an offline SVG QR code from text or a URL. |
+| `create_image_gallery` | Creates a responsive standalone HTML gallery that references selected workspace images. |
+
+### Connected MCP tools
+
+When an MCP Streamable HTTP server is connected, RunMind can discover and call that server's tools. It can also list available knowledge resources, read a selected resource, and retrieve named prompts. These are supplied by the connected server, not bundled as fixed RunMind tools.
+
+## Example workflows
+
+RunMind's tools can be combined in one Agent task. For example:
+
+- **Research to report:** search for a topic, open and read relevant pages, extract tables, compare sources, then create a Markdown, HTML, DOCX, or PDF report.
+- **Dataset cleanup:** inspect a CSV, infer its schema, validate required columns and rules, filter or deduplicate rows, join another dataset, and export the result.
+- **Project review:** request workspace access, map the project structure, search for relevant files, compare or checksum files, and prepare a findings report. File changes remain approval-gated.
+- **Document production:** turn structured information into a Word document or Excel workbook, create charts or a flow diagram, then verify the generated artifacts' structure.
+- **Image preparation:** inspect image metadata, resize, crop, or convert images, generate thumbnails or QR codes, and build an HTML gallery.
+- **Website inspection:** crawl a bounded same-origin section, traverse its sitemap, inspect metadata and links, and compare pages.
+
+## Models and integrations
+
+### Model providers
+
+- **Ollama** — default local API address: `http://localhost:11434`.
+- **LM Studio** — use its local server with the OpenAI-compatible API, commonly `http://localhost:1234/v1`.
+- **Other providers** — add an OpenAI-compatible endpoint, with optional API key and custom authentication headers.
+
+RunMind supports multiple configured connections. Model availability and capabilities such as vision and tool calling depend on the selected model and provider.
+
+### Web search and Reader services
+
+- **SearXNG** provides web search and multi-query research when configured.
+- **Native Reader** is used by desktop hosts for webpage retrieval. A configured custom Reader-compatible gateway can be used as a fallback, followed by Jina Reader for public URLs.
+- Reader retrieval and ordinary web search are separate: opening a supplied URL uses the Reader path; discovery uses the configured search service.
+
+### Model Context Protocol
+
+Connect MCP servers using **Streamable HTTP**. RunMind can discover server tools, resources, and prompts and make supported capabilities available to the agent. STDIO transport is not included.
+
+## Modes and conversation features
+
+### Chat
+
+Use RunMind as a regular streaming chat interface with model/provider selection, conversation history, attachments, and saved `.runmind` conversations.
+
+### Agent Mode
+
+Agent Mode can plan and execute multi-step tasks using built-in tools, selected workspace files, configured web services, and connected MCP servers. Independent read-only operations can run in parallel where safe; mutating operations are approval-gated. Specialized sub-agents are bounded, read-only, and cannot delegate further.
+
+### Deep Research
+
+Deep Research supports editable research plans, bounded search and page budgets, source collection, evidence and claim assessments, source notes, pause/resume/cancel controls, checkpoints, and Markdown report export. Research claims and model assessments remain distinguishable from application-checked quotation presence; the application does not claim to independently establish the truth of a model's verdict.
+
+### Branches and AI Branch Comparison
+
+Create and switch between conversation branches, rename or delete branches, and compare branch responses. **Compare with AI** opens a separate discussion over an immutable comparison snapshot. It supports follow-up questions, model switching, re-examination of the original branches, copying messages, and Markdown export. The comparison does not modify either branch or change the main chat model.
+
+## Workspace safety and limits
+
+- A workspace folder is selected by the user before local file operations are offered.
+- File paths are workspace-relative; absolute paths and traversal outside the selected folder are rejected.
+- Creating, editing, deleting, copying, moving, renaming, extracting, and generating files uses explicit approval where applicable.
+- New-file operations do not overwrite existing files. Editing and deletion create recovery backups; restore operations are also approval-gated.
+- File searches, web crawling, dataset operations, archive extraction, and artifact generation use explicit size, count, or depth limits to keep work bounded.
+- Artifact verification checks file structure and basic readability. It does not guarantee visual layout, formula calculation, or semantic correctness.
+
+Some generation formats have intentionally focused scope: DOCX supports a bounded Markdown subset; XLSX has worksheet, row, column, and cell limits; PDF is text-focused and uses built-in fonts; QR payloads are limited to 106 UTF-8 bytes; image galleries reference existing workspace images rather than copying them. See the [Feature Matrix](FEATURE-MATRIX.md) for exact limits and implementation details.
 
 ## Requirements
 
-- Windows 11 x64 (build 22621 or later). The current release does not include a Windows ARM64 build.
-- [Microsoft PowerToys](https://learn.microsoft.com/windows/powertoys/) for the PowerToys Run plugin.
+- Windows 11 x64 (build 22621 or later). An ARM64 build is not currently provided.
+- Microsoft PowerToys is required only for the PowerToys Run plugin.
 - .NET 10 Desktop Runtime (x64) for framework-dependent standalone builds.
-- [Ollama](https://ollama.com/) or another supported model server.
+- Ollama, LM Studio, or another supported model server.
+- The Microsoft Edge WebView2 Runtime. RunMind checks for it at startup and, if missing, downloads Microsoft's Evergreen bootstrapper and installs the runtime for the current Windows user. An internet connection is needed for that one-time setup.
 
-**WebView2 is handled automatically.** RunMind checks for the Microsoft Edge WebView2 Runtime at startup. If it is missing, RunMind downloads Microsoft's small Evergreen bootstrapper and silently installs the runtime for the current Windows user. No manual WebView2 installation is required. The first launch can take longer only when the runtime is missing; an internet connection is needed for that one-time setup. Normal launches use the already-installed shared runtime.
+## Build from source
 
-## Build
-
-Run **`Build-Release-x64.bat`** from the repository root to build the x64 release with a single click. The build environment needs the .NET 10 SDK. The PowerToys reference assemblies are included under `lib\x64`:
+Run `Build-Release-x64.bat` from the repository root. The build environment requires the .NET 10 SDK. PowerToys reference assemblies are included under `lib\x64`:
 
 - `PowerToys.Common.UI.dll`
 - `PowerToys.ManagedCommon.dll`
@@ -67,53 +206,45 @@ Run **`Build-Release-x64.bat`** from the repository root to build the x64 releas
 - `Wox.Infrastructure.dll`
 - `Wox.Plugin.dll`
 
-## Install the PowerToys Run plugin
+See [BUILD-AND-SETUP.md](BUILD-AND-SETUP.md) for detailed build and deployment instructions.
+
+## Install and launch
+
+### PowerToys Run plugin
 
 1. Close PowerToys completely.
-2. When upgrading from LocalLLM, remove the old deployed `Community.PowerToys.Run.Plugin.LocalLLM` folder. The plugin ID is unchanged, so do not leave both folders installed.
+2. If upgrading from LocalLLM, remove the old `Community.PowerToys.Run.Plugin.LocalLLM` plugin folder; the plugin ID is unchanged, so do not keep both deployed folders.
 3. Copy the contents of the `Community.PowerToys.Run.Plugin.RunMind` build output into:
 
    `%LOCALAPPDATA%\Microsoft\PowerToys\PowerToys Run\Plugins\Community.PowerToys.Run.Plugin.RunMind`
 
 4. Start PowerToys again.
+5. Enter `llm explain Git rebase` in PowerToys Run, or search for **RunMind** to launch the standalone app through application search.
 
-Use `llm <prompt>` in PowerToys Run, for example:
+### Standalone app
 
-```text
-llm explain Git rebase
-```
+Launch `RunMind.exe` from the standalone build output. Each launch opens an independent chat window; multiple standalone windows can run alongside PowerToys-hosted chats.
 
-Global search is also supported without the `llm` keyword. Search for **RunMind** to launch the standalone app through normal application search.
+## Connect your local model server
 
-## Run the standalone app
+The WebView2 chat page uses the origin `https://localhost`. The model server must allow requests from that origin:
 
-Launch `RunMind.exe` from the standalone build output. Every launch opens an independent chat window; multiple standalone windows can run alongside PowerToys chats.
+- For Ollama, include `https://localhost` in `OLLAMA_ORIGINS` and restart Ollama.
+- For LM Studio, enable CORS in the local server settings.
+- For another OpenAI-compatible provider, configure its CORS policy to allow the RunMind page origin.
 
-## Connect a model
+## Conversations, settings, and privacy notes
 
-- **Ollama:** default API address `http://localhost:11434`.
-- **LM Studio:** enable its local server and OpenAI-compatible API; the usual base address is `http://localhost:1234/v1`.
-- **Other providers:** add an OpenAI-compatible endpoint in the model connection settings.
+RunMind saves resumable conversations as `.runmind` files. When opening one, choose **Open in this window** to replace the current conversation or **Open in new window** to keep the current chat and open another window. The saved filename becomes the conversation title.
 
-The WebView2 chat page uses the origin `https://localhost`. The model server must allow requests from that origin. For Ollama, include it in `OLLAMA_ORIGINS` and restart Ollama. In LM Studio, enable CORS in the local server settings.
+Standalone and PowerToys use separate WebView2 profiles. Their settings, credentials, Agent task history, and Deep Research checkpoints are therefore separate. API keys and MCP tokens are stored in the local WebView2 profile's `localStorage`; they are not encrypted by RunMind. Protect access to your Windows account and profile accordingly.
 
-## Conversations and settings
+## Documentation
 
-Save a chat to open the Windows Save As dialog with its generated title pre-filled and `.runmind` selected. The final filename becomes the conversation title. RunMind's native conversation format is `.runmind`; other conversation formats are not supported.
-
-When opening a saved chat, choose **Open in this window** to replace the current conversation or **Open in new window** to keep the current chat intact.
-
-Toolbar flyouts can be dragged using the grip at the top and resized from the bottom-right corner. These adjustments last only while the flyout is open; closing it resets its default position and size.
-
-Standalone and PowerToys use separate WebView2 profiles, so their settings, credentials, Agent task history, and Deep Research checkpoints are separate. API keys and MCP tokens are stored in the local WebView2 profile and are not encrypted by RunMind.
-
-## More documentation
-
-- [Build and setup details](BUILD-AND-SETUP.md)
-- [Feature matrix](FEATURE-MATRIX.md)
-- [Static validation report](VALIDATION-REPORT.md)
-- [Changelog](CHANGELOG.md)
-- [Roadmap](ROADMAP.md)
+- [Build and setup](BUILD-AND-SETUP.md) — build prerequisites, release packaging, and deployment details.
+- [Feature matrix](FEATURE-MATRIX.md) — detailed capability status, behavior, and limits.
+- [Changelog](CHANGELOG.md) — release-by-release changes and fixes.
+- [Roadmap](ROADMAP.md) — planned work and project direction.
 
 ---
 

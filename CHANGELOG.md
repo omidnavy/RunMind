@@ -1,3 +1,24 @@
+## [2.0.0] — Data, documents, and media capabilities
+
+### Added
+- Add a local, dependency-free artifact generator for Word DOCX, Excel XLSX, paginated text PDF, SVG QR codes, and multi-image HTML galleries.
+- Add structural artifact verification for DOCX/XLSX package parts and XML, PDF structure, SVG/HTML roots, JSON syntax, and CSV/TSV readability. Generated artifacts are verified after saving; verification does not claim visual or semantic correctness.
+- Add multi-series bar/line charts plus pie/doughnut charts as self-contained SVG. Add editable Mermaid flowchart source alongside SVG diagrams by default, with selectable TD/TB/LR/RL/BT direction.
+- Extend sitemap reading to bounded recursive sitemap-index traversal, URL deduplication, same-host-only child sitemaps, and text search across URL and sitemap metadata.
+- Extend JSON transforms with pick/omit fields, recursive key renaming, flatten/unflatten, array filtering, and array-field mapping; optionally save transformed JSON as a new workspace file.
+- Add deterministic CSV/TSV dataset validation for required and unique columns and bounded row rules. Improve delimiter inference across dataset analysis, filtering, deduplication, schema inference, joins, and merges.
+- Enhance Markdown reports with titles, summaries, table of contents, and generation metadata; render Markdown as safe HTML for HTML reports.
+
+### Safety and limits
+- All generated files require the existing in-app user approval and are created as new files; existing files are never overwritten.
+- Generators run locally/offline and introduce no runtime package dependencies. DOCX supports a bounded Markdown subset; XLSX is limited to 10 worksheets, 10,000 rows per sheet, 50 columns, and 100,000 cells total; PDF is a text-report format using built-in fonts and does not render images or complex layouts; QR codes support up to 106 UTF-8 bytes; galleries reference workspace images rather than copying or embedding them.
+- Sitemap traversal is restricted to the starting hostname and bounded to 20 sitemap documents, 2,000 matching URLs, and a bounded scan budget. Artifact verification checks structure, not visual layout, formula results, factual correctness, or semantic completeness.
+- No presentation generator, metadata-preserving document conversion, or website change-monitoring subsystem is included in this release.
+
+### Validation
+- Independent package-reader checks for DOCX, XLSX, and PDF; XML parsing for all generated Office package parts; SVG parsing; QR decode checks for multiple payload sizes; JavaScript syntax and tool-dispatch checks; project XML and plugin manifest validation; and overlay application against the reconstructed 1.10.34 baseline.
+- Windows/.NET compilation and live WebView2/PowerToys integration require the Windows build environment and excluded reference/resource files and are not claimed here.
+
 ## [1.10.34] — Spacious, movable and resizable flyouts
 
 ### Changed

@@ -1,3 +1,27 @@
+## RunMind 2.0.0 — Data, document, and media capabilities
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| JSON | Advanced transforms | Pretty/minify, recursive key sorting/renaming, pick/omit fields, flatten/unflatten, array filtering, and array-field mapping. Optional destination writes a new JSON file after approval. | **Implemented**; prototype-related key paths are rejected; source is unchanged. |
+| Datasets | CSV/TSV processing | Delimiter inference plus existing analysis, statistics, filters, deduplication, merge, comparison, schema inference, and joins. | **Implemented**; inputs remain size/row bounded; explicit delimiters must be one character. |
+| Datasets | Rule validation | Required/unique columns and bounded per-column rules for empty values, numbers/ranges, equality, containment, membership, email, and HTTP(S) URLs. | **Implemented**; up to 100,000 rows, 100 rules, and 200 returned issues. |
+| Web | Sitemap traversal | Recursively follows sitemap indexes, deduplicates URLs, searches URL/last-modified/frequency/priority metadata, and skips child sitemaps on other hosts. | **Implemented**; max 20 sitemap documents, 2,000 matching URLs, and bounded scan work; no change monitoring. |
+| Documents | DOCX creation | Creates Open XML Word documents from Markdown headings, paragraphs, inline emphasis/code, lists, fenced code, and simple pipe tables. | **Implemented**; basic document layout only; no arbitrary template/layout engine. |
+| Spreadsheets | XLSX creation | Creates multi-sheet Open XML workbooks with typed text/number/boolean cells, header styling, frozen header rows, filters, and bounded column widths. Strings are never interpreted as formulas. | **Implemented**; max 10 sheets, 10,000 data rows per sheet, 50 columns, and 100,000 cells total. |
+| Documents | PDF creation | Creates paginated text PDFs with headings, paragraphs, lists, and text-rendered tables. | **Implemented**; built-in fonts, common Western European characters, no embedded image or complex layout rendering. |
+| Reports | Markdown / HTML | Adds title, summary, optional table of contents, generated-at metadata, and safe Markdown rendering in standalone HTML reports. | **Implemented**; supplied complete HTML documents are retained as provided. |
+| Charts | SVG charts | Supports grouped bar, multi-series line, pie, and doughnut charts with bounded labels and data points. | **Implemented**; max 40 labels and 8 series; generated SVG is editable. |
+| Diagrams | SVG + Mermaid | Generates SVG flowcharts and editable Mermaid source; both are created by default with selectable flow direction. | **Implemented**; max 16 nodes and 40 connections. |
+| Media | QR generation | Generates QR code SVG entirely offline. | **Implemented**; max 106 UTF-8 payload bytes, error correction L. |
+| Media | Image galleries | Creates standalone responsive HTML galleries referencing workspace PNG/JPEG/WebP/GIF images by relative path. | **Implemented**; max 200 images and 100 MB of source images; originals are not copied. |
+| Reliability | Artifact verification | Checks Office ZIP/XML structure, PDF markers/pages, SVG/HTML roots, JSON syntax, and CSV/TSV readability after generation or on demand. | **Implemented**; structural verification only, not visual or semantic validation. |
+
+### Explicitly not included in 2.0.0
+
+- Presentation generation.
+- Metadata-preserving document conversion.
+- Website change monitoring/scheduled snapshots.
+
 ## 1.10.34 updates
 
 | Area | Feature | Current behavior | Status / limits |
@@ -121,7 +145,7 @@
 
 # RunMind — Feature Matrix
 
-This document describes the **current RunMind 1.10.33 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
+This document describes the **current RunMind 2.0.0 feature set** across its PowerToys Run plugin and standalone Windows application. It is a unified snapshot, not a release-by-release history.
 
 ## RunMind 1.10.15 — generated branch-label correction
 

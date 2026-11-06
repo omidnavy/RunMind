@@ -1,3 +1,11 @@
+## RunMind 2.0.0 — data, document, and media tools
+
+This release is an overlay for the complete RunMind 1.10.34 source tree. It adds bounded JSON transforms, CSV/TSV delimiter inference and dataset validation, searchable recursive same-host sitemap traversal, local DOCX/XLSX/PDF generation, Markdown/HTML report improvements, advanced SVG charts, editable Mermaid diagrams, offline QR SVGs, HTML image galleries, and structural artifact verification. Generated files use the existing workspace approval flow and are never allowed to overwrite existing files.
+
+The new `Community.PowerToys.Run.Plugin.RunMind/ArtifactTools.js` file is loaded beside `ChatWindow.html` in both standalone and PowerToys hosts. It contains dependency-free ZIP/Open XML, PDF, QR, and SVG generation helpers. No additional runtime packages are required. The generated formats are intentionally bounded: DOCX uses a Markdown subset; XLSX is limited to 10 sheets, 10,000 rows per sheet, 50 columns, and 100,000 cells; PDF is text-focused; QR payloads are limited to 106 UTF-8 bytes; image galleries reference existing workspace files. `verify_artifact` checks file structure, not visual or semantic correctness.
+
+No presentation generator, metadata-preserving document conversion, or website change-monitoring service is included. The overlay contains changed/new files only and preserves original project-relative paths. Retain excluded resources such as `lib`, `assets`, `Vendor`, `OCR`, and `screenshots`, then build on Windows with `Build-Release-x64.bat` using the .NET 10 SDK and the PowerToys reference assemblies.
+
 ## RunMind 1.10.34 — spacious, movable and resizable flyouts
 
 This overlay is for the complete RunMind 1.10.33 source tree. It gives the toolbar, Appearance, Conversations, OCR, Context Manager, and Deep Research flyouts larger default working areas and places them against the full safe WebView viewport instead of shrinking them to the space immediately beside their trigger. Every flyout can be moved using the grip at the top and resized using the bottom-right grip. Position and size are temporary for the open lifetime only and reset on close; they are never saved. The Conversations panel is wider and its Save/Open buttons wrap without clipping the Export copy action. Long content still scrolls when it genuinely exceeds the viewport.
