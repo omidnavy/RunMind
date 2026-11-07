@@ -79,9 +79,9 @@ internal static class AppearancePreferenceStore
     private static AppearancePreferences Normalize(string? mode, string? lightTheme, string? darkTheme)
     {
         var safeMode = mode is "system" or "light" or "dark" ? mode : DefaultMode;
-        var safeLightTheme = lightTheme is "classic-light" or "soft-ivory" or "sage-garden" or "rose-clay" or "sandstone"
+        var safeLightTheme = lightTheme is "classic-light" or "soft-ivory" or "sage-garden" or "rose-clay" or "sandstone" or "clay"
             ? lightTheme : DefaultLightTheme;
-        var safeDarkTheme = darkTheme is "warm-graphite" or "obsidian" or "deep-forest" or "mocha" or "burgundy"
+        var safeDarkTheme = darkTheme is "warm-graphite" or "obsidian" or "deep-forest" or "mocha" or "burgundy" or "clay"
             ? darkTheme : DefaultDarkTheme;
         return new AppearancePreferences(safeMode, safeLightTheme, safeDarkTheme);
     }

@@ -35,6 +35,16 @@
       --shadow-panel: 0 16px 42px rgba(0, 0, 0, .34);
       --shadow-float: 0 4px 14px rgba(0, 0, 0, .24);
     }
+    :root[data-theme="dark"][data-color-theme="clay"] {
+      color-scheme: dark;
+      /* Clay Dark: exact background, foreground, and accent values from the supplied reference. */
+      --color-bg: #2d2d2b; --color-surface: #353533; --color-surface-raised: #3d3d3b;
+      --color-surface-hover: #444442; --color-input: #444442; --color-text: #f9f9f7;
+      --color-muted: #9a9a97; --color-accent: #cc7d5e; --color-accent-contrast: #2d2d2b;
+      --color-border: #524945; --color-user-bubble: #4b403c; --color-assistant-bubble: #353533;
+      --color-danger: #ef8982; --color-success: #91c49d;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .34); --shadow-float: 0 4px 14px rgba(0, 0, 0, .24);
+    }
     :root[data-theme="dark"][data-color-theme="obsidian"] {
       color-scheme: dark;
       --color-bg: #151515; --color-surface: #1d1d1d; --color-surface-raised: #282828;
@@ -116,6 +126,16 @@
       --color-border: #ddd2c1; --color-user-bubble: #f2e4d2; --color-assistant-bubble: #fffdf9;
       --color-danger: #b34c41; --color-success: #4f7850;
       --shadow-panel: 0 12px 36px rgba(61, 46, 29, .1); --shadow-float: 0 3px 12px rgba(61, 46, 29, .08);
+    }
+    :root[data-theme="light"][data-color-theme="clay"] {
+      color-scheme: light;
+      /* Clay Light: exact background, foreground, and accent values from the supplied reference. */
+      --color-bg: #f9f9f7; --color-surface: #fafaf8; --color-surface-raised: #f2f2f0;
+      --color-surface-hover: #eaeae8; --color-input: #ffffff; --color-text: #2d2d2b;
+      --color-muted: #797977; --color-accent: #cc7d5e; --color-accent-contrast: #2d2d2b;
+      --color-border: #e6e6e4; --color-user-bubble: #f6ede9; --color-assistant-bubble: #fafaf8;
+      --color-danger: #b32630; --color-success: #167948;
+      --shadow-panel: 0 12px 36px rgba(45, 45, 43, .09); --shadow-float: 0 3px 12px rgba(45, 45, 43, .07);
     }
     /* Preserve a correct first paint before the WebView host supplies saved preferences. */
     @media (prefers-color-scheme: light) {
@@ -870,6 +890,7 @@
                     <option value="sage-garden">Sage Garden</option>
                     <option value="rose-clay">Rose Clay</option>
                     <option value="sandstone">Sandstone</option>
+                    <option value="clay">Clay</option>
                   </select>
                 </div>
                 <div class="appearance-field">
@@ -880,6 +901,7 @@
                     <option value="deep-forest">Deep Forest</option>
                     <option value="mocha">Mocha</option>
                     <option value="burgundy">Burgundy</option>
+                    <option value="clay">Clay</option>
                   </select>
                 </div>
               </div>
@@ -3313,7 +3335,7 @@
     const resetAppearanceButton = $('#resetAppearance');
     const APPEARANCE_DEFAULTS = Object.freeze({ mode: 'system', lightTheme: 'classic-light', darkTheme: 'warm-graphite' });
     const APPEARANCE_THEME_NAMES = Object.freeze({
-      'classic-light': 'Classic Light', 'soft-ivory': 'Soft Ivory', 'sage-garden': 'Sage Garden', 'rose-clay': 'Rose Clay', sandstone: 'Sandstone',
+      'classic-light': 'Classic Light', 'soft-ivory': 'Soft Ivory', 'sage-garden': 'Sage Garden', 'rose-clay': 'Rose Clay', sandstone: 'Sandstone', clay: 'Clay',
       'warm-graphite': 'Warm Graphite', obsidian: 'Obsidian', 'deep-forest': 'Deep Forest', mocha: 'Mocha', burgundy: 'Burgundy'
     });
     const systemColorScheme = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
@@ -3321,9 +3343,9 @@
     function normalizeAppearance(value) {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
       const mode = ['system', 'light', 'dark'].includes(value.mode) ? value.mode : APPEARANCE_DEFAULTS.mode;
-      const lightTheme = Object.hasOwn(APPEARANCE_THEME_NAMES, value.lightTheme) && ['classic-light', 'soft-ivory', 'sage-garden', 'rose-clay', 'sandstone'].includes(value.lightTheme)
+      const lightTheme = Object.hasOwn(APPEARANCE_THEME_NAMES, value.lightTheme) && ['classic-light', 'soft-ivory', 'sage-garden', 'rose-clay', 'sandstone', 'clay'].includes(value.lightTheme)
         ? value.lightTheme : APPEARANCE_DEFAULTS.lightTheme;
-      const darkTheme = Object.hasOwn(APPEARANCE_THEME_NAMES, value.darkTheme) && ['warm-graphite', 'obsidian', 'deep-forest', 'mocha', 'burgundy'].includes(value.darkTheme)
+      const darkTheme = Object.hasOwn(APPEARANCE_THEME_NAMES, value.darkTheme) && ['warm-graphite', 'obsidian', 'deep-forest', 'mocha', 'burgundy', 'clay'].includes(value.darkTheme)
         ? value.darkTheme : APPEARANCE_DEFAULTS.darkTheme;
       return { mode, lightTheme, darkTheme };
     }
@@ -3369,12 +3391,12 @@
       commitAppearance();
     });
     lightThemeSelect.addEventListener('change', () => {
-      currentAppearance.lightTheme = ['classic-light', 'soft-ivory', 'sage-garden', 'rose-clay', 'sandstone'].includes(lightThemeSelect.value)
+      currentAppearance.lightTheme = ['classic-light', 'soft-ivory', 'sage-garden', 'rose-clay', 'sandstone', 'clay'].includes(lightThemeSelect.value)
         ? lightThemeSelect.value : APPEARANCE_DEFAULTS.lightTheme;
       commitAppearance();
     });
     darkThemeSelect.addEventListener('change', () => {
-      currentAppearance.darkTheme = ['warm-graphite', 'obsidian', 'deep-forest', 'mocha', 'burgundy'].includes(darkThemeSelect.value)
+      currentAppearance.darkTheme = ['warm-graphite', 'obsidian', 'deep-forest', 'mocha', 'burgundy', 'clay'].includes(darkThemeSelect.value)
         ? darkThemeSelect.value : APPEARANCE_DEFAULTS.darkTheme;
       commitAppearance();
     });
@@ -6280,7 +6302,7 @@
         }
       }
       if (content) parts.push(content);
-      parts.push(`---\n\nGenerated by RunMind 2.0.1 · ${new Date().toISOString()}`);
+      parts.push(`---\n\nGenerated by RunMind 2.0.8 · ${new Date().toISOString()}`);
       return parts.join('\n\n') + '\n';
     }
 

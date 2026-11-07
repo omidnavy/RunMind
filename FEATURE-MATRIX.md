@@ -1,3 +1,48 @@
+## RunMind 2.0.8 — reliable inline answer refresh
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| PowerToys Run | Dynamic fast-result preview | The **Ask RunMind** pending result displays a bounded, whitespace-normalized preview of the latest prompt received by the fast query path, alongside **Open in chat** and background-generation status. | **Implemented**; formatting is bounded to 100 characters and performs no regex or network work. Updates occur when PowerToys dispatches a new query. |
+
+## RunMind 2.0.6 — asynchronous inline result publication
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| PowerToys Run | Non-blocking delayed generation | The delayed plugin callback starts model generation in the background and returns immediately, releasing PowerToys' per-plugin execution gate. Completed answers are sent through `IResultUpdated` with the originating query generation. | **Implemented**; a pending **Open in chat** result remains visible while generation runs, and the completed answer appears as an additional result. |
+| PowerToys Run | Non-blocking fast result | The fast result is returned immediately while the delayed model request runs outside the plugin execution gate. | **Implemented**; PowerToys still manages its own search-result list refresh. |
+
+## RunMind 2.0.5 — non-blocking inline query cancellation
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| PowerToys Run | Fast query replacement | New fast queries invalidate the previous operation immediately and start asynchronous cancellation callbacks without waiting for them in `IPlugin.Query()`. The previous cancellation source remains alive until callback completion. | **Implemented**; the host must dispatch updated input; PowerToys Input smoothing can delay that dispatch. |
+| PowerToys Run | Inline timing diagnostics | Debug builds report fast-result preparation time and prior-query cancellation callback duration without logging query text. | **Implemented**; diagnostic output is omitted from Release builds. |
+
+## RunMind 2.0.4 — PowerToys inline latest-query handoff
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| PowerToys Run | Pending-result click handoff | A pending result click resolves against the latest active query received by RunMind and uses that operation's prompt, model, and provider settings consistently. | **Implemented**; cannot use text PowerToys has not yet dispatched to the plugin. No artificial debounce is added. |
+
+## RunMind 2.0.3 — inline reliability and WebView security hardening
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| PowerToys Run | Query-operation lifecycle | Distinguishes started, already-running, and terminal operations; pre-start cancellation signals waiters so terminal operations cannot cause an indefinite wait. | **Implemented** |
+| PowerToys Run | Settings/query synchronization | Publishes settings and invalidates the prior query atomically; versioned snapshots reject stale fast/delayed callbacks. | **Implemented** |
+| PowerToys Run | Input validation | One shared filter governs fast and delayed query paths. | **Implemented** |
+| WebView2 | Navigation and message origin | Default-deny navigation; trusts only the mapped HTTPS localhost chat page on its default port; external HTTP(S)/mailto opens through Windows; unsupported schemes and untrusted messages are blocked. | **Implemented** |
+| Providers | Bounded inline generation | Ollama and LM Studio accumulated output is capped at 8 Mi characters; incomplete streams are rejected unless an explicit completion marker is received. | **Implemented**; provider must emit Ollama `done: true`, LM Studio `[DONE]`, or a non-null final `finish_reason`. |
+| Providers | Timeout diagnostics | Model discovery, connection establishment, and generation timeouts are distinguished in diagnostics. | **Implemented**; fixed limits remain 8 seconds for model discovery and 15 seconds for connection establishment. |
+| Ollama | Endpoint query parameters | Query parameters are retained when deriving `/api/tags` for model discovery. | **Implemented** for native discovery; chat-window base URL forwarding remains deferred until path-aware URL composition is added. |
+
+## RunMind 2.0.2 — Clay appearance palettes
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| Appearance | Clay Light and Dark | Add the paired Clay palette to both independent selectors. Shared reference colors are `#F9F9F7` (light background), `#2D2D2B` (dark background / light foreground), and `#CC7D5E` (accent); supporting surface and border shades follow the screenshot's warm-neutral appearance. | **Implemented**; exact base colors are retained, secondary UI shades are adapted to RunMind's theme tokens. |
+| Appearance | Cross-host preferences | Clay selections use the existing shared preference file and apply in standalone and PowerToys-hosted chat windows without restart. | **Implemented** |
+
 ## RunMind 2.0.0 — Data, document, and media capabilities
 
 | Area | Feature | Current behavior | Status / limits |
@@ -511,3 +556,6 @@ The following are intentionally outside the current feature set or remain unimpl
 - Deep Research claim verdicts and source-quality explanations are model-assisted, not independently proven. Local quote matching confirms only that normalized quotation text occurs in a bounded stored excerpt; it does not prove logical entailment, factual truth, source authority, or editorial independence.
 - Deep Research time budgets are soft boundaries: current HTTP operations complete before the task stops retrieving and synthesizes collected evidence.
 - Source-level checks do not replace a Windows build and live tests against the user's PowerToys, WebView2, model servers, Reader/SearXNG endpoints, workspace permissions, and MCP servers.
+
+
+RunMind now requests one same-query refresh through the PowerToys public API after background generation completes. The cached answer is returned through the standard delayed-query result path without another LLM request; the refresh is skipped if the active query has changed.

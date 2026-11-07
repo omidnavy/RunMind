@@ -1,3 +1,123 @@
+## [2.0.8] — Reliable PowerToys result refresh
+
+### Fixed
+- Replace asynchronous `IResultUpdated` publication with PowerToys' public `IPublicAPI.ChangeQuery(query, requery: true)` mechanism after inline generation completes. This makes the completed answer flow through the ordinary delayed-query result pipeline, including the host's normal plugin metadata assignment.
+- Keep generation asynchronous and release the per-plugin execution gate immediately. Completion triggers exactly one same-query refresh; the delayed query then returns the cached answer without issuing another model request.
+- Re-check the active operation on the UI dispatcher immediately before requesting the refresh, preventing a completed older query from replacing newer text typed in the meantime.
+- Remove the unused `IResultUpdated` implementation from RunMind; the completed answer no longer depends on PowerToys registering or accepting that event.
+
+### Compatibility and scope
+- Preserve global search, the `llm` action keyword, the live 100-character prompt preview, the pending chat-opening result, provider request behavior, and the non-blocking cancellation lifecycle.
+- The answer replaces the pending RunMind result after one host-managed requery. The model is not called a second time.
+- No debounce, timer, keyboard hook, dependency, or additional network request is introduced.
+
+### Validation
+- Source-level checks verify the delayed callback still returns immediately, generation runs once per operation, completion is cached before refresh, and the refresh is guarded against a superseding query.
+- Project XML, plugin manifest JSON, version alignment, changed-files-only overlay reconstruction, and ZIP integrity checked against the reconstructed 2.0.7 source tree.
+- Windows/.NET compilation and live PowerToys integration tests require the Windows build environment and excluded PowerToys reference assemblies; they are not claimed here.
+
+## [2.0.7] — Live inline query preview
+
+### Changed
+- Restore the live prompt preview in the fast **Ask RunMind** result. The subtitle now reflects the latest prompt delivered to RunMind while retaining the **Open in chat** and background-generation status.
+- Use a small, bounded whitespace-normalizing preview routine on the fast path. It avoids regular expressions and caps displayed query text at 100 characters, keeping per-keystroke formatting lightweight.
+- Preserve the asynchronous delayed-generation flow introduced in 2.0.6: model requests continue outside PowerToys' per-plugin execution gate, and completed results are published against their originating query generation.
+
+### Compatibility and scope
+- Preserve global search, the `llm` action keyword, provider behavior, query cancellation, latest-operation click handoff, and asynchronous result publication.
+- The displayed preview updates only when PowerToys delivers a new query to RunMind; the plugin cannot display text that the host has not dispatched.
+- No debounce, timer, keyboard hook, dependency, or additional model request is introduced.
+
+### Validation
+- Source-level checks verify both fast and delayed pending-result creation use the query prompt, preview formatting is bounded, and the asynchronous generation/publication lifecycle is unchanged.
+- Project XML, plugin manifest JSON, version alignment, changed-files-only overlay reconstruction, and ZIP integrity checked against the reconstructed 2.0.6 project state.
+- Windows/.NET compilation and live PowerToys timing tests require the Windows build environment and PowerToys reference assemblies; they are not claimed here.
+
+## [2.0.6] — Asynchronous PowerToys inline result publication
+
+### Fixed
+- Stop blocking PowerToys' per-plugin execution gate while an inline model request is running. The delayed callback now schedules generation in the background and returns immediately, allowing subsequent keystrokes to reach the fast query path and cancel superseded operations.
+- Publish completed inline responses through PowerToys' `IResultUpdated` event, carrying the original query generation so the host can reject stale responses.
+- Keep the fast pending result available for opening chat while generation runs. Its title and subtitle are now stable and no longer format a changing preview on every keystroke.
+- Remove the obsolete synchronous completion waiter from the query-operation lifecycle; cancellation and disposal remain coordinated with asynchronous cancellation callbacks.
+
+### Compatibility and scope
+- Preserve global plugin search, the `llm` action keyword, the immediate pending chat handoff, existing providers, query validation, and the 2.0.5 cancellation/disposal safeguards.
+- The completed inline answer is delivered asynchronously as a separate result while the pending **Open in chat** result remains available. PowerToys controls its own result-list refresh cycle; RunMind no longer holds its plugin execution gate for the duration of generation.
+- No artificial debounce, keyboard hooks, dependencies, or class extraction added.
+
+### Validation
+- Source-level checks cover immediate return from the delayed callback, one background generation per operation, query-generation-tagged result publication, cancellation of superseded work, and removal of synchronous waiting.
+- Project XML, plugin manifest JSON, version alignment, changed-files-only overlay reconstruction, and ZIP integrity checked against the reconstructed 2.0.5 baseline.
+- Windows/.NET compilation and live PowerToys integration tests were not available in this environment.
+
+## [2.0.5] — Non-blocking PowerToys inline query cancellation
+
+### Changed
+- Replace synchronous `CancellationTokenSource.Cancel()` callback execution in the inline query operation with `CancellationTokenSource.CancelAsync()`. The fast PowerToys query path now marks the previous operation cancelled immediately and returns its new pending result without waiting for registered cancellation callbacks to finish.
+- Keep the previous cancellation source reserved until all asynchronous cancellation callbacks complete; only then can the existing operation lifecycle dispose it. Pre-start cancellation, completion signaling, handoff invalidation, and current-operation checks remain intact.
+- Add Debug-build timing diagnostics for fast-result preparation and previous-query cancellation callback completion. Diagnostics do not include the user's search text and are omitted from Release builds.
+
+### Compatibility and scope
+- Preserve the existing `IPlugin.Query()` / `IDelayedExecutionPlugin.Query()` split, the existing query filters, model/provider request formats, and the pending-result handoff behavior. No artificial debounce, timer, keyboard hook, or additional network request is introduced.
+- PowerToys must still dispatch the updated search text to RunMind; Input smoothing can delay that host callback. This change removes RunMind's synchronous wait for cancellation callbacks, not PowerToys' own input-dispatch delay.
+- The project targets .NET 10, where `CancellationTokenSource.CancelAsync()` is available. No new package or runtime dependency is added.
+
+### Validation
+- Source-level checks verify that the fast replacement path invokes non-blocking cancellation, that cancellation is marked before the callback task is observed, and that the cancellation source remains protected from disposal until asynchronous callbacks finish.
+- Check pre-start cancellation signaling, repeated Cancel/Dispose calls, completion/disposal ordering, and DEBUG-only timing diagnostics. Validate C# delimiter/token balance, project XML, plugin manifest JSON, release-version alignment, changed-files-only overlay reconstruction, and ZIP integrity against the supplied 2.0.4 baseline.
+- Windows/.NET compilation and live PowerToys timing tests require the Windows build environment and excluded PowerToys reference assemblies; they are not claimed here.
+
+## [2.0.4] — PowerToys inline latest-query handoff
+
+### Fixed
+- Resolve clicks on pending inline results against the latest active query RunMind has received, rather than unconditionally using the prompt captured by the result that PowerToys may still be displaying.
+- Use the selected operation's own prompt, model, and provider settings together when opening the chat or displaying a completed response. This prevents an older visible result from opening a chat with an earlier prompt after a newer query has already reached the plugin.
+- Reject a click if no valid active query remains; do not fall back to an older prompt.
+
+### Compatibility and limitation
+- The fast query path and existing query-operation lifecycle are retained. This change does not add an artificial debounce or delay.
+- PowerToys must deliver the newer search text to the plugin before RunMind can use it. Text still being typed but not yet dispatched by PowerToys is not observable through the plugin result action.
+
+### Validation
+- Source-level checks verify the pending-result action resolves the active query under the query lock and uses a single operation's prompt/model/settings for both handoff and completed-response paths.
+- Project XML, plugin manifest JSON, release-version alignment, overlay application, changed-files-only contents, and ZIP integrity checked against the supplied 2.0.3 overlay plus the 2.0.2 baseline.
+- Windows/.NET compilation and live PowerToys interaction tests were not available in this environment.
+
+## [2.0.3] — Inline reliability and WebView security hardening
+
+### Fixed
+- Replace the ambiguous query-operation start Boolean with explicit **Started**, **AlreadyRunning**, and **Terminal** outcomes. A delayed callback waits only when another callback is actually running the operation; cancelling or handing off an operation before it starts now completes its wait signal and cannot leave a worker waiting forever.
+- Coordinate settings publication and active-query invalidation under a consistent settings-then-query lock order. Versioned settings snapshots prevent stale fast/delayed callbacks from starting work after a settings change, without cancelling a new query created from the new settings.
+- Use one shared input filter for the fast and delayed PowerToys query paths, including the `llm`, action-keyword, and standalone app-name exclusions.
+- Default-deny WebView2 navigation. Only the exact mapped `https://localhost/ChatWindow.html` page on the default HTTPS port is trusted; invalid and unsupported schemes are blocked, while HTTP, HTTPS, and mailto links continue to open externally. Web messages are dispatched only from that trusted page origin.
+- Bound accumulated PowerToys Run inline output to 8 Mi characters for both Ollama and LM Studio instead of allowing unlimited response accumulation.
+- Require an explicit successful stream-completion signal: Ollama `done: true`, or LM Studio `[DONE]` / a final non-null OpenAI-compatible `finish_reason`. Unexpected EOF is reported as an incomplete response rather than a successful partial answer.
+- Report model-discovery timeouts separately from response-generation timeouts and clarify that the configurable Request timeout does not affect model discovery or connection establishment.
+- Preserve Ollama endpoint query parameters when deriving the native `/api/tags` model-discovery URL.
+
+### Compatibility and scope
+- Keep the existing 55 MiB conversation-window transfer limit and preview normalization unchanged; neither was changed without usage measurements or focused regression coverage.
+- Keep `IsValidModelAsync()` and the public compatibility overload; their in-file call-site count alone is not enough to prove they are unused by other assemblies.
+- The chat-window Ollama base URL still omits endpoint query strings because the current WebView code appends API paths to that base. Forwarding query strings there requires a path-aware URL composition change in `ChatWindow.html`; they are not appended blindly in this release. Native `/api/tags` discovery does preserve them.
+- No class extraction, dependency changes, or broader refactoring is included.
+
+### Validation
+- Source-level checks cover query-operation terminal/start branches, pre-start cancellation signalling, settings-snapshot version checks, lock-order consistency, fast/delayed query-filter reuse, WebView2 default-deny navigation and origin gating, response-size enforcement, explicit stream completion, timeout messages, and Ollama discovery query preservation.
+- C# delimiter/token balance, C# project XML, plugin manifest JSON, version alignment, and changed-files-only overlay application checked against the supplied 2.0.2 archive.
+- The .NET SDK, Windows WPF/WebView2 runtime, and excluded PowerToys reference assemblies were unavailable, so Windows/.NET compilation and live PowerToys integration tests were not run.
+
+## [2.0.2] — Clay appearance palettes
+
+### Added
+- Add the paired **Clay** light and dark palettes to the Appearance selectors, inspired by the supplied reference screenshots without copying the original theme name.
+- Use the reference's exact base colors: `#F9F9F7` light background, `#2D2D2B` dark background / light foreground, and `#CC7D5E` shared accent. Supporting surfaces, borders, muted text, and message fills are tuned to the same warm-neutral palette for RunMind's controls and panels.
+- Preserve independent Light and Dark palette selections, per-user persistence, instant application, and existing defaults. Clay is accepted consistently by the WebView and native preference store for both standalone and PowerToys-hosted windows.
+
+### Validation
+- Theme selector counts and IDs, JavaScript syntax, C# project XML, plugin manifest JSON, native preference allow-lists, release-version alignment, and changed-files-only overlay application checked against the supplied 2.0.0 archive plus the 2.0.1 overlay.
+- The supplied reference screenshots were inspected for palette colors. Windows/.NET compilation and live WebView2/PowerToys runtime validation were not available in this environment.
+
 ## [2.0.1] — New conversation workflow
 
 ### Added

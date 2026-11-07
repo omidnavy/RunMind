@@ -10,7 +10,7 @@
     <Product>RunMind</Product>
     <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
     <RootNamespace>RunMind.Standalone</RootNamespace>
-    <Version>2.0.1</Version>
+    <Version>2.0.8</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

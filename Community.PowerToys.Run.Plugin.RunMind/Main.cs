@@ -46,6 +46,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private const int DefaultRequestTimeoutSeconds = 600;
     private const int DefaultInlineCpuThreads = 0;
     private const int MaximumInlineSystemPromptCharacters = 12000;
+    private const int MaximumInlineResponseCharacters = 8 * 1024 * 1024;
+    private const int ModelDiscoveryTimeoutSeconds = 8;
+    private const int ProviderConnectionTimeoutSeconds = 15;
     private const string PreviousDefaultInlineSystemPrompt =
         "SYSTEM\n\n" +
         "You are QuickAI, a compact proactive local AI living inside \"Microsoft PowerToys Run\".\n" +
@@ -85,6 +88,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private string _defaultModel = DefaultModel;
     private string _thinking = DefaultThinking;
     private int _provider;
+    private long _settingsVersion;
     private int _keepAliveSeconds = DefaultKeepAliveSeconds;
     private int _requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
     private int _inlineCpuThreads = DefaultInlineCpuThreads;
@@ -290,6 +294,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             }
         }
 
+        QueryOperation? previous;
         lock (_settingsLock)
         {
             _endpoint = string.IsNullOrWhiteSpace(endpoint) ? DefaultEndpoint : endpoint.Trim();
@@ -306,9 +311,22 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _inlineMaxOutputTokens = inlineMaxOutputTokens;
             _inlineSeed = inlineSeed;
             _inlineConversationalMode = inlineConversationalMode;
+            _settingsVersion++;
+
+            // Publish the new settings and invalidate work using the old snapshot as one
+            // coordinated operation. BeginQuery/GetOrBeginQuery use the same lock order.
+            lock (_queryLock)
+            {
+                previous = _activeQuery;
+                _activeQuery = null;
+                _latestFastQuery = null;
+                _hasReceivedFastQuery = true;
+            }
         }
 
-        CancelActiveQuery();
+        // Cancellation callbacks may re-enter plugin code; never invoke them under either lock.
+        previous?.Cancel();
+        previous?.Dispose();
     }
 
     // PowerToys calls this fast path as the user types. It must never perform network I/O.
@@ -321,23 +339,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             return new List<Result>();
         }
 
-        var search = (query.Search ?? string.Empty).Trim();
-        if (search.Length == 0
-            || search.Equals("llm", StringComparison.OrdinalIgnoreCase)
-            || (!string.IsNullOrWhiteSpace(query.ActionKeyword)
-                && search.Equals(query.ActionKeyword.Trim(), StringComparison.OrdinalIgnoreCase)))
-        {
-            // `llm` by itself is intentionally not a launcher command. Windows Search /
-            // PowerToys' normal application indexer launches RunMind.exe by its app name.
-            CancelActiveQuery();
-            return new List<Result>();
-        }
-
-        // Let PowerToys' normal application indexer handle the standalone app name.
-        if (string.IsNullOrWhiteSpace(query.ActionKeyword)
-            && (search.Equals("RunMind", StringComparison.OrdinalIgnoreCase)
-                || search.Equals("LocalLLM", StringComparison.OrdinalIgnoreCase)
-                || search.Equals("Local LLM", StringComparison.OrdinalIgnoreCase)))
+        if (!TryGetValidSearchText(query, out var search))
         {
             CancelActiveQuery();
             return new List<Result>();
@@ -346,6 +348,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         // Global mode accepts even a one-character prompt. PowerToys may use short
         // prefixes while typing; the normal delayed-execution path handles throttling.
 
+#if DEBUG
+        var fastQueryStartedAt = Stopwatch.GetTimestamp();
+#endif
         var settings = GetSettingsSnapshot();
         var (model, prompt) = ParseModelAndPrompt(search, settings.DefaultModel);
         if (string.IsNullOrWhiteSpace(prompt))
@@ -355,21 +360,24 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         var operation = BeginQuery(search, model, prompt, settings);
-        return operation is null
+        var results = operation is null
             ? new List<Result>()
-            : new List<Result> { CreatePendingResult(operation) };
+            : new List<Result> { CreatePendingResult(prompt) };
+#if DEBUG
+        Debug.WriteLine($"[RunMind] PowerToys fast query prepared in {Stopwatch.GetElapsedTime(fastQueryStartedAt).TotalMilliseconds:F1} ms.");
+#endif
+        return results;
     }
 
-    // PowerToys invokes the delayed phase from a background query worker. The fast Query()
-    // above has already returned immediately; this phase can wait for model I/O and return
-    // the completed result directly to the host's current query generation.
+    // PowerToys holds a per-plugin execution gate while calling IDelayedExecutionPlugin.
+    // Start generation in the background and return immediately so new keystrokes can
+    // reach Query() and supersede the previous operation while the model is still running.
     public List<Result> Query(Query query, bool delayedExecution)
     {
         if (!delayedExecution || query is null)
             return new List<Result>();
 
-        var search = (query.Search ?? string.Empty).Trim();
-        if (search.Length == 0)
+        if (!TryGetValidSearchText(query, out var search))
         {
             CancelActiveQuery();
             return new List<Result>();
@@ -377,29 +385,16 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
         var currentSettings = GetSettingsSnapshot();
         var (currentModel, currentPrompt) = ParseModelAndPrompt(search, currentSettings.DefaultModel);
-        if (string.IsNullOrWhiteSpace(currentPrompt)) return new List<Result>();
-
-        var operation = GetOrBeginQuery(search, currentModel, currentPrompt, currentSettings);
-        if (operation is null) return new List<Result>();
-
-        if (!operation.TryGetCompletion(out _, out _))
+        if (string.IsNullOrWhiteSpace(currentPrompt))
         {
-            if (operation.TryStart())
-            {
-                // PowerToys invokes IDelayedExecutionPlugin.Query from its background
-                // query phase and awaits the returned result. Keep HTTP asynchronous
-                // internally, but wait here so the host can publish this response as part
-                // of the exact query generation without rewriting the search-box text.
-                ExecuteQueryAsync(operation).GetAwaiter().GetResult();
-            }
-            else
-            {
-                // Defensive path for duplicate delayed callbacks for the same operation.
-                operation.WaitForFinish();
-            }
+            CancelActiveQuery();
+            return new List<Result>();
         }
 
-        if (!IsCurrentQuery(operation)) return new List<Result>();
+        var operation = GetOrBeginQuery(search, currentModel, currentPrompt, currentSettings);
+        if (operation is null)
+            return new List<Result>();
+
         if (operation.TryGetCompletion(out var completedResponse, out var isError))
         {
             return new List<Result>
@@ -408,11 +403,65 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             };
         }
 
-        // The fast Query() path already supplied the pending item in the normal flow.
-        // Return it only for hosts that invoke the delayed interface without the fast path.
+        switch (operation.TryStart())
+        {
+            case QueryOperation.StartResult.Started:
+                // Task.Run also moves synchronous setup before the first HTTP await off the
+                // PowerToys callback. The plugin gate is released as soon as this method returns.
+                _ = Task.Run(() => ExecuteQueryAndRefreshAsync(operation, query));
+                break;
+
+            case QueryOperation.StartResult.AlreadyRunning:
+                // Another delayed callback already owns this operation. Its completion event
+                // will publish the result; never hold the plugin gate waiting for it.
+                break;
+
+            case QueryOperation.StartResult.Terminal:
+                // Re-check in case the operation completed between the first check and TryStart.
+                if (operation.TryGetCompletion(out completedResponse, out isError))
+                {
+                    return new List<Result>
+                    {
+                        CreateResponseResult(operation.Model, completedResponse, isError, operation.Prompt, operation.Settings),
+                    };
+                }
+                break;
+        }
+
+        // The fast phase normally supplied the persistent "Open in chat" result. Hosts that
+        // invoke only the delayed interface still receive that entry while generation runs.
         return HasFastQueryResult(search)
             ? new List<Result>()
-            : new List<Result> { CreatePendingResult(operation) };
+            : new List<Result> { CreatePendingResult(currentPrompt) };
+    }
+
+    private async Task ExecuteQueryAndRefreshAsync(QueryOperation operation, Query query)
+    {
+        try
+        {
+            await ExecuteQueryAsync(operation).ConfigureAwait(false);
+            if (!IsCurrentQuery(operation) || !operation.TryGetCompletion(out _, out _))
+                return;
+
+            // Do not depend on IResultUpdated being wired by every supported PowerToys build.
+            // Force one normal query cycle for the same search. The completed operation is
+            // already cached, so the delayed Query() path returns the answer immediately
+            // without starting another model request or holding the plugin execution gate.
+            DispatchToUi(() =>
+            {
+                // A newer keystroke may arrive between model completion and this dispatcher
+                // callback. Never replace the user's newer search with an obsolete query.
+                if (!IsCurrentQuery(operation))
+                    return;
+
+                _context?.API.ChangeQuery(query.RawQuery, requery: true);
+            }, "Could not refresh the completed RunMind result");
+        }
+        catch (Exception ex)
+        {
+            // Keep fire-and-forget task failures from becoming unobserved exceptions.
+            Debug.WriteLine($"[RunMind] Could not refresh the completed inline result: {ex}");
+        }
     }
 
     private async Task ExecuteQueryAsync(QueryOperation operation)
@@ -466,6 +515,25 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     }
 
+    private static bool TryGetValidSearchText(Query query, out string search)
+    {
+        search = (query.Search ?? string.Empty).Trim();
+        if (search.Length == 0
+            || search.Equals("llm", StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrWhiteSpace(query.ActionKeyword)
+                && search.Equals(query.ActionKeyword.Trim(), StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        // Let PowerToys' normal application indexer handle the standalone app name.
+        if (string.IsNullOrWhiteSpace(query.ActionKeyword)
+            && (search.Equals("RunMind", StringComparison.OrdinalIgnoreCase)
+                || search.Equals("LocalLLM", StringComparison.OrdinalIgnoreCase)
+                || search.Equals("Local LLM", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        return true;
+    }
+
     private bool HasFastQueryResult(string search)
     {
         lock (_queryLock)
@@ -479,27 +547,31 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     {
         QueryOperation? previous;
         QueryOperation operation;
-        lock (_queryLock)
+        lock (_settingsLock)
         {
-            if (_disposed) return null;
-            if (_activeQuery is not null
-                && string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
-                && !_activeQuery.IsCancellationRequested
-                && !_activeQuery.WasHandedOff)
+            if (settings.Version != _settingsVersion) return null;
+            lock (_queryLock)
             {
+                if (_disposed) return null;
+                if (_activeQuery is not null
+                    && string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
+                    && !_activeQuery.IsCancellationRequested
+                    && !_activeQuery.WasHandedOff)
+                {
+                    _latestFastQuery = search;
+                    _hasReceivedFastQuery = true;
+                    return _activeQuery;
+                }
+
+                previous = _activeQuery;
+                operation = new QueryOperation(search, model, prompt, settings);
+                _activeQuery = operation;
                 _latestFastQuery = search;
                 _hasReceivedFastQuery = true;
-                return _activeQuery;
             }
-
-            previous = _activeQuery;
-            operation = new QueryOperation(search, model, prompt, settings);
-            _activeQuery = operation;
-            _latestFastQuery = search;
-            _hasReceivedFastQuery = true;
         }
 
-        // Cancel outside the state lock: CancellationToken callbacks may run inline.
+        // Cancel outside both locks: CancellationToken callbacks may run inline.
         previous?.Cancel();
         previous?.Dispose();
         return operation;
@@ -507,26 +579,30 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     private QueryOperation? GetOrBeginQuery(string search, string model, string prompt, SettingsSnapshot settings)
     {
-        lock (_queryLock)
+        lock (_settingsLock)
         {
-            if (_disposed) return null;
-
-            // A delayed callback for an obsolete query must never restart cancelled work.
-            if (_hasReceivedFastQuery && !string.Equals(_latestFastQuery, search, StringComparison.Ordinal))
-                return null;
-
-            if (_activeQuery is not null)
+            if (settings.Version != _settingsVersion) return null;
+            lock (_queryLock)
             {
-                if (!string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
-                    || _activeQuery.IsCancellationRequested || _activeQuery.WasHandedOff)
-                    return null;
-                return _activeQuery;
-            }
+                if (_disposed) return null;
 
-            // Supports launcher configurations which invoke only the delayed path first.
-            var operation = new QueryOperation(search, model, prompt, settings);
-            _activeQuery = operation;
-            return operation;
+                // A delayed callback for an obsolete query must never restart cancelled work.
+                if (_hasReceivedFastQuery && !string.Equals(_latestFastQuery, search, StringComparison.Ordinal))
+                    return null;
+
+                if (_activeQuery is not null)
+                {
+                    if (!string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
+                        || _activeQuery.IsCancellationRequested || _activeQuery.WasHandedOff)
+                        return null;
+                    return _activeQuery;
+                }
+
+                // Supports launcher configurations which invoke only the delayed path first.
+                var operation = new QueryOperation(search, model, prompt, settings);
+                _activeQuery = operation;
+                return operation;
+            }
         }
     }
 
@@ -645,7 +721,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
-        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(ProviderConnectionTimeoutSeconds));
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
         using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(requestTimeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
@@ -666,6 +742,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         using var reader = new StreamReader(responseStream, Encoding.UTF8);
         var output = new StringBuilder();
         var recordNumber = 0;
+        var receivedCompletion = false;
         while (true)
         {
             var line = await reader.ReadLineAsync(requestTimeout.Token).ConfigureAwait(false);
@@ -681,11 +758,16 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 if (root.TryGetProperty("error", out var errorElement) && errorElement.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(errorElement.GetString()))
                     throw new InvalidOperationException($"Ollama: {errorElement.GetString()}");
                 if (root.TryGetProperty("response", out var chunk) && chunk.ValueKind == JsonValueKind.String)
-                    output.Append(chunk.GetString());
+                    AppendBoundedResponseChunk(output, chunk.GetString(), "Ollama");
                 if (root.TryGetProperty("done", out var doneElement) && doneElement.ValueKind == JsonValueKind.True)
+                {
+                    receivedCompletion = true;
                     break;
+                }
             }
         }
+        if (!receivedCompletion)
+            throw new InvalidDataException("Ollama closed the response stream before its final done:true record. The response may be incomplete; retry the request.");
         return output.ToString();
     }
 
@@ -717,7 +799,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
-        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(ProviderConnectionTimeoutSeconds));
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
         using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(requestTimeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
@@ -737,6 +819,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         using var reader = new StreamReader(responseStream, Encoding.UTF8);
         var output = new StringBuilder();
         var recordNumber = 0;
+        var receivedCompletion = false;
         while (true)
         {
             var line = await reader.ReadLineAsync(requestTimeout.Token).ConfigureAwait(false);
@@ -744,7 +827,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
             var data = line[5..].Trim();
             if (data.Length == 0) continue;
-            if (data.Equals("[DONE]", StringComparison.OrdinalIgnoreCase)) break;
+            if (data.Equals("[DONE]", StringComparison.OrdinalIgnoreCase))
+            {
+                receivedCompletion = true;
+                break;
+            }
             recordNumber++;
             JsonDocument json;
             try { json = JsonDocument.Parse(data); }
@@ -759,14 +846,32 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     var choice = choices[0];
                     if (choice.TryGetProperty("delta", out var delta) && delta.ValueKind == JsonValueKind.Object
                         && delta.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
-                        output.Append(content.GetString());
+                        AppendBoundedResponseChunk(output, content.GetString(), "LM Studio");
                     else if (choice.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.Object
                         && message.TryGetProperty("content", out content) && content.ValueKind == JsonValueKind.String)
-                        output.Append(content.GetString());
+                        AppendBoundedResponseChunk(output, content.GetString(), "LM Studio");
+
+                    // Some OpenAI-compatible servers omit [DONE] but send the standard
+                    // non-null finish_reason on their final choice. Treat that as an
+                    // explicit completion signal, not an arbitrary EOF.
+                    if (choice.TryGetProperty("finish_reason", out var finishReason)
+                        && finishReason.ValueKind == JsonValueKind.String
+                        && !string.IsNullOrWhiteSpace(finishReason.GetString()))
+                        receivedCompletion = true;
                 }
             }
         }
+        if (!receivedCompletion)
+            throw new InvalidDataException("LM Studio closed the response stream without [DONE] or a final finish_reason. The response may be incomplete; retry the request.");
         return output.ToString();
+    }
+
+    private static void AppendBoundedResponseChunk(StringBuilder output, string? chunk, string providerName)
+    {
+        if (string.IsNullOrEmpty(chunk)) return;
+        if (chunk.Length > MaximumInlineResponseCharacters - output.Length)
+            throw new InvalidDataException($"The {providerName} response exceeded RunMind's {MaximumInlineResponseCharacters:N0}-character inline output limit. Use a smaller request or open the full chat window for longer work.");
+        output.Append(chunk);
     }
 
     private async Task<List<string>> FetchModelsFromEndpointAsync(SettingsSnapshot settings, CancellationToken cancellationToken = default)
@@ -783,37 +888,44 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 return new List<string>(_modelCache);
         }
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(ModelDiscoveryTimeoutSeconds));
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
-        using var request = new HttpRequestMessage(HttpMethod.Get, modelsUri);
-        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
-            var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
-            throw new HttpRequestException($"Could not query the {GetProviderName(settings)} model list (HTTP {(int)response.StatusCode} {response.ReasonPhrase}).{detail}", null, response.StatusCode);
-        }
+            using var request = new HttpRequestMessage(HttpMethod.Get, modelsUri);
+            using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
+                var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
+                throw new HttpRequestException($"Could not query the {GetProviderName(settings)} model list (HTTP {(int)response.StatusCode} {response.ReasonPhrase}).{detail}", null, response.StatusCode);
+            }
 
-        var modelListBytes = await ReadBoundedContentBytesAsync(response.Content, 4 * 1024 * 1024, requestTimeout.Token).ConfigureAwait(false);
-        using var json = JsonDocument.Parse(modelListBytes);
-        var modelNames = new List<string>();
-        var arrayName = settings.Provider == 1 ? "data" : "models";
-        if (!json.RootElement.TryGetProperty(arrayName, out var modelsElement) || modelsElement.ValueKind != JsonValueKind.Array)
-            throw new InvalidDataException($"The {GetProviderName(settings)} model-list response did not contain a '{arrayName}' array. Check the configured API URL.");
+            var modelListBytes = await ReadBoundedContentBytesAsync(response.Content, 4 * 1024 * 1024, requestTimeout.Token).ConfigureAwait(false);
+            using var json = JsonDocument.Parse(modelListBytes);
+            var modelNames = new List<string>();
+            var arrayName = settings.Provider == 1 ? "data" : "models";
+            if (!json.RootElement.TryGetProperty(arrayName, out var modelsElement) || modelsElement.ValueKind != JsonValueKind.Array)
+                throw new InvalidDataException($"The {GetProviderName(settings)} model-list response did not contain a '{arrayName}' array. Check the configured API URL.");
 
-        foreach (var model in modelsElement.EnumerateArray())
-        {
-            var nameProperty = settings.Provider == 1 ? "id" : "name";
-            if (model.TryGetProperty(nameProperty, out var nameElement) && nameElement.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(nameElement.GetString()))
-                modelNames.Add(nameElement.GetString()!);
+            foreach (var model in modelsElement.EnumerateArray())
+            {
+                var nameProperty = settings.Provider == 1 ? "id" : "name";
+                if (model.TryGetProperty(nameProperty, out var nameElement) && nameElement.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(nameElement.GetString()))
+                    modelNames.Add(nameElement.GetString()!);
+            }
+            lock (ModelCacheLock)
+            {
+                _modelCacheEndpoint = cacheKey;
+                _modelCacheTimestamp = DateTimeOffset.UtcNow;
+                _modelCache = new List<string>(modelNames);
+            }
+            return modelNames;
         }
-        lock (ModelCacheLock)
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
-            _modelCacheEndpoint = cacheKey;
-            _modelCacheTimestamp = DateTimeOffset.UtcNow;
-            _modelCache = new List<string>(modelNames);
+            throw new TimeoutException($"Model discovery timed out after {ModelDiscoveryTimeoutSeconds} seconds while contacting {GetProviderName(settings)}. Check the provider endpoint and whether the service is responding.", ex);
         }
-        return modelNames;
     }
 
     private static string GetProviderName(SettingsSnapshot settings) => settings.Provider == 1 ? "LM Studio" : "Ollama";
@@ -863,40 +975,41 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return true;
     }
 
-    private Result CreatePendingResult(QueryOperation operation)
+    private Result CreatePendingResult(string prompt)
     {
-        var model = operation.Model;
-        var prompt = operation.Prompt;
-        var settings = operation.Settings;
+        var queryPreview = CreateInlineQueryPreview(prompt);
+        var subtitle = string.IsNullOrEmpty(queryPreview)
+            ? "Open in chat · Answer generates in background"
+            : $"{queryPreview} · Open in chat · Answer generates in background";
+
         return new Result
         {
             Title = "Ask RunMind",
-            SubTitle = $"{CreatePreview(prompt)} · Generating… · Open in chat",
+            SubTitle = subtitle,
             IcoPath = _iconPath,
             Score = 45,
-            ContextData = new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["prompt"] = prompt,
-                ["model"] = model,
-                ["mode"] = "pending",
-            },
             Action = _ =>
             {
                 DispatchToUi(() =>
                 {
                     try
                     {
-                        if (!TryResolvePendingOperation(operation, out var completedResponse, out var isError, out var needsHandoff))
+                        if (!TryResolvePendingOperation(out var currentOperation, out var completedResponse, out var isError, out var needsHandoff))
                             return;
+
+                        // PowerToys can briefly leave an older result visible while a newer
+                        // fast query is being published. Resolve the click against the latest
+                        // operation RunMind has received, and use that operation's prompt,
+                        // model, and settings as one consistent snapshot.
                         if (needsHandoff)
                         {
                             // Cancel the inline HTTP request before starting the chat request.
-                            operation.Cancel();
-                            ShowPromptChatWindow(settings, model, prompt);
+                            currentOperation.Cancel();
+                            ShowPromptChatWindow(currentOperation.Settings, currentOperation.Model, currentOperation.Prompt);
                         }
                         else
                         {
-                            ShowNativeResponseWindow(settings, model, prompt, completedResponse, isError);
+                            ShowNativeResponseWindow(currentOperation.Settings, currentOperation.Model, currentOperation.Prompt, completedResponse, isError);
                         }
                     }
                     catch (Exception ex)
@@ -909,19 +1022,34 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         };
     }
 
-    private bool TryResolvePendingOperation(QueryOperation operation, out string response, out bool isError, out bool needsHandoff)
+    private bool TryResolvePendingOperation(
+        out QueryOperation currentOperation,
+        out string response,
+        out bool isError,
+        out bool needsHandoff)
     {
         lock (_queryLock)
         {
-            if (_disposed || !ReferenceEquals(_activeQuery, operation) || operation.IsCancellationRequested || operation.WasHandedOff)
+            // The clicked Result may belong to the previous query generation if PowerToys
+            // has not replaced its visible result list yet. Never use that Result's captured
+            // prompt when RunMind has already registered a newer active operation.
+            currentOperation = _activeQuery!;
+            if (_disposed
+                || currentOperation is null
+                || currentOperation.IsCancellationRequested
+                || currentOperation.WasHandedOff
+                || (_hasReceivedFastQuery && !string.Equals(_latestFastQuery, currentOperation.Search, StringComparison.Ordinal)))
             {
+                currentOperation = null!;
                 response = string.Empty;
                 isError = false;
                 needsHandoff = false;
                 return false;
             }
 
-            var completed = operation.TryGetCompletionOrMarkHandoff(out response, out isError);
+            // A result from an older generation intentionally resolves to the latest active
+            // operation. If there is no newer operation, this is the original clicked one.
+            var completed = currentOperation.TryGetCompletionOrMarkHandoff(out response, out isError);
             needsHandoff = !completed;
             return true;
         }
@@ -1067,7 +1195,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 _inlineTopP,
                 _inlineMaxOutputTokens,
                 _inlineSeed,
-                _inlineConversationalMode);
+                _inlineConversationalMode,
+                _settingsVersion);
         }
     }
 
@@ -1161,9 +1290,58 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         builder.Path = (lastSlash >= 0 ? path[..(lastSlash + 1)] : string.Empty) + "tags";
-        builder.Query = string.Empty;
+        // Preserve query parameters (for example, gateway/API-key parameters) when
+        // switching from /api/generate to /api/tags.
         builder.Fragment = string.Empty;
         return builder.Uri;
+    }
+
+    // Keep the fast result visibly tied to the current input without doing regex,
+    // Markdown, or unbounded formatting work on PowerToys' keystroke path.
+    private static string CreateInlineQueryPreview(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        const int maxLength = 100;
+        var preview = new StringBuilder(Math.Min(text.Length, maxLength));
+        var pendingSpace = false;
+        var truncated = false;
+
+        foreach (var character in text)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                pendingSpace = preview.Length > 0;
+                continue;
+            }
+
+            if (pendingSpace)
+            {
+                if (preview.Length >= maxLength)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                preview.Append(' ');
+                pendingSpace = false;
+            }
+
+            if (preview.Length >= maxLength)
+            {
+                truncated = true;
+                break;
+            }
+
+            preview.Append(character);
+        }
+
+        // Avoid leaving half of a UTF-16 surrogate pair at the display boundary.
+        if (truncated && preview.Length > 0 && char.IsHighSurrogate(preview[preview.Length - 1]))
+            preview.Length--;
+
+        return truncated ? preview.ToString().TrimEnd() + "…" : preview.ToString();
     }
 
     private static string CreatePreview(string text)
@@ -1183,9 +1361,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             exceptionChain.Add(current);
         }
 
+        var explicitTimeout = exceptionChain.OfType<TimeoutException>().FirstOrDefault();
+        if (explicitTimeout is not null)
+            return explicitTimeout.Message;
+
         if (exceptionChain.Any(item => item is OperationCanceledException))
         {
-            return "The request timed out. Increase Request timeout (seconds) in the plugin settings or use a smaller/faster model.";
+            return $"The provider request timed out. Model discovery has a {ModelDiscoveryTimeoutSeconds}-second limit, connection establishment has a {ProviderConnectionTimeoutSeconds}-second limit, and response generation uses the configured Request timeout. Increasing Request timeout only affects response generation.";
         }
 
         var diagnosticText = string.Join(" ", exceptionChain.Select(item => item.Message));
@@ -1466,6 +1648,22 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         _ = InitializeChatWebViewAsync(appWindow, webView, assemblyDirectory, JsonSerializer.Serialize(bootstrap));
     }
 
+    private static bool IsTrustedChatPageSource(string source)
+    {
+        return Uri.TryCreate(source, UriKind.Absolute, out var sourceUri)
+            && IsTrustedChatPageUri(sourceUri);
+    }
+
+    private static bool IsTrustedChatPageUri(Uri uri)
+    {
+        return uri.IsAbsoluteUri
+            && uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            && uri.IsDefaultPort
+            && string.IsNullOrEmpty(uri.UserInfo)
+            && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase);
+    }
+
     private bool TryHandleNewConversationMessage(
         string source,
         string messageJson,
@@ -1474,10 +1672,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     {
         try
         {
-            if (!Uri.TryCreate(source, UriKind.Absolute, out var sourceUri)
-                || sourceUri.Scheme != Uri.UriSchemeHttps
-                || !sourceUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-                || !sourceUri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase))
+            if (!IsTrustedChatPageSource(source))
                 return false;
 
             if (string.IsNullOrWhiteSpace(messageJson) || Encoding.UTF8.GetByteCount(messageJson) > 16 * 1024)
@@ -1561,10 +1756,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     {
         try
         {
-            if (!Uri.TryCreate(source, UriKind.Absolute, out var sourceUri)
-                || sourceUri.Scheme != Uri.UriSchemeHttps
-                || !sourceUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-                || !sourceUri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase))
+            if (!IsTrustedChatPageSource(source))
                 return;
 
             if (string.IsNullOrWhiteSpace(messageJson)
@@ -2027,6 +2219,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             var activeBootstrapJson = bootstrapJson;
             core.WebMessageReceived += (_, messageArgs) =>
             {
+                if (!IsTrustedChatPageSource(messageArgs.Source)) return;
                 if (windowThemeSynchronizer.TryHandleWebMessage(messageArgs.Source, messageArgs.WebMessageAsJson))
                     return;
                 if (nativePageReader.TryHandleMessage(
@@ -2060,15 +2253,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             };
             core.NavigationStarting += (_, e) =>
             {
-                if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
+                // Navigation is denied by default. Only the exact mapped app page may
+                // remain in WebView2; supported external links are handed to Windows.
+                e.Cancel = true;
+                if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri)) return;
+                if (IsTrustedChatPageUri(uri))
                 {
-                    return;
-                }
-
-                if (uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
-                    && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-                    && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase))
-                {
+                    e.Cancel = false;
                     return;
                 }
 
@@ -2076,7 +2267,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
                     || uri.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase))
                 {
-                    e.Cancel = true;
                     try
                     {
                         Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
@@ -2363,6 +2553,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         builder.Path = prefix.TrimEnd('/');
+        // This bootstrap value is a path base: ChatWindow.html appends API routes to it.
+        // Keeping a query string here would turn the appended route into query text.
+        // Native model discovery preserves endpoint query parameters in BuildTagsUri;
+        // chat-window query forwarding needs a path-aware URL builder before it can do so.
         builder.Query = string.Empty;
         builder.Fragment = string.Empty;
         if (builder.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
@@ -2376,7 +2570,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private sealed class QueryOperation : IDisposable
     {
         private readonly CancellationTokenSource _cancellation = new();
-        private readonly TaskCompletionSource<bool> _finishedSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object _sync = new();
         private int _started;
         private int _cancelRequested;
@@ -2411,19 +2604,24 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         public bool IsCancellationRequested => Volatile.Read(ref _cancelRequested) != 0;
         public bool WasHandedOff => Volatile.Read(ref _handedOff) != 0;
 
-        public bool TryStart()
+        public enum StartResult
+        {
+            Started,
+            AlreadyRunning,
+            Terminal,
+        }
+
+        public StartResult TryStart()
         {
             lock (_sync)
             {
-                if (_disposed || IsCancellationRequested || WasHandedOff || _started != 0) return false;
+                if (_disposed || _finished || IsCancellationRequested || WasHandedOff)
+                    return StartResult.Terminal;
+                if (_started != 0)
+                    return StartResult.AlreadyRunning;
                 _started = 1;
-                return true;
+                return StartResult.Started;
             }
-        }
-
-        public void WaitForFinish()
-        {
-            _finishedSignal.Task.GetAwaiter().GetResult();
         }
 
         public void Cancel()
@@ -2433,28 +2631,83 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 if (!_disposed && Interlocked.Exchange(ref _cancelRequested, 1) == 0)
                 {
+                    // Reserve the source until CancelAsync has completed every registered
+                    // callback. This flag also prevents Dispose/MarkFinished from disposing
+                    // the source while those callbacks are still running.
                     _cancelInProgress = true;
                     sourceToCancel = _cancellation;
                 }
 
-                if (_started == 0 || _finished) _disposeRequested = true;
+                if (_started == 0)
+                {
+                    // No background worker exists to finish this operation.
+                    _finished = true;
+                    _disposeRequested = true;
+                }
+                else if (_finished)
+                {
+                    _disposeRequested = true;
+                }
                 TryDisposeSourceLocked();
             }
 
-            // Cancellation callbacks may execute synchronously and can re-enter plugin
-            // code. Never invoke CancellationTokenSource.Cancel while holding _sync.
-            if (sourceToCancel is not null)
+            if (sourceToCancel is null) return;
+
+            // CancelAsync sets IsCancellationRequested synchronously, so obsolete work is
+            // invalidated before Cancel returns. Registered callbacks finish asynchronously,
+            // keeping PowerToys' fast Query() callback independent of HTTP cancellation work.
+#if DEBUG
+            var cancellationStartedAt = Stopwatch.GetTimestamp();
+#endif
+            try
             {
-                try { sourceToCancel.Cancel(); }
-                catch (ObjectDisposedException) { }
-                finally
-                {
-                    lock (_sync)
-                    {
-                        _cancelInProgress = false;
-                        TryDisposeSourceLocked();
-                    }
-                }
+                var cancellationTask = sourceToCancel.CancelAsync();
+                _ = CompleteCancellationAsync(cancellationTask
+#if DEBUG
+                    , cancellationStartedAt
+#endif
+                );
+            }
+            catch (Exception ex)
+            {
+                // Do not let an exceptional cancellation callback block or fail a newer
+                // PowerToys query. The source still needs the same deferred-disposal path.
+                Debug.WriteLine($"[RunMind] Could not start asynchronous query cancellation: {ex}");
+                CompleteCancellationReservation();
+            }
+        }
+
+        private async Task CompleteCancellationAsync(Task cancellationTask
+#if DEBUG
+            , long cancellationStartedAt
+#endif
+        )
+        {
+            try
+            {
+                await cancellationTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // CancelAsync reports callback exceptions through its task. Observe them so
+                // a fire-and-forget cancellation cannot become an unobserved task failure.
+                Debug.WriteLine($"[RunMind] A query cancellation callback failed: {ex}");
+            }
+            finally
+            {
+                CompleteCancellationReservation();
+#if DEBUG
+                Debug.WriteLine($"[RunMind] Previous query cancellation callbacks completed in {Stopwatch.GetElapsedTime(cancellationStartedAt).TotalMilliseconds:F1} ms.");
+#endif
+            }
+        }
+
+        private void CompleteCancellationReservation()
+        {
+            lock (_sync)
+            {
+                _cancelInProgress = false;
+                TryDisposeSourceLocked();
             }
         }
 
@@ -2518,7 +2771,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 TryDisposeSourceLocked();
             }
 
-            _finishedSignal.TrySetResult(true);
         }
 
         public void Dispose()
@@ -2554,5 +2806,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         double? InlineTopP,
         int? InlineMaxOutputTokens,
         int? InlineSeed,
-        bool InlineConversationalMode);
+        bool InlineConversationalMode,
+        long Version);
 }
