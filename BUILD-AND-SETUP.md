@@ -1,7 +1,5 @@
-## RunMind 2.0.8 — reliable inline answer refresh
+## RunMind 2.0.9 — configurable PowerToys Run timeouts
 
-The completed PowerToys Run inline answer now returns through the standard delayed-query result path. Generation remains asynchronous outside PowerToys' per-plugin execution gate. When a response is ready, RunMind requests one requery of the exact originating search through the public PowerToys API; the already-completed response is then returned immediately from the delayed query without another model request. A final current-operation check prevents an older completion from replacing a newer search.
+PowerToys Run now exposes separate **Model discovery timeout** and **Provider connection timeout** settings. Their defaults remain 8 and 15 seconds, matching the previous hard-coded values. Both accept 1–300 seconds; missing or invalid saved values fall back to the defaults. Model discovery applies to the provider model-list request and response-body read. Provider connection applies to the initial generation request through its first response headers. The existing **Request timeout** remains the overall inline generation-request limit. These settings affect the PowerToys Run plugin only, not standalone chat.
 
-The live prompt preview, global search, `llm` keyword, pending **Open in chat** result, provider settings, and cancellation safeguards remain intact. The `IResultUpdated` event is no longer used for this result flow.
-
-This overlay contains changed files only. Extract it over the complete RunMind 2.0.7 source tree, retaining excluded resources such as `lib`, `assets`, `Vendor`, `OCR`, and `screenshots`, then build on Windows with `Build-Release-x64.bat` using the .NET 10 SDK and the PowerToys reference assemblies.
+This overlay contains changed files only. Extract it over the complete RunMind 2.0.8 source tree, retaining excluded resources such as `lib`, `assets`, `Vendor`, `OCR`, and `screenshots`, then build on Windows with `Build-Release-x64.bat` using the .NET 10 SDK and the PowerToys reference assemblies.

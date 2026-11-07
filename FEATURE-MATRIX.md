@@ -1,3 +1,10 @@
+## RunMind 2.0.9 — configurable inline timeouts
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| PowerToys Run | Model discovery timeout | Configurable timeout for requesting and reading the selected provider's model list. Default 8 seconds. | **Implemented**; valid range 1–300 seconds; legacy installations retain the 8-second default. |
+| PowerToys Run | Provider connection timeout | Configurable initial connection/response-header deadline for inline Ollama and LM Studio generation requests. Default 15 seconds. | **Implemented**; valid range 1–300 seconds; the existing Request timeout remains the overall request limit. |
+
 ## RunMind 2.0.8 — reliable inline answer refresh
 
 | Area | Feature | Current behavior | Status / limits |

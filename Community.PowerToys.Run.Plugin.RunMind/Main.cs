@@ -44,11 +44,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private const string DefaultThinking = "auto";
     private const int DefaultKeepAliveSeconds = 300;
     private const int DefaultRequestTimeoutSeconds = 600;
+    private const int DefaultModelDiscoveryTimeoutSeconds = 8;
+    private const int DefaultProviderConnectionTimeoutSeconds = 15;
+    private const int MinimumStageTimeoutSeconds = 1;
+    private const int MaximumStageTimeoutSeconds = 300;
     private const int DefaultInlineCpuThreads = 0;
     private const int MaximumInlineSystemPromptCharacters = 12000;
     private const int MaximumInlineResponseCharacters = 8 * 1024 * 1024;
-    private const int ModelDiscoveryTimeoutSeconds = 8;
-    private const int ProviderConnectionTimeoutSeconds = 15;
     private const string PreviousDefaultInlineSystemPrompt =
         "SYSTEM\n\n" +
         "You are QuickAI, a compact proactive local AI living inside \"Microsoft PowerToys Run\".\n" +
@@ -91,6 +93,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private long _settingsVersion;
     private int _keepAliveSeconds = DefaultKeepAliveSeconds;
     private int _requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
+    private int _modelDiscoveryTimeoutSeconds = DefaultModelDiscoveryTimeoutSeconds;
+    private int _providerConnectionTimeoutSeconds = DefaultProviderConnectionTimeoutSeconds;
     private int _inlineCpuThreads = DefaultInlineCpuThreads;
     private string _inlineSystemPrompt = string.Empty;
     private double? _inlineTemperature;
@@ -161,6 +165,22 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             DisplayDescription = "Maximum time to wait for an inline PowerToys Run generation request (30–3600 seconds). Does not affect the standalone chat window.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
             TextValue = DefaultRequestTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        },
+        new()
+        {
+            Key = "ModelDiscoveryTimeoutSeconds",
+            DisplayLabel = "Model discovery timeout (seconds)",
+            DisplayDescription = "Maximum time to request and read the selected provider's model list before generation starts. Default: 8 seconds. Range: 1–300 seconds.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = DefaultModelDiscoveryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        },
+        new()
+        {
+            Key = "ProviderConnectionTimeoutSeconds",
+            DisplayLabel = "Provider connection timeout (seconds)",
+            DisplayDescription = "Maximum time for an inline generation request to connect and receive its initial HTTP response headers. After headers arrive, the Request timeout controls response generation. Default: 15 seconds. Range: 1–300 seconds.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = DefaultProviderConnectionTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         },
         new()
         {
@@ -238,6 +258,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         int provider = 0;
         int keepAliveSeconds = DefaultKeepAliveSeconds;
         int requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
+        int modelDiscoveryTimeoutSeconds = DefaultModelDiscoveryTimeoutSeconds;
+        int providerConnectionTimeoutSeconds = DefaultProviderConnectionTimeoutSeconds;
         int inlineCpuThreads = DefaultInlineCpuThreads;
         string inlineSystemPrompt = DefaultInlineSystemPrompt;
         double? inlineTemperature = null;
@@ -287,6 +309,18 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 requestTimeoutSeconds = parsedTimeout;
             }
 
+            if (int.TryParse(GetTextOption(options, "ModelDiscoveryTimeoutSeconds", DefaultModelDiscoveryTimeoutSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedDiscoveryTimeout)
+                && parsedDiscoveryTimeout is >= MinimumStageTimeoutSeconds and <= MaximumStageTimeoutSeconds)
+            {
+                modelDiscoveryTimeoutSeconds = parsedDiscoveryTimeout;
+            }
+
+            if (int.TryParse(GetTextOption(options, "ProviderConnectionTimeoutSeconds", DefaultProviderConnectionTimeoutSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedConnectionTimeout)
+                && parsedConnectionTimeout is >= MinimumStageTimeoutSeconds and <= MaximumStageTimeoutSeconds)
+            {
+                providerConnectionTimeoutSeconds = parsedConnectionTimeout;
+            }
+
             if (int.TryParse(GetTextOption(options, "InlineCpuThreads", DefaultInlineCpuThreads.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedCpuThreads)
                 && parsedCpuThreads is >= 0 and <= 128)
             {
@@ -304,6 +338,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _thinking = string.IsNullOrWhiteSpace(thinking) ? DefaultThinking : thinking.Trim();
             _keepAliveSeconds = keepAliveSeconds;
             _requestTimeoutSeconds = requestTimeoutSeconds;
+            _modelDiscoveryTimeoutSeconds = modelDiscoveryTimeoutSeconds;
+            _providerConnectionTimeoutSeconds = providerConnectionTimeoutSeconds;
             _inlineCpuThreads = inlineCpuThreads;
             _inlineSystemPrompt = inlineSystemPrompt;
             _inlineTemperature = inlineTemperature;
@@ -506,7 +542,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         catch (Exception ex)
         {
             if (IsCurrentQuery(operation) && !operation.IsCancellationRequested)
-                operation.SetCompletion($"Request failed: {GetUsefulExceptionMessage(ex)}", isError: true);
+                operation.SetCompletion($"Request failed: {GetUsefulExceptionMessage(ex, operation.Settings)}", isError: true);
         }
         finally
         {
@@ -721,7 +757,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
-        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(ProviderConnectionTimeoutSeconds));
+        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.ProviderConnectionTimeoutSeconds));
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
         using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(requestTimeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
@@ -799,7 +835,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
-        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(ProviderConnectionTimeoutSeconds));
+        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.ProviderConnectionTimeoutSeconds));
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
         using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(requestTimeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
@@ -888,7 +924,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 return new List<string>(_modelCache);
         }
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(ModelDiscoveryTimeoutSeconds));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.ModelDiscoveryTimeoutSeconds));
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
         try
         {
@@ -924,7 +960,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
-            throw new TimeoutException($"Model discovery timed out after {ModelDiscoveryTimeoutSeconds} seconds while contacting {GetProviderName(settings)}. Check the provider endpoint and whether the service is responding.", ex);
+            throw new TimeoutException($"Model discovery timed out after {settings.ModelDiscoveryTimeoutSeconds} seconds while contacting {GetProviderName(settings)}. Check the provider endpoint and whether the service is responding. You can increase Model discovery timeout in the PowerToys Run plugin settings.", ex);
         }
     }
 
@@ -1189,6 +1225,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 _thinking,
                 _keepAliveSeconds,
                 _requestTimeoutSeconds,
+                _modelDiscoveryTimeoutSeconds,
+                _providerConnectionTimeoutSeconds,
                 _inlineCpuThreads,
                 _inlineSystemPrompt,
                 _inlineTemperature,
@@ -1353,7 +1391,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return preview.Length <= maxLength ? preview : preview[..(maxLength - 1)].TrimEnd() + "…";
     }
 
-    private static string GetUsefulExceptionMessage(Exception exception)
+    private static string GetUsefulExceptionMessage(Exception exception, SettingsSnapshot settings)
     {
         var exceptionChain = new List<Exception>();
         for (Exception? current = exception; current is not null; current = current.InnerException)
@@ -1367,7 +1405,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
         if (exceptionChain.Any(item => item is OperationCanceledException))
         {
-            return $"The provider request timed out. Model discovery has a {ModelDiscoveryTimeoutSeconds}-second limit, connection establishment has a {ProviderConnectionTimeoutSeconds}-second limit, and response generation uses the configured Request timeout. Increasing Request timeout only affects response generation.";
+            return $"The provider request timed out. Model discovery is limited to {settings.ModelDiscoveryTimeoutSeconds} seconds, initial provider connection and response headers are limited to {settings.ProviderConnectionTimeoutSeconds} seconds, and response generation uses the configured {settings.RequestTimeoutSeconds}-second Request timeout. Adjust the corresponding timeout in the PowerToys Run plugin settings.";
         }
 
         var diagnosticText = string.Join(" ", exceptionChain.Select(item => item.Message));
@@ -2800,6 +2838,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         string Thinking,
         int KeepAliveSeconds,
         int RequestTimeoutSeconds,
+        int ModelDiscoveryTimeoutSeconds,
+        int ProviderConnectionTimeoutSeconds,
         int InlineCpuThreads,
         string InlineSystemPrompt,
         double? InlineTemperature,

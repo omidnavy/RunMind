@@ -1,3 +1,21 @@
+## [2.0.9] — Configurable PowerToys Run stage timeouts
+
+### Changed
+- Add independent PowerToys Run plugin settings for **Model discovery timeout** and **Provider connection timeout**. Both default to the previous hard-coded values (8 and 15 seconds respectively), preserving existing behavior for installations that do not yet have these settings saved.
+- Model discovery timeout controls the selected provider's model-list request and response-body read. Provider connection timeout controls the initial inline generation request through receipt of its HTTP response headers; the existing Request timeout remains the overall generation-request limit.
+- Validate both new settings to the inclusive range 1–300 seconds. Missing, malformed, or out-of-range stored values fall back to the previous defaults.
+- Include the active configured timeout values in generic inline timeout diagnostics; model-discovery timeout errors report the configured discovery limit.
+
+### Compatibility and scope
+- Settings apply only to inline PowerToys Run requests. Standalone chat timeout behavior is unchanged.
+- Existing settings retain their prior behavior: installations without the two new options continue using 8-second model discovery and 15-second provider connection defaults.
+- No provider request format, query lifecycle, async result refresh, global-search behavior, or dependencies changed.
+
+### Validation
+- Source checks verify both settings are exposed through `AdditionalOptions`, parsed with backward-compatible defaults and range validation, stored in the immutable settings snapshot, and used at every former hard-coded timeout call site.
+- Project XML, plugin manifest JSON, version alignment, changed-files-only overlay reconstruction, and ZIP integrity checked against the reconstructed 2.0.8 source tree.
+- Windows/.NET compilation and live PowerToys settings/UI tests require the Windows build environment and excluded PowerToys reference assemblies; they are not claimed here.
+
 ## [2.0.8] — Reliable PowerToys result refresh
 
 ### Fixed
