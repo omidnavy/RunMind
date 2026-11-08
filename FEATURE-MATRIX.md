@@ -1,11 +1,22 @@
-## RunMind 2.1.4 — Branch comparison turn selection
+## RunMind 2.1.6 — Reliability, bounded processing, and workspace safety
 
 | Area | Feature | Current behavior | Status / limits |
 |---|---|---|---|
+| IndexedDB | Independent workspace and conversation connections | Workspace folder handles and conversation/session archives use separate database references with connection-local version-change cleanup. | **Fixed**; a workspace database open cannot overwrite the conversation database handle. |
+| Branch comparison | Response outcome classification | Failed and cancelled generations are excluded from completed-turn selection; whole-branch history labels their outcome. | **Fixed**; cancellation is persisted as optional message metadata; legacy stop-marker messages are recognized. |
+| Branch comparison | Bounded model and session context | Model dossier, follow-up context, cached discussion history, and comparison-session count have explicit limits. | **Bounded**; full original branch histories remain visible/exportable; model omissions are disclosed. |
+| Branch comparison | Streaming and modal accessibility | AI response streaming updates the active message at a throttled interval; Tab/Shift+Tab stay inside the modal. | **Improved**; focus returns to the element that opened the modal. |
+| Workspace | Scan and listing budgets | Recursive scans and direct folder listings count directory entries as well as files. | **Bounded**; 10,000 entries per scan/listing, with truncation diagnostics. |
+| Workspace | Safe file mutation | RunMind writes are serialized by destination path; edit/delete/move/rename perform snapshot checks after approval and before destructive completion. | **Improved**; unrelated external writers cannot be excluded atomically by the browser file API. |
+| Workspace | Automatic backup retention | Retains up to 20 `.bak` files and 500 MiB, deleting oldest backups first. | **Bounded**; no pruning is attempted when the backup inventory exceeds its scan budget. |
+| CSV | Merge and join limits | Aggregate input/output bytes, row counts, strict quote parsing, and inner-loop cancellation are enforced. | **Bounded**; merge input/output 50 MiB; join input 20 MiB, output 50 MiB / 100,000 rows. |
+| Workspace analysis | Duplicate detection | Groups candidate files by size before hashing and enforces cumulative hashing limits. | **Bounded**; up to 300 files, 100 MiB per file, and 500 MiB cumulative hashing. |
+| Security | Reader destination validation | Trailing DNS dots are normalized before private/local host classification; authenticated remote Reader endpoint fetches reject redirects. | **Fixed**; `localhost.` and dotted loopback IPv4 forms are classified correctly. Configure Reader gateways at their canonical non-redirecting URL. Existing Native Reader DNS/IP and redirect checks are unchanged. |
+
 | Branch comparison | Latest completed turn per branch | Each branch compares the assistant response following that branch's own latest user prompt. | **Fixed**; branches can have different message counts. An unanswered latest prompt never falls back to an older response. |
 | Branch comparison | Turn and prompt identification | Each card shows its user-turn number and a short preview of the prompt being answered. | **Implemented**; active branch is synchronized from the live transcript before comparison. |
 | Branch comparison | Single response mode | Compare one selected user question and its corresponding assistant response from each branch. | **Default mode**; initially selects each branch's latest user turn; each branch has an independent turn selector. Unanswered turns are shown but are not sent to AI comparison. |
-| Branch comparison | Whole branch mode | Display and assess the complete ordered conversation history of both selected branches. | **Implemented**; includes user prompts, assistant responses, available text attachments, and recorded model thinking. Large dossiers may exceed provider context limits; content is not silently truncated. |
+| Branch comparison | Whole branch mode | Display and export the complete ordered conversation history of both selected branches. | **Implemented**; includes user prompts, assistant responses, available text attachments, and recorded model thinking. Model input is bounded to representative first/last messages and disclosed excerpts; omitted history remains visible/exportable. |
 | Branch comparison | Mode-aware AI dossier and export | AI assessment, follow-up discussion context, and Markdown export preserve the selected comparison scope and content. | **Implemented**; comparison snapshots remain immutable; same selections restore the same in-session discussion. |
 
 ## RunMind 2.1.3 — Preserve Think preference when editing prompts

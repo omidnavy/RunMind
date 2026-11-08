@@ -1,10 +1,14 @@
-## RunMind 2.1.4 — Branch comparison uses each branch's latest completed turn
+## RunMind 2.1.6 — Reliability, bounded processing, and workspace safety
 
 RunMind Standalone and the PowerToys Run plugin use the same `ChatWindow.html` Agent runtime. The runtime owns tool selection, permission checks, approval prompts, Workspace Context, and Agent Skills. The shared `Shared/AgentHostBridge.cs` adapter is limited to named Windows-native capabilities: shared Project Profile storage, Git process execution, global Skills storage/management, and resumable downloads. It does not expose a general command shell.
 
 ### Overlay installation
 
-This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.4 source tree**, preserving all existing files and directories. It includes the previously tested 2.1.1 build correction, 2.1.2 UI changes, 2.1.3 Think preference fix, and 2.1.4 branch-comparison correctness fix. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
+This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.5 source tree**, preserving all existing files and directories. It contains only the files changed for 2.1.6; all earlier release fixes must already be present in the 2.1.5 baseline. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
+
+### 2.1.6 reliability and processing limits
+
+The shared ChatWindow runtime separates its workspace and conversation IndexedDB connections, records failed/cancelled assistant turns, bounds comparison-model and follow-up context, and rate-limits AI comparison streaming renders. Workspace operations use per-path serialization and post-approval snapshot checks; directory scans, backup retention, CSV processing, and duplicate hashing have explicit budgets. Private-host validation normalizes trailing DNS dots, and authenticated requests to configured remote Reader endpoints reject HTTP redirects (configure the canonical endpoint URL). The existing Native Reader DNS/IP and redirect protections remain unchanged. The AI comparison modal traps keyboard focus. These changes do not migrate API credentials out of WebView storage and do not virtualize the main transcript.
 
 ### Build and requirements
 

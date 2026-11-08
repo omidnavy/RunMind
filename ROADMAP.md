@@ -1,8 +1,8 @@
 # RunMind roadmap
 
-## Current release: 2.1.5
+## Current release: 2.1.6
 
-RunMind 2.1.5 completes Branch Comparison with two modes: Single response (default), including independent per-branch question/turn selection, and Whole branch, which compares complete ordered histories including recorded model thinking. Mode and turn selection are included in the immutable AI comparison dossier and Markdown export. The 2.1.4 per-branch latest-turn correctness remains the default behavior; 2.1.3 Think preference preservation and 2.1.2 Agent Settings/flyout improvements remain in place. The existing Git, downloads, Project Profiles, Workspace Context, Skills Manager, conversation lifecycle, and shared Agent runtime remain in place. The `ChatWindow.html` Agent runtime and `AgentHostBridge` contract remain the foundation for future hosts.
+RunMind 2.1.6 hardens the shared runtime and workspace tools without changing the product architecture. It fixes separate IndexedDB connection ownership, branch-comparison failed/cancelled response classification, modal keyboard focus, and trailing-dot private-host validation. Whole-branch model input, AI follow-up context, comparison-session cache, streaming rendering, directory traversal, backup retention, CSV merge/join, and duplicate hashing now have explicit bounds. Workspace writes are serialized by path and destructive edits/moves/renames revalidate source snapshots after approval and immediately before completion. The complete branch histories remain available in the comparison UI and Markdown export; model input uses disclosed excerpts. The 2.1.5 Single response / Whole branch comparison modes and the earlier Git, downloads, Project Profiles, Workspace Context, Skills Manager, conversation lifecycle, and shared Agent runtime remain in place.
 
 ## Planned release sequence
 

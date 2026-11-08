@@ -1,3 +1,33 @@
+## [2.1.6] — Reliability, bounded processing, and workspace safety
+
+### Fixed
+- Keep the Workspace and Conversation Branch databases in separate IndexedDB handles. Each database's version-change callback now closes only the connection it owns, so session cleanup and workspace-handle operations cannot overwrite one another's database reference.
+- Exclude failed and cancelled assistant generations from completed branch-comparison turns. Cancellation is recorded and retained in saved branch messages; Whole branch display and export identify failed, cancelled, and still-generating responses.
+- Normalize trailing DNS dots before private/local hostname classification, including `localhost.` and dotted loopback IPv4 forms; reject redirects from configured remote Reader endpoints so an authenticated Reader request cannot silently follow a redirect.
+- Revalidate source snapshots after approval and again immediately before destructive completion in edit, delete, move, and rename flows. Move/rename coordinate source and destination paths; when a source changes during the operation, RunMind preserves it and leaves any already-created destination copy intact.
+- Serialize RunMind workspace writes by destination path and perform the final no-overwrite existence check inside that lock. This closes races between concurrent RunMind operations; the browser file API cannot provide atomic exclusion against unrelated external writers.
+- Add a bounded directory-entry budget to recursive workspace scans and direct folder listings, with truncation/count diagnostics.
+- Add automatic backup retention (20 `.bak` files / 500 MiB), while keeping the newest backups and refusing to prune when the inventory scan itself is truncated.
+- Enforce strict CSV quote placement, correct the 50% numeric-summary threshold rounding, bound aggregate merge/join input and output sizes, and check cancellation within join loops.
+- Group duplicate-file candidates by size before hashing and enforce a 500 MiB cumulative hashing budget in addition to the 100 MiB per-file limit. Hashing uses the Web Crypto digest API, which requires one file buffer at a time; the per-file and cumulative budgets bound that buffer-based workload.
+- Trap Tab/Shift+Tab focus within the AI Branch Comparison modal and restore focus to the actual opener when it closes.
+
+### Improved
+- Bound Whole branch model input to a 100,000-character dossier using representative first/last history excerpts and explicit omission notices. Full branch histories remain available in the comparison view and Markdown export.
+- Bound comparison follow-up context to 16,000 characters / 12 recent messages, each cached discussion to 40 messages / 60,000 characters, and the in-memory comparison-session cache to three recent selections.
+- Hash comparison-session identity without retaining a serialized copy of the entire dossier.
+- Throttle comparison streaming updates and update only the active assistant message content rather than rebuilding the full discussion for each token.
+- Return explicit directory-entry diagnostics from workspace listings and expose the new CSV/hash/scan limits in Agent tool descriptions.
+
+### Compatibility
+- Existing `.runmind` version 1 and 2 conversations remain supported. The optional `cancelled` message flag is backward-compatible; older cancelled messages containing the existing stop marker are also recognized. Configured Reader endpoints must return the response directly; HTTP redirects are rejected and the endpoint should be configured at its canonical URL.
+- Full original branch history remains unchanged. Only the model request uses bounded excerpts; the UI and Markdown branch dossier retain the complete history. The separate AI follow-up discussion has an explicit bounded retention policy, disclosed in the UI and Markdown export.
+- No API credential-storage migration or transcript virtualization is included in this release. No provider routing, Agent permission policy, Git, Skills, or NativePageReader changes are intended.
+
+### Validation
+- Validate IndexedDB ownership/source paths, cancelled/error turn classification, bounded dossier and discussion contexts, LRU session eviction, throttled streaming update wiring, modal focus trap, trailing-dot host classification, directory-entry budgets, path-lock serialization, post-approval/post-backup snapshot checks, backup retention, strict CSV parsing, aggregate CSV limits, join cancellation, duplicate-hash budgets, JavaScript syntax, HTML/CSS structure, project XML, plugin manifest JSON, version alignment, changed-files-only overlay packaging, ZIP integrity, and byte-for-byte overlay reapplication against RunMind 2.1.5.
+- Windows/.NET compilation and live PowerToys/WebView2/provider/runtime testing require the target Windows environment and are not claimed here.
+
 ## [2.1.5] — Perfecting Branch Comparison
 
 ### Added
