@@ -14,7 +14,7 @@ RunMind is available in two forms:
 - Chat with local models hosted by Ollama or LM Studio, or connect additional OpenAI-compatible endpoints.
 - Switch between configured providers and models, including custom API keys and authentication headers.
 - Ask questions, work through code and technical problems, inspect images and documents, and use model tool-calling capabilities.
-- Use **Agent Mode** for multi-step tasks that combine web research, workspace files, data processing, artifact creation, Git operations, on-demand Agent Skills, and a Global/Project Skills Manager.
+- Use **Agent Mode** for multi-step tasks that combine web research, workspace files, data processing, artifact creation, Git operations, on-demand Agent Skills, a Global/Project Skills Manager, and organized Agent Settings for Agent, Project, Skills, and Security. Tall flyouts remain anchored to their toolbar buttons.
 - Use **Deep Research** for structured investigations with editable plans, source collection, evidence notes, checkpoints, and report export.
 - Connect external **Model Context Protocol (MCP)** servers over Streamable HTTP to make their tools, resources, and prompts available to RunMind.
 - Create and manage conversation branches, compare branch responses with AI, and continue a separate discussion about a comparison without changing the original branches.

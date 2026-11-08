@@ -1,10 +1,10 @@
-## RunMind 2.1.1 — Conversation lifecycle and Agent Skills Manager
+## RunMind 2.1.2 — Agent Settings UX and anchored flyouts
 
 RunMind Standalone and the PowerToys Run plugin use the same `ChatWindow.html` Agent runtime. The runtime owns tool selection, permission checks, approval prompts, Workspace Context, and Agent Skills. The shared `Shared/AgentHostBridge.cs` adapter is limited to named Windows-native capabilities: shared Project Profile storage, Git process execution, global Skills storage/management, and resumable downloads. It does not expose a general command shell.
 
 ### Overlay installation
 
-This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.0 source tree**, including the 2.1.0 changes you tested, preserving all existing files and directories. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
+This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.1 source tree**, including the 2.1.1 build correction you tested, preserving all existing files and directories. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
 
 ### Build and requirements
 
@@ -30,6 +30,10 @@ Supported operations include status, diff, log, show, local branches, remotes, s
 
 A cloned repository is authorized for native Git. To use browser-based file tools against it, separately call `request_folder_access` and choose the cloned directory in the WebView's folder picker. Browser folder grants and native Git selection are different capabilities.
 
+### Agent Settings layout and flyouts
+
+Agent Settings is organized into four tabs: **Agent**, **Project**, **Skills**, and **Security**. The redesign changes presentation and navigation only; existing setting controls and their save/apply/approval handlers retain their IDs and behavior. All toolbar flyouts remain attached to their trigger. A tall panel opens below when it fits, flips above only when needed, and otherwise scrolls within the larger side of the trigger rather than centering over and covering the toolbar.
+
 ### Agent Skills and Skills Manager
 
 RunMind uses the open Agent Skills folder format. Global Skills live under `%LOCALAPPDATA%\RunMind\Skills\<skill-name>\SKILL.md`; project Skills live under `<workspace>\.agents\skills\<skill-name>\SKILL.md`. The required frontmatter fields are `name` and `description`.
@@ -54,7 +58,7 @@ Git reads default to **Allow**; local Git writes, remote Git operations, and dow
 
 ### Validation boundary
 
-The overlay is validated against the supplied 2.0.9 baseline at source level (JavaScript syntax, XML/JSON, static integration invariants, exact file-diff reconstruction, and ZIP integrity). A Windows/.NET compile and live WebView2/PowerToys tests must still be performed in the target Windows environment; they are not represented as completed by this package.
+The overlay is validated against the reconstructed 2.1.1 source tree (including the 2.1.1 build correction) at source level (JavaScript syntax, XML/JSON, static integration invariants, exact file-diff reconstruction, and ZIP integrity). A Windows/.NET compile and live WebView2/PowerToys tests must still be performed in the target Windows environment; they are not represented as completed by this package.
 
 ## RunMind 2.0.9 — configurable PowerToys Run timeouts
 

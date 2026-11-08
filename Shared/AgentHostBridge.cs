@@ -906,7 +906,7 @@ public sealed class AgentHostBridge : IDisposable
         {
             await EnsurePublicDestinationAsync(current, timeout.Token).ConfigureAwait(false);
             using var request = new HttpRequestMessage(HttpMethod.Get, current);
-            request.Headers.UserAgent.ParseAdd("RunMind-Downloader/2.1.1");
+            request.Headers.UserAgent.ParseAdd("RunMind-Downloader/2.1.2");
             request.Headers.Accept.ParseAdd("*/*");
             if (offset > 0)
             {

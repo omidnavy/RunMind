@@ -1,3 +1,22 @@
+## [2.1.2] — Agent Settings UX and anchored flyouts
+
+### Improved
+- Redesign the Agent Settings flyout into four navigable sections: Agent, Project, Skills, and Security. Existing controls, element IDs, settings handlers, profile behavior, permission semantics, and Skills Manager operations are retained.
+- Group related settings into consistent cards with standardized field spacing, full-width inputs/selects, aligned permission rows, wrapping action groups, clearer descriptions, and a focused section-level save action.
+- Improve the Skills Manager presentation with separate scope selection, installed-skill list, description area, status feedback, and clearly differentiated install/refresh/remove actions. Preserve the manual installation paths and the Global versus Current Project distinction.
+
+### Fixed
+- Fix toolbar flyouts covering their trigger buttons and neighboring controls when a tall panel fits neither entirely above nor below the trigger. Flyouts now remain anchored to the trigger: they open below whenever they fit, flip above when necessary, and when neither side can contain the full panel they use the larger available side as a scrollable viewport. They are no longer centered over the toolbar as a fallback.
+- Apply the shared placement correction to toolbar, conversation, appearance, OCR, and other panels using the shared flyout placement helper. User-moved/resized panels remain clamped to the viewport and retain their temporary geometry behavior.
+
+### Compatibility
+- No Agent Core, tool, permission, profile, Skills storage, conversation, provider, or NativePageReader behavior changes are intended.
+- `Shared/NativePageReader.cs` and the native host bridge are unchanged in this release.
+
+### Validation
+- Validate all inline JavaScript syntax, Agent Settings tab/control wiring, unique control IDs, HTML structure, project XML, plugin manifest JSON, version alignment, flyout placement edge cases, changed-files-only packaging, ZIP integrity, and exact overlay reapplication against the reconstructed 2.1.1 tree (including the 2.1.1 build-fix overlay).
+- A Windows/.NET build and live WebView2 layout testing at multiple window sizes/DPI scales require the target Windows environment and are not claimed here.
+
 ## [2.1.1] — Conversation lifecycle, startup polish, and Agent Skills Manager
 
 ### Build correction

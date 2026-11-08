@@ -1,3 +1,13 @@
+## RunMind 2.1.2 — Agent Settings UX and anchored flyouts
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| Agent Settings | Section navigation | Agent, Project, Skills, and Security sections use keyboard-accessible tabs. | **Implemented**; the existing setting IDs and event handlers are retained. |
+| Agent Settings | Consistent layout | Standardized cards, field gaps, input/select widths, checkbox rows, action wrapping, and permission rows. | **Implemented**; preserves the current theme variables and controls. |
+| Skills Manager | Manager presentation | Separate Global/Project scope, installed-skill list, description/status, install, refresh, and remove actions. | **Reorganized**; existing install/discovery/remove operations and manual paths are retained. |
+| Flyouts | Trigger-anchored vertical placement | Prefer below when the panel fits; otherwise flip above, or use the larger side as a bounded scroll area. | **Implemented**; no centered fallback that obscures the trigger or nearby controls. |
+| Flyouts | Viewport and resize behavior | Shared positioning applies to existing toolbar/conversation/appearance panels. | **Preserved**; temporary drag/resize geometry is still clamped to the viewport and resets on close. |
+
 ## RunMind 2.1.1 — Session-scoped conversations and Agent Skills Manager
 
 | Area | Feature | Current behavior | Status / limits |

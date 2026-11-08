@@ -243,7 +243,60 @@
     .toolbar-icon:hover, .toolbar-menu[open] > .toolbar-icon, .toolbar-icon.active { color: var(--color-text); background: var(--color-surface-hover); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, var(--color-border)); }
     .toolbar-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
     .toolbar-panel { position: absolute; z-index: 25; top: calc(100% + 8px); left: 0; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; overscroll-behavior: contain; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
-    #agentSettingsMenu .toolbar-panel { max-height: calc(100vh - 24px); overflow: auto; }
+    #agentSettingsMenu .toolbar-panel { width: min(500px, calc(100vw - 24px)); padding: 15px; }
+    .agent-settings-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 13px; }
+    .agent-settings-header h2 { margin: 0 0 4px; font-size: 15px; line-height: 1.25; }
+    .agent-settings-header .panel-note { margin: 0; max-width: 420px; }
+    .agent-settings-tabs { position: sticky; top: -15px; z-index: 3; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin: 0 -2px 13px; padding: 5px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+    .agent-settings-tab { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; min-height: 34px; padding: 6px 5px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-muted); font: 650 11px/1.2 var(--font-ui); cursor: pointer; }
+    .agent-settings-tab > span { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: var(--color-surface-hover); color: var(--color-muted); font-size: 8px; font-variant-numeric: tabular-nums; }
+    .agent-settings-tab:hover { background: var(--color-surface-hover); color: var(--color-text); }
+    .agent-settings-tab[aria-selected="true"] { border-color: var(--color-border); background: var(--color-surface-raised); color: var(--color-text); box-shadow: var(--shadow-float); }
+    .agent-settings-tab[aria-selected="true"] > span { background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)); color: var(--color-accent); }
+    .agent-settings-page { display: flex; flex-direction: column; gap: 11px; min-width: 0; }
+    .agent-settings-page[hidden] { display: none !important; }
+    .agent-settings-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); }
+    .agent-settings-card-heading h3, .agent-settings-card > h3 { margin: 0; color: var(--color-text); font-size: 12px; font-weight: 750; line-height: 1.3; }
+    .agent-settings-card-heading p, .agent-settings-card > p { margin: 4px 0 0; color: var(--color-muted); font-size: 10px; line-height: 1.45; }
+    .agent-settings-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+    .agent-settings-fields .setting-field { gap: 5px; }
+    .agent-settings-fields .setting-field label { line-height: 1.35; }
+    .agent-settings-fields .setting-field input, .agent-settings-fields .setting-field select { box-sizing: border-box; width: 100%; min-width: 0; height: 35px; }
+    .agent-settings-optional { color: var(--color-muted); font-size: 10px; font-weight: 450; }
+    .agent-settings-checkbox { display: flex; align-items: flex-start; gap: 8px; min-width: 0; color: var(--color-text); font-size: 11px; line-height: 1.45; cursor: pointer; }
+    .agent-settings-checkbox input { flex: 0 0 15px; width: 15px; height: 15px; margin: 1px 0 0; accent-color: var(--color-accent); }
+    .agent-settings-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; min-width: 0; margin-top: 1px; }
+    .agent-settings-actions .button { min-height: 32px; padding: 6px 10px; font-size: 10px; }
+    .agent-settings-actions .setting-reset { min-height: 30px; padding: 5px 7px; font-size: 10px; }
+    .agent-settings-actions-wrap { justify-content: flex-start; }
+    .agent-settings-status { margin: 0; color: var(--color-muted); font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+    .agent-settings-page-footer { position: sticky; bottom: -15px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 1px -15px -15px; padding: 10px 15px; border-top: 1px solid var(--color-border); background: var(--color-surface); }
+    .agent-settings-page-footer > span { color: var(--color-muted); font-size: 10px; }
+    .agent-settings-page-footer .button { min-height: 33px; padding: 6px 11px; font-size: 11px; }
+    .agent-skill-description { min-height: 42px; padding: 9px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-muted); font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+    #agentSkillSelect { box-sizing: border-box; width: 100%; min-height: 118px; padding: 5px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-input); color: var(--color-text); font: 11px/1.4 var(--font-ui); }
+    #agentSkillSelect option { padding: 5px 6px; }
+    #agentSkillSelect option:checked { background: var(--color-accent); color: var(--color-bg); }
+    .agent-settings-manual-help { gap: 5px; }
+    .agent-settings-manual-help p { overflow-wrap: anywhere; }
+    .agent-settings-manual-help code { color: var(--color-text); font-size: 10px; }
+    .agent-settings-permissions { display: grid; gap: 0; }
+    .agent-settings-permission-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(112px, 142px); align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--color-border); }
+    .agent-settings-permission-row:first-child { padding-top: 0; }
+    .agent-settings-permission-row:last-child { padding-bottom: 0; border-bottom: 0; }
+    .agent-settings-permission-row > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .agent-settings-permission-row label { color: var(--color-text); font-size: 11px; font-weight: 650; }
+    .agent-settings-permission-row small { color: var(--color-muted); font-size: 9px; line-height: 1.35; }
+    .agent-settings-permission-row select { box-sizing: border-box; width: 100%; min-width: 0; height: 32px; }
+    .agent-settings-permissions + .agent-settings-actions { justify-content: flex-end; }
+    .danger-text { color: var(--color-danger) !important; }
+    @media (max-width: 520px) {
+      #agentSettingsMenu .toolbar-panel { width: min(500px, calc(100vw - 16px)); padding: 12px; }
+      .agent-settings-tabs { top: -12px; margin-left: -1px; margin-right: -1px; }
+      .agent-settings-tab { gap: 4px; font-size: 10px; }
+      .agent-settings-page-footer { margin-left: -12px; margin-right: -12px; margin-bottom: -12px; padding-left: 12px; padding-right: 12px; }
+      .agent-settings-permission-row { grid-template-columns: minmax(0, 1fr) minmax(100px, 122px); gap: 8px; }
+    }
     #ocrLanguageMenu .toolbar-panel { width: min(460px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; }
     .ocr-language-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--color-border); }
     .ocr-language-row:last-child { border-bottom: 0; }
@@ -1122,32 +1175,108 @@
         </details>
         <details class="toolbar-menu" id="agentSettingsMenu">
           <summary class="toolbar-icon" title="Agent settings" aria-label="Agent settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="5"/></svg></summary>
-          <div class="toolbar-panel" role="group" aria-label="Agent configuration">
-            <h2>Agent settings</h2>
-            <p class="panel-note">Tools · Workspace · Web</p>
-            <div class="setting-field"><label for="agentSearchUrl">SearXNG instance URL</label><input id="agentSearchUrl" type="url" placeholder="https://your-searxng.example"></div>
-            <label class="setting-note"><input id="agentReaderFallback" type="checkbox" checked> Use an external Reader only when direct browser fetch fails</label>
-            <div class="setting-field"><label for="agentCustomReaderUrl">Custom Reader gateway (first remote fallback, optional)</label><input id="agentCustomReaderUrl" type="url" spellcheck="false" placeholder="https://your-reader-gateway.example"></div>
-            <div class="setting-field"><label for="agentCustomReaderToken">Custom gateway token</label><input id="agentCustomReaderToken" type="password" autocomplete="off" spellcheck="false" placeholder="Optional"></div>
-            <div class="setting-field"><label for="agentReaderBaseUrl">Jina Reader endpoint (final remote fallback)</label><input id="agentReaderBaseUrl" type="url" spellcheck="false" placeholder="https://r.jina.ai"></div>
-            <div class="setting-field"><label for="agentJinaApiKey">Jina API key</label><input id="agentJinaApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Optional"></div>
-            <div class="setting-footer"><button type="button" class="setting-reset" id="testCustomReader">Test custom gateway</button><button type="button" class="setting-reset" id="testJinaReader">Test Jina Reader</button><button type="button" class="setting-reset" id="clearReaderCredentials">Clear Reader credentials</button></div>
-            <p class="setting-note" id="readerCredentialStatus">Credentials saved.</p>
-            <div class="setting-field"><label for="agentMaxSteps">Maximum tool steps per task</label><input id="agentMaxSteps" type="number" min="1" max="20" step="1" value="8"></div>
-            <label class="setting-note"><input id="agentAutoApproveReads" type="checkbox"> Automatically allow read-only tools</label>
-            <div class="setting-field"><strong>Project Profiles</strong><p class="setting-note">Profiles are shared by Standalone and PowerToys Run. They copy settings and instructions, never browser folder grants or credentials.</p><label for="projectProfileName">Profile name</label><input id="projectProfileName" type="text" maxlength="80" placeholder="e.g. Backend API project"></div>
-            <div class="setting-field"><label for="projectProfileSelect">Saved profile</label><select id="projectProfileSelect"><option value="">No profiles loaded</option></select><div class="setting-footer"><button type="button" class="setting-reset" id="saveProjectProfile">Save current settings</button><button type="button" class="setting-reset" id="applyProjectProfile">Apply profile</button><button type="button" class="setting-reset" id="deleteProjectProfile">Delete</button><button type="button" class="setting-reset" id="refreshProjectProfiles">Refresh</button></div></div>
-            <div class="setting-field"><strong>Agent Skills</strong><p class="setting-note">Open Agent Skills format. Global: %LOCALAPPDATA%\RunMind\Skills\&lt;skill-name&gt;\SKILL.md. Project: .agents/skills/&lt;skill-name&gt;/SKILL.md. Skills are discovered by metadata and loaded only when relevant; scripts are never auto-executed.</p><div class="setting-footer"><label for="agentSkillScope">Manager scope</label><select id="agentSkillScope"><option value="global">Global skills</option><option value="project">Current project skills</option></select><button type="button" class="setting-reset" id="refreshAgentSkills">Refresh</button><button type="button" class="setting-reset" id="installAgentSkill">Install skill folder</button><button type="button" class="setting-reset" id="removeAgentSkill" disabled>Remove selected</button></div><label for="agentSkillSelect">Installed skills</label><select id="agentSkillSelect" size="4" style="width:100%;min-height:84px"><option value="">Refresh to list skills</option></select><p id="agentSkillDescription" class="setting-note">Select a skill to view its description.</p><p id="agentSkillsStatus" class="setting-note" aria-live="polite">Skills are discovered on demand by the Agent.</p></div>
-            <div class="setting-field"><strong>Conversation permission policy</strong><p class="setting-note">Saved with this conversation and reusable in its Project Profile. The shared host defaults apply when a conversation has no override. Destructive Git actions always require a fresh approval.</p>
-              <label for="permissionGitRead">Git read operations</label><select id="permissionGitRead"><option value="allow">Allow</option><option value="ask">Ask</option></select>
-              <label for="permissionGitWrite">Git local changes (stage, commit, branch, merge, stash)</label><select id="permissionGitWrite"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select>
-              <label for="permissionGitRemote">Git remote (fetch, pull, push, clone)</label><select id="permissionGitRemote"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select>
-              <label for="permissionDownloads">Downloads</label><select id="permissionDownloads"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select>
-              <div class="setting-footer"><button type="button" class="setting-reset" id="savePermissionPolicy">Save for this conversation</button></div>
+          <div class="toolbar-panel agent-settings-panel" role="group" aria-label="Agent configuration">
+            <header class="agent-settings-header">
+              <div><h2>Agent settings</h2><p class="panel-note">Configure how RunMind works with tools, projects, and external services.</p></div>
+            </header>
+            <div class="agent-settings-tabs" role="tablist" aria-label="Agent settings sections">
+              <button type="button" class="agent-settings-tab" id="agentSettingsTabAgent" role="tab" aria-controls="agentSettingsPageAgent" aria-selected="true" tabindex="0"><span aria-hidden="true">01</span> Agent</button>
+              <button type="button" class="agent-settings-tab" id="agentSettingsTabProject" role="tab" aria-controls="agentSettingsPageProject" aria-selected="false" tabindex="-1"><span aria-hidden="true">02</span> Project</button>
+              <button type="button" class="agent-settings-tab" id="agentSettingsTabSkills" role="tab" aria-controls="agentSettingsPageSkills" aria-selected="false" tabindex="-1"><span aria-hidden="true">03</span> Skills</button>
+              <button type="button" class="agent-settings-tab" id="agentSettingsTabSecurity" role="tab" aria-controls="agentSettingsPageSecurity" aria-selected="false" tabindex="-1"><span aria-hidden="true">04</span> Security</button>
             </div>
-            <div class="setting-field"><strong>Always-approved tools</strong><div id="alwaysApprovedToolsList" class="setting-note">None</div><div class="setting-footer"><button type="button" class="setting-reset" id="clearAlwaysApprovedTools">Clear approvals</button></div></div>
-            <div class="setting-footer"><button type="button" class="setting-reset" id="changeAgentFolder">Change workspace folder</button><button type="button" class="setting-reset" id="clearAgentFolder">Clear folder access</button></div>
-            <div class="setting-footer"><button type="button" class="setting-reset" id="agentSaveSettings">Save agent settings</button></div>
+
+            <section class="agent-settings-page" id="agentSettingsPageAgent" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabAgent">
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Web retrieval</h3><p>Configure search and remote Reader fallbacks.</p></div></div>
+                <div class="agent-settings-fields">
+                  <div class="setting-field"><label for="agentSearchUrl">SearXNG instance URL</label><input id="agentSearchUrl" type="url" placeholder="https://your-searxng.example"></div>
+                  <label class="agent-settings-checkbox" for="agentReaderFallback"><input id="agentReaderFallback" type="checkbox" checked><span>Use an external Reader only when direct browser fetch fails</span></label>
+                  <div class="setting-field"><label for="agentCustomReaderUrl">Custom Reader gateway <span class="agent-settings-optional">· optional first fallback</span></label><input id="agentCustomReaderUrl" type="url" spellcheck="false" placeholder="https://your-reader-gateway.example"></div>
+                  <div class="setting-field"><label for="agentCustomReaderToken">Custom gateway token</label><input id="agentCustomReaderToken" type="password" autocomplete="off" spellcheck="false" placeholder="Optional"></div>
+                  <div class="setting-field"><label for="agentReaderBaseUrl">Jina Reader endpoint <span class="agent-settings-optional">· final remote fallback</span></label><input id="agentReaderBaseUrl" type="url" spellcheck="false" placeholder="https://r.jina.ai"></div>
+                  <div class="setting-field"><label for="agentJinaApiKey">Jina API key</label><input id="agentJinaApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Optional"></div>
+                </div>
+                <div class="agent-settings-actions">
+                  <button type="button" class="setting-reset" id="testCustomReader">Test custom gateway</button>
+                  <button type="button" class="setting-reset" id="testJinaReader">Test Jina Reader</button>
+                  <button type="button" class="setting-reset" id="clearReaderCredentials">Clear credentials</button>
+                </div>
+                <p class="agent-settings-status" id="readerCredentialStatus" aria-live="polite">Credentials saved.</p>
+              </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Agent behavior</h3><p>Set the execution budget and read-operation defaults.</p></div></div>
+                <div class="agent-settings-fields">
+                  <div class="setting-field"><label for="agentMaxSteps">Maximum tool steps per task</label><input id="agentMaxSteps" type="number" min="1" max="20" step="1" value="8"></div>
+                  <label class="agent-settings-checkbox" for="agentAutoApproveReads"><input id="agentAutoApproveReads" type="checkbox"><span>Automatically allow read-only tools</span></label>
+                </div>
+              </section>
+              <div class="agent-settings-page-footer"><span>Applies to this WebView profile.</span><button type="button" class="button primary" id="agentSaveSettings">Save agent settings</button></div>
+            </section>
+
+            <section class="agent-settings-page" id="agentSettingsPageProject" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabProject" hidden>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Project Profiles</h3><p>Reusable settings and instructions shared by Standalone and PowerToys Run. Folder grants and credentials are never copied.</p></div></div>
+                <div class="agent-settings-fields">
+                  <div class="setting-field"><label for="projectProfileName">Profile name</label><input id="projectProfileName" type="text" maxlength="80" placeholder="e.g. Backend API project"></div>
+                  <div class="setting-field"><label for="projectProfileSelect">Saved profile</label><select id="projectProfileSelect"><option value="">No saved profiles</option></select></div>
+                </div>
+                <div class="agent-settings-actions agent-settings-actions-wrap">
+                  <button type="button" class="button primary" id="saveProjectProfile">Save current settings</button>
+                  <button type="button" class="button" id="applyProjectProfile">Apply profile</button>
+                  <button type="button" class="setting-reset" id="refreshProjectProfiles">Refresh</button>
+                  <button type="button" class="setting-reset danger-text" id="deleteProjectProfile">Delete profile</button>
+                </div>
+              </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Workspace access</h3><p>Folder access belongs to this conversation and must be granted separately in each host.</p></div></div>
+                <div class="agent-settings-actions agent-settings-actions-wrap">
+                  <button type="button" class="button" id="changeAgentFolder">Change workspace folder</button>
+                  <button type="button" class="setting-reset danger-text" id="clearAgentFolder">Clear folder access</button>
+                </div>
+              </section>
+            </section>
+
+            <section class="agent-settings-page" id="agentSettingsPageSkills" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabSkills" hidden>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Agent Skills</h3><p>Skills are discovered from metadata and loaded only when relevant. Scripts are never executed automatically.</p></div></div>
+                <div class="agent-settings-fields">
+                  <div class="setting-field"><label for="agentSkillScope">Installation scope</label><select id="agentSkillScope"><option value="global">Global skills · all projects</option><option value="project">Current project · this workspace</option></select></div>
+                  <div class="setting-field"><label for="agentSkillSelect">Installed skills</label><select id="agentSkillSelect" size="5"><option value="">Refresh to list skills</option></select></div>
+                </div>
+                <div class="agent-skill-description" id="agentSkillDescription">Select a Skill to view its description.</div>
+                <p class="agent-settings-status" id="agentSkillsStatus" aria-live="polite">Skills are discovered on demand by the Agent.</p>
+                <div class="agent-settings-actions agent-settings-actions-wrap">
+                  <button type="button" class="button primary" id="installAgentSkill">Install Skill folder</button>
+                  <button type="button" class="button" id="refreshAgentSkills">Refresh list</button>
+                  <button type="button" class="setting-reset danger-text" id="removeAgentSkill" disabled>Remove selected</button>
+                </div>
+              </section>
+              <section class="agent-settings-card agent-settings-manual-help">
+                <h3>Manual installation</h3>
+                <p>Global: <code>%LOCALAPPDATA%\RunMind\Skills\&lt;skill-name&gt;\SKILL.md</code></p>
+                <p>Project: <code>.agents/skills/&lt;skill-name&gt;/SKILL.md</code></p>
+                <p>Each Skill needs <code>name</code> and <code>description</code> frontmatter. Global and project installations are managed independently.</p>
+              </section>
+            </section>
+
+            <section class="agent-settings-page" id="agentSettingsPageSecurity" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabSecurity" hidden>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Conversation permissions</h3><p>These policies are saved with this conversation and can be reused in a Project Profile. Destructive Git operations always require fresh approval.</p></div></div>
+                <div class="agent-settings-permissions">
+                  <div class="agent-settings-permission-row"><div><label for="permissionGitRead">Git read operations</label><small>Status, diffs, history and repository inspection.</small></div><select id="permissionGitRead"><option value="allow">Allow</option><option value="ask">Ask</option></select></div>
+                  <div class="agent-settings-permission-row"><div><label for="permissionGitWrite">Git local changes</label><small>Stage, commit, branch, merge and stash.</small></div><select id="permissionGitWrite"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select></div>
+                  <div class="agent-settings-permission-row"><div><label for="permissionGitRemote">Git remote operations</label><small>Fetch, pull, push and clone.</small></div><select id="permissionGitRemote"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select></div>
+                  <div class="agent-settings-permission-row"><div><label for="permissionDownloads">Downloads</label><small>Network downloads and destination writes.</small></div><select id="permissionDownloads"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select></div>
+                </div>
+                <div class="agent-settings-actions"><button type="button" class="button primary" id="savePermissionPolicy">Save conversation policy</button></div>
+              </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Always-approved tools</h3><p>Persistent read-only approvals for this WebView profile.</p></div></div>
+                <div id="alwaysApprovedToolsList" class="always-approved-tools"><span class="setting-note">None</span></div>
+                <div class="agent-settings-actions"><button type="button" class="setting-reset danger-text" id="clearAlwaysApprovedTools">Clear all approvals</button></div>
+              </section>
+            </section>
           </div>
         </details>
         <details class="toolbar-menu" id="ocrLanguageMenu">
@@ -9490,7 +9619,6 @@ ${dataset.rows.length - rows.length} duplicate row(s) removed`, risky: true }, s
       const availableHeight = Math.max(1, viewportHeight - marginY * 2);
       const width = Math.min(Number.isFinite(panelWidth) ? Math.max(1, panelWidth) : availableWidth, availableWidth);
       const naturalHeight = Number.isFinite(panelHeight) ? Math.max(1, panelHeight) : availableHeight;
-      const visibleHeight = Math.min(naturalHeight, availableHeight);
       const anchorLeft = Number.isFinite(anchorRect?.left) ? anchorRect.left : marginX;
       const anchorRight = Number.isFinite(anchorRect?.right) ? anchorRect.right : anchorLeft;
       const anchorTop = Number.isFinite(anchorRect?.top) ? anchorRect.top : marginY;
@@ -9501,26 +9629,28 @@ ${dataset.rows.length - rows.length} duplicate row(s) removed`, risky: true }, s
 
       const belowSpace = Math.max(0, viewportHeight - marginY - anchorBottom - gap);
       const aboveSpace = Math.max(0, anchorTop - gap - marginY);
+      // Prefer below whenever the panel can fit there. Otherwise flip above
+      // when it fits; if neither side fits, constrain it to the larger side.
+      // Never center a toolbar flyout over the viewport: that obscures its trigger
+      // and neighboring controls (especially on tall Agent/Research panels).
       const fitsBelow = naturalHeight <= belowSpace;
       const fitsAbove = naturalHeight <= aboveSpace;
-      const opensAbove = !fitsBelow && fitsAbove;
-      const anchorVisible = anchorBottom >= marginY && anchorTop <= viewportHeight - marginY;
-      const useViewportOverlay = !anchorVisible || (!fitsBelow && !fitsAbove);
-
-      // A panel must not be squeezed into the gap next to its trigger. When
-      // neither side has room, it uses the full safe viewport as a floating panel.
-      const top = useViewportOverlay
-        ? Math.max(marginY, (viewportHeight - visibleHeight) / 2)
-        : (opensAbove ? anchorTop - gap - visibleHeight : anchorBottom + gap);
+      const opensAbove = !fitsBelow && (fitsAbove || aboveSpace > belowSpace);
+      const rawSideSpace = opensAbove ? aboveSpace : belowSpace;
+      const sideSpace = Math.min(availableHeight, rawSideSpace || availableHeight);
+      const visibleHeight = Math.max(1, Math.min(naturalHeight, sideSpace));
+      const top = opensAbove
+        ? anchorTop - gap - visibleHeight
+        : anchorBottom + gap;
       return {
         left,
         top: Math.max(marginY, Math.min(top, viewportHeight - visibleHeight - marginY)),
         maxWidth: availableWidth,
-        maxHeight: availableHeight,
+        maxHeight: Math.max(1, sideSpace || availableHeight),
         width,
         height: visibleHeight,
         opensAbove,
-        useViewportOverlay
+        useViewportOverlay: false
       };
     }
     function toolbarFlyoutViewport() {
@@ -9722,6 +9852,7 @@ ${dataset.rows.length - rows.length} duplicate row(s) removed`, risky: true }, s
         const placement = calculateToolbarFlyoutPlacement(anchorRect, panelWidth, naturalHeight, viewport.width, viewport.height);
         panel.style.maxWidth = `${Math.floor(placement.maxWidth)}px`;
         panel.style.maxHeight = `${Math.floor(placement.maxHeight)}px`;
+        panel.style.height = `${Math.floor(placement.height)}px`;
         panel.style.left = `${Math.round(placement.left)}px`;
         panel.style.top = `${Math.round(placement.top)}px`;
         positionToolbarFlyoutResizeHandle(menu, panel);
@@ -12277,6 +12408,38 @@ ${toolActivityDetail}`;
       const access = await requestFolderAccess(activeController?.signal, true);
       if (access.error) showToast(access.error);
     });
+    const agentSettingsTabs = [
+      ['agentSettingsTabAgent', 'agentSettingsPageAgent'],
+      ['agentSettingsTabProject', 'agentSettingsPageProject'],
+      ['agentSettingsTabSkills', 'agentSettingsPageSkills'],
+      ['agentSettingsTabSecurity', 'agentSettingsPageSecurity']
+    ].map(([tabId, pageId]) => ({ tab: document.getElementById(tabId), page: document.getElementById(pageId) }));
+    function selectAgentSettingsTab(index, focusTab = false) {
+      const bounded = Math.max(0, Math.min(agentSettingsTabs.length - 1, index));
+      agentSettingsTabs.forEach((item, itemIndex) => {
+        const selected = itemIndex === bounded;
+        item.tab.setAttribute('aria-selected', String(selected));
+        item.tab.tabIndex = selected ? 0 : -1;
+        item.page.hidden = !selected;
+      });
+      if (agentSettingsMenu.open) {
+        const panel = agentSettingsMenu.querySelector(':scope > .toolbar-panel');
+        if (panel) panel.scrollTop = 0;
+        positionToolbarFlyout(agentSettingsMenu);
+      }
+      if (focusTab) agentSettingsTabs[bounded].tab.focus();
+    }
+    agentSettingsTabs.forEach((item, index) => {
+      item.tab.addEventListener('click', () => selectAgentSettingsTab(index));
+      item.tab.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? agentSettingsTabs.length - 1
+          : (index + (event.key === 'ArrowRight' ? 1 : agentSettingsTabs.length - 1)) % agentSettingsTabs.length;
+        selectAgentSettingsTab(next, true);
+      });
+    });
+    selectAgentSettingsTab(0);
     $('#agentSaveSettings').addEventListener('click', saveAgentSettings);
     const persistReaderCredentialInputs = () => {
       saveReaderCredentials({ jinaApiKey: agentJinaApiKey.value.trim(), customGatewayToken: agentCustomReaderToken.value.trim() });

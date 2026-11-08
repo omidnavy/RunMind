@@ -8,7 +8,7 @@
 	<UseWindowsForms>true</UseWindowsForms>
 	<RootNamespace>Community.PowerToys.Run.Plugin.RunMind</RootNamespace>
 	<AssemblyName>Community.PowerToys.Run.Plugin.RunMind</AssemblyName>
-	<Version>2.1.1</Version>
+	<Version>2.1.2</Version>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
