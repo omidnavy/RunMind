@@ -13,12 +13,13 @@ namespace RunMind.Standalone;
 public partial class MainWindow : Window
 {
     private readonly WindowThemeSynchronizer _windowThemeSynchronizer;
+    private readonly NativePageReader _nativePageReader = new();
+    private readonly AgentHostBridge _agentHostBridge = new();
     private readonly WebView2 _webView = new()
     {
         DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24),
         AllowExternalDrop = false,
     };
-    private readonly NativePageReader _nativePageReader = new();
     private bool _closing;
     private bool _webViewDisposed;
     private string _initializationStage = "Prepare standalone window";
@@ -93,6 +94,7 @@ public partial class MainWindow : Window
             _initializationStage = "Configure standalone WebView2 navigation";
             var core = _webView.CoreWebView2;
             core.SetVirtualHostNameToFolderMapping("localhost", appFolder, CoreWebView2HostResourceAccessKind.DenyCors);
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(AppearancePreferenceStore.CreateDocumentBootstrapScript());
             // Accept only bounded native operations: Save As, validated conversation-window
             // requests, and starting a new conversation. No host objects are exposed.
             core.Settings.IsWebMessageEnabled = true;
@@ -192,6 +194,8 @@ public partial class MainWindow : Window
                 return;
             if (_nativePageReader.TryHandleMessage(args.Source, args.WebMessageAsJson, _webView.CoreWebView2, Dispatcher))
                 return;
+            if (_agentHostBridge.TryHandleMessage(args.Source, args.WebMessageAsJson, _webView.CoreWebView2, Dispatcher))
+                return;
             if (ConversationSaveDialog.TryHandleMessage(args.Source, args.WebMessageAsJson, this, _webView.CoreWebView2))
                 return;
             if (!Uri.TryCreate(args.Source, UriKind.Absolute, out var source)
@@ -282,7 +286,7 @@ public partial class MainWindow : Window
         var formatName = format.GetString();
         if (!string.Equals(formatName, "runmind", StringComparison.Ordinal))
             return false;
-        if (!conversation.TryGetProperty("version", out var version) || !version.TryGetInt32(out var versionNumber) || versionNumber != 1)
+        if (!conversation.TryGetProperty("version", out var version) || !version.TryGetInt32(out var versionNumber) || versionNumber is not (1 or 2))
             return false;
         return conversation.TryGetProperty("messages", out var messages)
             && messages.ValueKind == JsonValueKind.Array
@@ -309,10 +313,17 @@ public partial class MainWindow : Window
         });
     }
 
-    private void OnClosed(object? sender, EventArgs e)
+    private async void OnClosed(object? sender, EventArgs e)
     {
         _closing = true;
+        try
+        {
+            if (_webView.CoreWebView2 is { } core)
+                await core.ExecuteScriptAsync("window.runMindCloseSession && window.runMindCloseSession();");
+        }
+        catch { /* Crash/reload cleanup uses the IndexedDB session lease. */ }
         _nativePageReader.Dispose();
+        _agentHostBridge.Dispose();
         _windowThemeSynchronizer.Dispose();
         DisposeWebView();
     }

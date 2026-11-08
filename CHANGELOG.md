@@ -1,3 +1,71 @@
+## [2.1.1] — Conversation lifecycle, startup polish, and Agent Skills Manager
+
+### Build correction
+- Fully qualify `System.Windows.Application` when dispatching the Global Skill folder picker. The Standalone project enables both WPF and Windows Forms, so the unqualified `Application` type is ambiguous.
+
+### Fixed
+- Fix `.runmind` Save As rejecting conversations serialized in format version 2. The shared native handler now accepts versions 1 and 2 while retaining message-array validation and the existing file-size limit.
+- Prevent the saved appearance from flashing after the default theme on startup. Both WebView2 hosts now inject the saved appearance before document content is first rendered; the existing JavaScript appearance controls and cross-host synchronization remain in place.
+- Replace the project-specific System Atlas example in the Project Profile name field with a neutral placeholder.
+
+### Changed
+- Separate temporary conversation recovery from intentional conversation saving. Active conversation branches are stored in a session-keyed IndexedDB archive; `sessionStorage` carries the active window's session identifier. Conversation branches are no longer duplicated into Local Storage.
+- Keep the temporary archive isolated per top-level chat window and host profile. Reloads retain the same session; starting a new conversation rotates the session identifier and retires the previous temporary archive.
+- Delete a session's temporary conversation archive, Deep Research checkpoints/history, and session-scoped Agent activity on normal window close. Startup cleanup removes expired session records and their associated temporary data; crashed or uncleanly terminated sessions receive a 24-hour lease grace period before cleanup.
+- Retire the legacy 2.1.0 Local Storage branch snapshots on first 2.1.1 startup. Legacy IndexedDB branch archives and unowned legacy research checkpoints/history are expired after the 24-hour grace period. Existing Workspace Context folder handles remain in their separate IndexedDB database and are not removed by conversation-session cleanup.
+- Restrict Deep Research checkpoint restoration to the owning window session. A fresh chat no longer searches for or claims a paused/interrupted task from another window.
+
+### Added
+- Add an Agent Skills Manager to Agent Settings with separate Global Skills and Current Project Skills scopes. It lists installed Skill names and descriptions, supports folder installation, and removes a selected Skill after confirmation.
+- Add native global Skill installation/removal under `%LOCALAPPDATA%\RunMind\Skills` and project Skill installation/removal under `.agents/skills`. Installation validates `SKILL.md` metadata and applies bounded file-count, depth, and size limits; global removal rejects symbolic links and reparse points before recursive deletion. Existing files are never overwritten.
+- Preserve manual installation support and the open Agent Skills folder layout. Scripts and other Skill assets may be stored, but scripts are never automatically executed and Skills cannot grant themselves permissions.
+
+### Compatibility and limits
+- `.runmind` versions 1 and 2 remain supported. Version 2 remains the current save format.
+- IndexedDB remains in use for browser folder handles and for the full-size temporary conversation archive. Local Storage remains for application preferences and other persistent settings, not conversation branch transcripts.
+- Active temporary conversations and Deep Research checkpoints survive reloads in their originating window. They are not a conversation library and are not shared with other windows. Save a conversation as `.runmind` to retain it intentionally or move it between windows/hosts.
+- Global Skills are shared through the native per-user folder. Project Skills require an authorized project workspace in the current WebView profile. The two scopes are managed independently; deleting one installation does not delete the other.
+
+### Validation
+- JavaScript syntax, project XML, plugin manifest JSON, version alignment, static session/storage invariants, Save format-version acceptance, pre-paint theme bootstrap registration, NativePageReader source-hash/integration checks, changed-files-only overlay reconstruction, and ZIP integrity are checked against the reconstructed 2.1.0 source tree.
+- A Windows/.NET compile and live WebView2, PowerToys Run, theme-flash, skill-folder-picker, and multi-window runtime tests require the target Windows environment and are not claimed here.
+
+## [2.1.0] — Project-aware Agent, Git, Skills, and reliable downloads
+
+### Added
+- Add shared Project Profiles for Standalone and PowerToys Run. Profiles capture project instructions, provider/model plus the exact configured connection ID, safe Agent settings, enabled Skill names, MCP server IDs, a workspace folder-name hint, and the conversation permission policy. Credential fields and browser folder handles are not copied into a profile; freeform project instructions should not be used to store secrets.
+- Extend Workspace Context snapshots in `.runmind` format version 2 while retaining version 1 import compatibility. Context remains optional and conversation-scoped. Browser directory handles stay in IndexedDB under the context ID; the folder name in a conversation or profile is only a reconnect hint.
+- Add a narrow `AgentHostBridge` shared by both Windows hosts for the capabilities that require native Windows access. The shared `ChatWindow.html` remains the Agent runtime and owns tool definitions, policy decisions, approval UI, and orchestration.
+- Add everyday Git tools: repository selection, clone, status, diff, log, show, branches, remotes, stage, unstage, commit, create/switch branch, merge, revert, cherry-pick, stash, fetch, pull, push, reset, clean, restore, and branch deletion. Git runs through `ProcessStartInfo.ArgumentList`, never a shell command string.
+- Add `download_file` for original HTTP/HTTPS response bytes. The browser path handles smaller CORS-accessible downloads; the native path streams to disk, supports validated HTTP Range resume, ETag/Last-Modified checks, progress and cancellation, computes SHA-256, checks an optional expected digest, stages to a `.runmind.part` file, and finalizes without overwriting an existing destination.
+- Add Agent Skills discovery and on-demand loading for the open `SKILL.md` format, from global `%LOCALAPPDATA%\RunMind\Skills\<name>\SKILL.md` and project `.agents/skills/<name>/SKILL.md` locations. Skill instructions and explicitly requested references are bounded; scripts are not automatically executed.
+- Add conversation-scoped permission levels for Git reads, Git writes, Git remote operations, and downloads. Destructive Git actions always require a fresh approval, and native repository selection always prompts separately from browser folder access.
+
+### Build corrections
+- Fully qualify `Microsoft.Win32.SaveFileDialog` in the shared conversation save handler. Both Windows host projects enable WinForms, so an unqualified `SaveFileDialog` is ambiguous; the WPF owner overload is intentional.
+- Fully qualify the WPF `System.Windows.Application` base type in the Standalone app entry point and remove a redundant `ObjectDisposedException` catch already covered by `InvalidOperationException`.
+
+### Changed
+- Keep Project Profile metadata in a shared per-user native store so both desktop hosts see the same profile catalog. The shared native adapter supplies policy defaults; conversation overrides travel with that conversation and saved profile. A named mutex serializes profile updates across host processes.
+- Applying a Project Profile copies its values into the active conversation. Later profile edits do not mutate existing conversations. Applying a profile creates a new Workspace Context ID and does not transfer a browser folder grant or previously selected native Git repository.
+- Bind native Git repository selection to the current conversation context. Switching contexts invalidates the native repository capability until the user selects or clones one for the active context.
+- Require explicit remote and branch arguments for Git fetch, pull, and push. Always require fresh approval for destructive Git operations and commits (Git hooks may execute during a commit). Repository selection has its own fresh confirmation.
+- Keep browser folder access and native Git selection separate. A cloned repository becomes available to native Git in that conversation; browser-based file tools require a separate `request_folder_access` action and user-selected folder.
+- Restore and retain the original `NativePageReader` message handling and lifecycle in Standalone and PowerToys Run. `Shared/NativePageReader.cs` is unchanged from 2.0.9.
+
+### Compatibility and limits
+- `.runmind` versions 1 and 2 remain readable. Version 2 stores Workspace Context snapshots, not OS permissions, authentication material, or transferable filesystem grants.
+- Project Profiles are shared between the two desktop hosts through `%LOCALAPPDATA%\RunMind\ProjectProfiles`. Browser directory handles remain specific to the WebView profile that stored them in IndexedDB; reselect/re-authorize the folder in another host or device. RunMind never silently substitutes a folder.
+- Git requires Git for Windows (`git.exe`) on `PATH`. This release supports ordinary working trees with a local `.git` directory; linked Git worktrees and `.git` files are not supported. Clone accepts credential-free HTTP/HTTPS URLs; configure authentication with Windows Git Credential Manager. There is no unrestricted terminal tool.
+- Native downloads are limited to 4 GB and two hours per operation, use a Windows Save dialog, and block private, loopback, link-local, and reserved IP destinations. Resume requires a matching URL fingerprint and a server validator (ETag or Last-Modified); otherwise a fresh transfer starts. Browser downloads are limited to 10 MB and require browser fetch/CORS access plus an authorized workspace folder. Downloads are never automatically extracted or executed.
+- Agent Skills are discovered as metadata first and loaded only on demand. `SKILL.md` and individual references are limited to 128 KB; up to 10 references may be requested per load. Skills cannot grant permissions and scripts are not executed by this release.
+- No project indexing, semantic search, reusable workflows, Standalone Launcher, or Command Palette UI is included. Those remain later roadmap work.
+- No new package dependency is introduced.
+
+### Validation
+- JavaScript syntax and static integration checks, project XML parsing, plugin manifest JSON parsing, version alignment, NativePageReader source-hash/integration checks, changed-files-only overlay reconstruction, and ZIP integrity are checked against the supplied 2.0.9 source archive.
+- A Windows/.NET build and live WebView2, Git, download, and PowerToys runtime tests are not claimed here: this environment has no .NET SDK or Windows runtime. Use the Windows build instructions and perform the first full runtime test on the target machine.
+
 ## [2.0.9] — Configurable PowerToys Run stage timeouts
 
 ### Changed

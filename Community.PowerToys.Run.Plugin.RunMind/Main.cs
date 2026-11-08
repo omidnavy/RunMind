@@ -1485,6 +1485,17 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
     }
 
+    private static async Task DisposeWebViewWithSessionCleanupAsync(WebView2 webView)
+    {
+        try
+        {
+            if (webView.CoreWebView2 is { } core)
+                await core.ExecuteScriptAsync("window.runMindCloseSession && window.runMindCloseSession();");
+        }
+        catch { /* Crash/reload cleanup uses the IndexedDB session lease. */ }
+        DisposeWebViewSafely(webView);
+    }
+
     private static void DisposeWebViewSafely(WebView2 webView)
     {
         lock (DisposedWebViews)
@@ -1542,7 +1553,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             Icon = LoadWindowIcon(assemblyDirectory),
             WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = webView,
         };
-        appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        appWindow.Closed += async (_, _) => await DisposeWebViewWithSessionCleanupAsync(webView);
         WindowLayout.ConfigureInitialPlacement(appWindow);
         appWindow.Show();
         appWindow.Activate();
@@ -1570,7 +1581,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             Content = webView,
         };
 
-        appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        appWindow.Closed += async (_, _) => await DisposeWebViewWithSessionCleanupAsync(webView);
         WindowLayout.ConfigureInitialPlacement(appWindow);
         appWindow.Show();
         appWindow.Activate();
@@ -1640,7 +1651,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             Content = webView,
         };
 
-        appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        appWindow.Closed += async (_, _) => await DisposeWebViewWithSessionCleanupAsync(webView);
         WindowLayout.ConfigureInitialPlacement(appWindow);
         appWindow.Show();
         appWindow.Activate();
@@ -1679,7 +1690,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             Content = webView,
         };
 
-        appWindow.Closed += (_, _) => DisposeWebViewSafely(webView);
+        appWindow.Closed += async (_, _) => await DisposeWebViewWithSessionCleanupAsync(webView);
         WindowLayout.ConfigureInitialPlacement(appWindow);
         appWindow.Show();
         appWindow.Activate();
@@ -1837,7 +1848,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         var formatName = format.GetString();
         if (!string.Equals(formatName, "runmind", StringComparison.Ordinal))
             return false;
-        if (!conversation.TryGetProperty("version", out var version) || !version.TryGetInt32(out var versionNumber) || versionNumber != 1)
+        if (!conversation.TryGetProperty("version", out var version) || !version.TryGetInt32(out var versionNumber) || versionNumber is not (1 or 2))
             return false;
         return conversation.TryGetProperty("messages", out var messages)
             && messages.ValueKind == JsonValueKind.Array
@@ -2247,11 +2258,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 "localhost",
                 appFolderPath,
                 CoreWebView2HostResourceAccessKind.DenyCors);
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(AppearancePreferenceStore.CreateDocumentBootstrapScript());
 
-            // Expose only the bounded native public-page reader, conversation Save As,
-            // validated conversation-window operations, and new-conversation requests. General host objects stay disabled.
+            // Native Page Reader remains available for bounded public-page retrieval.
+            // AgentHostBridge exposes only the explicitly enumerated native capabilities.
             var nativePageReader = new NativePageReader();
-            appWindow.Closed += (_, _) => nativePageReader.Dispose();
+            var agentHostBridge = new AgentHostBridge();
+            appWindow.Closed += (_, _) => { nativePageReader.Dispose(); agentHostBridge.Dispose(); };
             core.Settings.IsWebMessageEnabled = true;
             core.Settings.AreHostObjectsAllowed = false;
             var activeBootstrapJson = bootstrapJson;
@@ -2260,8 +2273,9 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 if (!IsTrustedChatPageSource(messageArgs.Source)) return;
                 if (windowThemeSynchronizer.TryHandleWebMessage(messageArgs.Source, messageArgs.WebMessageAsJson))
                     return;
-                if (nativePageReader.TryHandleMessage(
-                    messageArgs.Source, messageArgs.WebMessageAsJson, core, appWindow.Dispatcher))
+                if (nativePageReader.TryHandleMessage(messageArgs.Source, messageArgs.WebMessageAsJson, core, appWindow.Dispatcher))
+                    return;
+                if (agentHostBridge.TryHandleMessage(messageArgs.Source, messageArgs.WebMessageAsJson, core, appWindow.Dispatcher))
                     return;
                 if (ConversationSaveDialog.TryHandleMessage(
                     messageArgs.Source, messageArgs.WebMessageAsJson, appWindow, core))
@@ -2383,7 +2397,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             DisposeWebViewSafely(webView);
             var fallbackWebView = CreateChatWebView();
             appWindow.Content = fallbackWebView;
-            appWindow.Closed += (_, _) => DisposeWebViewSafely(fallbackWebView);
+            appWindow.Closed += async (_, _) => await DisposeWebViewWithSessionCleanupAsync(fallbackWebView);
             await InitializeChatWebViewAsync(
                 appWindow,
                 fallbackWebView,

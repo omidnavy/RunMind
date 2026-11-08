@@ -45,6 +45,19 @@ internal static class AppearancePreferenceStore
         };
     }
 
+    public static string CreateDocumentBootstrapScript()
+    {
+        var json = JsonSerializer.Serialize(CreateBootstrapValue());
+        return "(() => { const a = " + json + "; if (!a) return; "
+            + "const mode = ['system','light','dark'].includes(a.mode) ? a.mode : 'system'; "
+            + "const light = ['classic-light','soft-ivory','sage-garden','rose-clay','sandstone','clay'].includes(a.lightTheme) ? a.lightTheme : 'classic-light'; "
+            + "const dark = ['warm-graphite','obsidian','deep-forest','mocha','burgundy','clay'].includes(a.darkTheme) ? a.darkTheme : 'warm-graphite'; "
+            + "const apply = () => { const root = document.documentElement; if (!root) return false; "
+            + "const effective = mode === 'system' ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode; "
+            + "root.dataset.appearanceMode = mode; root.dataset.theme = effective; root.dataset.colorTheme = effective === 'dark' ? dark : light; return true; }; "
+            + "if (!apply()) { const observer = new MutationObserver(() => { if (apply()) observer.disconnect(); }); observer.observe(document, { childList: true, subtree: true }); } })();";
+    }
+
     public static bool TryHandleMessage(string source, string messageJson, out AppearancePreferences? settings)
     {
         settings = null;

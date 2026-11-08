@@ -1,3 +1,19 @@
+# RunMind roadmap
+
+## Current release: 2.1.1
+
+RunMind 2.1.1 builds on the 2.1.0 project-aware Agent with session-scoped temporary conversation archives, explicit `.runmind` persistence, v1/v2 Save compatibility, a pre-paint theme bootstrap, and a Global/Project Agent Skills Manager. Git, downloads, Project Profiles, Workspace Context, and the shared Agent runtime remain in place. The `ChatWindow.html` Agent runtime and `AgentHostBridge` contract are the foundation for future hosts.
+
+## Planned release sequence
+
+- **2.2.0 — Project Intelligence and Workflows:** project-aware indexing/intelligence and reusable multi-step workflows built on Workspace Context and the shared Agent tool contract.
+- **2.3.0 — Standalone RunMind Launcher:** a standalone launcher experience built on the same Agent Core and native host capabilities.
+- **2.4.0 — PowerToys Command Palette extension:** expose the shared Agent capabilities through a Command Palette host without duplicating tool or permission logic.
+
+These are planned scopes, not shipped features or release-date commitments. The detailed backlog below is retained as historical candidate work from the 1.10.x roadmap and should be re-evaluated against the 2.x plan before implementation.
+
+---
+
 ## 1.10.34 completed
 
 - Improved the default size and viewport placement of toolbar flyouts. All flyouts can be temporarily moved and resized while open; their geometry resets on close and is never persisted.

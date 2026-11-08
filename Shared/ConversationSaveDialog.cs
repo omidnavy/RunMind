@@ -82,7 +82,7 @@ internal static class ConversationSaveDialog
                     suggestedName = Path.GetFileNameWithoutExtension(suggestedName) + ".runmind";
                 }
 
-                var dialog = new SaveFileDialog
+                var dialog = new Microsoft.Win32.SaveFileDialog
                 {
                     Title = "Save RunMind conversation",
                     Filter = "RunMind conversation (*.runmind)|*.runmind",
@@ -158,7 +158,7 @@ internal static class ConversationSaveDialog
             return false;
         if (!conversation.TryGetProperty("version", out var version)
             || !version.TryGetInt32(out var versionNumber)
-            || versionNumber != 1)
+            || versionNumber is not (1 or 2))
             return false;
         return conversation.TryGetProperty("messages", out var messages)
             && messages.ValueKind == JsonValueKind.Array

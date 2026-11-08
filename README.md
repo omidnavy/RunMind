@@ -14,7 +14,7 @@ RunMind is available in two forms:
 - Chat with local models hosted by Ollama or LM Studio, or connect additional OpenAI-compatible endpoints.
 - Switch between configured providers and models, including custom API keys and authentication headers.
 - Ask questions, work through code and technical problems, inspect images and documents, and use model tool-calling capabilities.
-- Use **Agent Mode** for multi-step tasks that combine web research, workspace files, data processing, and artifact creation.
+- Use **Agent Mode** for multi-step tasks that combine web research, workspace files, data processing, artifact creation, Git operations, on-demand Agent Skills, and a Global/Project Skills Manager.
 - Use **Deep Research** for structured investigations with editable plans, source collection, evidence notes, checkpoints, and report export.
 - Connect external **Model Context Protocol (MCP)** servers over Streamable HTTP to make their tools, resources, and prompts available to RunMind.
 - Create and manage conversation branches, compare branch responses with AI, and continue a separate discussion about a comparison without changing the original branches.
@@ -63,7 +63,7 @@ RunMind exposes tools to Agent Mode and, where applicable, Deep Research. Tools 
 | `read_file` | Reads a UTF-8 text file. |
 | `create_file` | Creates a new text file without overwriting an existing file. |
 | `download_webpage` | Downloads webpage content through the Reader pipeline and saves it locally. |
-| `download_file` | Downloads original response bytes for a direct file URL, preserving the original file rather than extracting webpage text. |
+| `download_file` | Downloads original response bytes. Uses browser fetch for smaller CORS-accessible files or the native streaming/resumable downloader for larger or browser-restricted downloads. |
 | `file_info` | Returns file size, MIME type, last-modified time, and name. |
 | `edit_file` | Replaces a text file after approval and creates a recovery backup. |
 | `restore_file_backup` | Restores a previous backup after approval. |
@@ -77,6 +77,27 @@ RunMind exposes tools to Agent Mode and, where applicable, Deep Research. Tools 
 | `project_overview` | Builds a bounded overview of a project workspace. |
 | `find_duplicates` | Finds files with identical SHA-256 content within configured scan limits. |
 | `compare_folders` | Compares two folders by relative file paths and sizes. |
+
+### Git integration, Project Profiles, and Agent Skills
+
+| Tool / capability | What it does |
+|---|---|
+| `git_clone` | Clones an HTTP/HTTPS Git repository into a new folder using Git for Windows and the native folder picker. Supports self-hosted Gogs/Gitea endpoints. |
+| `git_select_repository` | Grants native Git access to one existing normal working tree for the active conversation. |
+| `git_status`, `git_diff`, `git_log`, `git_show`, `git_branches`, `git_remotes` | Read working-tree status, diffs, history, commit summaries, branches, and configured remotes. |
+| `git_stage`, `git_unstage`, `git_commit`, `git_create_branch`, `git_switch_branch`, `git_merge`, `git_revert`, `git_cherry_pick`, `git_stash` | Perform common local Git operations subject to the active conversation's approval policy. |
+| `git_fetch`, `git_pull`, `git_push` | Perform remote operations with an explicitly named remote and branch. |
+| `git_reset_hard`, `git_clean`, `git_restore`, `git_delete_branch` | Perform destructive operations; these always require a fresh approval. |
+| `list_agent_skills` | Discover `SKILL.md` metadata in global and selected-project Skill folders. |
+| `load_agent_skill` | Load the selected Skill instructions and explicitly requested references on demand. Scripts are not automatically executed. |
+| Project Profiles | Save and reuse project instructions, provider/model connection, safe Agent settings, Skill names, MCP references, and conversation permission policy across both desktop hosts. |
+| Agent Skills Manager | Browse Global and Current Project Skills, inspect descriptions, install a local Skill folder, and remove a selected installation after confirmation. |
+
+Git requires Git for Windows on `PATH`. This release supports normal repositories with a local `.git` directory, not linked worktrees. A native Git folder selection is separate from the browser workspace grant. Project Profiles are shared through `%LOCALAPPDATA%\RunMind\ProjectProfiles`; browser folder handles remain in IndexedDB in the current WebView profile and must be reconnected when switching hosts/devices. Credential fields and filesystem handles are not copied into profiles or portable conversations; do not place secrets in freeform project instructions.
+
+Global Skills are stored under `%LOCALAPPDATA%\RunMind\Skills`; project Skills live under `.agents\skills` inside the selected browser workspace. Use **Agent Settings → Agent Skills** to manage either scope. Manual installation remains supported: copy a Skill folder containing `SKILL.md` to `%LOCALAPPDATA%\RunMind\Skills\<skill-name>\` for global use, or `.agents\skills\<skill-name>\` for project use. The required `SKILL.md` metadata fields are `name` and `description`. Skills load on demand and cannot grant themselves permissions; scripts are never executed automatically.
+
+Unsaved conversations and Deep Research checkpoints use per-window temporary sessions in IndexedDB, with the session identifier in `sessionStorage`. A new window never inherits another window's conversation or research checkpoint. Normal window close removes temporary conversation data; abandoned sessions are cleaned up on a later startup after a 24-hour grace period. Workspace folder handles remain in their separate IndexedDB store. Save a `.runmind` file explicitly to retain a conversation.
 
 ### Documents, archives, and structured data
 
@@ -163,11 +184,11 @@ Connect MCP servers using **Streamable HTTP**. RunMind can discover server tools
 
 ### Chat
 
-Use RunMind as a regular streaming chat interface with model/provider selection, conversation history, attachments, and saved `.runmind` conversations.
+Use RunMind as a regular streaming chat interface with model/provider selection, conversation branches, attachments, and explicitly saved `.runmind` conversations.
 
 ### Agent Mode
 
-Agent Mode can plan and execute multi-step tasks using built-in tools, selected workspace files, configured web services, and connected MCP servers. Independent read-only operations can run in parallel where safe; mutating operations are approval-gated. Specialized sub-agents are bounded, read-only, and cannot delegate further.
+Agent Mode can plan and execute multi-step tasks using built-in tools, selected workspace files, configured web services, connected MCP servers, native Git operations, and Agent Skills loaded on demand. Project Profiles provide reusable project instructions and safe settings shared by Standalone and PowerToys Run. Each conversation retains its own Workspace Context and permission policy; applying a profile does not silently transfer folder handles or native Git grants. Independent read-only operations can run in parallel where safe; mutating operations are approval-gated. Specialized sub-agents are bounded, read-only, and cannot delegate further.
 
 ### Deep Research
 
@@ -179,7 +200,7 @@ Create and switch between conversation branches, rename or delete branches, and 
 
 ## Workspace safety and limits
 
-- A workspace folder is selected by the user before local file operations are offered.
+- A browser workspace folder is selected by the user before local file operations are offered. Native Git repository selection is a separate, conversation-scoped authorization.
 - File paths are workspace-relative; absolute paths and traversal outside the selected folder are rejected.
 - Creating, editing, deleting, copying, moving, renaming, extracting, and generating files uses explicit approval where applicable.
 - New-file operations do not overwrite existing files. Editing and deletion create recovery backups; restore operations are also approval-gated.
@@ -194,6 +215,7 @@ Some generation formats have intentionally focused scope: DOCX supports a bounde
 - Microsoft PowerToys is required only for the PowerToys Run plugin.
 - .NET 10 Desktop Runtime (x64) for framework-dependent standalone builds.
 - Ollama, LM Studio, or another supported model server.
+- Git for Windows on `PATH` for native Git tools.
 - The Microsoft Edge WebView2 Runtime. RunMind checks for it at startup and, if missing, downloads Microsoft's Evergreen bootstrapper and installs the runtime for the current Windows user. An internet connection is needed for that one-time setup.
 
 ## Build from source

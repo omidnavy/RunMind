@@ -3,6 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Platforms>x64;arm64</Platforms>
     <PlatformTarget>$(Platform)</PlatformTarget>
     <AssemblyName>RunMind</AssemblyName>
@@ -10,7 +11,7 @@
     <Product>RunMind</Product>
     <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
     <RootNamespace>RunMind.Standalone</RootNamespace>
-    <Version>2.0.9</Version>
+    <Version>2.1.1</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
@@ -21,6 +22,7 @@
     <Compile Include="..\Shared\AppearancePreferences.cs" Link="Shared\AppearancePreferences.cs" />
     <Compile Include="..\Shared\WindowThemeSynchronizer.cs" Link="Shared\WindowThemeSynchronizer.cs" />
     <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
+    <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <Content Include="..\Community.PowerToys.Run.Plugin.RunMind\ChatWindow.html" Link="ChatWindow.html" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\Community.PowerToys.Run.Plugin.RunMind\ArtifactTools.js" Link="ArtifactTools.js" CopyToOutputDirectory="PreserveNewest" />
