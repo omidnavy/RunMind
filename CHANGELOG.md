@@ -1,3 +1,25 @@
+## [2.1.5] — Perfecting Branch Comparison
+
+### Added
+- Add two Branch Comparison modes: **Single response** and **Whole branch**. Single response remains the default and initially selects each branch's latest user question/answer turn.
+- Allow the user to choose a specific question/answer turn independently for Branch A and Branch B. Turn options show their own turn number, whether an answer is available, and a short question preview. An unanswered latest turn remains visible and is never silently replaced by an older answer; the user may explicitly select an earlier answered turn.
+- Add Whole branch comparison, displaying and sending the complete ordered history of both branches, including all user prompts, assistant responses, per-message provider/model attribution, available text attachments, and recorded model thinking. Recorded thinking is separately labeled in the UI and treated as contextual evidence by the comparison model.
+- Include comparison mode and selected turn/history content in the immutable comparison dossier, AI assessment, follow-up discussion context, and Markdown export.
+
+### Improved
+- Tailor the prepared AI assessment instruction and re-examination request to the selected mode: one question/answer pair for Single response, or cross-turn consistency, evolving decisions, constraints, unresolved questions, corrections, and recorded thinking for Whole branch.
+- Preserve prior AI comparison discussions when the same branch content and selection are reopened; comparison session identity no longer changes solely because a new dossier timestamp is created.
+- Keep each branch's turn numbering independent. Branches with different message counts and different numbers of turns can be compared without aligning raw message indices.
+
+### Compatibility
+- No branch storage schema, conversation format, provider routing, Agent, Think, Git, Skills, workspace, or NativePageReader behavior changes.
+- Existing latest-response comparison is preserved as the default Single response mode. Whole branch is opt-in.
+- Whole branch comparison includes recorded `thinking` content only when that content exists in the saved branch messages. It does not synthesize or infer missing reasoning. Large histories can exceed a selected model's context limit; RunMind retains the dossier and displays an approximate context estimate rather than silently dropping turns.
+
+### Validation
+- Validate independent turn enumeration across different branch lengths, latest answered/unanswered turns, explicit earlier-turn selection, multiple assistant messages within one turn, Whole branch chronological history, recorded thinking inclusion, mode-aware AI instructions/export, comparison-session identity, inline JavaScript syntax, project XML, plugin manifest JSON, version alignment, changed-files-only overlay packaging, ZIP integrity, and exact overlay reapplication against RunMind 2.1.4.
+- Windows/.NET compilation and live PowerToys/WebView2/provider testing require the target Windows environment and are not claimed here.
+
 ## [2.1.4] — Branch comparison uses each branch's latest completed turn
 
 ### Fixed

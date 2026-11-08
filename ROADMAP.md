@@ -1,8 +1,8 @@
 # RunMind roadmap
 
-## Current release: 2.1.4
+## Current release: 2.1.5
 
-RunMind 2.1.4 fixes branch comparison turn selection so each branch contributes its latest completed response to its own latest user prompt, even when branches have different lengths. Comparison cards identify the turn and prompt being compared. It includes the 2.1.3 per-prompt Think preference preservation and 2.1.2 Agent Settings/flyout improvements. The four-section Agent Settings flyout and trigger-anchored positioning for tall flyouts remain in place. The existing Git, downloads, Project Profiles, Workspace Context, Skills Manager, conversation lifecycle, and shared Agent runtime remain in place. The `ChatWindow.html` Agent runtime and `AgentHostBridge` contract remain the foundation for future hosts.
+RunMind 2.1.5 completes Branch Comparison with two modes: Single response (default), including independent per-branch question/turn selection, and Whole branch, which compares complete ordered histories including recorded model thinking. Mode and turn selection are included in the immutable AI comparison dossier and Markdown export. The 2.1.4 per-branch latest-turn correctness remains the default behavior; 2.1.3 Think preference preservation and 2.1.2 Agent Settings/flyout improvements remain in place. The existing Git, downloads, Project Profiles, Workspace Context, Skills Manager, conversation lifecycle, and shared Agent runtime remain in place. The `ChatWindow.html` Agent runtime and `AgentHostBridge` contract remain the foundation for future hosts.
 
 ## Planned release sequence
 

@@ -197,7 +197,7 @@ Deep Research supports editable research plans, bounded search and page budgets,
 
 ### Branches and AI Branch Comparison
 
-Create and switch between conversation branches, rename or delete branches, and compare branch responses. **Compare with AI** opens a separate discussion over an immutable comparison snapshot. It supports follow-up questions, model switching, re-examination of the original branches, copying messages, and Markdown export. The comparison does not modify either branch or change the main chat model.
+Create and switch between conversation branches, rename or delete branches, and compare branch content in two modes. **Single response** (default) compares one question/answer turn from each branch, initially selecting each branch's latest turn; users can independently choose any answered turn in Branch A and Branch B. **Whole branch** compares the complete ordered histories, including prompts, answers, per-message provider/model attribution, available text attachments, and recorded model thinking. **Compare with AI** opens a separate discussion over an immutable snapshot of the selected mode and content. It supports follow-up questions, model switching, re-examination, copying messages, and Markdown export. Large whole-branch dossiers may exceed the selected model's context limit; RunMind displays an approximate estimate rather than silently dropping turns. Comparison does not modify either branch or change the main chat model.
 
 ## Workspace safety and limits
 

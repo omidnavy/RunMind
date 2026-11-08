@@ -4,7 +4,7 @@ RunMind Standalone and the PowerToys Run plugin use the same `ChatWindow.html` A
 
 ### Overlay installation
 
-This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.3 source tree**, including the tested 2.1.1 build correction, 2.1.2 UI changes, and 2.1.3 Think preference fix, preserving all existing files and directories. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
+This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.4 source tree**, preserving all existing files and directories. It includes the previously tested 2.1.1 build correction, 2.1.2 UI changes, 2.1.3 Think preference fix, and 2.1.4 branch-comparison correctness fix. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
 
 ### Build and requirements
 
@@ -33,6 +33,12 @@ A cloned repository is authorized for native Git. To use browser-based file tool
 ### Agent Settings layout and flyouts
 
 Agent Settings is organized into four tabs: **Agent**, **Project**, **Skills**, and **Security**. The redesign changes presentation and navigation only; existing setting controls and their save/apply/approval handlers retain their IDs and behavior. All toolbar flyouts remain attached to their trigger. A tall panel opens below when it fits, flips above only when needed, and otherwise scrolls within the larger side of the trigger rather than centering over and covering the toolbar.
+
+### Branch Comparison
+
+Branch Comparison has two modes. **Single response** is the default: it compares one question/answer turn from each branch, initially selecting each branch's latest turn. The Branch A and Branch B selectors are independent, so branches can have different turn counts and users can explicitly choose earlier turns. An unanswered turn is shown as unanswered; RunMind does not silently substitute an older response, and AI comparison remains disabled until both selected turns have answers.
+
+**Whole branch** displays and sends the complete ordered history of both branches. It includes user prompts, assistant responses, per-message provider/model attribution, available text attachment content, and recorded model thinking in separately labeled expandable sections. The AI dossier and Markdown export retain the selected scope. Large histories may exceed a model's context limit; RunMind shows an approximate token estimate and does not silently omit turns.
 
 ### Agent Skills and Skills Manager
 
