@@ -1,8 +1,8 @@
 # RunMind roadmap
 
-## Current release: 2.1.3
+## Current release: 2.1.4
 
-RunMind 2.1.3 builds on the 2.1.2 UI improvements and preserves each prompt's Think preference when editing/resubmitting, including legacy conversation fallback and draft restoration on cancel. The four-section Agent Settings flyout and trigger-anchored positioning for tall flyouts remain in place. The existing Git, downloads, Project Profiles, Workspace Context, Skills Manager, conversation lifecycle, and shared Agent runtime remain in place. The `ChatWindow.html` Agent runtime and `AgentHostBridge` contract remain the foundation for future hosts.
+RunMind 2.1.4 fixes branch comparison turn selection so each branch contributes its latest completed response to its own latest user prompt, even when branches have different lengths. Comparison cards identify the turn and prompt being compared. It includes the 2.1.3 per-prompt Think preference preservation and 2.1.2 Agent Settings/flyout improvements. The four-section Agent Settings flyout and trigger-anchored positioning for tall flyouts remain in place. The existing Git, downloads, Project Profiles, Workspace Context, Skills Manager, conversation lifecycle, and shared Agent runtime remain in place. The `ChatWindow.html` Agent runtime and `AgentHostBridge` contract remain the foundation for future hosts.
 
 ## Planned release sequence
 

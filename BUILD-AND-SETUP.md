@@ -1,10 +1,10 @@
-## RunMind 2.1.3 — Preserve Think preference when editing prompts
+## RunMind 2.1.4 — Branch comparison uses each branch's latest completed turn
 
 RunMind Standalone and the PowerToys Run plugin use the same `ChatWindow.html` Agent runtime. The runtime owns tool selection, permission checks, approval prompts, Workspace Context, and Agent Skills. The shared `Shared/AgentHostBridge.cs` adapter is limited to named Windows-native capabilities: shared Project Profile storage, Git process execution, global Skills storage/management, and resumable downloads. It does not expose a general command shell.
 
 ### Overlay installation
 
-This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.2 source tree**, including the tested 2.1.1 build correction and 2.1.2 UI changes, preserving all existing files and directories. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
+This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.3 source tree**, including the tested 2.1.1 build correction, 2.1.2 UI changes, and 2.1.3 Think preference fix, preserving all existing files and directories. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
 
 ### Build and requirements
 
@@ -69,3 +69,7 @@ This overlay contains changed files only. Extract it over the complete RunMind 2
 ### Think preference when editing prompts
 
 Each newly sent user message records the Think toggle selected for that prompt. Editing the prompt restores that selection independently of the assistant's effective provider request flag, which can be suppressed by Agent/MCP/Deep Research mode. Cancelling an edit restores the previous unsent draft's Think selection. Older `.runmind` files without this optional field remain supported and use the paired assistant response's request flag/thinking content as a fallback.
+
+### Branch comparison
+
+Branch comparison selects the latest assistant response that follows each branch's own most recent user prompt. Different branch message counts are supported. If the latest prompt in either branch has no answer yet, RunMind explains which branch is incomplete rather than substituting an older response. Each comparison card shows the turn number and prompt preview.

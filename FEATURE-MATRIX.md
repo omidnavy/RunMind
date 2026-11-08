@@ -1,3 +1,10 @@
+## RunMind 2.1.4 — Branch comparison turn selection
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| Branch comparison | Latest completed turn per branch | Each branch compares the assistant response following that branch's own latest user prompt. | **Fixed**; branches can have different message counts. An unanswered latest prompt never falls back to an older response. |
+| Branch comparison | Turn and prompt identification | Each card shows its user-turn number and a short preview of the prompt being answered. | **Implemented**; active branch is synchronized from the live transcript before comparison. |
+
 ## RunMind 2.1.3 — Preserve Think preference when editing prompts
 
 | Composer | Think preference on prompt edit | Each user prompt stores its Think toggle independently from the assistant effective request flag; editing restores it and cancelling restores the prior draft toggle. | **Implemented**; optional message metadata is backwards-compatible with `.runmind` v1/v2. Older messages infer from the paired assistant response. |

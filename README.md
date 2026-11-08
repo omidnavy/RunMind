@@ -90,6 +90,7 @@ RunMind exposes tools to Agent Mode and, where applicable, Deep Research. Tools 
 | `git_reset_hard`, `git_clean`, `git_restore`, `git_delete_branch` | Perform destructive operations; these always require a fresh approval. |
 | `list_agent_skills` | Discover `SKILL.md` metadata in global and selected-project Skill folders. |
 | `load_agent_skill` | Load the selected Skill instructions and explicitly requested references on demand. Scripts are not automatically executed. |
+| Branch comparison | Compare each branch’s latest completed response to its own latest user prompt; different branch lengths are supported. |
 | Project Profiles | Save and reuse project instructions, provider/model connection, safe Agent settings, Skill names, MCP references, and conversation permission policy across both desktop hosts. |
 | Agent Skills Manager | Browse Global and Current Project Skills, inspect descriptions, install a local Skill folder, and remove a selected installation after confirmation. |
 

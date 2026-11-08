@@ -1336,14 +1336,14 @@
           <article class="branch-compare-card">
             <header class="branch-compare-card-head">
               <span class="branch-compare-letter" aria-hidden="true">A</span>
-              <div class="branch-compare-card-title"><strong id="conversationBranchCompareLeftTitle">Current branch</strong><span>Latest assistant response</span></div>
+              <div class="branch-compare-card-title"><strong id="conversationBranchCompareLeftTitle">Current branch</strong><span id="conversationBranchCompareLeftMeta">Latest response to the latest prompt</span></div>
             </header>
             <div class="branch-compare-response-content" id="conversationBranchCompareLeft"></div>
           </article>
           <article class="branch-compare-card">
             <header class="branch-compare-card-head">
               <span class="branch-compare-letter" aria-hidden="true">B</span>
-              <div class="branch-compare-card-title"><strong id="conversationBranchCompareRightTitle">Other branch</strong><span>Latest assistant response</span></div>
+              <div class="branch-compare-card-title"><strong id="conversationBranchCompareRightTitle">Other branch</strong><span id="conversationBranchCompareRightMeta">Latest response to the latest prompt</span></div>
             </header>
             <div class="branch-compare-response-content" id="conversationBranchCompareRight"></div>
           </article>
@@ -3375,13 +3375,36 @@
       renderMessages(false); saveConversationBranches(); renderConversationBranchBar(); updateContextManagerUI();
       showToast('Branch deleted. Returned to the Original conversation.');
     }
+    function latestUserEntry(branch) {
+      const branchMessages = Array.isArray(branch?.messages) ? branch.messages : [];
+      let latest = null;
+      let turnNumber = 0;
+      for (let index = 0; index < branchMessages.length; index++) {
+        if (branchMessages[index]?.role === 'user') {
+          turnNumber++;
+          latest = { message: branchMessages[index], index, turnNumber };
+        }
+      }
+      return latest;
+    }
     function latestAssistantEntry(branch) {
       const branchMessages = Array.isArray(branch?.messages) ? branch.messages : [];
-      for (let index = branchMessages.length - 1; index >= 0; index--) {
+      const latestPrompt = latestUserEntry(branch);
+      if (!latestPrompt) return null;
+      // Only compare an answer that follows this branch's most recent user prompt.
+      // Never fall back to an older answer when the latest turn is unanswered.
+      for (let index = branchMessages.length - 1; index > latestPrompt.index; index--) {
         const message = branchMessages[index];
-        if (message?.role === 'assistant' && String(message.content || '').trim()) return { message, index };
+        if (message?.role === 'assistant' && String(message.content || '').trim()) {
+          return { message, index, prompt: latestPrompt.message, promptIndex: latestPrompt.index, turnNumber: latestPrompt.turnNumber };
+        }
       }
       return null;
+    }
+    function branchComparisonEntryLabel(entry) {
+      const prompt = String(entry?.prompt?.content || '').replace(/\s+/g, ' ').trim();
+      const preview = prompt.length > 88 ? `${prompt.slice(0, 85).trimEnd()}…` : prompt;
+      return `Turn ${entry?.turnNumber || '?'} · Reply to: ${preview || '(empty prompt)'}`;
     }
     function latestUserPromptBefore(branch, beforeIndex) {
       const branchMessages = Array.isArray(branch?.messages) ? branch.messages : [];
@@ -3534,12 +3557,26 @@
       };
     }
     function compareConversationBranches() {
+      if (activeController || messages.some(item => item.pending)) {
+        showToast('Wait for the current response to finish before comparing branches.');
+        return;
+      }
+      // The live transcript is authoritative for the active branch. Sync it before
+      // reading the branch snapshots so the comparison cannot use stale in-memory data.
+      saveActiveConversationBranch();
       const current = conversationBranches.find(item => item.id === activeConversationBranchId);
       const other = conversationBranches.find(item => item.id === conversationBranchCompareSelect.value);
       if (!current || !other || current.id === other.id) return;
       const currentEntry = latestAssistantEntry(current);
       const otherEntry = latestAssistantEntry(other);
-      if (!currentEntry || !otherEntry) { showToast('Both branches need an assistant response before comparison.'); return; }
+      if (!currentEntry || !otherEntry) {
+        const incomplete = !currentEntry ? current : other;
+        const latestPrompt = latestUserEntry(incomplete);
+        showToast(latestPrompt
+          ? `“${incomplete.name}” has no assistant response to its latest prompt yet. Older answers are not substituted.`
+          : `“${incomplete.name}” has no user prompt and assistant response to compare.`);
+        return;
+      }
       if (branchCompareController) cancelBranchComparisonAi('Comparison stopped because the comparison snapshot changed.');
       const dossier = createBranchComparisonDossier(current, currentEntry, other, otherEntry);
       const key = branchComparisonSessionKey(dossier);
@@ -3548,6 +3585,10 @@
       conversationBranchCompareTitle.textContent = `${current.name} ↔ ${other.name}`;
       conversationBranchCompareLeftTitle.textContent = current.name;
       conversationBranchCompareRightTitle.textContent = other.name;
+      const leftMeta = $('#conversationBranchCompareLeftMeta');
+      const rightMeta = $('#conversationBranchCompareRightMeta');
+      if (leftMeta) { leftMeta.textContent = branchComparisonEntryLabel(currentEntry); leftMeta.title = String(currentEntry.prompt?.content || ''); }
+      if (rightMeta) { rightMeta.textContent = branchComparisonEntryLabel(otherEntry); rightMeta.title = String(otherEntry.prompt?.content || ''); }
       conversationBranchCompareLeft.innerHTML = renderMarkdown(dossier.branchA.response || '(No assistant response in this branch.)');
       conversationBranchCompareRight.innerHTML = renderMarkdown(dossier.branchB.response || '(No assistant response in this branch.)');
       populateBranchComparisonModelOptions(currentModelKey());

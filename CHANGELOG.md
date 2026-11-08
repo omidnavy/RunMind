@@ -1,4 +1,20 @@
-## [2.1.3] — Preserve Think preference when editing prompts - hotfix
+## [2.1.4] — Branch comparison uses each branch's latest completed turn
+
+### Fixed
+- Fix branch comparison selecting an older assistant answer when a branch has a newer user prompt that has not received a response yet. Comparison now requires an assistant response after that branch's own latest user message; it never falls back to an answer from an earlier turn.
+- Synchronize the active branch from the live transcript immediately before comparison so the comparison cannot use a stale in-memory branch snapshot.
+- Identify each compared response by its own user-turn number and a preview of the prompt it answers, making the selected turn visible in both comparison cards.
+- Show a branch-specific explanation when either branch has no answer for its latest prompt.
+
+### Compatibility
+- Branches may contain different numbers of messages and turns. Each branch is evaluated independently; message indices are never compared across branches.
+- Existing conversation and branch storage formats are unchanged. No provider, Agent, Think, or conversation persistence behavior is changed.
+
+### Validation
+- Validate differing branch lengths, answered and unanswered latest prompts, trailing user messages, latest-turn pairing, inline JavaScript syntax, project XML, plugin manifest JSON, version alignment, changed-files-only overlay packaging, ZIP integrity, and exact overlay reapplication against RunMind 2.1.3.
+- Windows/.NET compilation and live PowerToys/WebView2 UI testing require the target Windows environment and are not claimed here.
+
+## [2.1.3] — Preserve Think preference when editing prompts
 
 ### Fixed
 - Preserve the user's Think toggle on each user prompt independently of the assistant's effective `thinkRequested` flag. The effective flag can be suppressed by Agent, MCP, or Deep Research modes, even while the user's Think selection remains enabled.
