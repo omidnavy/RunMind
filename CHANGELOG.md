@@ -1,3 +1,18 @@
+## [2.1.3] — Preserve Think preference when editing prompts - hotfix
+
+### Fixed
+- Preserve the user's Think toggle on each user prompt independently of the assistant's effective `thinkRequested` flag. The effective flag can be suppressed by Agent, MCP, or Deep Research modes, even while the user's Think selection remains enabled.
+- Restore that saved per-prompt Think preference when editing and resubmitting the prompt. For older conversations without the new user-message field, infer the choice from the paired assistant response's request flag or stored thinking content.
+- Restore the unsent draft's previous Think toggle when cancelling prompt editing.
+
+### Compatibility
+- Add optional `thinkEnabled` metadata to user messages in temporary branch archives and `.runmind` files. Existing version-1 and version-2 conversation files remain compatible; missing metadata uses the legacy assistant-response fallback.
+- The global Think preference, provider request payload, Agent/MCP/Research behavior, and regeneration behavior are otherwise unchanged.
+
+### Validation
+- Validate inline JavaScript syntax, Think preference capture/edit/cancel/serialization paths, legacy conversation fallback, project XML, plugin manifest JSON, version alignment, changed-files-only packaging, ZIP integrity, and exact overlay reapplication against RunMind 2.1.2.
+- Windows/.NET compilation and live provider tests require the target Windows environment and are not claimed here.
+
 ## [2.1.2] — Agent Settings UX and anchored flyouts
 
 ### Improved

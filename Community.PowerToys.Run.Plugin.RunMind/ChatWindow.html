@@ -2916,7 +2916,9 @@
       return {
         role: message.role === 'user' ? 'user' : 'assistant', content: String(message.content || '').slice(0, forStorage ? 12000 : 20 * 1024 * 1024),
         thinking: String(message.thinking || '').slice(0, forStorage ? 3000 : 20 * 1024 * 1024), thinkingOpen: !!message.thinkingOpen,
-        thinkRequested: !!message.thinkRequested, isContinuation: !!message.isContinuation,
+        thinkRequested: !!message.thinkRequested,
+        ...(typeof message.thinkEnabled === 'boolean' ? { thinkEnabled: message.thinkEnabled } : {}),
+        isContinuation: !!message.isContinuation,
         timestamp: Number(message.timestamp) || Date.now(), provider: String(message.provider || ''), connectionName: String(message.connectionName || '').slice(0, 120), model: String(message.model || '').slice(0, 512),
         error: !!message.error, attachments, metrics: message.metrics && typeof message.metrics === 'object' ? { ...message.metrics } : undefined,
         generationSettings: message.generationSettings && typeof message.generationSettings === 'object' ? { ...message.generationSettings } : undefined
@@ -2927,7 +2929,9 @@
         const clone = cloneBranchMessage(message, false);
         return {
           role: clone.role, content: clone.content, thinking: clone.thinking, thinkingOpen: clone.thinkingOpen,
-          thinkRequested: clone.thinkRequested, generationSettings: clone.generationSettings || null,
+          thinkRequested: clone.thinkRequested,
+          ...(typeof clone.thinkEnabled === 'boolean' ? { thinkEnabled: clone.thinkEnabled } : {}),
+          generationSettings: clone.generationSettings || null,
           isContinuation: clone.isContinuation,
           attachments: clone.attachments.map(file => ({ name: file.name, type: file.type, size: file.size, text: file.text, dataUrl: file.dataUrl })),
           timestamp: new Date(clone.timestamp).toISOString(), provider: clone.provider || null, connectionName: clone.connectionName || null, model: clone.model || null, error: clone.error
@@ -3826,12 +3830,20 @@
       if (action === 'edit') {
         if (message.role !== 'user' || message.isContinuation) return;
         editingMessageIndex = index;
-        draftBeforeEdit = { text: promptInput.value, attachments: pendingAttachments.map(item => ({ ...item })) };
+        draftBeforeEdit = {
+          text: promptInput.value,
+          attachments: pendingAttachments.map(item => ({ ...item })),
+          thinkEnabled: !!thinkToggle.checked
+        };
         promptInput.value = message.content || '';
         pendingAttachments = (message.attachments || []).map(item => ({ ...item }));
         const nextAssistant = messages.slice(index + 1).find(item => item.role === 'assistant');
-        if (nextAssistant && typeof nextAssistant.thinkRequested === 'boolean') thinkToggle.checked = nextAssistant.thinkRequested;
-        syncThinkButton(); renderPendingAttachments(); editModeNotice.hidden = false; autoResizePrompt(); renderMessages(); promptInput.focus();
+        // The prompt stores the user's Think toggle separately from the assistant's
+        // effective request flag. The latter can be false when Agent/MCP/Research
+        // mode suppresses provider thinking, even though the user's toggle was on.
+        if (typeof message.thinkEnabled === 'boolean') thinkToggle.checked = message.thinkEnabled;
+        else if (nextAssistant) thinkToggle.checked = nextAssistant.thinkRequested === true || !!String(nextAssistant.thinking || '').trim();
+        syncThinkButton(); savePreferences(); renderPendingAttachments(); editModeNotice.hidden = false; autoResizePrompt(); renderMessages(); promptInput.focus();
         return;
       }
       if (message.role !== 'assistant') return;
@@ -3874,6 +3886,9 @@
       if (editingMessageIndex !== null && draftBeforeEdit) {
         promptInput.value = draftBeforeEdit.text;
         pendingAttachments = draftBeforeEdit.attachments.map(item => ({ ...item }));
+        if (typeof draftBeforeEdit.thinkEnabled === 'boolean') thinkToggle.checked = draftBeforeEdit.thinkEnabled;
+        syncThinkButton();
+        savePreferences();
         renderPendingAttachments();
         autoResizePrompt();
       }
@@ -11425,7 +11440,7 @@ ${toolActivityDetail}`;
       const managedHistoryIsComplete = contextPlanForRequest.recentStart === 0 && contextPlanForRequest.omittedCount === 0 && !contextSummary;
       const previousResponseId = selection.provider === 'lmstudio' && managedHistoryIsComplete && previousAssistant?.provider === 'lmstudio' && previousAssistant?.model === selection.model
         ? previousAssistant.providerResponseId || null : null;
-      const userMessage = { role: 'user', content, attachments, timestamp: startedAt, provider: selection.provider, connectionName: selection.serverName || selection.connection?.name || '', model: selection.model, isContinuation: isContinuationRequest };
+      const userMessage = { role: 'user', content, attachments, timestamp: startedAt, provider: selection.provider, connectionName: selection.serverName || selection.connection?.name || '', model: selection.model, thinkEnabled: thinkForRequest, isContinuation: isContinuationRequest };
       nextMessageIsContinuation = false;
       messages.push(userMessage);
       const assistantMessage = { role: 'assistant', content: '', thinking: '', thinkingOpen: defaultThinkingOpen, thinkRequested: thinkForRequest && !agentModeEnabled && !mcpModeEnabled && !deepResearchEnabled, generationSettings: settingsForRequest, timestamp: startedAt, provider: selection.provider, connectionName: selection.serverName || selection.connection?.name || '', model: selection.model, pending: true, metrics: { startedAt, lastActivityAt: startedAt, elapsedMs: 0, timeToFirstTokenMs: null, tokenCount: null, tokensPerSecond: null, approximateRate: false } };
@@ -11809,7 +11824,7 @@ ${toolActivityDetail}`;
         }) : [];
         if (attachments.reduce((total, file) => total + file.size, 0) > ATTACHMENT_LIMITS.maxTotalBytes) throw new Error(`Attachments in message ${index + 1} exceed the combined 25 MB limit.`);
         const parsedTime = Date.parse(message.timestamp || '');
-        return { role: message.role, content: message.content.slice(0, 20 * 1024 * 1024), thinking: typeof message.thinking === 'string' ? message.thinking.slice(0, 20 * 1024 * 1024) : '', thinkingOpen: typeof message.thinkingOpen === 'boolean' ? message.thinkingOpen : (sessionData.session?.defaultThinkingOpen ?? true), thinkRequested: !!message.thinkRequested, generationSettings: message.generationSettings && typeof message.generationSettings === 'object' ? message.generationSettings : null, isContinuation: !!message.isContinuation, attachments, timestamp: Number.isFinite(parsedTime) ? parsedTime : Date.now(), provider: ['ollama', 'lmstudio'].includes(message.provider) ? message.provider : null, connectionName: typeof message.connectionName === 'string' ? message.connectionName.slice(0, 120) : null, model: typeof message.model === 'string' ? message.model.slice(0, 512) : null, error: !!message.error };
+        return { role: message.role, content: message.content.slice(0, 20 * 1024 * 1024), thinking: typeof message.thinking === 'string' ? message.thinking.slice(0, 20 * 1024 * 1024) : '', thinkingOpen: typeof message.thinkingOpen === 'boolean' ? message.thinkingOpen : (sessionData.session?.defaultThinkingOpen ?? true), thinkRequested: !!message.thinkRequested, ...(typeof message.thinkEnabled === 'boolean' ? { thinkEnabled: message.thinkEnabled } : {}), generationSettings: message.generationSettings && typeof message.generationSettings === 'object' ? message.generationSettings : null, isContinuation: !!message.isContinuation, attachments, timestamp: Number.isFinite(parsedTime) ? parsedTime : Date.now(), provider: ['ollama', 'lmstudio'].includes(message.provider) ? message.provider : null, connectionName: typeof message.connectionName === 'string' ? message.connectionName.slice(0, 120) : null, model: typeof message.model === 'string' ? message.model.slice(0, 512) : null, error: !!message.error };
       });
       return clean;
     }

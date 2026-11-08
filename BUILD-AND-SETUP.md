@@ -1,10 +1,10 @@
-## RunMind 2.1.2 — Agent Settings UX and anchored flyouts
+## RunMind 2.1.3 — Preserve Think preference when editing prompts
 
 RunMind Standalone and the PowerToys Run plugin use the same `ChatWindow.html` Agent runtime. The runtime owns tool selection, permission checks, approval prompts, Workspace Context, and Agent Skills. The shared `Shared/AgentHostBridge.cs` adapter is limited to named Windows-native capabilities: shared Project Profile storage, Git process execution, global Skills storage/management, and resumable downloads. It does not expose a general command shell.
 
 ### Overlay installation
 
-This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.1 source tree**, including the 2.1.1 build correction you tested, preserving all existing files and directories. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
+This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.2 source tree**, including the tested 2.1.1 build correction and 2.1.2 UI changes, preserving all existing files and directories. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
 
 ### Build and requirements
 
@@ -65,3 +65,7 @@ The overlay is validated against the reconstructed 2.1.1 source tree (including 
 PowerToys Run now exposes separate **Model discovery timeout** and **Provider connection timeout** settings. Their defaults remain 8 and 15 seconds, matching the previous hard-coded values. Both accept 1–300 seconds; missing or invalid saved values fall back to the defaults. Model discovery applies to the provider model-list request and response-body read. Provider connection applies to the initial generation request through its first response headers. The existing **Request timeout** remains the overall inline generation-request limit. These settings affect the PowerToys Run plugin only, not standalone chat.
 
 This overlay contains changed files only. Extract it over the complete RunMind 2.0.8 source tree, retaining excluded resources such as `lib`, `assets`, `Vendor`, `OCR`, and `screenshots`, then build on Windows with `Build-Release-x64.bat` using the .NET 10 SDK and the PowerToys reference assemblies.
+
+### Think preference when editing prompts
+
+Each newly sent user message records the Think toggle selected for that prompt. Editing the prompt restores that selection independently of the assistant's effective provider request flag, which can be suppressed by Agent/MCP/Deep Research mode. Cancelling an edit restores the previous unsent draft's Think selection. Older `.runmind` files without this optional field remain supported and use the paired assistant response's request flag/thinking content as a fallback.

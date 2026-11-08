@@ -1,8 +1,8 @@
 # RunMind roadmap
 
-## Current release: 2.1.2
+## Current release: 2.1.3
 
-RunMind 2.1.2 builds on the 2.1.1 project-aware Agent with a redesigned four-section Agent Settings flyout and trigger-anchored positioning for tall flyouts. The existing Git, downloads, Project Profiles, Workspace Context, Skills Manager, conversation lifecycle, and shared Agent runtime remain in place. The `ChatWindow.html` Agent runtime and `AgentHostBridge` contract remain the foundation for future hosts.
+RunMind 2.1.3 builds on the 2.1.2 UI improvements and preserves each prompt's Think preference when editing/resubmitting, including legacy conversation fallback and draft restoration on cancel. The four-section Agent Settings flyout and trigger-anchored positioning for tall flyouts remain in place. The existing Git, downloads, Project Profiles, Workspace Context, Skills Manager, conversation lifecycle, and shared Agent runtime remain in place. The `ChatWindow.html` Agent runtime and `AgentHostBridge` contract remain the foundation for future hosts.
 
 ## Planned release sequence
 

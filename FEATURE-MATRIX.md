@@ -1,3 +1,7 @@
+## RunMind 2.1.3 — Preserve Think preference when editing prompts
+
+| Composer | Think preference on prompt edit | Each user prompt stores its Think toggle independently from the assistant effective request flag; editing restores it and cancelling restores the prior draft toggle. | **Implemented**; optional message metadata is backwards-compatible with `.runmind` v1/v2. Older messages infer from the paired assistant response. |
+
 ## RunMind 2.1.2 — Agent Settings UX and anchored flyouts
 
 | Area | Feature | Current behavior | Status / limits |
