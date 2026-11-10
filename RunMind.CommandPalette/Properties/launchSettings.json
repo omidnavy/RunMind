@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "RunMind.CommandPalette (Package)": {
+      "commandName": "MsixPackage",
+      "nativeDebugging": false
+    }
+  }
+}

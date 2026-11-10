@@ -4,10 +4,11 @@
 
 ![Screenshot](screenshots/Screenshot-1.png)
 
-RunMind is available in two forms:
+RunMind is available through three Windows entry points:
 
 - **Standalone Windows app** — a full chat window that can be launched independently, with support for multiple windows.
 - **PowerToys Run plugin** — start a RunMind conversation directly from PowerToys Run using `llm <prompt>` or search for RunMind.
+- **PowerToys Command Palette extension** — an independent host with a branded **RunMind** inline fallback, **Open chat with empty context**, and an extension settings page for the shared provider/model configuration. The fallback streams local model answers directly into a Command Palette conversation page and supports follow-up turns. It starts its own chat process from the packaged Command Palette executable and hosts the canonical shared chat UI; it does not launch or require the Standalone executable. Inline settings are shared with PowerToys Run. The helper package is hidden from Start and Windows Search because it is a COM host, not a separately launchable app. `Build-Release-x64.bat` builds all three Release x64 hosts and creates/signs the Command Palette MSIX without installing it; `Install-RunMind-CommandPalette.bat` separately installs or uninstalls the already-built package.
 
 ## What you can do with RunMind
 
@@ -213,15 +214,16 @@ Some generation formats have intentionally focused scope: DOCX supports a bounde
 ## Requirements
 
 - Windows 11 x64 (build 22621 or later). An ARM64 build is not currently provided.
-- Microsoft PowerToys is required only for the PowerToys Run plugin.
+- Microsoft PowerToys is required for the PowerToys Run plugin and Command Palette extension; the standalone app does not require PowerToys.
 - .NET 10 Desktop Runtime (x64) for framework-dependent standalone builds.
+- The .NET 10 SDK to build the Command Palette extension. Its pinned Windows SDK/MSIX build tools are restored through NuGet. The first local MSIX installation requests administrator approval to trust the development signing certificate.
 - Ollama, LM Studio, or another supported model server.
 - Git for Windows on `PATH` for native Git tools.
 - The Microsoft Edge WebView2 Runtime. RunMind checks for it at startup and, if missing, downloads Microsoft's Evergreen bootstrapper and installs the runtime for the current Windows user. An internet connection is needed for that one-time setup.
 
 ## Build from source
 
-Run `Build-Release-x64.bat` from the repository root. The build environment requires the .NET 10 SDK. PowerToys reference assemblies are included under `lib\x64`:
+Run `Build-Release-x64.bat` from the repository root to prepare runtime resources, clean/build all three hosts in Release x64 mode, and package/sign the Command Palette MSIX. It does not install anything. The MSIX and its public signing certificate are written to `Release\CommandPalette\x64`. Use `Install-RunMind-CommandPalette.bat` to install that prebuilt package; it does not need the .NET SDK or rebuild the project. Use `Install-RunMind-CommandPalette.bat uninstall` to remove it. The release build environment requires the .NET 10 SDK. PowerToys reference assemblies are included under `lib\x64`:
 
 - `PowerToys.Common.UI.dll`
 - `PowerToys.ManagedCommon.dll`
@@ -248,6 +250,12 @@ See [BUILD-AND-SETUP.md](BUILD-AND-SETUP.md) for detailed build and deployment i
 
 Launch `RunMind.exe` from the standalone build output. Each launch opens an independent chat window; multiple standalone windows can run alongside PowerToys-hosted chats.
 
+### PowerToys Command Palette extension
+
+The extension is installed as a signed MSIX package by `Install-RunMind-CommandPalette.bat`. On first installation, Windows requests administrator approval to trust the public certificate whose publisher matches the package. This trust step does not enable Developer Mode; Windows 10 version 2004 and later and Windows 11 enable sideloading by default unless a policy disables it. After installation, run Command Palette's **Reload Command Palette extensions** command; fully restart PowerToys if the extension list does not refresh. The extension provides a branded **RunMind** fallback and **Open chat with empty context**. Inline model configuration is available from Command Palette's Installed Extensions settings for RunMind; there is deliberately no searchable **Configure RunMind** command.
+
+Command Palette starts a chat process from its own packaged executable and hosts the canonical `Shared/ChatWindow.html`, `Shared/ArtifactTools.js`, and shared native bridge directly. It does not require the Standalone executable or a configured path to `RunMind.exe`. The branded **RunMind** fallback accepts a plain natural-language query or a `RunMind <question>` prefix. Selecting the fallback opens a Command Palette content page; model inference starts only after selection, streams the local model's answer, and accepts follow-up questions. The page's **Open chat with context** action transfers the complete ordered inline transcript—including every completed user/assistant turn—into the Command Palette-owned chat window. If generation is still running, it transfers the current question without presenting a partial answer as complete. The destination restores the transcript as its real conversation state, so follow-up requests retain the prior context. The package does not create a Start-menu or Windows Search entry because its executable is a COM host, not a user-launchable app.
+
 ## Connect your local model server
 
 The WebView2 chat page uses the origin `https://localhost`. The model server must allow requests from that origin:
@@ -260,7 +268,7 @@ The WebView2 chat page uses the origin `https://localhost`. The model server mus
 
 RunMind saves resumable conversations as `.runmind` files. When opening one, choose **Open in this window** to replace the current conversation or **Open in new window** to keep the current chat and open another window. The saved filename becomes the conversation title.
 
-Standalone and PowerToys use separate WebView2 profiles. Their settings, credentials, Agent task history, and Deep Research checkpoints are therefore separate. API keys and MCP tokens are stored in the local WebView2 profile's `localStorage`; they are not encrypted by RunMind. Protect access to your Windows account and profile accordingly.
+Standalone and PowerToys use separate WebView2 profiles. Their chat settings, credentials, Agent task history, and Deep Research checkpoints are therefore separate. PowerToys Run and Command Palette inline-answer configuration is separate from full chat preferences, but both inline hosts read and write the same `%LOCALAPPDATA%\RunMind\Shared\inline-model-settings.json` file. API keys and MCP tokens are stored in the local WebView2 profile's `localStorage`; they are not encrypted by RunMind. Protect access to your Windows account and profile accordingly.
 
 ## Documentation
 

@@ -61,7 +61,7 @@
 
 ### 2.1.x not included
 
-Project indexing, semantic search, reusable workflows, Standalone Launcher, and PowerToys Command Palette UI remain future releases. The shared Agent host contract is the integration point for those later hosts; this release does not ship their UI.
+Project indexing, semantic search, reusable workflows, and the Standalone Launcher remain future-release work. The PowerToys Command Palette host integration is tracked separately in the 2.2.0 development section below; it hosts the canonical shared chat UI in its own process rather than launching the Standalone executable. Command Palette now has a native inline conversation fallback with provider/model settings shared with PowerToys Run.
 
 ## RunMind 2.0.9 — configurable inline timeouts
 
@@ -385,9 +385,15 @@ This document describes the **current RunMind 2.0.0 feature set** across its Pow
 
 | Area | Feature | Current behavior | Status / limits |
 |---|---|---|---|
+| Hosts | PowerToys Command Palette extension | Provides a branded **RunMind** free-text fallback, **Open chat with empty context**, and a native extension settings page. There is no top-level Configure command or manual answer-paste context form. The COM host is hidden from Start/Search with `AppListEntry="none"`. | **Implemented in source; target-machine rebuild/reload validation pending** |
+| Launch | Command Palette chat process | Starts a separate chat process from the packaged Command Palette executable; the chat process remains independent of the COM extension lifecycle. | **Implemented in source; end-to-end Windows validation pending** |
+| Launch | Command Palette context handoff | **Open chat with context** serializes the full ordered inline transcript into the RunMind v2 conversation format; the Command Palette-owned chat restores it through the normal session loader. A still-running turn transfers its user prompt without an unfinished assistant response. | **Implemented in source; target-machine continuation test pending** |
+| Query | Command Palette fallback query | A branded **RunMind** fallback accepts natural-language queries and `RunMind <question>`, opens a Command Palette content page, streams the local model answer, and accepts follow-up turns. Its pinned Dock command resolves to a dedicated persistent content-page instance, separate from the active search fallback; both pages expose **Start fresh** to clear their own history. | **Implemented in source; live provider testing pending** |
+| Settings | Command Palette inline model settings | Installed Extensions settings page provides Ollama/LM Studio selection, live model discovery, arbitrary custom model IDs, a shared provider-neutral thinking/reasoning selector, a Command Palette-specific launcher prompt, generation controls, and provider-specific settings. The PowerToys Run inline system prompt remains separate. It does not open the chat window. | **Implemented in source; live provider testing pending** |
+| Settings | Shared inline model configuration | PowerToys Run and Command Palette use `%LOCALAPPDATA%\RunMind\Shared\inline-model-settings.json`; both hosts read and write the same inline provider/model settings. | **Implemented in source; target-machine synchronization validation pending** |
 | Hosts | PowerToys Run plugin | Adds RunMind as a PowerToys Run plugin and launches the shared chat experience. | **Implemented** |
 | Hosts | Standalone desktop app | `RunMind.exe` launches the same shared chat UI in a native WPF/WebView2 window. | **Implemented** |
-| Hosts | Shared application | Both hosts use the same `ChatWindow.html` application and browser-side feature implementation. | **Implemented** |
+| Hosts | Shared application | Standalone, PowerToys Run, and Command Palette link the canonical `Shared/ChatWindow.html` and `Shared/ArtifactTools.js`; all three compile the shared native host bridge and window helpers. PowerToys Run and Command Palette also share the inline provider/model/generation settings file. Full chat preferences remain isolated per WebView2 profile. | **Implemented in source; target-machine settings interaction validation pending** |
 | Windows | Multiple standalone windows | Each normal launch creates a separate RunMind process and chat window. Multiple PowerToys chat windows can also be open. | **Implemented**; standalone instances use the standalone WebView2 profile. |
 | Windows | Window identity and task isolation | Each chat window receives a native-generated unique ID used to scope recent Agent Tasks and research checkpoints. | **Implemented** |
 | Windows | Native title bar theme | Standalone title bar follows the Windows light/dark app preference and responds to Windows theme-change notifications. | **Implemented**; visual behavior should be verified on Windows. |
@@ -593,9 +599,9 @@ This document describes the **current RunMind 2.0.0 feature set** across its Pow
 
 | Area | Current behavior | Status / limits |
 |---|---|---|
-| Target framework | Standalone and PowerToys projects target `net10.0-windows10.0.22621.0`. | **Implemented**; keep aligned with the current PowerToys reference assemblies. |
+| Target framework | Standalone, PowerToys Run, and Command Palette projects target `net10.0-windows10.0.22621.0`. | **Implemented**; the Command Palette package currently targets x64. |
 | Architecture | Current one-click build script produces the Windows x64 release. | **Implemented** |
-| Build script | `Build-Release-x64.bat` cleans and builds the PowerToys plugin and standalone app. | **Included in source** |
+| Build script | `Build-Release-x64.bat` cleans and builds all three hosts in Release x64; `Install-RunMind-CommandPalette.bat` separately packages/signs/installs or uninstalls the extension. | **Included in source**; Windows build and deployment must run on the target system. |
 | PowerToys references | The source package includes the five PowerToys/Wox reference assemblies under `lib\x64`. | **Included**; assemblies must remain at the relative paths expected by the projects. |
 | .NET | Requires the .NET 10 SDK to build. Framework-dependent standalone deployments require the matching .NET 10 Desktop Runtime. | **External prerequisite**; WebView2 provisioning does not install .NET. |
 | WebView2 | Both hosts check for the Microsoft Edge WebView2 Evergreen Runtime and invoke Microsoft's per-user bootstrapper when missing. | **Implemented**; first install requires internet; the browser runtime is not bundled inside RunMind. |

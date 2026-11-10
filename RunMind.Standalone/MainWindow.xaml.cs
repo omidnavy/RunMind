@@ -26,13 +26,42 @@ public partial class MainWindow : Window
     private string _userDataFolder = "(not resolved)";
     private readonly string? _initialConversationJson;
     private readonly string? _initialConversationFileName;
+    private readonly string _hostProfileName;
+    private readonly string? _initialPrompt;
+    private readonly string? _initialResponse;
+    private readonly bool _initialIsError;
+    private string? _autoSendPromptText;
     private bool _freshConversationForNextNavigation;
     private string? _freshConversationProvider;
     private string? _freshConversationModel;
     private string? _freshConversationConnectionId;
     private bool? _freshConversationThinkEnabled;
 
-    public MainWindow() : this(null, null, false, null, null, null, null) { }
+    public MainWindow() : this(null) { }
+
+    public MainWindow(string? autoSendPromptText)
+        : this(null, null, false, null, null, null, null, autoSendPromptText) { }
+
+    public MainWindow(string? autoSendPromptText, string hostProfileName)
+        : this(null, null, false, null, null, null, null, autoSendPromptText,
+            string.IsNullOrWhiteSpace(hostProfileName) ? "Standalone" : hostProfileName) { }
+
+    /// <summary>
+    /// Creates a chat window for an independent host such as PowerToys Command Palette.
+    /// Prompt/response are displayed as context; they are not submitted a second time.
+    /// </summary>
+    public MainWindow(string? initialPrompt, string? initialResponse, bool initialIsError, string hostProfileName)
+        : this(null, null, false, null, null, null, null, null,
+            string.IsNullOrWhiteSpace(hostProfileName) ? "Standalone" : hostProfileName,
+            initialPrompt, initialResponse, initialIsError) { }
+
+    /// <summary>
+    /// Creates a chat window initialized from a complete RunMind conversation payload.
+    /// The normal session loader restores the transcript as real conversation state.
+    /// </summary>
+    public MainWindow(string initialConversationJson, string? initialConversationFileName, string hostProfileName)
+        : this(initialConversationJson, initialConversationFileName, false, null, null, null, null, null,
+            string.IsNullOrWhiteSpace(hostProfileName) ? "Standalone" : hostProfileName) { }
 
     private MainWindow(
         string? initialConversationJson,
@@ -41,10 +70,20 @@ public partial class MainWindow : Window
         string? initialProvider,
         string? initialModel,
         string? initialConnectionId,
-        bool? initialThinkEnabled)
+        bool? initialThinkEnabled,
+        string? autoSendPromptText,
+        string hostProfileName = "Standalone",
+        string? initialPrompt = null,
+        string? initialResponse = null,
+        bool initialIsError = false)
     {
         _initialConversationJson = initialConversationJson;
         _initialConversationFileName = initialConversationFileName;
+        _hostProfileName = hostProfileName;
+        _initialPrompt = initialPrompt;
+        _initialResponse = initialResponse;
+        _initialIsError = initialIsError;
+        _autoSendPromptText = autoSendPromptText;
         _freshConversationForNextNavigation = startFreshConversation;
         _freshConversationProvider = initialProvider;
         _freshConversationModel = initialModel;
@@ -75,7 +114,9 @@ public partial class MainWindow : Window
             // Each host owns a separate WebView2 profile. This prevents one host's
             // browser session from blocking the other host during concurrent startup.
             _initializationStage = "Create standalone WebView2 user-data folder";
-            var profile = Path.Combine(localAppData, "LocalLLM", "Standalone", "WebView2");
+            var profile = string.Equals(_hostProfileName, "Standalone", StringComparison.OrdinalIgnoreCase)
+                ? Path.Combine(localAppData, "LocalLLM", "Standalone", "WebView2")
+                : Path.Combine(localAppData, "RunMind", _hostProfileName, "WebView2");
             _userDataFolder = profile;
             Directory.CreateDirectory(profile);
             _initializationStage = "Ensure Microsoft Edge WebView2 Runtime";
@@ -157,6 +198,10 @@ public partial class MainWindow : Window
                         initialModel = freshConversation ? _freshConversationModel : null,
                         initialConnectionId = freshConversation ? _freshConversationConnectionId : null,
                         initialThink = freshConversation ? _freshConversationThinkEnabled : null,
+                        autoSendPromptText = _autoSendPromptText,
+                        prompt = freshConversation ? null : _initialPrompt,
+                        response = freshConversation ? null : _initialResponse,
+                        isError = !freshConversation && _initialIsError,
                         initialConversation,
                         initialConversationFileName = freshConversation ? null : _initialConversationFileName,
                     });
@@ -164,6 +209,7 @@ public partial class MainWindow : Window
                     _freshConversationModel = null;
                     _freshConversationConnectionId = null;
                     _freshConversationThinkEnabled = null;
+                    _autoSendPromptText = null;
                     await core.ExecuteScriptAsync($"window.initializeRunMind({bootstrap});");
                 }
                 catch (Exception ex)
@@ -250,7 +296,7 @@ public partial class MainWindow : Window
 
             if (messageType == "runmind.newConversationInNewWindow")
             {
-                var newWindow = new MainWindow(null, null, true, provider, model, connectionId, thinkEnabled);
+                var newWindow = new MainWindow(null, null, true, provider, model, connectionId, thinkEnabled, null);
                 newWindow.Show();
                 newWindow.Activate();
                 return;
@@ -269,7 +315,7 @@ public partial class MainWindow : Window
             if (fileName.Length > 255) fileName = fileName[..255];
             if (!fileName.EndsWith(".runmind", StringComparison.OrdinalIgnoreCase)) return;
 
-            var child = new MainWindow(conversation.GetRawText(), fileName, false, null, null, null, null);
+            var child = new MainWindow(conversation.GetRawText(), fileName, false, null, null, null, null, null);
             child.Show();
             child.Activate();
         }

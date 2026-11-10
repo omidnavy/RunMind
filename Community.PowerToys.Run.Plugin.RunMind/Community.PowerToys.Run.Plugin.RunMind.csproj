@@ -8,7 +8,7 @@
 	<UseWindowsForms>true</UseWindowsForms>
 	<RootNamespace>Community.PowerToys.Run.Plugin.RunMind</RootNamespace>
 	<AssemblyName>Community.PowerToys.Run.Plugin.RunMind</AssemblyName>
-	<Version>2.1.6</Version>
+	<Version>2.2.0</Version>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
@@ -23,6 +23,7 @@
     <Compile Include="..\Shared\WindowThemeSynchronizer.cs" Link="Shared\WindowThemeSynchronizer.cs" />
     <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
     <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
+    <Compile Include="..\Shared\InlineModelSettings.cs" Link="Shared\InlineModelSettings.cs" />
     <Reference Include="PowerToys.Common.UI">
       <HintPath>..\lib\x64\PowerToys.Common.UI.dll</HintPath>
     </Reference>
@@ -43,12 +44,14 @@
     <None Update="plugin.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="ChatWindow.html">
+    <Content Include="..\Shared\ChatWindow.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="ArtifactTools.js">
+      <Link>ChatWindow.html</Link>
+    </Content>
+    <Content Include="..\Shared\ArtifactTools.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+      <Link>ArtifactTools.js</Link>
+    </Content>
     <None Update="Images\*.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

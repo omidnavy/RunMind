@@ -1,10 +1,12 @@
 ## RunMind 2.1.6 — Reliability, bounded processing, and workspace safety
 
-RunMind Standalone and the PowerToys Run plugin use the same `ChatWindow.html` Agent runtime. The runtime owns tool selection, permission checks, approval prompts, Workspace Context, and Agent Skills. The shared `Shared/AgentHostBridge.cs` adapter is limited to named Windows-native capabilities: shared Project Profile storage, Git process execution, global Skills storage/management, and resumable downloads. It does not expose a general command shell.
+All three hosts—Standalone, PowerToys Run, and PowerToys Command Palette—link the same canonical `Shared/ChatWindow.html` Agent runtime and `Shared/ArtifactTools.js` helpers. Each host deploys the files beside its own chat window and uses the shared native `Shared/AgentHostBridge.cs` implementation for supported Windows capabilities. Command Palette runs its own chat process from its packaged extension executable; it does not launch or depend on the Standalone executable. The hosts use separate WebView2 profiles to avoid simultaneous profile locks. Appearance preferences are shared through the native preference file. Inline model settings are shared by the PowerToys Run and Command Palette hosts through `%LOCALAPPDATA%\RunMind\Shared\inline-model-settings.json`; full chat preferences and browser-backed conversation data remain local to each WebView2 profile.
+
+There is no `AgentHostAdapter.js` in this source snapshot. The existing native adapter is `Shared/AgentHostBridge.cs`; JavaScript tool definitions and orchestration remain in `Shared/ChatWindow.html`. No speculative adapter file was added.
 
 ### Overlay installation
 
-This release ZIP is a changed-files-only overlay. Extract it over the **complete RunMind 2.1.5 source tree**, preserving all existing files and directories. It contains only the files changed for 2.1.6; all earlier release fixes must already be present in the 2.1.5 baseline. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
+The historical **2.1.6 release ZIP** was a changed-files-only overlay. It was applied over the **complete RunMind 2.1.5 source tree**, preserving all existing files and directories. It contained only the files changed for 2.1.6; all earlier release fixes had to be present in the 2.1.5 baseline. Do not replace the source tree with the overlay ZIP. The supplied source archive does not contain every build-time resource referenced by the project; retain/provide the original `lib`, `Assets`, `Vendor`, `OCR`, and `screenshots` directories from the full project checkout. The existing `Shared/NativePageReader.cs` remains unchanged and its integration in both hosts is retained.
 
 ### 2.1.6 reliability and processing limits
 
@@ -14,11 +16,43 @@ The shared ChatWindow runtime separates its workspace and conversation IndexedDB
 
 - Build on Windows with the .NET 10 SDK.
 - Retain the PowerToys reference assemblies under `lib\x64` for the PowerToys plugin project.
-- Retain the linked `Assets`, `Vendor`, and `OCR` resources used by the two host projects.
+- The source ZIP includes the `Assets`, `lib\x64`, and `screenshots` folders. Pinned PDF.js, Tesseract.js, and English/Persian OCR model resources are generated under `Vendor` and `OCR\tessdata` by `Prepare-RunMind-OCR.ps1` on the first build; that initial preparation requires internet access. Once those generated files are present, subsequent builds can proceed offline.
 - Install Git for Windows and ensure `git.exe` is available on `PATH` to use native Git tools.
-- Build both projects using the repository's `Build-Release-x64.bat` script. The plugin also requires the matching PowerToys environment for deployment and runtime testing.
+- Build the PowerToys plugin, Command Palette extension project, and Standalone app using `Build-Release-x64.bat`. Package/install or uninstall the Command Palette extension separately with `Install-RunMind-CommandPalette.bat`. The PowerToys plugin also requires the matching PowerToys environment for deployment and runtime testing.
 
-### Project Profiles and Workspace Context
+#
+## RunMind 2.2.0 source snapshot
+
+The supplied 2.2.0 ZIP is a full source-project snapshot, not a changed-files-only overlay. It includes the application projects, shared sources, brand assets, PowerToys reference assemblies under `lib\x64`, screenshots, build/package/install scripts, and documentation. The generated PDF/OCR runtime resources are intentionally not prebundled: `Prepare-RunMind-OCR.ps1` downloads the pinned package versions and language models into `Vendor` and `OCR\tessdata` during the release build. The integration currently targets Windows x64. `Build-Release-x64.bat` is the single release entry point: it restores the solution including the `win-x64` runtime pack, cleans and builds Standalone, the PowerToys Run plugin, and the Command Palette extension, then creates and signs the Command Palette MSIX. It opts out of .NET CLI telemetry for all `dotnet` processes started by the script and suppresses first-run/logo output. It does not install any application. `Install-RunMind-CommandPalette.bat` only trusts the public signing certificate when needed and installs the already-built MSIX; it does not restore packages, run OCR preparation, compile, or package anything.
+
+## PowerToys Command Palette extension (2.2.0)
+
+`RunMind.CommandPalette` is an x64 MSIX-packaged WinRT COM extension. Its package manifest registers an out-of-process COM server and the `com.microsoft.commandpalette` app extension. PowerToys discovers the extension through the Windows package catalog; the COM class ID in the package manifest must match the extension's `[Guid]` and the `CreateInstance` class ID.
+
+### Build and install without Visual Studio
+
+Install the .NET 10 SDK and PowerToys with Command Palette enabled. The Command Palette project restores its pinned Windows SDK/MSIX build tools through NuGet; a separate Visual Studio deployment step is not required. From the repository root:
+
+- `Build-Release-x64.bat` — prepare pinned OCR assets, clean and build the full Release x64 solution (all three hosts), then build and sign the Command Palette MSIX. This is the only build/release entry point.
+- `Build-Release-x64.bat build` — same as the default release build.
+- `Install-RunMind-CommandPalette.bat` — install the prebuilt `Release\CommandPalette\x64\RunMind.CommandPalette.msix`. This script does not invoke the .NET SDK or rebuild any project.
+- `Install-RunMind-CommandPalette.bat uninstall` — remove the current user's RunMind Command Palette package.
+
+The release build creates or reuses a self-signed code-signing certificate in the current user's Personal certificate store. Its subject matches the package publisher, `CN=Omid Navy`, and the release output includes only its public `.cer` file alongside the MSIX. The private key stays in the current user's certificate store; no `.pfx` file or password is written into the repository or release output. On first install, Windows requests administrator approval once to trust that public certificate in the Local Machine **Trusted People** store. The certificate is retained after uninstall so later local releases do not need a new trust operation. This self-signed certificate is intended for this machine or controlled test devices, not public distribution.
+
+`Build-RunMind-CommandPalette.ps1`, called by the main release script, creates the `.msix`, validates its package identity, Command Palette app-extension declaration, COM class ID, assets, and `Public` folder, and writes the signed package plus public `.cer` to `Release\CommandPalette\x64`. The deployment script only verifies the package signature and publisher, establishes certificate trust if needed, and installs the prebuilt package with `Add-AppxPackage -Path`. Do not use `Add-AppxPackage -Register` for this normal workflow: that registers a loose development layout rather than installing the packaged app.
+
+After installation, open PowerToys Command Palette and run **Reload Command Palette extensions**. Then search for **RunMind** or **Open chat with empty context**. To configure the inline model, open Command Palette's Installed Extensions settings and select RunMind. There is intentionally no top-level **Configure RunMind** command; it previously opened the chat window instead of a real extension settings page. If the extension is still not listed, fully exit and restart PowerToys before investigating its extension logs.
+
+The package manifest sets `AppListEntry="none"` so the COM host does not appear in Start or Windows Search. Keep the MSIX package installed: it registers the COM server and app extension that PowerToys needs. It remains visible in Windows Installed apps so it can be uninstalled. PowerToys starts the executable through the registered COM server. If the extension still fails to load, inspect `%LOCALAPPDATA%\RunMind\CommandPalette\Logs\com-server.log`. The log identifies whether Windows launched the process and which COM-server initialization stage completed. A missing log means the activation did not reach `Main`; a log ending before `ComServer.Start() completed` points to startup/registration, while a completed startup followed by a provider error points to extension-provider initialization.
+
+The Command Palette host offers a branded **RunMind** fallback and **Open chat with empty context**. The inline fallback and pinned Dock page each keep independent history and provide **Start fresh** to clear that page without opening the full chat app. Type a natural-language query (or `RunMind <question>`) and select the **RunMind** fallback to open an inline conversation page inside Command Palette. The configured local model starts generating only after selection and returns the answer directly in that page; output streams into the page, and follow-up questions remain in the same conversation. **Open chat with context** transfers the complete ordered inline transcript to the independent Command Palette chat window. If generation is still running, the pending user question is transferred without an unfinished assistant response. The destination restores the transcript as the active conversation, so follow-up requests retain the inline history. No answer copying or manual context pasting is required. The Installed Extensions → RunMind settings page configures Ollama or LM Studio, discovers models from the selected provider, and also accepts any manually entered model ID. Its thinking/reasoning mode is shared by both providers; keep-alive and CPU threads remain Ollama-specific, while Nemotron conversational mode is LM Studio/model-specific. These settings are stored in `%LOCALAPPDATA%\RunMind\Shared\inline-model-settings.json`; PowerToys Run and Command Palette use the same file. The host does not require a Standalone executable path or `RUNMIND_STANDALONE_EXE`.
+
+The Command Palette extension SDK is versioned independently of RunMind. The project pins `Microsoft.CommandPalette.Extensions` 0.12.260812002, `Microsoft.Windows.CsWinRT` 2.3.1, `Microsoft.Windows.SDK.BuildTools.MSIX` 1.7.261102100, `Microsoft.Windows.SDK.BuildTools` 10.0.26100.9457, and `Shmuelie.WinRTServer` 2.2.1. Both Windows SDK build-tools packages are private to this project. The MSIX package generates the package, while the separate Windows SDK BuildTools package supplies the Windows SDK MSBuild infrastructure (`UAP.props`) needed by MSIX/PRI build targets. Keep the Command Palette target framework and package manifest minimum OS at 10.0.22621.0; the 26100 BuildTools package is a build-time dependency and does not raise the app's declared minimum Windows version. The Command Palette extension API is still pre-1.0 and may change; update packages only after checking PowerToys compatibility notes and retesting the package.
+
+The Command Palette project resolves CsWinRT's Windows metadata from the `Microsoft.Windows.SDK.NET.Ref` targeting pack restored for its target framework. This avoids CsWinRT's separate `Platforms\UAP\<version>\Platform.xml` lookup, which can fail on incomplete or unreadable Windows SDK installations even when the matching .NET Windows metadata is available. The MSBuild target reads the resolved targeting-pack path; it does not hard-code a NuGet cache path or package version.
+
+## Project Profiles and Workspace Context
 
 Project Profiles are shared between Standalone and PowerToys Run in `%LOCALAPPDATA%\RunMind\ProjectProfiles`. Profiles capture project instructions, provider/model and connection ID, selected Agent settings, enabled Skill names, MCP server IDs, a workspace folder-name hint, and permission policy. Credential fields and browser folder handles are not copied; do not put secrets in freeform instructions.
 
@@ -72,7 +106,7 @@ The overlay is validated against the reconstructed 2.1.1 source tree (including 
 
 ## RunMind 2.0.9 — configurable PowerToys Run timeouts
 
-PowerToys Run now exposes separate **Model discovery timeout** and **Provider connection timeout** settings. Their defaults remain 8 and 15 seconds, matching the previous hard-coded values. Both accept 1–300 seconds; missing or invalid saved values fall back to the defaults. Model discovery applies to the provider model-list request and response-body read. Provider connection applies to the initial generation request through its first response headers. The existing **Request timeout** remains the overall inline generation-request limit. These settings affect the PowerToys Run plugin only, not standalone chat.
+PowerToys Run now exposes separate **Model discovery timeout** and **Provider connection timeout** settings. Their defaults remain 8 and 15 seconds, matching the previous hard-coded values. Both accept 1–300 seconds; missing or invalid saved values fall back to the defaults. Model discovery applies to the provider model-list request and response-body read. Provider connection applies to the initial generation request through its first response headers. The existing **Request timeout** remains the overall inline generation-request limit. These settings are part of the shared inline-model configuration used by PowerToys Run and Command Palette. They do not affect full chat sessions.
 
 This overlay contains changed files only. Extract it over the complete RunMind 2.0.8 source tree, retaining excluded resources such as `lib`, `assets`, `Vendor`, `OCR`, and `screenshots`, then build on Windows with `Build-Release-x64.bat` using the .NET 10 SDK and the PowerToys reference assemblies.
 
@@ -83,3 +117,12 @@ Each newly sent user message records the Think toggle selected for that prompt. 
 ### Branch comparison
 
 Branch comparison selects the latest assistant response that follows each branch's own most recent user prompt. Different branch message counts are supported. If the latest prompt in either branch has no answer yet, RunMind explains which branch is incomplete rather than substituting an older response. Each comparison card shows the turn number and prompt preview.
+
+
+### Command Palette provider authentication
+
+The Command Palette extension settings have separate optional **API key** and **custom authentication header** fields for both Ollama and LM Studio. Secret inputs are masked in the form. The API key is sent using `Authorization: Bearer`. A custom header accepts a complete `Header-Name: value` line and is used for both model discovery and generation. If the custom header is also named `Authorization`, it replaces the automatically generated Bearer header. Credentials are not written to diagnostics, but are stored in the per-user RunMind settings JSON without DPAPI encryption; protect the Windows user profile containing the file. PowerToys Run settings saves explicitly preserve these Command Palette-only credential fields.
+
+### Enter and Shift+Enter in inline conversations
+
+The Command Palette extension uses the host's Adaptive Card form control. The current host submits Enter only when the focused text box is single-line (`AcceptsReturn` is false). The RunMind prompt needs a multiline text box, so Enter inserts a newline and the Send action must be clicked. Enter-to-send plus Shift+Enter-newline requires a PowerToys Command Palette host change; an out-of-process extension cannot handle that host keyboard event. See `docs/COMMAND-PALETTE-KEYBOARD-HOST-PATCH.md` for the exact host-side behavior needed.

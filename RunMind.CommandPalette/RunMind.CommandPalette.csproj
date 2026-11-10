@@ -1,0 +1,134 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <PlatformTarget>$(Platform)</PlatformTarget>
+    <AssemblyName>RunMind.CommandPalette</AssemblyName>
+    <RootNamespace>RunMind.CommandPalette</RootNamespace>
+    <Version>2.2.0</Version>
+    <AppxPackageVersion>2.2.0.0</AppxPackageVersion>
+    <AppxPackageIdentityName>RunMind.CommandPalette</AppxPackageIdentityName>
+    <AppxPackagePublisher>CN=Omid Navy</AppxPackagePublisher>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!--
+      The Command Palette SDK ships its WinRT API contract as a .winmd reference.
+      RunMind implements the extension interfaces in its managed COM server and
+      registers that server explicitly in Package.appxmanifest. The API contract
+      is not a separate WinRT component with its own implementation binary, so
+      APPX1707 is informational here; do not map it to an unrelated DLL.
+    -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);APPX1707</MSBuildWarningsAsMessages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CommandPalette.Extensions" Version="0.12.260812002" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" />
+    <PackageReference Include="Shmuelie.WinRTServer" Version="2.2.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX" Version="1.7.261102100">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.9457">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude this obsolete file if an older source folder was updated in place. -->
+    <Compile Remove="ConfigureRunMindPage.cs;AskRunMindPage.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\StoreLogo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Public\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Assets\Square150x150Logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Assets\Square44x44Logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <!-- Command Palette hosts the same canonical WPF/WebView2 chat window as Standalone. -->
+    <Page Include="..\RunMind.Standalone\MainWindow.xaml" Link="RunMindChatWindow.xaml" />
+    <Compile Include="..\RunMind.Standalone\MainWindow.xaml.cs" Link="SharedHost\MainWindow.xaml.cs" />
+    <Compile Include="..\Shared\ConversationSaveDialog.cs" Link="Shared\ConversationSaveDialog.cs" />
+    <Compile Include="..\Shared\WebView2RuntimeBootstrapper.cs" Link="Shared\WebView2RuntimeBootstrapper.cs" />
+    <Compile Include="..\Shared\WindowLayout.cs" Link="Shared\WindowLayout.cs" />
+    <Compile Include="..\Shared\AppearancePreferences.cs" Link="Shared\AppearancePreferences.cs" />
+    <Compile Include="..\Shared\WindowThemeSynchronizer.cs" Link="Shared\WindowThemeSynchronizer.cs" />
+    <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
+    <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
+    <Compile Include="..\Shared\InlineModelSettings.cs" Link="Shared\InlineModelSettings.cs" />
+    <Resource Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" />
+    <Content Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Assets\Brand\Icon.svg" Link="Assets\Brand\Icon.svg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Shared\ChatWindow.html" Link="ChatWindow.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Shared\ArtifactTools.js" Link="ArtifactTools.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Vendor\**\*.*" Link="Vendor\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\OCR\tessdata\**\*.*" Link="OCR\tessdata\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+  <!--
+    Use the Windows SDK projection ref-pack metadata restored for this TFM.
+    CsWinRT's default SDK-version lookup reads Platforms\UAP\<version>\Platform.xml.
+    Some otherwise usable Windows SDK installations have an unreadable or incomplete
+    Platform.xml, which prevents CsWinRT from starting even though the .NET targeting
+    pack contains the matching WinMD files. The ref-pack path is obtained from MSBuild's
+    resolved targeting-pack items rather than assuming a NuGet cache location/version.
+  -->
+  <Target Name="RunMindResolveCsWinRTWindowsMetadata"
+          Condition="'$(CsWinRTEnabled)' == 'true'"
+          DependsOnTargets="ResolveReferences"
+          BeforeTargets="CsWinRTGenerateProjection;CsWinRTSetAuthoringWinMDs;GenerateMSBuildEditorConfigFile;GenerateMSBuildEditorConfigFileCore">
+    <PropertyGroup>
+      <_RunMindCsWinRTMetadataIsDefault Condition="'$(CsWinRTWindowsMetadata)' != '' and '$(CsWinRTWindowsMetadata)' != 'local' and '$(CsWinRTWindowsMetadata)' != 'sdk' and '$(CsWinRTWindowsMetadata)' != 'sdk+' and !Exists('$(CsWinRTWindowsMetadata)')">true</_RunMindCsWinRTMetadataIsDefault>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(_RunMindCsWinRTMetadataIsDefault)' == 'true'">
+      <_RunMindWindowsSdkRefPack Include="@(ResolvedTargetingPack->'%(Path)')"
+                                  Condition="'%(ResolvedTargetingPack.NuGetPackageId)' == 'Microsoft.Windows.SDK.NET.Ref'" />
+      <_RunMindWindowsSdkRefPackDistinct Include="@(_RunMindWindowsSdkRefPack->Distinct())" />
+    </ItemGroup>
+    <PropertyGroup Condition="'$(_RunMindCsWinRTMetadataIsDefault)' == 'true'">
+      <_RunMindWindowsSdkWinMdPath Condition="'@(_RunMindWindowsSdkRefPackDistinct)' != ''">@(_RunMindWindowsSdkRefPackDistinct)\winmd</_RunMindWindowsSdkWinMdPath>
+    </PropertyGroup>
+    <Error Condition="'$(_RunMindCsWinRTMetadataIsDefault)' == 'true' and ('$(_RunMindWindowsSdkWinMdPath)' == '' or !Exists('$(_RunMindWindowsSdkWinMdPath)'))"
+           Text="RunMind Command Palette could not locate the Windows SDK .NET projection ref-pack WinMD directory. Restore the .NET 10 Windows targeting pack and retry." />
+    <PropertyGroup Condition="'$(_RunMindCsWinRTMetadataIsDefault)' == 'true'">
+      <CsWinRTWindowsMetadata>$(_RunMindWindowsSdkWinMdPath)</CsWinRTWindowsMetadata>
+    </PropertyGroup>
+    <Message Condition="'$(_RunMindCsWinRTMetadataIsDefault)' == 'true'"
+             Importance="Normal"
+             Text="RunMind Command Palette: using Windows SDK projection metadata from '$(_RunMindWindowsSdkWinMdPath)' for CsWinRT." />
+  </Target>
+</Project>

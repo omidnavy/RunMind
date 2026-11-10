@@ -4,11 +4,11 @@
 	"IsGlobal": true,
 	"Name": "RunMind",
 	"Author": "Omid Navy",
-	"Version": "2.1.6",
+	"Version": "2.2.0",
 	"Language": "csharp",
 	"Website": "https://omid.navy",
 	"ExecuteFileName": "Community.PowerToys.Run.Plugin.RunMind.dll",
-	"IcoPathDark": "Images\\icon-dark.png",
-	"IcoPathLight": "Images\\icon-light.png",
+	"IcoPathDark": "Images\\256x256.png",
+	"IcoPathLight": "Images\\256x256.png",
 	"DynamicLoading": true
 }

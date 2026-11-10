@@ -6,11 +6,15 @@ RunMind 2.1.6 hardens the shared runtime and workspace tools without changing th
 
 ## Planned release sequence
 
-- **2.2.0 — Project Intelligence and Workflows:** project-aware indexing/intelligence and reusable multi-step workflows built on Workspace Context and the shared Agent tool contract.
-- **2.3.0 — Standalone RunMind Launcher:** a standalone launcher experience built on the same Agent Core and native host capabilities.
-- **2.4.0 — PowerToys Command Palette extension:** expose the shared Agent capabilities through a Command Palette host without duplicating tool or permission logic.
+- **2.2.0 — PowerToys Command Palette Extension:** provide a first-class Command Palette host that shares the canonical RunMind chat UI and native runtime, supports a branded inline fallback with streaming responses and follow-up turns, and opens chat with empty or generated context. A native extension settings page configures the shared Ollama/LM Studio model and generation settings used by PowerToys Run and Command Palette.
+- **2.3.0 — Project Intelligence and Workflows:** project-aware indexing/intelligence and reusable multi-step workflows built on Workspace Context and the shared Agent tool contract.
+- **2.4.0 — Standalone RunMind Launcher:** a dedicated standalone launcher experience built on the same Agent Core and native host capabilities.
 
 These are planned scopes, not shipped features or release-date commitments. The detailed backlog below is retained as historical candidate work from the 1.10.x roadmap and should be re-evaluated against the 2.x plan before implementation.
+
+### 2.2.0 implementation boundary
+
+The Command Palette extension is an independent MSIX/WinRT COM host. It launches its own chat process from the packaged Command Palette executable and hosts the canonical shared ChatWindow, ArtifactTools, and native bridge. It does not launch or depend on the Standalone executable. Free-text fallback input is handled by a native Command Palette content page, which calls the selected local provider directly and streams the answer in the palette; follow-up questions stay in the same page. The native extension settings page configures a provider/model/generation settings file shared with PowerToys Run; it does not launch the chat window. The Command Palette package's COM-host app entry is hidden from Start/Search; the MSIX remains installed to register the extension. The packaged extension requires deployment/reload through Command Palette.
 
 ---
 

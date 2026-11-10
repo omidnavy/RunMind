@@ -40,12 +40,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     private const string DefaultEndpoint = "http://localhost:11434/api/generate";
     private const string DefaultLMStudioBaseUrl = "http://localhost:1234/v1";
-    private const string DefaultModel = "qwen3:14b";
+    private const string DefaultModel = "";
     private const string DefaultThinking = "auto";
     private const int DefaultKeepAliveSeconds = 300;
     private const int DefaultRequestTimeoutSeconds = 600;
     private const int DefaultModelDiscoveryTimeoutSeconds = 8;
-    private const int DefaultProviderConnectionTimeoutSeconds = 15;
     private const int MinimumStageTimeoutSeconds = 1;
     private const int MaximumStageTimeoutSeconds = 300;
     private const int DefaultInlineCpuThreads = 0;
@@ -57,8 +56,8 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         "The input is the user's current search-box text. It may be a single letter, partial word, application name, command, question, complete task or anything else.\n" +
         "Answer immediately without introductions.";
     private const string DefaultInlineSystemPrompt =
-        "You are QuickAI, a compact, proactive local AI living inside \"Microsoft PowerToys Run\".\n" +
-        "The input is the user's current search-box text. It may be a single letter, partial word, application name, command, question, complete task or anything else.";
+        "You are RunMind, a helpful, concise local AI assistant available from PowerToys Run and PowerToys Command Palette.\n" +
+        "The input may be a short search query, a question, a command, or a complete task. Respond directly and adapt the level of detail to the request.";
 
     // The HttpClient is shared, but individual requests have their own configurable timeout.
     private static readonly HttpClient HttpClient = new()
@@ -84,17 +83,17 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private bool _hasReceivedFastQuery;
     private bool _disposed;
     private PluginInitContext? _context;
-    private string _iconPath = @"Images\icon.png";
+    private string _iconPath = @"Images\256x256.png";
     private string _endpoint = DefaultEndpoint;
     private string _lmStudioBaseUrl = DefaultLMStudioBaseUrl;
     private string _defaultModel = DefaultModel;
     private string _thinking = DefaultThinking;
     private int _provider;
     private long _settingsVersion;
+    private long _sharedSettingsWriteTimeUtcTicks;
     private int _keepAliveSeconds = DefaultKeepAliveSeconds;
     private int _requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
     private int _modelDiscoveryTimeoutSeconds = DefaultModelDiscoveryTimeoutSeconds;
-    private int _providerConnectionTimeoutSeconds = DefaultProviderConnectionTimeoutSeconds;
     private int _inlineCpuThreads = DefaultInlineCpuThreads;
     private string _inlineSystemPrompt = string.Empty;
     private double? _inlineTemperature;
@@ -103,20 +102,25 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private int? _inlineSeed;
     private bool _inlineConversationalMode;
 
-    public IEnumerable<PluginAdditionalOption> AdditionalOptions => new List<PluginAdditionalOption>
+    public IEnumerable<PluginAdditionalOption> AdditionalOptions
     {
+        get
+        {
+            var shared = LoadSharedInlineSettingsForOptions();
+            return new List<PluginAdditionalOption>
+            {
         new()
         {
             Key = "InlineProvider",
-            DisplayLabel = "PowerToys Run LLM provider",
-            DisplayDescription = "Provider used for inline PowerToys Run results. The standalone chat window has its own provider selector.",
+            DisplayLabel = "Inline model provider",
+            DisplayDescription = "Shared by PowerToys Run and Command Palette inline answers. Full chat-window provider settings remain separate.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Combobox,
             ComboBoxItems = new List<KeyValuePair<string, string>>
             {
                 new("Ollama", "0"),
                 new("LM Studio", "1"),
             },
-            ComboBoxValue = 0,
+            ComboBoxValue = shared.Provider == "lmstudio" ? 1 : 0,
         },
         new()
         {
@@ -124,15 +128,15 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             DisplayLabel = "Ollama API endpoint",
             DisplayDescription = "Full Ollama generate endpoint, for example http://localhost:11434/api/generate.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultEndpoint,
+            TextValue = shared.OllamaEndpoint,
         },
         new()
         {
             Key = "LMStudioBaseUrl",
             DisplayLabel = "LM Studio base URL",
-            DisplayDescription = "OpenAI-compatible LM Studio base URL used when LM Studio is selected for inline PowerToys Run, and by the WebView2 chat window, for example http://localhost:1234/v1.",
+            DisplayDescription = "OpenAI-compatible LM Studio base URL used by both inline-answer hosts, for example http://localhost:1234/v1.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultLMStudioBaseUrl,
+            TextValue = shared.LMStudioBaseUrl,
         },
         new()
         {
@@ -140,15 +144,24 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             DisplayLabel = "Default model",
             DisplayDescription = "Model identifier as shown by the selected provider (Ollama model name or LM Studio model ID). You can override it per query with > model > prompt.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultModel,
+            TextValue = shared.Model,
         },
         new()
         {
             Key = "Thinking",
-            DisplayLabel = "Thinking / think",
-            DisplayDescription = "Ollama only: use auto, true, false, or a model-specific value such as low. Auto uses low for gpt-oss, false for Qwen, and omits the field for other models.",
-            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultThinking,
+            DisplayLabel = "Thinking / reasoning",
+            DisplayDescription = "Shared mode for Ollama and LM Studio. Auto uses the model default; the other choices are mapped to each provider's API. Model support varies.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Combobox,
+            ComboBoxItems = new List<KeyValuePair<string, string>>
+            {
+                new("Auto — model default", "auto"),
+                new("On", "on"),
+                new("Off", "off"),
+                new("Low", "low"),
+                new("Medium", "medium"),
+                new("High", "high"),
+            },
+            ComboBoxValue = GetThinkingChoiceIndex(shared.Thinking),
         },
         new()
         {
@@ -156,15 +169,15 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             DisplayLabel = "Keep model loaded (seconds)",
             DisplayDescription = "Ollama only: value sent as keep_alive. Use 0 to unload the model after the request. Range: 0–86400 seconds.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultKeepAliveSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            TextValue = shared.KeepAliveSeconds.ToString(CultureInfo.InvariantCulture),
         },
         new()
         {
             Key = "RequestTimeoutSeconds",
             DisplayLabel = "Request timeout (seconds)",
-            DisplayDescription = "Maximum time to wait for an inline PowerToys Run generation request (30–3600 seconds). Does not affect the standalone chat window.",
+            DisplayDescription = "Maximum time for an inline generation request in either PowerToys Run or Command Palette (30–3600 seconds). Does not affect full chat sessions.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultRequestTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            TextValue = shared.RequestTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         },
         new()
         {
@@ -172,65 +185,59 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             DisplayLabel = "Model discovery timeout (seconds)",
             DisplayDescription = "Maximum time to request and read the selected provider's model list before generation starts. Default: 8 seconds. Range: 1–300 seconds.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultModelDiscoveryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
-        },
-        new()
-        {
-            Key = "ProviderConnectionTimeoutSeconds",
-            DisplayLabel = "Provider connection timeout (seconds)",
-            DisplayDescription = "Maximum time for an inline generation request to connect and receive its initial HTTP response headers. After headers arrive, the Request timeout controls response generation. Default: 15 seconds. Range: 1–300 seconds.",
-            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultProviderConnectionTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+            TextValue = shared.ModelDiscoveryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         },
         new()
         {
             Key = "InlineCpuThreads",
             DisplayLabel = "Ollama max CPU threads (optional)",
-            DisplayDescription = "Optional Ollama-only CPU thread limit for inline PowerToys Run requests. Leave blank or set to 0 to let Ollama choose automatically. Set 1–128 to use that maximum. Does not affect LM Studio or standalone chat.",
+            DisplayDescription = "Optional Ollama-only CPU thread limit shared by both inline-answer hosts. Use 0 for automatic selection or 1–128 to set a maximum. Does not affect LM Studio or full chat sessions.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = DefaultInlineCpuThreads.ToString(CultureInfo.InvariantCulture),
+            TextValue = shared.InlineCpuThreads.ToString(CultureInfo.InvariantCulture),
         },
         new()
         {
             Key = "InlineSystemPrompt",
-            DisplayLabel = "Custom system instructions (editable QuickAI default)",
-            DisplayDescription = "Pre-filled QuickAI instructions for PowerToys Run. Edit or clear them freely; an empty value disables the additional prompt. Maximum 12,000 characters. Does not affect the standalone chat app.",
+            DisplayLabel = "Inline system instructions",
+            DisplayDescription = "System instructions shared by PowerToys Run and Command Palette inline answers. Edit or clear them freely; an empty value disables the additional prompt. Maximum 12,000 characters.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.MultilineTextbox,
-            TextValue = DefaultInlineSystemPrompt,
+            TextValue = shared.InlineSystemPrompt,
             TextBoxMaxLength = MaximumInlineSystemPromptCharacters,
-            PlaceholderText = "Enter your PowerToys Run system instructions...",
+            PlaceholderText = "Enter shared inline-answer system instructions...",
         },
         new()
         {
             Key = "InlineTemperature",
             DisplayLabel = "Temperature (optional)",
-            DisplayDescription = "Inline PowerToys Run generation setting. Leave empty for the model default. Range: 0–2.",
+            DisplayDescription = shared.Provider == "lmstudio"
+                ? "Shared inline generation setting. Leave empty for the model default. LM Studio range: 0–1."
+                : "Shared inline generation setting. Leave empty for the model default. Ollama range: 0–2.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = string.Empty,
+            TextValue = shared.InlineTemperature?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
         },
         new()
         {
             Key = "InlineTopP",
             DisplayLabel = "Top P (optional)",
-            DisplayDescription = "Inline PowerToys Run generation setting. Leave empty for the model default. Range: 0–1.",
+            DisplayDescription = "Shared inline generation setting. Leave empty for the model default. Range: 0–1.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = string.Empty,
+            TextValue = shared.InlineTopP?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
         },
         new()
         {
             Key = "InlineMaxOutputTokens",
             DisplayLabel = "Max output tokens (optional)",
-            DisplayDescription = "Inline PowerToys Run output limit. Leave empty for the model default. Range: 1–1,000,000.",
+            DisplayDescription = "Shared inline output limit. Leave empty for the model default. Range: 1–1,000,000.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = string.Empty,
+            TextValue = shared.InlineMaxOutputTokens?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
         },
         new()
         {
             Key = "InlineSeed",
-            DisplayLabel = "Seed (optional)",
-            DisplayDescription = "Inline PowerToys Run reproducibility setting. Leave empty for a random/provider default seed. Range: 0–2,147,483,647.",
+            DisplayLabel = "Seed (optional; Ollama / LM Studio compatibility mode)",
+            DisplayDescription = "Shared inline reproducibility setting. Leave empty for a random/provider default seed. Range: 0–2,147,483,647.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = string.Empty,
+            TextValue = shared.InlineSeed?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
         },
         new()
         {
@@ -238,9 +245,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             DisplayLabel = "Nemotron 3.5 Bolt E4B conversational mode",
             DisplayDescription = "Optional and OFF by default. When enabled, sends chat_template_kwargs.conversational_mode=true for matching NVIDIA Nemotron 3.5 Bolt E4B model IDs through the LM Studio / OpenAI-compatible provider only. Ollama's native API does not expose this template parameter.",
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Checkbox,
-            Value = false,
+            Value = shared.InlineConversationalMode,
         },
-    };
+            };
+        }
+    }
 
     public void Init(PluginInitContext context)
     {
@@ -251,35 +260,39 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     public void UpdateSettings(PowerLauncherPluginSettings settings)
     {
-        string endpoint = DefaultEndpoint;
-        string lmStudioBaseUrl = DefaultLMStudioBaseUrl;
-        string model = DefaultModel;
-        string thinking = DefaultThinking;
-        int provider = 0;
-        int keepAliveSeconds = DefaultKeepAliveSeconds;
-        int requestTimeoutSeconds = DefaultRequestTimeoutSeconds;
-        int modelDiscoveryTimeoutSeconds = DefaultModelDiscoveryTimeoutSeconds;
-        int providerConnectionTimeoutSeconds = DefaultProviderConnectionTimeoutSeconds;
-        int inlineCpuThreads = DefaultInlineCpuThreads;
-        string inlineSystemPrompt = DefaultInlineSystemPrompt;
-        double? inlineTemperature = null;
-        double? inlineTopP = null;
-        int? inlineMaxOutputTokens = null;
-        int? inlineSeed = null;
-        bool inlineConversationalMode = false;
+        // Use the shared file as the baseline so a partial/older PowerToys settings
+        // payload cannot reset values recently changed from Command Palette.
+        var initial = LoadSharedInlineSettingsForOptions();
+        string endpoint = initial.OllamaEndpoint;
+        string lmStudioBaseUrl = initial.LMStudioBaseUrl;
+        string model = initial.Model;
+        string thinking = initial.Thinking;
+        int provider = initial.Provider == "lmstudio" ? 1 : 0;
+        int keepAliveSeconds = initial.KeepAliveSeconds;
+        int requestTimeoutSeconds = initial.RequestTimeoutSeconds;
+        int modelDiscoveryTimeoutSeconds = initial.ModelDiscoveryTimeoutSeconds;
+        int inlineCpuThreads = initial.InlineCpuThreads;
+        string inlineSystemPrompt = initial.InlineSystemPrompt;
+        double? inlineTemperature = initial.InlineTemperature;
+        double? inlineTopP = initial.InlineTopP;
+        int? inlineMaxOutputTokens = initial.InlineMaxOutputTokens;
+        int? inlineSeed = initial.InlineSeed;
+        bool inlineConversationalMode = initial.InlineConversationalMode;
 
         if (settings?.AdditionalOptions is not null)
         {
             var options = settings.AdditionalOptions;
             endpoint = GetTextOption(options, "LLMEndpoint", endpoint);
             lmStudioBaseUrl = GetTextOption(options, "LMStudioBaseUrl", lmStudioBaseUrl);
-            provider = options.FirstOrDefault(option => option.Key == "InlineProvider")?.ComboBoxValue == 1 ? 1 : 0;
+            var providerOption = options.FirstOrDefault(option => option.Key == "InlineProvider");
+            if (providerOption is not null)
+                provider = providerOption.ComboBoxValue == 1 ? 1 : 0;
             model = GetTextOption(options, "Model", model);
-            thinking = GetTextOption(options, "Thinking", thinking);
+            thinking = ReadThinkingOption(options, thinking);
             var inlinePromptOption = options.FirstOrDefault(option => option.Key == "InlineSystemPrompt");
             if (inlinePromptOption is null)
             {
-                inlineSystemPrompt = DefaultInlineSystemPrompt;
+                inlineSystemPrompt = initial.InlineSystemPrompt;
             }
             else
             {
@@ -291,37 +304,37 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     ? DefaultInlineSystemPrompt
                     : savedPrompt;
             }
-            inlineTemperature = ParseOptionalDouble(options, "InlineTemperature", 0, 2);
-            inlineTopP = ParseOptionalDouble(options, "InlineTopP", 0, 1);
-            inlineMaxOutputTokens = ParseOptionalInt(options, "InlineMaxOutputTokens", 1, 1000000);
-            inlineSeed = ParseOptionalInt(options, "InlineSeed", 0, int.MaxValue);
-            inlineConversationalMode = options.FirstOrDefault(option => option.Key == "InlineConversationalMode")?.Value is bool enabled && enabled;
+            if (options.Any(option => option.Key == "InlineTemperature"))
+                inlineTemperature = ParseOptionalDouble(options, "InlineTemperature", 0, provider == 1 ? 1 : 2);
+            if (options.Any(option => option.Key == "InlineTopP"))
+                inlineTopP = ParseOptionalDouble(options, "InlineTopP", 0, 1);
+            if (options.Any(option => option.Key == "InlineMaxOutputTokens"))
+                inlineMaxOutputTokens = ParseOptionalInt(options, "InlineMaxOutputTokens", 1, 1000000);
+            if (options.Any(option => option.Key == "InlineSeed"))
+                inlineSeed = ParseOptionalInt(options, "InlineSeed", 0, int.MaxValue);
+            var conversationalOption = options.FirstOrDefault(option => option.Key == "InlineConversationalMode");
+            if (conversationalOption?.Value is bool enabled)
+                inlineConversationalMode = enabled;
 
-            if (int.TryParse(GetTextOption(options, "KeepAliveSeconds", DefaultKeepAliveSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedKeepAlive)
+            if (int.TryParse(GetTextOption(options, "KeepAliveSeconds", initial.KeepAliveSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedKeepAlive)
                 && parsedKeepAlive is >= 0 and <= 86400)
             {
                 keepAliveSeconds = parsedKeepAlive;
             }
 
-            if (int.TryParse(GetTextOption(options, "RequestTimeoutSeconds", DefaultRequestTimeoutSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTimeout)
+            if (int.TryParse(GetTextOption(options, "RequestTimeoutSeconds", initial.RequestTimeoutSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTimeout)
                 && parsedTimeout is >= 30 and <= 3600)
             {
                 requestTimeoutSeconds = parsedTimeout;
             }
 
-            if (int.TryParse(GetTextOption(options, "ModelDiscoveryTimeoutSeconds", DefaultModelDiscoveryTimeoutSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedDiscoveryTimeout)
+            if (int.TryParse(GetTextOption(options, "ModelDiscoveryTimeoutSeconds", initial.ModelDiscoveryTimeoutSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedDiscoveryTimeout)
                 && parsedDiscoveryTimeout is >= MinimumStageTimeoutSeconds and <= MaximumStageTimeoutSeconds)
             {
                 modelDiscoveryTimeoutSeconds = parsedDiscoveryTimeout;
             }
 
-            if (int.TryParse(GetTextOption(options, "ProviderConnectionTimeoutSeconds", DefaultProviderConnectionTimeoutSeconds.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedConnectionTimeout)
-                && parsedConnectionTimeout is >= MinimumStageTimeoutSeconds and <= MaximumStageTimeoutSeconds)
-            {
-                providerConnectionTimeoutSeconds = parsedConnectionTimeout;
-            }
-
-            if (int.TryParse(GetTextOption(options, "InlineCpuThreads", DefaultInlineCpuThreads.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedCpuThreads)
+            if (int.TryParse(GetTextOption(options, "InlineCpuThreads", initial.InlineCpuThreads.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedCpuThreads)
                 && parsedCpuThreads is >= 0 and <= 128)
             {
                 inlineCpuThreads = parsedCpuThreads;
@@ -334,12 +347,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _endpoint = string.IsNullOrWhiteSpace(endpoint) ? DefaultEndpoint : endpoint.Trim();
             _provider = provider;
             _lmStudioBaseUrl = string.IsNullOrWhiteSpace(lmStudioBaseUrl) ? DefaultLMStudioBaseUrl : lmStudioBaseUrl.Trim().TrimEnd('/');
-            _defaultModel = string.IsNullOrWhiteSpace(model) ? DefaultModel : model.Trim();
+            _defaultModel = string.IsNullOrWhiteSpace(model) ? string.Empty : model.Trim();
             _thinking = string.IsNullOrWhiteSpace(thinking) ? DefaultThinking : thinking.Trim();
             _keepAliveSeconds = keepAliveSeconds;
             _requestTimeoutSeconds = requestTimeoutSeconds;
             _modelDiscoveryTimeoutSeconds = modelDiscoveryTimeoutSeconds;
-            _providerConnectionTimeoutSeconds = providerConnectionTimeoutSeconds;
             _inlineCpuThreads = inlineCpuThreads;
             _inlineSystemPrompt = inlineSystemPrompt;
             _inlineTemperature = inlineTemperature;
@@ -363,6 +375,38 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         // Cancellation callbacks may re-enter plugin code; never invoke them under either lock.
         previous?.Cancel();
         previous?.Dispose();
+
+        try
+        {
+            var savedAt = InlineModelSettingsStore.Save(new InlineModelSettings
+            {
+                Provider = provider == 1 ? "lmstudio" : "ollama",
+                OllamaEndpoint = endpoint,
+                LMStudioBaseUrl = lmStudioBaseUrl,
+                Model = model,
+                Thinking = thinking,
+                KeepAliveSeconds = keepAliveSeconds,
+                RequestTimeoutSeconds = requestTimeoutSeconds,
+                ModelDiscoveryTimeoutSeconds = modelDiscoveryTimeoutSeconds,
+                InlineCpuThreads = inlineCpuThreads,
+                InlineSystemPrompt = inlineSystemPrompt,
+                CommandPaletteSystemPrompt = initial.CommandPaletteSystemPrompt,
+                CommandPaletteOllamaApiKey = initial.CommandPaletteOllamaApiKey,
+                CommandPaletteOllamaAuthHeader = initial.CommandPaletteOllamaAuthHeader,
+                CommandPaletteLMStudioApiKey = initial.CommandPaletteLMStudioApiKey,
+                CommandPaletteLMStudioAuthHeader = initial.CommandPaletteLMStudioAuthHeader,
+                InlineTemperature = inlineTemperature,
+                InlineTopP = inlineTopP,
+                InlineMaxOutputTokens = inlineMaxOutputTokens,
+                InlineSeed = inlineSeed,
+                InlineConversationalMode = inlineConversationalMode,
+            });
+            Interlocked.Exchange(ref _sharedSettingsWriteTimeUtcTicks, savedAt.Ticks);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[RunMind] Could not persist shared inline model settings: {exception.Message}");
+        }
     }
 
     // PowerToys calls this fast path as the user types. It must never perform network I/O.
@@ -506,6 +550,12 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             var cancellationToken = operation.Token;
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (string.IsNullOrWhiteSpace(operation.Model))
+            {
+                operation.SetCompletion("No default model is selected. Set a model ID in the shared RunMind inline settings, or use the > model > prompt override.", isError: true);
+                return;
+            }
 
             var models = await FetchModelsFromEndpointAsync(operation.Settings, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
@@ -751,22 +801,19 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         if (settings.InlineSeed is int seed) generationOptions["seed"] = seed;
         if (generationOptions.Count > 0) requestBody["options"] = generationOptions;
 
-        if (TryResolveThinkValue(model, settings.Thinking, out var thinkValue))
+        if (TryResolveThinkValue(settings.Thinking, out var thinkValue))
         {
             requestBody["think"] = thinkValue;
         }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
-        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.ProviderConnectionTimeoutSeconds));
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
-        using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(requestTimeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
         };
 
-        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, sendTimeout.Token).ConfigureAwait(false);
-        connectionTimeout.CancelAfter(Timeout.InfiniteTimeSpan);
+        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
@@ -809,6 +856,117 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
     private async Task<string> QueryLMStudioStreamAsync(string input, string model, SettingsSnapshot settings, CancellationToken cancellationToken)
     {
+        if (settings.InlineSeed.HasValue || (settings.InlineConversationalMode && IsNemotron35BoltE4BModel(model)))
+            return await QueryLMStudioOpenAICompatStreamAsync(input, model, settings, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return await QueryLMStudioNativeStreamAsync(input, model, settings, cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+            when (exception.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.MethodNotAllowed)
+        {
+            if (!string.Equals(settings.Thinking, "auto", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "This LM Studio server does not expose /api/v1/chat, which RunMind needs to apply the shared Thinking / reasoning setting. Upgrade LM Studio or set Thinking / reasoning to Auto.", exception);
+            return await QueryLMStudioOpenAICompatStreamAsync(input, model, settings, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<string> QueryLMStudioNativeStreamAsync(string input, string model, SettingsSnapshot settings, CancellationToken cancellationToken)
+    {
+        var endpoint = BuildLMStudioNativeUri(settings.LMStudioBaseUrl, "chat");
+        var requestBody = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["model"] = model,
+            ["input"] = input,
+            ["stream"] = true,
+            ["store"] = false,
+        };
+        if (!string.IsNullOrWhiteSpace(settings.InlineSystemPrompt)) requestBody["system_prompt"] = settings.InlineSystemPrompt;
+        if (settings.InlineTemperature is double temperature) requestBody["temperature"] = Math.Min(temperature, 1.0);
+        if (settings.InlineTopP is double topP) requestBody["top_p"] = topP;
+        if (settings.InlineMaxOutputTokens is int maxTokens) requestBody["max_output_tokens"] = maxTokens;
+        var thinking = string.IsNullOrWhiteSpace(settings.Thinking) ? "auto" : settings.Thinking.Trim().ToLowerInvariant();
+        if (thinking != "auto") requestBody["reasoning"] = thinking;
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
+        using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
+        };
+        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
+            var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
+            throw new HttpRequestException($"LM Studio returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).{detail}", null, response.StatusCode);
+        }
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync(requestTimeout.Token).ConfigureAwait(false);
+        using var reader = new StreamReader(responseStream, Encoding.UTF8);
+        var output = new StringBuilder();
+        var eventName = string.Empty;
+        var recordNumber = 0;
+        var completed = false;
+        while (true)
+        {
+            var line = await reader.ReadLineAsync(requestTimeout.Token).ConfigureAwait(false);
+            if (line is null) break;
+            if (line.StartsWith("event:", StringComparison.OrdinalIgnoreCase))
+            {
+                eventName = line[6..].Trim();
+                continue;
+            }
+            if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+            var data = line[5..].Trim();
+            if (data.Length == 0) continue;
+            recordNumber++;
+            JsonDocument json;
+            try { json = JsonDocument.Parse(data); }
+            catch (JsonException exception) { throw new InvalidDataException($"LM Studio returned malformed REST SSE JSON at event {recordNumber}: {exception.Message}", exception); }
+            using (json)
+            {
+                var root = json.RootElement;
+                var eventType = root.TryGetProperty("type", out var typeElement) && typeElement.ValueKind == JsonValueKind.String
+                    ? typeElement.GetString() ?? eventName : eventName;
+                if (string.Equals(eventType, "error", StringComparison.OrdinalIgnoreCase))
+                {
+                    var detail = root.TryGetProperty("error", out var errorElement)
+                        && errorElement.ValueKind == JsonValueKind.Object
+                        && errorElement.TryGetProperty("message", out var messageElement)
+                        ? messageElement.GetString() : root.ToString();
+                    throw new InvalidOperationException("LM Studio: " + (string.IsNullOrWhiteSpace(detail) ? "The model request failed." : detail));
+                }
+                if (string.Equals(eventType, "message.delta", StringComparison.OrdinalIgnoreCase)
+                    && root.TryGetProperty("content", out var contentElement)
+                    && contentElement.ValueKind == JsonValueKind.String)
+                    AppendBoundedResponseChunk(output, contentElement.GetString(), "LM Studio");
+                else if (string.Equals(eventType, "chat.end", StringComparison.OrdinalIgnoreCase))
+                {
+                    completed = true;
+                    if (output.Length == 0 && root.TryGetProperty("result", out var resultElement)
+                        && resultElement.TryGetProperty("output", out var outputItems)
+                        && outputItems.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in outputItems.EnumerateArray())
+                            if (item.ValueKind == JsonValueKind.Object
+                                && item.TryGetProperty("type", out var itemType) && itemType.ValueKind == JsonValueKind.String && itemType.GetString() == "message"
+                                && item.TryGetProperty("content", out var messageContent) && messageContent.ValueKind == JsonValueKind.String)
+                                AppendBoundedResponseChunk(output, messageContent.GetString(), "LM Studio");
+                    }
+                    break;
+                }
+            }
+        }
+        if (!completed)
+            throw new InvalidDataException("LM Studio closed its REST response stream before chat.end. The response may be incomplete; retry the request.");
+        return output.ToString();
+    }
+
+    private async Task<string> QueryLMStudioOpenAICompatStreamAsync(string input, string model, SettingsSnapshot settings, CancellationToken cancellationToken)
+    {
         var endpoint = BuildLMStudioUri(settings.LMStudioBaseUrl, "chat/completions");
         var messages = new List<object>();
         if (!string.IsNullOrWhiteSpace(settings.InlineSystemPrompt))
@@ -824,26 +982,32 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         if (settings.InlineTopP is double topP) requestBody["top_p"] = topP;
         if (settings.InlineMaxOutputTokens is int maxOutputTokens) requestBody["max_tokens"] = maxOutputTokens;
         if (settings.InlineSeed is int seed) requestBody["seed"] = seed;
+        ApplyLMStudioThinkingOptions(requestBody, settings.Thinking);
         if (IsNemotron35BoltE4BModel(model))
         {
-            // Send both states explicitly so PowerToys can enable and disable the
-            // chat-template mode for this model without changing other model requests.
-            requestBody["chat_template_kwargs"] = new Dictionary<string, object>(StringComparer.Ordinal)
+            // Merge the model-specific conversational switch with the generic
+            // thinking option so enabling one does not overwrite the other.
+            Dictionary<string, object> templateOptions;
+            if (requestBody.TryGetValue("chat_template_kwargs", out var rawTemplateOptions)
+                && rawTemplateOptions is Dictionary<string, object> existingTemplateOptions)
             {
-                ["conversational_mode"] = settings.InlineConversationalMode,
-            };
+                templateOptions = existingTemplateOptions;
+            }
+            else
+            {
+                templateOptions = new Dictionary<string, object>(StringComparer.Ordinal);
+                requestBody["chat_template_kwargs"] = templateOptions;
+            }
+            templateOptions["conversational_mode"] = settings.InlineConversationalMode;
         }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
-        using var connectionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(settings.ProviderConnectionTimeoutSeconds));
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, cancellationToken);
-        using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(requestTimeout.Token, connectionTimeout.Token);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
         };
-        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, sendTimeout.Token).ConfigureAwait(false);
-        connectionTimeout.CancelAfter(Timeout.InfiniteTimeSpan);
+        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
@@ -913,7 +1077,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private async Task<List<string>> FetchModelsFromEndpointAsync(SettingsSnapshot settings, CancellationToken cancellationToken = default)
     {
         var modelsUri = settings.Provider == 1
-            ? BuildLMStudioUri(settings.LMStudioBaseUrl, "models")
+            ? BuildLMStudioNativeUri(settings.LMStudioBaseUrl, "models")
             : BuildTagsUri(settings.Endpoint);
         var cacheKey = modelsUri.AbsoluteUri;
         cancellationToken.ThrowIfCancellationRequested();
@@ -930,33 +1094,65 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, modelsUri);
             using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
+            JsonDocument json;
+            bool lmStudioCompatibilityFallback = false;
+            if (settings.Provider == 1 && (response.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.MethodNotAllowed))
             {
-                var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
-                var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
-                throw new HttpRequestException($"Could not query the {GetProviderName(settings)} model list (HTTP {(int)response.StatusCode} {response.ReasonPhrase}).{detail}", null, response.StatusCode);
+                response.Dispose();
+                lmStudioCompatibilityFallback = true;
+                using var compatibilityRequest = new HttpRequestMessage(HttpMethod.Get, BuildLMStudioUri(settings.LMStudioBaseUrl, "models"));
+                using var compatibilityResponse = await HttpClient.SendAsync(compatibilityRequest, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
+                if (!compatibilityResponse.IsSuccessStatusCode)
+                {
+                    var body = await ReadBoundedContentTextAsync(compatibilityResponse.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
+                    var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
+                    throw new HttpRequestException($"Could not query the LM Studio model list (HTTP {(int)compatibilityResponse.StatusCode} {compatibilityResponse.ReasonPhrase}).{detail}", null, compatibilityResponse.StatusCode);
+                }
+                var bytes = await ReadBoundedContentBytesAsync(compatibilityResponse.Content, 4 * 1024 * 1024, requestTimeout.Token).ConfigureAwait(false);
+                json = JsonDocument.Parse(bytes);
+            }
+            else
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = await ReadBoundedContentTextAsync(response.Content, 64 * 1024, requestTimeout.Token).ConfigureAwait(false);
+                    var detail = string.IsNullOrWhiteSpace(body) ? string.Empty : $" Response: {TrimForError(body)}";
+                    throw new HttpRequestException($"Could not query the {GetProviderName(settings)} model list (HTTP {(int)response.StatusCode} {response.ReasonPhrase}).{detail}", null, response.StatusCode);
+                }
+                var bytes = await ReadBoundedContentBytesAsync(response.Content, 4 * 1024 * 1024, requestTimeout.Token).ConfigureAwait(false);
+                json = JsonDocument.Parse(bytes);
             }
 
-            var modelListBytes = await ReadBoundedContentBytesAsync(response.Content, 4 * 1024 * 1024, requestTimeout.Token).ConfigureAwait(false);
-            using var json = JsonDocument.Parse(modelListBytes);
-            var modelNames = new List<string>();
-            var arrayName = settings.Provider == 1 ? "data" : "models";
-            if (!json.RootElement.TryGetProperty(arrayName, out var modelsElement) || modelsElement.ValueKind != JsonValueKind.Array)
-                throw new InvalidDataException($"The {GetProviderName(settings)} model-list response did not contain a '{arrayName}' array. Check the configured API URL.");
+            using (json)
+            {
+                var modelNames = new List<string>();
+                var arrayName = settings.Provider == 1 && !lmStudioCompatibilityFallback ? "models" : settings.Provider == 1 ? "data" : "models";
+                if (!json.RootElement.TryGetProperty(arrayName, out var modelsElement) || modelsElement.ValueKind != JsonValueKind.Array)
+                    throw new InvalidDataException($"The {GetProviderName(settings)} model-list response did not contain a '{arrayName}' array. Check the configured API URL.");
 
-            foreach (var model in modelsElement.EnumerateArray())
-            {
-                var nameProperty = settings.Provider == 1 ? "id" : "name";
-                if (model.TryGetProperty(nameProperty, out var nameElement) && nameElement.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(nameElement.GetString()))
-                    modelNames.Add(nameElement.GetString()!);
+                foreach (var model in modelsElement.EnumerateArray())
+                {
+                    if (model.ValueKind != JsonValueKind.Object) continue;
+                    if (settings.Provider == 1 && !lmStudioCompatibilityFallback)
+                    {
+                        if (!model.TryGetProperty("type", out var typeElement) || typeElement.ValueKind != JsonValueKind.String
+                            || !string.Equals(typeElement.GetString(), "llm", StringComparison.OrdinalIgnoreCase)) continue;
+                    }
+                    var nameProperty = settings.Provider == 1 ? (lmStudioCompatibilityFallback ? "id" : "key") : "name";
+                    if (model.TryGetProperty(nameProperty, out var nameElement)
+                        && nameElement.ValueKind == JsonValueKind.String
+                        && !string.IsNullOrWhiteSpace(nameElement.GetString()))
+                        modelNames.Add(nameElement.GetString()!.Trim());
+                }
+
+                lock (ModelCacheLock)
+                {
+                    _modelCacheEndpoint = cacheKey;
+                    _modelCacheTimestamp = DateTimeOffset.UtcNow;
+                    _modelCache = new List<string>(modelNames);
+                }
+                return modelNames;
             }
-            lock (ModelCacheLock)
-            {
-                _modelCacheEndpoint = cacheKey;
-                _modelCacheTimestamp = DateTimeOffset.UtcNow;
-                _modelCache = new List<string>(modelNames);
-            }
-            return modelNames;
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
@@ -964,7 +1160,92 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
     }
 
+    private static void ApplyLMStudioThinkingOptions(Dictionary<string, object> requestBody, string? rawSetting)
+    {
+        var setting = string.IsNullOrWhiteSpace(rawSetting) ? "auto" : rawSetting.Trim().ToLowerInvariant();
+        if (setting == "auto") return;
+
+        if (setting is "on" or "true" or "off" or "false")
+        {
+            var enabled = setting is "on" or "true";
+            var templateOptions = requestBody.TryGetValue("chat_template_kwargs", out var existing)
+                && existing is Dictionary<string, object> existingOptions
+                    ? existingOptions
+                    : new Dictionary<string, object>(StringComparer.Ordinal);
+            templateOptions["enable_thinking"] = enabled;
+            requestBody["chat_template_kwargs"] = templateOptions;
+            if (!enabled) requestBody["reasoning_effort"] = "none";
+            return;
+        }
+
+        if (setting is "low" or "medium" or "high")
+        {
+            requestBody["reasoning_effort"] = setting;
+            var templateOptions = requestBody.TryGetValue("chat_template_kwargs", out var existing)
+                && existing is Dictionary<string, object> existingOptions
+                    ? existingOptions
+                    : new Dictionary<string, object>(StringComparer.Ordinal);
+            templateOptions["enable_thinking"] = true;
+            requestBody["chat_template_kwargs"] = templateOptions;
+            return;
+        }
+
+        throw new InvalidOperationException("Thinking / reasoning mode must be auto, on, off, low, medium, or high.");
+    }
+
+    private static string ReadThinkingOption(IEnumerable<PluginAdditionalOption> options, string fallback)
+    {
+        var option = options.FirstOrDefault(candidate => candidate.Key == "Thinking");
+        if (option is null) return fallback;
+
+        // TextValue preserves settings created by earlier plugin versions, where
+        // Thinking was a textbox. New settings use the shared provider-neutral list.
+        var text = (option.TextValue ?? string.Empty).Trim().ToLowerInvariant();
+        if (text is "auto" or "on" or "off" or "low" or "medium" or "high") return text;
+
+        return option.ComboBoxValue switch
+        {
+            1 => "on",
+            2 => "off",
+            3 => "low",
+            4 => "medium",
+            5 => "high",
+            _ => "auto",
+        };
+    }
+
+    private static int GetThinkingChoiceIndex(string? value)
+        => (value ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "on" => 1,
+            "off" => 2,
+            "low" => 3,
+            "medium" => 4,
+            "high" => 5,
+            _ => 0,
+        };
+
     private static string GetProviderName(SettingsSnapshot settings) => settings.Provider == 1 ? "LM Studio" : "Ollama";
+
+    private static Uri BuildLMStudioNativeUri(string baseUrl, string relativePath)
+    {
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri)
+            || (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps)
+            || string.IsNullOrWhiteSpace(baseUri.Host)
+            || !string.IsNullOrEmpty(baseUri.UserInfo)
+            || !string.IsNullOrEmpty(baseUri.Query)
+            || !string.IsNullOrEmpty(baseUri.Fragment))
+            throw new InvalidOperationException("The LM Studio base URL must be an absolute HTTP or HTTPS URL without embedded credentials, query strings, or fragments, for example http://localhost:1234/v1.");
+        var path = baseUri.AbsolutePath.TrimEnd('/');
+        if (path.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)) path = path[..^3];
+        var builder = new UriBuilder(baseUri)
+        {
+            Path = path + "/api/v1/" + relativePath.TrimStart('/'),
+            Query = string.Empty,
+            Fragment = string.Empty,
+        };
+        return builder.Uri;
+    }
 
     private static Uri BuildLMStudioUri(string baseUrl, string relativePath)
     {
@@ -979,36 +1260,31 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         return builder.Uri;
     }
 
-    private static bool TryResolveThinkValue(string model, string? thinkingSetting, out object value)
+    private static bool TryResolveThinkValue(string? thinkingSetting, out object value)
     {
-        var setting = thinkingSetting?.Trim();
-        if (string.IsNullOrWhiteSpace(setting) || setting.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        var setting = string.IsNullOrWhiteSpace(thinkingSetting) ? "auto" : thinkingSetting.Trim().ToLowerInvariant();
+        if (setting == "auto")
         {
-            if (model.StartsWith("gpt-oss", StringComparison.OrdinalIgnoreCase))
-            {
-                value = "low";
-                return true;
-            }
-
-            if (model.StartsWith("qwen", StringComparison.OrdinalIgnoreCase))
-            {
-                value = false;
-                return true;
-            }
-
-            // Don't send an unnecessary/possibly unsupported field to other models.
+            // Leave the model's own default intact. Do not infer behavior from a model name.
             value = false;
             return false;
         }
-
-        if (bool.TryParse(setting, out var booleanValue))
+        if (setting is "on" or "true")
         {
-            value = booleanValue;
+            value = true;
             return true;
         }
-
-        value = setting;
-        return true;
+        if (setting is "off" or "false")
+        {
+            value = false;
+            return true;
+        }
+        if (setting is "low" or "medium" or "high")
+        {
+            value = setting;
+            return true;
+        }
+        throw new InvalidOperationException("Thinking / reasoning mode must be auto, on, off, low, medium, or high.");
     }
 
     private Result CreatePendingResult(string prompt)
@@ -1213,8 +1489,67 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             && !normalized.Contains("74b", StringComparison.Ordinal);
     }
 
+    private static InlineModelSettings LoadSharedInlineSettingsForOptions()
+    {
+        try { return InlineModelSettingsStore.Load(); }
+        catch { return new InlineModelSettings(); }
+    }
+
+    private void ApplySharedInlineSettingsIfChanged()
+    {
+        InlineModelSettings shared;
+        DateTime writeTime;
+        try
+        {
+            var path = InlineModelSettingsStore.FilePath;
+            if (!File.Exists(path)) return;
+            writeTime = File.GetLastWriteTimeUtc(path);
+            if (writeTime.Ticks <= Interlocked.Read(ref _sharedSettingsWriteTimeUtcTicks)) return;
+            shared = InlineModelSettingsStore.Load();
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[RunMind] Could not read shared inline model settings: {exception.Message}");
+            return;
+        }
+
+        QueryOperation? previous;
+        lock (_settingsLock)
+        {
+            if (writeTime.Ticks <= _sharedSettingsWriteTimeUtcTicks) return;
+            _endpoint = shared.OllamaEndpoint;
+            _lmStudioBaseUrl = shared.LMStudioBaseUrl;
+            _provider = shared.Provider == "lmstudio" ? 1 : 0;
+            _defaultModel = shared.Model;
+            _thinking = shared.Thinking;
+            _keepAliveSeconds = shared.KeepAliveSeconds;
+            _requestTimeoutSeconds = shared.RequestTimeoutSeconds;
+            _modelDiscoveryTimeoutSeconds = shared.ModelDiscoveryTimeoutSeconds;
+            _inlineCpuThreads = shared.InlineCpuThreads;
+            _inlineSystemPrompt = shared.InlineSystemPrompt;
+            _inlineTemperature = shared.InlineTemperature;
+            _inlineTopP = shared.InlineTopP;
+            _inlineMaxOutputTokens = shared.InlineMaxOutputTokens;
+            _inlineSeed = shared.InlineSeed;
+            _inlineConversationalMode = shared.InlineConversationalMode;
+            _settingsVersion++;
+            _sharedSettingsWriteTimeUtcTicks = writeTime.Ticks;
+            lock (_queryLock)
+            {
+                previous = _activeQuery;
+                _activeQuery = null;
+                _latestFastQuery = null;
+                _hasReceivedFastQuery = true;
+            }
+        }
+
+        previous?.Cancel();
+        previous?.Dispose();
+    }
+
     private SettingsSnapshot GetSettingsSnapshot()
     {
+        ApplySharedInlineSettingsIfChanged();
         lock (_settingsLock)
         {
             return new SettingsSnapshot(
@@ -1226,7 +1561,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 _keepAliveSeconds,
                 _requestTimeoutSeconds,
                 _modelDiscoveryTimeoutSeconds,
-                _providerConnectionTimeoutSeconds,
                 _inlineCpuThreads,
                 _inlineSystemPrompt,
                 _inlineTemperature,
@@ -1405,7 +1739,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
 
         if (exceptionChain.Any(item => item is OperationCanceledException))
         {
-            return $"The provider request timed out. Model discovery is limited to {settings.ModelDiscoveryTimeoutSeconds} seconds, initial provider connection and response headers are limited to {settings.ProviderConnectionTimeoutSeconds} seconds, and response generation uses the configured {settings.RequestTimeoutSeconds}-second Request timeout. Adjust the corresponding timeout in the PowerToys Run plugin settings.";
+            return $"The inline provider request exceeded the configured {settings.RequestTimeoutSeconds}-second Request timeout, which includes model loading, initial response headers, and response generation. Model discovery has its separate {settings.ModelDiscoveryTimeoutSeconds}-second timeout.";
         }
 
         var diagnosticText = string.Join(" ", exceptionChain.Select(item => item.Message));
@@ -2528,7 +2862,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 htmlPath);
         }
 
-        var thinkInitiallyEnabled = TryResolveThinkValue(model, settings.Thinking, out var thinkValue)
+        var thinkInitiallyEnabled = TryResolveThinkValue(settings.Thinking, out var thinkValue)
             && (thinkValue is bool boolValue
                 ? boolValue
                 : !string.Equals(Convert.ToString(thinkValue, System.Globalization.CultureInfo.InvariantCulture), "false", StringComparison.OrdinalIgnoreCase));
@@ -2853,7 +3187,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         int KeepAliveSeconds,
         int RequestTimeoutSeconds,
         int ModelDiscoveryTimeoutSeconds,
-        int ProviderConnectionTimeoutSeconds,
         int InlineCpuThreads,
         string InlineSystemPrompt,
         double? InlineTemperature,

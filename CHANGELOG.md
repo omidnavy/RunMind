@@ -1,3 +1,107 @@
+## [2.2.0] — Command Palette authentication and empty-chat handling (2026-11-10)
+
+### Added
+- Optional per-provider API keys and custom request authentication headers for Ollama and LM Studio in Command Palette settings. Authentication is applied to model discovery and generation. Secret input values are masked in the settings card.
+
+### Fixed
+- Opening the separate RunMind chat from an empty inline page now opens a new empty chat instead of raising an empty-transcript error.
+- Use distinct command IDs for the search fallback and persistent Dock command to avoid registering the same command as both fallback and Dock pin.
+- Validate custom header names and values to prevent header injection and reject reserved transport/content headers.
+
+### Security note
+- Command Palette credentials are stored in the per-user RunMind settings JSON and are not DPAPI-encrypted. They are never emitted to RunMind diagnostics.
+
+### Known host limitation
+- Enter-to-submit and Shift+Enter-for-newline require a PowerToys Command Palette host change; the extension API does not expose the Adaptive Card TextBox key event.
+
+## [2.2.0] — Dock conversation controls (2026-11-10)
+
+### Added
+- Add **Start fresh** to both inline search conversations and the pinned Dock conversation. It clears current/previous messages, cancels in-flight generation, resets the form field, and keeps the current page open.
+- Keep the Dock conversation page as its own persistent instance, separate from the search fallback, so Dock history can be continued without contaminating search fallback history.
+
+### Notes
+- Command Palette's Adaptive Card host does not currently expose modifier-aware key events to extensions. Multiline input and the explicit Send button remain; exact Enter-to-send / Shift+Enter-newline requires a PowerToys host change.
+
+## [2.2.0] — Command Palette Dock and prompt defaults (2026-11-10)
+
+### Fixed
+- Resolve the existing pinned `runmind.inline-conversation` Dock command to a fresh `InlineAnswerPage` instance instead of the long-lived search fallback page. The Dock page now starts with an empty transcript and does not inherit the active search query's conversation.
+- Use a neutral **Your message** label for the inline message form and update the empty-page guidance so it works for both fresh Dock chats and search fallback conversations.
+
+### Changed
+- Add a Command Palette-specific system prompt with the exact launcher-oriented instructions requested for its root search-box input. The Command Palette inline client now uses `CommandPaletteSystemPrompt` for Ollama, LM Studio native chat, and LM Studio compatibility chat.
+- Keep the existing `InlineSystemPrompt` independent for PowerToys Run. PowerToys Run settings writes explicitly preserve `CommandPaletteSystemPrompt`, so editing the Run plugin's own prompt does not reset the Command Palette prompt.
+- Expose the Command Palette prompt in its own extension settings page, without changing Standalone or PowerToys Run prompt behavior.
+
+### Keyboard input limitation
+- The inline follow-up remains an Adaptive Card multiline `Input.Text`, so Enter inserts a newline and the **Send** action submits. The current Command Palette host's `ContentFormControl` submits Enter only when the focused TextBox is single-line; it does not expose a modifier-aware event to extensions. Therefore RunMind cannot implement Enter-to-send plus Shift+Enter-newline through the current extension API alone. This needs a PowerToys host-side change.
+
+### Validation
+- Source-level checks cover Dock page isolation, preservation of the stable pinned ID, separation of the two system prompts, all three Command Palette provider request paths, and preservation by PowerToys Run settings writes. XML/JSON parsing and archive integrity checks are run for the release ZIP. Windows/.NET compilation and live Dock/provider tests still need to be confirmed on the target Windows installation.
+
+## [2.2.0] — Complete Command Palette conversation handoff (2026-11-10)
+
+### Added
+- Transfer the complete ordered inline conversation to the Command Palette-hosted chat window, including every completed user/assistant turn, provider/model attribution, timestamps, and failed assistant responses.
+- Restore the transferred transcript through the existing RunMind `.runmind` session loader so the messages become the active conversation state and subsequent model requests receive the prior history.
+- When inline generation is still running, transfer its current user prompt but omit the unfinished assistant response rather than presenting partial output as a completed turn.
+- Bound the conversation payload to 4 MB and the native chat launch request to 32 MB.
+
+### Compatibility
+- Reuse the existing `ChatWindow.html` session import path; no changes to the shared chat UI are required. Standalone and PowerToys Run conversation startup paths remain unchanged.
+
+### Validation
+- Static checks cover complete role-ordered transcript generation, RunMind v2 session schema, payload bounds, and routing into the existing `MainWindow` initial-conversation loader. Windows/.NET compilation and live chat continuation still require verification on the target Windows installation.
+
+## [2.2.0] — Command Palette form submission correction (2026-11-10)
+
+### Fixed
+- Handle the current Command Palette Adaptive Card submission contract in both the inline-model settings form and inline conversation form. The host provides form inputs and `Action.Submit.data` separately; both are now merged before processing the action.
+- Persist the selected provider/model when **Save settings** is submitted. Verify the saved model by reading the shared settings file back and emit diagnostics if persistence fails.
+- Execute **Send** and **Open chat with context** from the inline conversation form using the separately supplied action data.
+- Retain one-argument `SubmitForm` overloads for compatibility with older Command Palette hosts.
+
+### Validation
+- Static checks cover both form overloads, separation/merge of inputs and action data, JSON structure, project XML, and ZIP integrity. Windows/.NET compilation and live provider / chat process tests remain unverified in this environment.
+
+## [2.2.0] — PowerToys Command Palette integration (in development)
+
+### Added
+- Add an independent PowerToys Command Palette host that launches its own chat process from the packaged extension executable. It does not launch or require the Standalone executable.
+- Host the canonical shared `ChatWindow.html`, `ArtifactTools.js`, native bridge, and WPF/WebView2 chat window inside the Command Palette project by linking the shared sources and assets.
+- Add the **Open chat with empty context** action and a branded **RunMind** free-text fallback that submits the entered query to the Command Palette-hosted chat.
+- Add a native Command Palette extension settings page for inline provider/model and generation configuration. The page does not launch the chat window.
+- Keep each host's WebView2 profile isolated to avoid cross-process profile locking. The existing native appearance preference file remains shared across hosts. PowerToys Run and Command Palette inline settings are synchronized separately through a shared configuration file.
+- Move the canonical `ChatWindow.html` Agent runtime and `ArtifactTools.js` implementation into `Shared/`; Standalone, PowerToys Run, and Command Palette link those shared files into their existing output locations.
+
+
+### Command Palette inline settings follow-up
+- Remove the top-level **Configure RunMind** command and the old chat/settings-flyout launch path after user testing showed it opened a blank chat window.
+- Replace the manual answer-paste form with automatic query/result handoff from the inline Command Palette conversation to the independent chat window.
+- Add a provider selector, refreshable model dropdown, custom model ID, endpoints, timeouts, generation controls, system instructions, and Nemotron conversational-mode option to the actual extension settings page.
+- Add `Shared/InlineModelSettings.cs` as the common settings store consumed by Command Palette and PowerToys Run.
+- Keep inline answer generation/rendering and streaming inside Command Palette explicitly marked as outstanding.
+
+### Fixed
+- Resolve CsWinRT Windows metadata from the .NET Windows SDK projection ref-pack for the active target framework instead of relying on the installed SDK's `Platforms\UAP\<version>\Platform.xml`. This avoids the CsWinRT metadata-read failure reported on Windows SDK installations where that platform XML is missing, unreadable, or incomplete.
+- Reference `Microsoft.Windows.SDK.BuildTools` explicitly for the Command Palette project. The separate MSIX build-tools package supplies the Windows SDK MSBuild infrastructure (including `UAP.props`) required by MSIX/PRI generation; it is not supplied by `Microsoft.Windows.SDK.BuildTools.MSIX` alone.
+- Copy the Command Palette package logos and `Public` extension folder into both build and publish outputs. Loose registration previously depended on files that were not explicitly staged beside the executable.
+- Add a BAT-driven deployment workflow that creates a signed x64 MSIX, creates/reuses a publisher-matching local development certificate, trusts its public certificate in Local Machine Trusted People on first install, and installs/removes the package for the current user.
+- Validate the generated package's identity, app-extension declaration, COM CLSID consistency, logos, and public extension folder before installing it. The normal workflow now uses `Add-AppxPackage -Path` rather than loose-manifest registration.
+- Demote the SDK's `APPX1707` diagnostic to an informational MSBuild message. `Microsoft.CommandPalette.Extensions.winmd` is the Command Palette API contract consumed by the extension; RunMind implements its extension interfaces in the managed COM server registered by the package manifest, not as a separate WinRT component. Assigning an unrelated implementation DLL would be misleading.
+- Set the COM server working directory to its packaged executable directory before constructing the extension, ensuring relative package assets resolve consistently during COM activation.
+- Add a per-user COM-server startup log with process, activation arguments, working directory, initialization stages, provider requests, and full startup/shutdown exceptions. The log is written to `%LOCALAPPDATA%\RunMind\CommandPalette\Logs\com-server.log`; diagnostics failures are deliberately non-fatal.
+
+### Compatibility and scope
+- The Command Palette extension requires PowerToys Command Palette and its supported MSIX/WinRT extension model. It hosts the shared WPF/WebView2 chat UI in a process started from its own packaged executable. It does not depend on the Standalone executable. Inline model-answer rendering inside the Command Palette surface and full settings/data synchronization across the three isolated WebView2 profiles remain incomplete.
+- PowerToys Run remains supported. Its existing plugin behavior and settings are retained.
+- The local development package is signed with a machine-trusted self-signed certificate matching `CN=Omid Navy`; it is intended only for local testing and is not a production distribution certificate. The existing standalone host and PowerToys Run behavior remain unchanged.
+
+### Validation
+- Validate project and package-manifest XML, package identity/publisher alignment, all three Command Palette CLSID declarations, app-extension name and public folder, BAT action routing, deployment-script package checks, shared runtime source/output paths, JavaScript references, full source-archive layout, and ZIP integrity. Windows MSIX generation/signing, certificate elevation, package installation, and live PowerToys discovery/activation still require verification on the target Windows installation.
+- Windows MSIX generation/signing, certificate elevation, package installation, and live PowerToys discovery/activation still require verification on the target Windows installation.
+
 ## [2.1.6] — Reliability, bounded processing, and workspace safety
 
 ### Fixed
@@ -1485,3 +1589,11 @@ The original changelog recorded the following reliability follow-ups without ass
 - Provides a clean, responsive, theme-aware HTML response page with browser scrolling, selectable text, clickable HTTP/HTTPS/mailto links, a Copy Markdown button, and per-code-block copy buttons.
 - Disables model-supplied raw HTML, strips images and active elements, restricts link schemes, and uses a restrictive Content Security Policy. The response page makes no external requests on its own.
 - Keeps the PowerToys result subtitle short; Enter opens the full response, and the result context menu copies the complete Markdown response.
+
+
+### Command Palette activation diagnostics and SDK assembly resolution
+
+- Register a package-local resolver for `Microsoft.Windows.SDK.NET.dll` before Command Palette WinRT extension types are accessed.
+- Isolate COM-server startup in a non-inlined method so the resolver is installed before the extension class is JIT-compiled.
+- Log requested and packaged SDK assembly identities and the package path used for resolution.
+- Add startup diagnostics around CsWinRT wrapper initialization and extension construction.
