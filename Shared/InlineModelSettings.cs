@@ -35,6 +35,11 @@ public sealed record InlineModelSettings
     public string CommandPaletteOllamaAuthHeader { get; init; } = string.Empty;
     public string CommandPaletteLMStudioApiKey { get; init; } = string.Empty;
     public string CommandPaletteLMStudioAuthHeader { get; init; } = string.Empty;
+    // PowerToys Run credentials are separate from Command Palette credentials.
+    public string PowerToysRunOllamaApiKey { get; init; } = string.Empty;
+    public string PowerToysRunOllamaAuthHeader { get; init; } = string.Empty;
+    public string PowerToysRunLMStudioApiKey { get; init; } = string.Empty;
+    public string PowerToysRunLMStudioAuthHeader { get; init; } = string.Empty;
     public double? InlineTemperature { get; init; }
     public double? InlineTopP { get; init; }
     public int? InlineMaxOutputTokens { get; init; }
@@ -50,8 +55,18 @@ public sealed record InlineModelDiscoveryResult(IReadOnlyList<string> Models, st
 public static class InlineModelSettingsStore
 {
     public const string DefaultSystemPrompt =
+        "You are RunMind, a compact, proactive local AI living inside \"Microsoft PowerToys Run\".\n" +
+        "The input is the user's current search-box text. It may be a single letter, partial word, application name, command, question, complete task or anything else. You can not execute commands directly so instead guide the user how to use that command.";
+
+    private const string PreviousDefaultSystemPrompt =
         "You are RunMind, a helpful, concise local AI assistant available from PowerToys Run and PowerToys Command Palette.\n" +
         "The input may be a short search query, a question, a command, or a complete task. Respond directly and adapt the level of detail to the request.";
+
+    private const string LegacyQuickAiSystemPrompt =
+        "SYSTEM\n\n" +
+        "You are QuickAI, a compact proactive local AI living inside \"Microsoft PowerToys Run\".\n" +
+        "The input is the user's current search-box text. It may be a single letter, partial word, application name, command, question, complete task or anything else.\n" +
+        "Answer immediately without introductions.";
 
     public const string DefaultCommandPaletteSystemPrompt =
         "You are RunMind, a compact, proactive local AI living inside \"Microsoft PowerToys Command Palette\".\n" +
@@ -141,12 +156,16 @@ public static class InlineModelSettingsStore
             RequestTimeoutSeconds = Clamp(settings.RequestTimeoutSeconds, 30, 3600, 600),
             ModelDiscoveryTimeoutSeconds = Clamp(settings.ModelDiscoveryTimeoutSeconds, 1, 300, 8),
             InlineCpuThreads = Clamp(settings.InlineCpuThreads, 0, 128, 0),
-            InlineSystemPrompt = Limit(settings.InlineSystemPrompt, 12000, string.Empty),
+            InlineSystemPrompt = NormalizeInlineSystemPrompt(settings.InlineSystemPrompt),
             CommandPaletteSystemPrompt = Limit(settings.CommandPaletteSystemPrompt, 12000, DefaultCommandPaletteSystemPrompt),
             CommandPaletteOllamaApiKey = Limit(settings.CommandPaletteOllamaApiKey, 4096, string.Empty),
             CommandPaletteOllamaAuthHeader = Limit(settings.CommandPaletteOllamaAuthHeader, 8192, string.Empty),
             CommandPaletteLMStudioApiKey = Limit(settings.CommandPaletteLMStudioApiKey, 4096, string.Empty),
             CommandPaletteLMStudioAuthHeader = Limit(settings.CommandPaletteLMStudioAuthHeader, 8192, string.Empty),
+            PowerToysRunOllamaApiKey = Limit(settings.PowerToysRunOllamaApiKey, 4096, string.Empty),
+            PowerToysRunOllamaAuthHeader = Limit(settings.PowerToysRunOllamaAuthHeader, 8192, string.Empty),
+            PowerToysRunLMStudioApiKey = Limit(settings.PowerToysRunLMStudioApiKey, 4096, string.Empty),
+            PowerToysRunLMStudioAuthHeader = Limit(settings.PowerToysRunLMStudioAuthHeader, 8192, string.Empty),
             InlineTemperature = NormalizeDouble(settings.InlineTemperature, 0, 2),
             InlineTopP = NormalizeDouble(settings.InlineTopP, 0, 1),
             InlineMaxOutputTokens = NormalizeNullableInt(settings.InlineMaxOutputTokens, 1, 1_000_000),
@@ -156,9 +175,6 @@ public static class InlineModelSettingsStore
 
     /// <summary>
     /// Adds Command Palette credentials to an outbound provider request.
-    /// API keys use Bearer authentication by default. A custom "Name: value"
-    /// header is added last and replaces an API-key Authorization header when
-    /// it also uses the Authorization name.
     /// </summary>
     public static void ApplyCommandPaletteAuthentication(HttpRequestMessage request, InlineModelSettings rawSettings)
     {
@@ -170,15 +186,27 @@ public static class InlineModelSettingsStore
         var customHeader = settings.Provider == "lmstudio"
             ? settings.CommandPaletteLMStudioAuthHeader
             : settings.CommandPaletteOllamaAuthHeader;
+        ApplyAuthentication(request, apiKey, customHeader);
+    }
 
-        if (!string.IsNullOrWhiteSpace(apiKey))
+    /// <summary>
+    /// Adds an optional Bearer API key and optional custom HTTP header.
+    /// The custom header is applied last, so a custom Authorization header replaces the Bearer value.
+    /// </summary>
+    public static void ApplyAuthentication(HttpRequestMessage request, string? apiKey, string? customHeader)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        apiKey = (apiKey ?? string.Empty).Trim();
+        customHeader = (customHeader ?? string.Empty).Trim();
+
+        if (apiKey.Length > 0)
         {
             if (apiKey.Any(char.IsControl))
                 throw new InvalidOperationException("The API key must not contain control characters.");
             request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + apiKey);
         }
 
-        if (string.IsNullOrWhiteSpace(customHeader))
+        if (customHeader.Length == 0)
             return;
 
         var separator = customHeader.IndexOf(':');
@@ -202,6 +230,26 @@ public static class InlineModelSettingsStore
         request.Headers.Remove(name);
         if (!request.Headers.TryAddWithoutValidation(name, value))
             throw new InvalidOperationException($"'{name}' is not a valid request header for this provider.");
+    }
+
+    /// <summary>
+    /// Normalizes the PowerToys Run inline prompt, migrating only known built-in defaults.
+    /// A deliberately empty prompt remains empty.
+    /// </summary>
+    public static string NormalizeInlineSystemPrompt(string? value)
+    {
+        var normalized = (value ?? string.Empty)
+            .Replace("\\r\\n", "\n", StringComparison.Ordinal)
+            .Replace("\\n", "\n", StringComparison.Ordinal)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal)
+            .Trim();
+
+        if (string.Equals(normalized, PreviousDefaultSystemPrompt, StringComparison.Ordinal)
+            || string.Equals(normalized, LegacyQuickAiSystemPrompt, StringComparison.Ordinal))
+            return DefaultSystemPrompt;
+
+        return normalized.Length <= 12000 ? normalized : normalized[..12000];
     }
 
     private static bool IsValidHeaderName(string name)

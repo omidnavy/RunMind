@@ -50,14 +50,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private const int DefaultInlineCpuThreads = 0;
     private const int MaximumInlineSystemPromptCharacters = 12000;
     private const int MaximumInlineResponseCharacters = 8 * 1024 * 1024;
-    private const string PreviousDefaultInlineSystemPrompt =
-        "SYSTEM\n\n" +
-        "You are QuickAI, a compact proactive local AI living inside \"Microsoft PowerToys Run\".\n" +
-        "The input is the user's current search-box text. It may be a single letter, partial word, application name, command, question, complete task or anything else.\n" +
-        "Answer immediately without introductions.";
-    private const string DefaultInlineSystemPrompt =
-        "You are RunMind, a helpful, concise local AI assistant available from PowerToys Run and PowerToys Command Palette.\n" +
-        "The input may be a short search query, a question, a command, or a complete task. Respond directly and adapt the level of detail to the request.";
 
     // The HttpClient is shared, but individual requests have their own configurable timeout.
     private static readonly HttpClient HttpClient = new()
@@ -96,6 +88,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     private int _modelDiscoveryTimeoutSeconds = DefaultModelDiscoveryTimeoutSeconds;
     private int _inlineCpuThreads = DefaultInlineCpuThreads;
     private string _inlineSystemPrompt = string.Empty;
+    private string _ollamaApiKey = string.Empty;
+    private string _ollamaAuthHeader = string.Empty;
+    private string _lmStudioApiKey = string.Empty;
+    private string _lmStudioAuthHeader = string.Empty;
     private double? _inlineTemperature;
     private double? _inlineTopP;
     private int? _inlineMaxOutputTokens;
@@ -140,6 +136,46 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         },
         new()
         {
+            Key = "OllamaApiKey",
+            DisplayLabel = "Ollama API key (optional)",
+            DisplayDescription = "PowerToys Run only. Sends Authorization: Bearer <key> to Ollama model discovery and generation requests. Stored in the local per-user RunMind settings file; leave empty when not required.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = shared.PowerToysRunOllamaApiKey,
+            TextBoxMaxLength = 4096,
+            PlaceholderText = "Optional Ollama API key...",
+        },
+        new()
+        {
+            Key = "OllamaAuthHeader",
+            DisplayLabel = "Ollama custom auth header (optional)",
+            DisplayDescription = "PowerToys Run only. Full header in the form Header-Name: value. A custom Authorization header replaces the Bearer API key header.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = shared.PowerToysRunOllamaAuthHeader,
+            TextBoxMaxLength = 8192,
+            PlaceholderText = "Header-Name: value",
+        },
+        new()
+        {
+            Key = "LMStudioApiKey",
+            DisplayLabel = "LM Studio API key (optional)",
+            DisplayDescription = "PowerToys Run only. Sends Authorization: Bearer <key> to LM Studio model discovery and generation requests. Stored in the local per-user RunMind settings file; leave empty when not required.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = shared.PowerToysRunLMStudioApiKey,
+            TextBoxMaxLength = 4096,
+            PlaceholderText = "Optional LM Studio API key...",
+        },
+        new()
+        {
+            Key = "LMStudioAuthHeader",
+            DisplayLabel = "LM Studio custom auth header (optional)",
+            DisplayDescription = "PowerToys Run only. Full header in the form Header-Name: value. A custom Authorization header replaces the Bearer API key header.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = shared.PowerToysRunLMStudioAuthHeader,
+            TextBoxMaxLength = 8192,
+            PlaceholderText = "Header-Name: value",
+        },
+        new()
+        {
             Key = "Model",
             DisplayLabel = "Default model",
             DisplayDescription = "Model identifier as shown by the selected provider (Ollama model name or LM Studio model ID). You can override it per query with > model > prompt.",
@@ -154,12 +190,12 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Combobox,
             ComboBoxItems = new List<KeyValuePair<string, string>>
             {
-                new("Auto — model default", "auto"),
-                new("On", "on"),
-                new("Off", "off"),
-                new("Low", "low"),
-                new("Medium", "medium"),
-                new("High", "high"),
+                new("Auto — model default", "0"),
+                new("On", "1"),
+                new("Off", "2"),
+                new("Low", "3"),
+                new("Medium", "4"),
+                new("High", "5"),
             },
             ComboBoxValue = GetThinkingChoiceIndex(shared.Thinking),
         },
@@ -273,6 +309,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         int modelDiscoveryTimeoutSeconds = initial.ModelDiscoveryTimeoutSeconds;
         int inlineCpuThreads = initial.InlineCpuThreads;
         string inlineSystemPrompt = initial.InlineSystemPrompt;
+        string ollamaApiKey = initial.PowerToysRunOllamaApiKey;
+        string ollamaAuthHeader = initial.PowerToysRunOllamaAuthHeader;
+        string lmStudioApiKey = initial.PowerToysRunLMStudioApiKey;
+        string lmStudioAuthHeader = initial.PowerToysRunLMStudioAuthHeader;
         double? inlineTemperature = initial.InlineTemperature;
         double? inlineTopP = initial.InlineTopP;
         int? inlineMaxOutputTokens = initial.InlineMaxOutputTokens;
@@ -288,6 +328,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             if (providerOption is not null)
                 provider = providerOption.ComboBoxValue == 1 ? 1 : 0;
             model = GetTextOption(options, "Model", model);
+            ollamaApiKey = ReadOptionalTextOption(options, "OllamaApiKey", ollamaApiKey, 4096);
+            ollamaAuthHeader = ReadOptionalTextOption(options, "OllamaAuthHeader", ollamaAuthHeader, 8192);
+            lmStudioApiKey = ReadOptionalTextOption(options, "LMStudioApiKey", lmStudioApiKey, 4096);
+            lmStudioAuthHeader = ReadOptionalTextOption(options, "LMStudioAuthHeader", lmStudioAuthHeader, 8192);
             thinking = ReadThinkingOption(options, thinking);
             var inlinePromptOption = options.FirstOrDefault(option => option.Key == "InlineSystemPrompt");
             if (inlinePromptOption is null)
@@ -296,13 +340,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             }
             else
             {
-                var savedPrompt = NormalizeInlineSystemPrompt(inlinePromptOption.TextValue ?? string.Empty);
-                var previousDefault = NormalizeInlineSystemPrompt(PreviousDefaultInlineSystemPrompt);
-                // Migrate only the exact previous built-in starter text. Preserve custom prompts
-                // and an explicitly empty value (which disables the additional instructions).
-                inlineSystemPrompt = string.Equals(savedPrompt, previousDefault, StringComparison.Ordinal)
-                    ? DefaultInlineSystemPrompt
-                    : savedPrompt;
+                inlineSystemPrompt = NormalizeInlineSystemPrompt(inlinePromptOption.TextValue ?? string.Empty);
             }
             if (options.Any(option => option.Key == "InlineTemperature"))
                 inlineTemperature = ParseOptionalDouble(options, "InlineTemperature", 0, provider == 1 ? 1 : 2);
@@ -354,12 +392,21 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _modelDiscoveryTimeoutSeconds = modelDiscoveryTimeoutSeconds;
             _inlineCpuThreads = inlineCpuThreads;
             _inlineSystemPrompt = inlineSystemPrompt;
+            _ollamaApiKey = ollamaApiKey;
+            _ollamaAuthHeader = ollamaAuthHeader;
+            _lmStudioApiKey = lmStudioApiKey;
+            _lmStudioAuthHeader = lmStudioAuthHeader;
             _inlineTemperature = inlineTemperature;
             _inlineTopP = inlineTopP;
             _inlineMaxOutputTokens = inlineMaxOutputTokens;
             _inlineSeed = inlineSeed;
             _inlineConversationalMode = inlineConversationalMode;
             _settingsVersion++;
+            lock (ModelCacheLock)
+            {
+                _modelCacheEndpoint = null;
+                _modelCache.Clear();
+            }
 
             // Publish the new settings and invalidate work using the old snapshot as one
             // coordinated operation. BeginQuery/GetOrBeginQuery use the same lock order.
@@ -395,6 +442,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 CommandPaletteOllamaAuthHeader = initial.CommandPaletteOllamaAuthHeader,
                 CommandPaletteLMStudioApiKey = initial.CommandPaletteLMStudioApiKey,
                 CommandPaletteLMStudioAuthHeader = initial.CommandPaletteLMStudioAuthHeader,
+                PowerToysRunOllamaApiKey = ollamaApiKey,
+                PowerToysRunOllamaAuthHeader = ollamaAuthHeader,
+                PowerToysRunLMStudioApiKey = lmStudioApiKey,
+                PowerToysRunLMStudioAuthHeader = lmStudioAuthHeader,
                 InlineTemperature = inlineTemperature,
                 InlineTopP = inlineTopP,
                 InlineMaxOutputTokens = inlineMaxOutputTokens,
@@ -641,8 +692,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 if (_disposed) return null;
                 if (_activeQuery is not null
                     && string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
-                    && !_activeQuery.IsCancellationRequested
-                    && !_activeQuery.WasHandedOff)
+                    && (!_activeQuery.IsCancellationRequested || _activeQuery.WasHandedOff))
                 {
                     _latestFastQuery = search;
                     _hasReceivedFastQuery = true;
@@ -679,7 +729,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 if (_activeQuery is not null)
                 {
                     if (!string.Equals(_activeQuery.Search, search, StringComparison.Ordinal)
-                        || _activeQuery.IsCancellationRequested || _activeQuery.WasHandedOff)
+                        || (_activeQuery.IsCancellationRequested && !_activeQuery.WasHandedOff))
                         return null;
                     return _activeQuery;
                 }
@@ -812,6 +862,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
         };
+        ApplyProviderAuthentication(request, settings);
 
         using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
@@ -896,6 +947,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
         };
+        ApplyProviderAuthentication(request, settings);
         using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
@@ -1007,6 +1059,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"),
         };
+        ApplyProviderAuthentication(request, settings);
         using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
@@ -1074,6 +1127,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         output.Append(chunk);
     }
 
+    private static void ApplyProviderAuthentication(HttpRequestMessage request, SettingsSnapshot settings)
+    {
+        var apiKey = settings.Provider == 1 ? settings.LMStudioApiKey : settings.OllamaApiKey;
+        var customHeader = settings.Provider == 1 ? settings.LMStudioAuthHeader : settings.OllamaAuthHeader;
+        InlineModelSettingsStore.ApplyAuthentication(request, apiKey, customHeader);
+    }
+
     private async Task<List<string>> FetchModelsFromEndpointAsync(SettingsSnapshot settings, CancellationToken cancellationToken = default)
     {
         var modelsUri = settings.Provider == 1
@@ -1093,6 +1153,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, modelsUri);
+            ApplyProviderAuthentication(request, settings);
             using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
             JsonDocument json;
             bool lmStudioCompatibilityFallback = false;
@@ -1101,6 +1162,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 response.Dispose();
                 lmStudioCompatibilityFallback = true;
                 using var compatibilityRequest = new HttpRequestMessage(HttpMethod.Get, BuildLMStudioUri(settings.LMStudioBaseUrl, "models"));
+                ApplyProviderAuthentication(compatibilityRequest, settings);
                 using var compatibilityResponse = await HttpClient.SendAsync(compatibilityRequest, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token).ConfigureAwait(false);
                 if (!compatibilityResponse.IsSuccessStatusCode)
                 {
@@ -1201,16 +1263,23 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         // TextValue preserves settings created by earlier plugin versions, where
         // Thinking was a textbox. New settings use the shared provider-neutral list.
         var text = (option.TextValue ?? string.Empty).Trim().ToLowerInvariant();
-        if (text is "auto" or "on" or "off" or "low" or "medium" or "high") return text;
-
-        return option.ComboBoxValue switch
+        return text switch
         {
-            1 => "on",
-            2 => "off",
-            3 => "low",
-            4 => "medium",
-            5 => "high",
-            _ => "auto",
+            "auto" or "0" => "auto",
+            "on" or "true" or "1" => "on",
+            "off" or "false" or "2" => "off",
+            "low" or "3" => "low",
+            "medium" or "4" => "medium",
+            "high" or "5" => "high",
+            _ => option.ComboBoxValue switch
+            {
+                1 => "on",
+                2 => "off",
+                3 => "low",
+                4 => "medium",
+                5 => "high",
+                _ => fallback,
+            },
         };
     }
 
@@ -1342,14 +1411,12 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
     {
         lock (_queryLock)
         {
-            // The clicked Result may belong to the previous query generation if PowerToys
-            // has not replaced its visible result list yet. Never use that Result's captured
-            // prompt when RunMind has already registered a newer active operation.
+            // The clicked Result may belong to an earlier render of the same retained Run
+            // query. Keep resolving it against the active snapshot so each activation can
+            // open an independent chat. A genuinely newer search still invalidates the old one.
             currentOperation = _activeQuery!;
             if (_disposed
                 || currentOperation is null
-                || currentOperation.IsCancellationRequested
-                || currentOperation.WasHandedOff
                 || (_hasReceivedFastQuery && !string.Equals(_latestFastQuery, currentOperation.Search, StringComparison.Ordinal)))
             {
                 currentOperation = null!;
@@ -1527,6 +1594,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _modelDiscoveryTimeoutSeconds = shared.ModelDiscoveryTimeoutSeconds;
             _inlineCpuThreads = shared.InlineCpuThreads;
             _inlineSystemPrompt = shared.InlineSystemPrompt;
+            _ollamaApiKey = shared.PowerToysRunOllamaApiKey;
+            _ollamaAuthHeader = shared.PowerToysRunOllamaAuthHeader;
+            _lmStudioApiKey = shared.PowerToysRunLMStudioApiKey;
+            _lmStudioAuthHeader = shared.PowerToysRunLMStudioAuthHeader;
             _inlineTemperature = shared.InlineTemperature;
             _inlineTopP = shared.InlineTopP;
             _inlineMaxOutputTokens = shared.InlineMaxOutputTokens;
@@ -1534,6 +1605,11 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             _inlineConversationalMode = shared.InlineConversationalMode;
             _settingsVersion++;
             _sharedSettingsWriteTimeUtcTicks = writeTime.Ticks;
+            lock (ModelCacheLock)
+            {
+                _modelCacheEndpoint = null;
+                _modelCache.Clear();
+            }
             lock (_queryLock)
             {
                 previous = _activeQuery;
@@ -1563,6 +1639,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 _modelDiscoveryTimeoutSeconds,
                 _inlineCpuThreads,
                 _inlineSystemPrompt,
+                _ollamaApiKey,
+                _ollamaAuthHeader,
+                _lmStudioApiKey,
+                _lmStudioAuthHeader,
                 _inlineTemperature,
                 _inlineTopP,
                 _inlineMaxOutputTokens,
@@ -1572,17 +1652,15 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
     }
 
-    private static string NormalizeInlineSystemPrompt(string value)
+    private static string NormalizeInlineSystemPrompt(string? value)
+        => InlineModelSettingsStore.NormalizeInlineSystemPrompt(value);
+
+    private static string ReadOptionalTextOption(IEnumerable<PluginAdditionalOption> options, string key, string fallback, int maximumLength)
     {
-        var normalized = (value ?? string.Empty)
-            .Replace("\\r\\n", "\n", StringComparison.Ordinal)
-            .Replace("\\n", "\n", StringComparison.Ordinal)
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace("\r", "\n", StringComparison.Ordinal)
-            .Trim();
-        return normalized.Length > MaximumInlineSystemPromptCharacters
-            ? normalized[..MaximumInlineSystemPromptCharacters]
-            : normalized;
+        var option = options.FirstOrDefault(candidate => candidate.Key == key);
+        if (option is null) return fallback;
+        var value = (option.TextValue ?? string.Empty).Trim();
+        return value.Length <= maximumLength ? value : value[..maximumLength];
     }
 
     private static double? ParseOptionalDouble(IEnumerable<PluginAdditionalOption> options, string key, double minimum, double maximum)
@@ -2491,6 +2569,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                 {
                     Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
                 };
+                ApplyProviderAuthentication(request, settings);
                 using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
                 if (result.IsSuccessStatusCode)
                 {
@@ -2550,6 +2629,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
             };
+            ApplyProviderAuthentication(request, settings);
             using var result = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
             if (!result.IsSuccessStatusCode) throw new HttpRequestException($"Ollama title request returned HTTP {(int)result.StatusCode}.");
             var responseBytes = await ReadBoundedContentBytesAsync(result.Content, 512 * 1024, timeout.Token).ConfigureAwait(false);
@@ -3120,18 +3200,18 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             {
                 if (_hasCompletion && !IsCancellationRequested && !WasHandedOff)
                 {
+                    // A completed inline answer is an immutable launch snapshot. Do not
+                    // consume it: every activation can open another independent chat window.
                     response = _response;
                     isError = _isError;
-                    // Claim the pending result exactly once. A double-click must not open
-                    // multiple windows from the same query operation.
-                    Interlocked.Exchange(ref _handedOff, 1);
                     return true;
                 }
 
                 response = string.Empty;
                 isError = false;
-                // Mark handoff before releasing the lock. SetCompletion and IsCurrentQuery
-                // will reject the operation immediately, even before HTTP cancellation runs.
+                // A still-running inline request is handed to chat only once. Keep the
+                // original prompt/settings as a reusable snapshot so later activations
+                // can open sibling chats without starting another inline generation.
                 Interlocked.Exchange(ref _handedOff, 1);
                 return false;
             }
@@ -3189,6 +3269,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         int ModelDiscoveryTimeoutSeconds,
         int InlineCpuThreads,
         string InlineSystemPrompt,
+        string OllamaApiKey,
+        string OllamaAuthHeader,
+        string LMStudioApiKey,
+        string LMStudioAuthHeader,
         double? InlineTemperature,
         double? InlineTopP,
         int? InlineMaxOutputTokens,

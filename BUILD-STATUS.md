@@ -1,4 +1,6 @@
-# RunMind 2.2.0 — three-host source update
+# RunMind 2.2.1 — PowerToys Run settings and handoff fixes
+
+This is a follow-up release on the 2.2.0 three-host source baseline. It keeps the Standalone and Command Palette behavior intact while correcting PowerToys Run reasoning selection, adding Run-scoped provider authentication, updating the Run prompt default, and making chat launch snapshots reusable.
 
 This source snapshot updates the PowerToys Command Palette host and establishes a shared inline-model configuration with the PowerToys Run plugin.
 
@@ -35,6 +37,9 @@ These changes address the 23 reported compiler diagnostics by inspection against
 The Windows build completed successfully, but the install step exposed a PowerShell deployment-script error. `ForceApplicationShutdown` belongs to `Add-AppxPackage`; it is not a supported parameter of `Remove-AppxPackage`. The uninstall and upgrade paths now call `Remove-AppxPackage` without that unsupported switch. The install path detects whether the local `Add-AppxPackage` cmdlet exposes `ForceApplicationShutdown` and supplies it only when available. This keeps package replacement compatible with the installed Appx module.
 
 ## Validation status
+
+For 2.2.1, static checks passed for the edited C# delimiter structure, provider-auth request coverage, six reasoning-selection mappings, requested system-prompt text, JSON/XML project metadata, embedded JavaScript syntax, and ZIP integrity. A Windows/.NET build and live PowerToys Run test were not possible in the editing environment because it does not have the .NET SDK or Windows/PowerToys runtime.
+
 
 Static XML checks passed for the project files, publish profile, and package manifest. The complete Windows build and runtime checks have **not** been run in this environment because the .NET SDK and Windows/PowerToys runtime are unavailable here. On the target Windows machine, run:
 

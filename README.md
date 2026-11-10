@@ -7,7 +7,7 @@
 RunMind is available through three Windows entry points:
 
 - **Standalone Windows app** — a full chat window that can be launched independently, with support for multiple windows.
-- **PowerToys Run plugin** — start a RunMind conversation directly from PowerToys Run using `llm <prompt>` or search for RunMind.
+- **PowerToys Run plugin** — start a RunMind conversation directly from PowerToys Run using `llm <prompt>` or search for RunMind. The retained inline query can be opened in multiple independent chat windows, including after the first window takes over an in-progress answer.
 - **PowerToys Command Palette extension** — an independent host with a branded **RunMind** inline fallback, **Open chat with empty context**, and an extension settings page for the shared provider/model configuration. The fallback streams local model answers directly into a Command Palette conversation page and supports follow-up turns. It starts its own chat process from the packaged Command Palette executable and hosts the canonical shared chat UI; it does not launch or require the Standalone executable. Inline settings are shared with PowerToys Run. The helper package is hidden from Start and Windows Search because it is a COM host, not a separately launchable app. `Build-Release-x64.bat` builds all three Release x64 hosts and creates/signs the Command Palette MSIX without installing it; `Install-RunMind-CommandPalette.bat` separately installs or uninstalls the already-built package.
 
 ## What you can do with RunMind
@@ -168,7 +168,10 @@ RunMind's tools can be combined in one Agent task. For example:
 
 - **Ollama** — default local API address: `http://localhost:11434`.
 - **LM Studio** — use its local server with the OpenAI-compatible API, commonly `http://localhost:1234/v1`.
+- **PowerToys Run authentication** — the plugin settings expose separate optional API key and custom auth-header fields for Ollama and LM Studio. API keys use Bearer authorization; a custom header uses `Header-Name: value` and overrides the Bearer value when its name is `Authorization`.
 - **Other providers** — add an OpenAI-compatible endpoint, with optional API key and custom authentication headers.
+
+PowerToys Run API keys and custom auth headers are stored in the per-user RunMind settings JSON without DPAPI encryption, and the PowerToys Run text fields are not masked. Use only credentials appropriate for local storage on that Windows account.
 
 RunMind supports multiple configured connections. Model availability and capabilities such as vision and tool calling depend on the selected model and provider.
 

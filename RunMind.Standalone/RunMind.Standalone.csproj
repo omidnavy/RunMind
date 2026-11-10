@@ -11,7 +11,7 @@
     <Product>RunMind</Product>
     <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
     <RootNamespace>RunMind.Standalone</RootNamespace>
-    <Version>2.2.0</Version>
+    <Version>2.2.1</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

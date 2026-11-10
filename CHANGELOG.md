@@ -1,3 +1,21 @@
+## [2.2.1] — PowerToys Run settings and repeatable chat launch (2026-11-11)
+
+### Fixed
+- Use numeric combo-box values for the Thinking / reasoning setting so **Off** and the other selections persist correctly in PowerToys Run.
+- Make the original PowerToys Run query a reusable launch snapshot. If inline generation is handed to a chat window, the retained query can open additional independent chat windows from the same original prompt; one window's follow-up messages are not shared with its siblings.
+- Migrate the previous built-in PowerToys Run system prompt to the requested PowerToys Run-specific RunMind prompt while preserving custom and explicitly empty prompts.
+
+### Added
+- Add independent optional API key and custom authentication-header settings for the Ollama and LM Studio endpoints in PowerToys Run.
+- Apply provider authentication to model discovery, inline generation, and conversation-title requests. A custom `Authorization` header overrides the optional Bearer API key; other custom headers are sent alongside it.
+- Keep PowerToys Run credentials separate from Command Palette credentials in the shared per-user settings file.
+
+### Security note
+- PowerToys Run API keys and custom auth headers are stored in the per-user RunMind settings JSON without DPAPI encryption. The PowerToys Run settings text fields are not masked.
+
+### Validation
+- Static source, JSON, project XML, package-manifest, JavaScript, and archive checks were performed. Windows/.NET compilation and live PowerToys Run/provider tests still need to be run on the target Windows machine.
+
 ## [2.2.0] — Command Palette authentication and empty-chat handling (2026-11-10)
 
 ### Added
