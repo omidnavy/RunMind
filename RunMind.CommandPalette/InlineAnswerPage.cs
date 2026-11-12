@@ -23,6 +23,7 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
     private string _sourceQuery = string.Empty;
     private string _pendingPrompt = string.Empty;
     private bool _initialGenerationPending;
+    private bool _thinkEnabled = true;
     private string _currentPrompt = string.Empty;
     private string _currentAnswer = string.Empty;
     private string _status = "Type RunMind followed by a question.";
@@ -39,6 +40,8 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
         Name = "RunMind";
         Title = "RunMind";
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
+        try { _thinkEnabled = !string.Equals(InlineModelSettingsStore.Load().Thinking, "off", StringComparison.OrdinalIgnoreCase); }
+        catch { _thinkEnabled = true; }
         _conversationForm = new InlineConversationForm(this);
     }
 
@@ -148,14 +151,17 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
         RunMindCommandPaletteDiagnostics.Write(
             $"Starting inline generation {generation}; prompt length={prompt.Trim().Length}; previous history turns={history.Length}.");
         NotifyContentChanged(force: true);
-        _ = GenerateAsync(generation, current, history, prompt.Trim());
+        bool thinkEnabled;
+        lock (_sync) thinkEnabled = _thinkEnabled;
+        _ = GenerateAsync(generation, current, history, prompt.Trim(), thinkEnabled);
     }
 
     private async Task GenerateAsync(
         long generation,
         CancellationTokenSource requestSource,
         IReadOnlyList<InlineConversationTurn> history,
-        string prompt)
+        string prompt,
+        bool thinkEnabled)
     {
         var token = requestSource.Token;
         try
@@ -164,7 +170,7 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
             // asynchronous status/error notifications begin.
             await Task.Yield();
             token.ThrowIfCancellationRequested();
-            var settings = InlineModelSettingsStore.Load();
+            var settings = InlineModelSettingsStore.Load() with { Thinking = thinkEnabled ? "on" : "off" };
             RunMindCommandPaletteDiagnostics.Write(
                 $"Inline generation {generation} loaded settings. Provider={settings.Provider}; model='{settings.Model}'; settings file='{InlineModelSettingsStore.FilePath}'.");
             lock (_sync)
@@ -258,13 +264,14 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
         }
     }
 
-    private bool SendFollowUp(string prompt)
+    private bool SendFollowUp(string prompt, bool thinkEnabled)
     {
         prompt = prompt?.Trim() ?? string.Empty;
         if (prompt.Length == 0) return false;
         lock (_sync)
         {
             if (IsLoading) return false;
+            _thinkEnabled = thinkEnabled;
             if (!string.IsNullOrWhiteSpace(_currentPrompt)
                 && !string.IsNullOrWhiteSpace(_currentAnswer)
                 && !_isError)
@@ -360,7 +367,7 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
                 ["content"] = content,
                 ["timestamp"] = DateTimeOffset.FromUnixTimeMilliseconds(
                     timestamp > 0 ? timestamp : now.ToUnixTimeMilliseconds()).ToString("O"),
-                ["thinkRequested"] = false,
+                ["thinkRequested"] = _thinkEnabled,
             };
             if (provider is "ollama" or "lmstudio") message["provider"] = provider;
             if (!string.IsNullOrWhiteSpace(model)) message["model"] = model;
@@ -459,7 +466,7 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
         var now = Stopwatch.GetTimestamp();
         if (!force && Stopwatch.GetElapsedTime(_lastUiUpdate, now) < TimeSpan.FromMilliseconds(100)) return;
         _lastUiUpdate = now;
-        try { RaiseItemsChanged(2); }
+        try { if (force) _conversationForm.UpdateTemplate(); RaiseItemsChanged(2); }
         catch { /* The user may have dismissed Command Palette during generation. */ }
     }
 
@@ -493,25 +500,36 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
         public InlineConversationForm(InlineAnswerPage owner)
         {
             _owner = owner;
-            TemplateJson = """
+            UpdateTemplate();
+        }
+
+        internal void UpdateTemplate()
+        {
+            bool hasMessages;
+            bool thinkEnabled;
+            lock (_owner._sync)
+            {
+                hasMessages = _owner._history.Count > 0 || !string.IsNullOrWhiteSpace(_owner._currentPrompt);
+                thinkEnabled = _owner._thinkEnabled;
+            }
+
+            var actions = hasMessages
+                ? "{ \"type\": \"Action.Submit\", \"title\": \"Open RunMind\", \"data\": { \"action\": \"openEmptyChat\" } }, { \"type\": \"Action.Submit\", \"title\": \"Open RunMind with context\", \"data\": { \"action\": \"openChat\" } }"
+                : "{ \"type\": \"Action.Submit\", \"title\": \"Open RunMind\", \"data\": { \"action\": \"openEmptyChat\" } }";
+
+            TemplateJson = $$"""
             {
               "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
               "type": "AdaptiveCard",
               "version": "1.6",
               "body": [
-                {
-                  "type": "Input.Text",
-                  "id": "prompt",
-                  "label": "Your message",
-                  "placeholder": "Type a message…",
-                  "isMultiline": true,
-                  "maxLength": 12000
-                }
+                { "type": "Input.Toggle", "id": "thinkEnabled", "title": "Think / reasoning", "value": "{{(thinkEnabled ? "true" : "false")}}", "valueOn": "true", "valueOff": "false" },
+                { "type": "Input.Text", "id": "prompt", "label": "Your message", "placeholder": "Type a message…", "isMultiline": true, "maxLength": 12000 }
               ],
               "actions": [
                 { "type": "Action.Submit", "title": "Send", "data": { "action": "send" } },
                 { "type": "Action.Submit", "title": "Start fresh", "data": { "action": "startFresh" } },
-                { "type": "Action.Submit", "title": "Open chat with context", "data": { "action": "openChat" } }
+                {{actions}}
               ]
             }
             """;
@@ -532,6 +550,9 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
                 var action = ReadString(values, "action");
                 RunMindCommandPaletteDiagnostics.Write(
                     $"Inline conversation form action='{action}'.");
+                if (action.Equals("openEmptyChat", StringComparison.OrdinalIgnoreCase))
+                    return CommandResult.ShowToast(RunMindLauncher.Open().Message);
+
                 if (action.Equals("openChat", StringComparison.OrdinalIgnoreCase))
                 {
                     var result = _owner.OpenChatWithContext();
@@ -547,7 +568,8 @@ internal sealed partial class InlineAnswerPage : ContentPage, IFallbackHandler
                 var prompt = ReadString(values, "prompt");
                 if (string.IsNullOrWhiteSpace(prompt))
                     return CommandResult.ShowToast("Enter a follow-up question first.");
-                if (!_owner.SendFollowUp(prompt))
+                var thinkEnabled = !string.Equals(ReadString(values, "thinkEnabled"), "false", StringComparison.OrdinalIgnoreCase);
+                if (!_owner.SendFollowUp(prompt, thinkEnabled))
                     return CommandResult.ShowToast("Wait for the current response to finish before sending a follow-up.");
                 return CommandResult.KeepOpen();
             }

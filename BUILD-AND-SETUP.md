@@ -1,4 +1,4 @@
-# RunMind 2.2.2 — Build and setup
+# RunMind 2.2.3 — Build and setup
 
 This guide covers the current full-source release and retains explicitly labeled historical notes where useful.
 
@@ -24,11 +24,11 @@ The shared ChatWindow runtime separates its workspace and conversation IndexedDB
 - Install Git for Windows and ensure `git.exe` is available on `PATH` to use native Git tools.
 - Build the PowerToys plugin, Command Palette extension project, and Standalone app using `Build-Release-x64.bat`. Package/install or uninstall the Command Palette extension separately with `Install-RunMind-CommandPalette.bat`. The PowerToys plugin also requires the matching PowerToys environment for deployment and runtime testing.
 
-## RunMind 2.2.2 source snapshot
+## RunMind 2.2.3 source snapshot
 
-The supplied 2.2.2 ZIP is a full source-project snapshot, not a changed-files-only overlay. It includes the application projects, shared sources, brand assets, PowerToys reference assemblies under `lib\x64`, screenshots, build/package/install scripts, and documentation. The generated PDF/OCR runtime resources are intentionally not prebundled: `Prepare-RunMind-OCR.ps1` downloads the pinned package versions and language models into `Vendor` and `OCR\tessdata` during the release build. The integration currently targets Windows x64. `Build-Release-x64.bat` is the single release entry point: it restores the solution including the `win-x64` runtime pack, cleans and builds Standalone, the PowerToys Run plugin, and the Command Palette extension, then creates and signs the Command Palette MSIX. It opts out of .NET CLI telemetry for all `dotnet` processes started by the script and suppresses first-run/logo output. It does not install any application. `Install-RunMind-CommandPalette.bat` trusts the public signing certificate when needed, installs the already-built MSIX, and makes a guarded attempt to configure the direct RunMind alias; it does not restore packages, run OCR preparation, compile, or package anything.
+The supplied 2.2.3 ZIP is a full source-project snapshot, not a changed-files-only overlay. It includes the application projects, shared sources, brand assets, PowerToys reference assemblies under `lib\x64`, screenshots, build/package/install scripts, and documentation. The generated PDF/OCR runtime resources are intentionally not prebundled: `Prepare-RunMind-OCR.ps1` downloads the pinned package versions and language models into `Vendor` and `OCR\tessdata` during the release build. The integration currently targets Windows x64. `Build-Release-x64.bat` is the single release entry point: it restores the solution including the `win-x64` runtime pack, cleans and builds Standalone, the PowerToys Run plugin, and the Command Palette extension, then creates and signs the Command Palette MSIX. It opts out of .NET CLI telemetry for all `dotnet` processes started by the script and suppresses first-run/logo output. It does not install any application. `Install-RunMind-CommandPalette.bat` trusts the public signing certificate when needed, installs the already-built MSIX, and makes a guarded attempt to configure the direct RunMind alias; it does not restore packages, run OCR preparation, compile, or package anything.
 
-## PowerToys Command Palette extension (2.2.2)
+## PowerToys Command Palette extension (2.2.3)
 
 `RunMind.CommandPalette` is an x64 MSIX-packaged WinRT COM extension. Its package manifest registers an out-of-process COM server and the `com.microsoft.commandpalette` app extension. PowerToys discovers the extension through the Windows package catalog; the COM class ID in the package manifest must match the extension's `[Guid]` and the `CreateInstance` class ID.
 

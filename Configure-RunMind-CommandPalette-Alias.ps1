@@ -60,10 +60,9 @@ try {
     foreach ($path in $existingPaths) {
         try {
             $probe = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
-            $aliasesProperty = Get-JsonProperty -Object $probe -Name 'Aliases'
-            if ($null -ne $aliasesProperty -and $null -ne $aliasesProperty.Value) {
-                $validPaths.Add($path)
-            }
+            # A valid host settings.json is a candidate even before its custom
+            # alias map has been created. The script can initialize that map.
+            if ($probe -is [pscustomobject]) { $validPaths.Add($path) }
         }
         catch {
             # Ignore unrelated or malformed candidate settings files; never rewrite them.
@@ -83,16 +82,14 @@ try {
     $settingsPath = $validPaths[0]
     $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
     $aliasesProperty = Get-JsonProperty -Object $settings -Name 'Aliases'
-    $aliases = $aliasesProperty.Value
-    $aliasProperties = @($aliases.PSObject.Properties)
-
-    # AliasManager creates the built-in aliases when the collection is empty.
-    # Do not insert just one alias into an empty collection, because that would
-    # prevent the host from populating its normal built-in aliases on startup.
-    if ($aliasProperties.Count -eq 0) {
-        Write-Notice 'The host alias collection is empty. Leaving it untouched so Command Palette can populate its built-in aliases first. Open Command Palette once, close it, then run this script again.'
-        return
+    if ($null -eq $aliasesProperty -or $null -eq $aliasesProperty.Value) {
+        $aliases = New-Object PSObject
+        Set-JsonProperty -Object $settings -Name 'Aliases' -Value $aliases
     }
+    else {
+        $aliases = $aliasesProperty.Value
+    }
+    $aliasProperties = @($aliases.PSObject.Properties)
 
     $existingAlias = $aliasProperties | Where-Object { $_.Name -ieq $aliasName } | Select-Object -First 1
     if ($null -ne $existingAlias) {

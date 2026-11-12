@@ -1,4 +1,4 @@
-## [2.2.2] — PowerToys Run settings polish and Command Palette alias (2026-11-11)
+## [2.2.3] — PowerToys Run settings polish and Command Palette alias (2026-11-11)
 
 ### Changed
 - Group the PowerToys Run provider settings in endpoint-first order: Ollama endpoint and its two auth fields, followed by LM Studio URL and its two auth fields. No setting keys or credential behavior changed.

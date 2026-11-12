@@ -1,4 +1,4 @@
-# RunMind 2.2.2 — PowerToys Run settings polish and Command Palette alias
+# RunMind 2.2.3 — Command Palette Think toggle and Dock actions
 
 - Reordered the PowerToys Run provider-auth fields so each provider's endpoint is immediately followed by its API key and custom header.
 - Added the `https://omid.navy` website to the Command Palette extension About section and package metadata.

@@ -9,8 +9,8 @@
     <PlatformTarget>$(Platform)</PlatformTarget>
     <AssemblyName>RunMind.CommandPalette</AssemblyName>
     <RootNamespace>RunMind.CommandPalette</RootNamespace>
-    <Version>2.2.2</Version>
-    <AppxPackageVersion>2.2.2.0</AppxPackageVersion>
+    <Version>2.2.3</Version>
+    <AppxPackageVersion>2.2.3.0</AppxPackageVersion>
     <AppxPackageIdentityName>RunMind.CommandPalette</AppxPackageIdentityName>
     <AppxPackagePublisher>CN=Omid Navy</AppxPackagePublisher>
     <EnableMsixTooling>true</EnableMsixTooling>
