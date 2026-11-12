@@ -1950,12 +1950,12 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             title = CreateFallbackConversationTitle(prompt),
             appearance = AppearancePreferenceStore.CreateBootstrapValue(),
             windowInstanceId = Guid.NewGuid().ToString("N"),
-            initialModel = model,
-            initialProvider = settings.Provider == 1 ? "lmstudio" : "ollama",
+            // Keep inline provenance for the initial prompt, but do not pass inline
+            // selection or endpoints: the chat window uses its own saved configuration.
+            sourceProvider = settings.Provider == 1 ? "lmstudio" : "ollama",
+            sourceModel = model,
             autoSendPromptText = prompt,
             generateTitleAfterFirstResponse = true,
-            ollamaBaseUrl = BuildOllamaBaseUrl(settings.Endpoint),
-            lmStudioBaseUrl = RewriteLocalhostToLoopback(settings.LMStudioBaseUrl),
             keepAliveSeconds = settings.KeepAliveSeconds,
         };
         var webView = CreateChatWebView();
@@ -2951,13 +2951,13 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             title,
             appearance = AppearancePreferenceStore.CreateBootstrapValue(),
             windowInstanceId = Guid.NewGuid().ToString("N"),
-            initialModel = model,
-            initialProvider = settings.Provider == 1 ? "lmstudio" : "ollama",
+            // Keep inline response provenance separate from the chat model selection.
+            // The chat window must use its own configured provider/model connections.
+            sourceProvider = settings.Provider == 1 ? "lmstudio" : "ollama",
+            sourceModel = model,
             prompt = prompt ?? string.Empty,
             response = response ?? string.Empty,
             isError,
-            ollamaBaseUrl = BuildOllamaBaseUrl(settings.Endpoint),
-            lmStudioBaseUrl = RewriteLocalhostToLoopback(settings.LMStudioBaseUrl),
             keepAliveSeconds = settings.KeepAliveSeconds,
             initialThink = thinkInitiallyEnabled,
         };

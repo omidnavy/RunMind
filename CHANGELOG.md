@@ -1,3 +1,13 @@
+## [2.2.4] — PowerToys Run chat handoff isolation (2026-11-12)
+
+### Fixed
+- Stop passing the PowerToys Run inline provider, model, and endpoint URLs into the full chat window when opening an in-progress query or completed inline response. The chat window now retains its own selected model and its own saved provider connections.
+- Keep the inline provider/model as message provenance only, so the original inline response can still be attributed correctly without forcing the chat generation model.
+- An in-progress inline prompt now auto-sends using the chat window's currently selected model instead of failing because the inline model is absent from the chat window's connection list.
+
+### Validation
+- Static checks cover bootstrap separation, message provenance, project metadata, and archive integrity. Windows/.NET compilation and live PowerToys Run tests remain to be run on the target Windows machine.
+
 ## [2.2.3] — PowerToys Run settings polish and Command Palette alias (2026-11-11)
 
 ### Changed

@@ -1,4 +1,14 @@
-# RunMind 2.2.3 — Command Palette Think toggle and Dock actions
+# RunMind 2.2.4 — PowerToys Run chat handoff isolation
+
+- PowerToys Run now passes the inline provider/model only as source provenance when opening the chat window.
+- Opening an in-progress query auto-sends the prompt using the chat window's own selected model.
+- Completed inline response handoff preserves the inline source attribution without overriding chat provider/model selection.
+- Inline endpoint URLs are no longer injected into the full chat window; its own saved provider connections remain authoritative.
+
+Static validation passed for JSON/XML metadata, JavaScript syntax, bootstrap separation, and archive integrity. Windows/.NET compilation and live PowerToys Run testing remain outstanding.
+
+## Previous release: RunMind 2.2.3 — Command Palette Think toggle and Dock actions
+
 
 - Reordered the PowerToys Run provider-auth fields so each provider's endpoint is immediately followed by its API key and custom header.
 - Added the `https://omid.navy` website to the Command Palette extension About section and package metadata.

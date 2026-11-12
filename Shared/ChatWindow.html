@@ -4787,22 +4787,20 @@
             .filter(row => row && row.id && ['ollama','lmstudio'].includes(row.type) && typeof row.baseUrl === 'string' && /^https?:\/\//i.test(row.baseUrl))
             .map(row => {
               const config = { ...row, apiKey: String(row.apiKey || ''), authHeader: String(row.authHeader || 'Authorization'), builtIn: String(row.id).startsWith('default-'), lmStudioMetadataApi: row.lmStudioMetadataApi === true || String(row.id) === 'default-lmstudio' };
-              // A PowerToys-launched chat must inherit the current inline endpoints while
-              // retaining any API key/header saved for those built-in connections.
-              if (config.id === 'default-ollama' && BOOT.ollamaBaseUrl) config.baseUrl = BOOT.ollamaBaseUrl;
-              if (config.id === 'default-lmstudio' && BOOT.lmStudioBaseUrl) config.baseUrl = BOOT.lmStudioBaseUrl;
+              // PowerToys Run inline endpoints are intentionally isolated from full-chat
+              // connections. A chat launched from an inline result keeps its own saved URLs.
               return config;
             });
           // Preserve the two built-in providers even if an older/corrupt settings record
           // omitted one; custom connections remain alongside them.
-          if (!configs.some(config => config.id === 'default-ollama')) configs.push({ id: 'default-ollama', name: 'Ollama', type: 'ollama', baseUrl: BOOT.ollamaBaseUrl || 'http://localhost:11434', enabled: true, builtIn: true });
-          if (!configs.some(config => config.id === 'default-lmstudio')) configs.push({ id: 'default-lmstudio', name: 'LM Studio', type: 'lmstudio', baseUrl: BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1', enabled: true, builtIn: true, lmStudioMetadataApi: true });
+          if (!configs.some(config => config.id === 'default-ollama')) configs.push({ id: 'default-ollama', name: 'Ollama', type: 'ollama', baseUrl: 'http://localhost:11434', enabled: true, builtIn: true });
+          if (!configs.some(config => config.id === 'default-lmstudio')) configs.push({ id: 'default-lmstudio', name: 'LM Studio', type: 'lmstudio', baseUrl: 'http://localhost:1234/v1', enabled: true, builtIn: true, lmStudioMetadataApi: true });
           return configs;
         }
       } catch (_) {}
       return [
-        { id: 'default-ollama', name: 'Ollama', type: 'ollama', baseUrl: BOOT.ollamaBaseUrl || 'http://localhost:11434', enabled: true, builtIn: true },
-        { id: 'default-lmstudio', name: 'LM Studio', type: 'lmstudio', baseUrl: BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1', enabled: true, builtIn: true, lmStudioMetadataApi: true }
+        { id: 'default-ollama', name: 'Ollama', type: 'ollama', baseUrl: 'http://localhost:11434', enabled: true, builtIn: true },
+        { id: 'default-lmstudio', name: 'LM Studio', type: 'lmstudio', baseUrl: 'http://localhost:1234/v1', enabled: true, builtIn: true, lmStudioMetadataApi: true }
       ];
     }
     function saveModelConnections() {
@@ -13282,11 +13280,12 @@ ${toolActivityDetail}`;
         renderResearchTask();
       }
       updateContextSettingForProvider('ollama');
-      const initialProvider = BOOT.initialProvider === 'lmstudio' ? 'lmstudio' : 'ollama';
-      if (BOOT.prompt) messages.push({ role: 'user', content: String(BOOT.prompt), timestamp: Date.now(), provider: initialProvider, model: BOOT.initialModel || '', initial: true });
+      const sourceProvider = BOOT.sourceProvider === 'lmstudio' ? 'lmstudio' : (BOOT.initialProvider === 'lmstudio' ? 'lmstudio' : 'ollama');
+      const sourceModel = String(BOOT.sourceModel || BOOT.initialModel || '');
+      if (BOOT.prompt) messages.push({ role: 'user', content: String(BOOT.prompt), timestamp: Date.now(), provider: sourceProvider, model: sourceModel, initial: true });
       if (BOOT.response !== undefined && BOOT.response !== null) {
         const responseParts = extractEmbeddedThinking(String(BOOT.response));
-        messages.push({ role: 'assistant', content: responseParts.content, thinking: responseParts.thinking, thinkingOpen: true, thinkRequested: !!BOOT.initialThink, timestamp: Date.now(), provider: initialProvider, model: BOOT.initialModel || '', error: !!BOOT.isError, initial: true });
+        messages.push({ role: 'assistant', content: responseParts.content, thinking: responseParts.thinking, thinkingOpen: true, thinkRequested: !!BOOT.initialThink, timestamp: Date.now(), provider: sourceProvider, model: sourceModel, error: !!BOOT.isError, initial: true });
       }
       await loadConversationBranches(!BOOT.prompt && BOOT.response == null && !BOOT.initialConversation);
       setConversationTitle(BOOT.title || 'New chat');
