@@ -255,7 +255,7 @@ Launch `RunMind.exe` from the standalone build output. Each launch opens an inde
 
 ### PowerToys Command Palette extension
 
-The extension is installed as a signed MSIX package by `Install-RunMind-CommandPalette.bat`. On first installation, Windows requests administrator approval to trust the public certificate whose publisher matches the package. This trust step does not enable Developer Mode; Windows 10 version 2004 and later and Windows 11 enable sideloading by default unless a policy disables it. After installation, run Command Palette's **Reload Command Palette extensions** command; fully restart PowerToys if the extension list does not refresh. The extension provides a branded **RunMind** fallback and **Open chat with empty context**. Inline model configuration is available from Command Palette's Installed Extensions settings for RunMind; there is deliberately no searchable **Configure RunMind** command.
+The extension is installed as a signed MSIX package by `Install-RunMind-CommandPalette.bat`. The installer also attempts to set the direct **RunMind** alias to **Open chat with empty context**; if Command Palette was open, close it and rerun `Configure-RunMind-CommandPalette-Alias.ps1`. The extension About section links to [omid.navy](https://omid.navy). On first installation, Windows requests administrator approval to trust the public certificate whose publisher matches the package. This trust step does not enable Developer Mode; Windows 10 version 2004 and later and Windows 11 enable sideloading by default unless a policy disables it. After installation, run Command Palette's **Reload Command Palette extensions** command; fully restart PowerToys if the extension list does not refresh. The extension provides a branded **RunMind** fallback and **Open chat with empty context**. Inline model configuration is available from Command Palette's Installed Extensions settings for RunMind; there is deliberately no searchable **Configure RunMind** command.
 
 Command Palette starts a chat process from its own packaged executable and hosts the canonical `Shared/ChatWindow.html`, `Shared/ArtifactTools.js`, and shared native bridge directly. It does not require the Standalone executable or a configured path to `RunMind.exe`. The branded **RunMind** fallback accepts a plain natural-language query or a `RunMind <question>` prefix. Selecting the fallback opens a Command Palette content page; model inference starts only after selection, streams the local model's answer, and accepts follow-up questions. The page's **Open chat with context** action transfers the complete ordered inline transcript—including every completed user/assistant turn—into the Command Palette-owned chat window. If generation is still running, it transfers the current question without presenting a partial answer as complete. The destination restores the transcript as its real conversation state, so follow-up requests retain the prior context. The package does not create a Start-menu or Windows Search entry because its executable is a COM host, not a user-launchable app.
 
@@ -284,3 +284,8 @@ Standalone and PowerToys use separate WebView2 profiles. Their chat settings, cr
 
 ![Screenshot](screenshots/Screenshot-3.png)
 ![Screenshot](screenshots/Screenshot-2.png)
+
+
+## About RunMind
+
+RunMind for Command Palette includes an About section in its extension settings. Website: [https://omid.navy](https://omid.navy).

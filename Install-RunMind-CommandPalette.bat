@@ -30,6 +30,7 @@ if errorlevel 1 (
 echo.
 echo [SUCCESS] RunMind Command Palette installed.
 echo Open PowerToys Command Palette and run "Reload Command Palette extensions".
+echo The installer also attempts to set the direct RunMind alias for empty chat.
 goto :finish
 
 :uninstall
@@ -59,6 +60,8 @@ echo   No argument  Install the already-built and signed Command Palette MSIX.
 echo   install      Same as the default action.
 echo   uninstall    Remove the current user's Command Palette package.
 echo   help         Show this help.
+echo.
+echo The installer also attempts to configure the default RunMind direct alias.
 echo.
 echo Build all three RunMind hosts first with Build-Release-x64.bat.
 if /I not "%ACTION%"=="help" set "EXITCODE=1"

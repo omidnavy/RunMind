@@ -1,3 +1,15 @@
+## [2.2.2] — PowerToys Run settings polish and Command Palette alias (2026-11-11)
+
+### Changed
+- Group the PowerToys Run provider settings in endpoint-first order: Ollama endpoint and its two auth fields, followed by LM Studio URL and its two auth fields. No setting keys or credential behavior changed.
+- Add an About section to Command Palette's RunMind extension settings, including the RunMind website and a clickable **Visit omid.navy** action.
+- Give **Open chat with empty context** the stable command ID `runmind.open-empty-chat`.
+- Extend the separate Command Palette installer to seed the direct `RunMind` alias for that command when Command Palette is closed and its existing alias settings are available. The script creates a timestamped backup before writing, preserves a `RunMind` alias owned by another command, and skips safely when the host is running, its settings are not initialized, or the settings path is ambiguous. The helper can be rerun after closing Command Palette.
+
+### Validation
+- Static project, JSON/XML, source-order, stable-ID, About-link, installer-guard, and archive checks were performed.
+- Windows/.NET compilation and live PowerToys Run / Command Palette tests remain to be run on the target Windows machine.
+
 ## [2.2.1] — PowerToys Run settings and repeatable chat launch (2026-11-11)
 
 ### Fixed

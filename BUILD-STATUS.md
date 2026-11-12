@@ -1,4 +1,14 @@
-# RunMind 2.2.1 — PowerToys Run settings and handoff fixes
+# RunMind 2.2.2 — PowerToys Run settings polish and Command Palette alias
+
+- Reordered the PowerToys Run provider-auth fields so each provider's endpoint is immediately followed by its API key and custom header.
+- Added the `https://omid.navy` website to the Command Palette extension About section and package metadata.
+- Added stable command ID `runmind.open-empty-chat` to **Open chat with empty context**.
+- Added `Configure-RunMind-CommandPalette-Alias.ps1`; the separate MSIX installer calls it after install. When Command Palette is closed and the existing host settings contain its initialized aliases, it adds the `RunMind` direct alias, backs up `settings.json`, and does not overwrite an alias assigned to another command. It skips rather than create an incomplete settings file or risk editing a live host configuration.
+- If the installer skips alias setup, close Command Palette and run `Configure-RunMind-CommandPalette-Alias.ps1` from the source folder.
+
+Static validation for this source update covers project and manifest XML, plugin JSON, C# source consistency, settings order, About URL, alias command ID and PowerShell script structure. A Windows/.NET build and live host verification are still required. The previous release's detailed validation notes follow.
+
+## Previous release: RunMind 2.2.1 — PowerToys Run settings and handoff fixes
 
 This is a follow-up release on the 2.2.0 three-host source baseline. It keeps the Standalone and Command Palette behavior intact while correcting PowerToys Run reasoning selection, adding Run-scoped provider authentication, updating the Run prompt default, and making chat launch snapshots reusable.
 

@@ -264,12 +264,17 @@ internal sealed partial class InlineModelSettingsPage : ContentPage
                 new { type = "Input.Toggle", id = "inlineConversationalMode", title = "Nemotron 3.5 Bolt E4B conversational mode (LM Studio compatibility mode)", value = _settings.InlineConversationalMode ? "true" : "false", isVisible = _settings.Provider == "lmstudio" },
                 new { type = "TextBlock", text = "Command Palette system prompt", weight = "Bolder", spacing = "Medium" },
                 new { type = "Input.Text", id = "commandPaletteSystemPrompt", label = "System prompt", value = _settings.CommandPaletteSystemPrompt, isMultiline = true, maxLength = 12000, placeholder = "Instructions for Command Palette queries…" },
+                new { type = "TextBlock", text = "About RunMind", weight = "Bolder", spacing = "Large" },
+                new { type = "TextBlock", text = "RunMind brings your local AI models into Microsoft PowerToys Command Palette. Created by Omid Navy.", wrap = true },
+                new { type = "TextBlock", text = "Default direct alias: RunMind → Open chat with empty context. The installer configures this when Command Palette is closed.", isSubtle = true, wrap = true },
+                new { type = "TextBlock", text = "Website: https://omid.navy", isSubtle = true, wrap = true },
             };
 
             var actions = new object[]
             {
                 new { type = "Action.Submit", title = "Refresh models", data = new { action = "refresh" } },
                 new { type = "Action.Submit", title = "Save settings", data = new { action = "save" } },
+                new { type = "Action.OpenUrl", title = "Visit omid.navy", url = "https://omid.navy" },
             };
 
             TemplateJson = JsonSerializer.Serialize(new Dictionary<string, object?>

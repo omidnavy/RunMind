@@ -1,1 +1,6 @@
-This package directory is reserved for public static resources exposed by the Command Palette app extension. RunMind currently publishes no additional static resources here.
+RunMind for Microsoft PowerToys Command Palette
+
+RunMind brings local AI models into Command Palette. It supports Ollama and LM Studio, inline conversations, and independent chat windows.
+
+Created by Omid Navy.
+Website: https://omid.navy

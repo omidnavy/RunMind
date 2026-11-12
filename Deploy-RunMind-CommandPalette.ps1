@@ -181,12 +181,22 @@ try {
         throw 'Windows accepted the MSIX installation command but the RunMind package could not be found afterward.'
     }
 
+    $aliasScript = Join-Path $root 'Configure-RunMind-CommandPalette-Alias.ps1'
+    if (Test-Path -LiteralPath $aliasScript -PathType Leaf) {
+        Write-Step 'Setting the default RunMind direct alias (when Command Palette is closed)'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $aliasScript
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host '[WARNING] Package installation succeeded, but the optional RunMind alias setup did not complete.' -ForegroundColor Yellow
+        }
+    }
+
     Write-Host ''
     Write-Host '[SUCCESS] The prebuilt, signed RunMind Command Palette package is installed.' -ForegroundColor Green
     Write-Host "Package file: $msixPath" -ForegroundColor DarkGray
     Write-Host "Installed location: $($installed[0].InstallLocation)" -ForegroundColor DarkGray
     Write-Host 'No build or Developer Mode change was performed by the installer.' -ForegroundColor Green
     Write-Host 'Open PowerToys Command Palette and run: Reload Command Palette extensions.' -ForegroundColor Yellow
+    Write-Host 'If alias setup was skipped because Command Palette was open or its settings did not exist yet, close it and run Configure-RunMind-CommandPalette-Alias.ps1.' -ForegroundColor Yellow
 }
 catch {
     Write-Host ''

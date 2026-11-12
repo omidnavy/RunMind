@@ -128,14 +128,6 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         },
         new()
         {
-            Key = "LMStudioBaseUrl",
-            DisplayLabel = "LM Studio base URL",
-            DisplayDescription = "OpenAI-compatible LM Studio base URL used by both inline-answer hosts, for example http://localhost:1234/v1.",
-            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
-            TextValue = shared.LMStudioBaseUrl,
-        },
-        new()
-        {
             Key = "OllamaApiKey",
             DisplayLabel = "Ollama API key (optional)",
             DisplayDescription = "PowerToys Run only. Sends Authorization: Bearer <key> to Ollama model discovery and generation requests. Stored in the local per-user RunMind settings file; leave empty when not required.",
@@ -153,6 +145,14 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             TextValue = shared.PowerToysRunOllamaAuthHeader,
             TextBoxMaxLength = 8192,
             PlaceholderText = "Header-Name: value",
+        },
+        new()
+        {
+            Key = "LMStudioBaseUrl",
+            DisplayLabel = "LM Studio base URL",
+            DisplayDescription = "OpenAI-compatible LM Studio base URL used by both inline-answer hosts, for example http://localhost:1234/v1.",
+            PluginOptionType = PluginAdditionalOption.AdditionalOptionType.Textbox,
+            TextValue = shared.LMStudioBaseUrl,
         },
         new()
         {
