@@ -328,6 +328,28 @@
                   <button type="button" class="setting-reset danger-text" id="clearAgentFolder">Clear folder access</button>
                 </div>
               </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Project intelligence</h3><p>Build a local, persistent index of source files, manifests, imports, and symbols. Indexing is explicit; credentials, secrets, binaries, and generated/dependency folders are excluded.</p></div></div>
+                <div class="agent-settings-actions agent-settings-actions-wrap">
+                  <button type="button" class="button primary" id="buildProjectIndex">Build / refresh index</button>
+                  <button type="button" class="button" id="cancelProjectIndex" disabled>Cancel indexing</button>
+                  <button type="button" class="setting-reset" id="clearProjectIndex">Clear index</button>
+                </div>
+                <p class="agent-settings-status" id="projectIndexStatus" aria-live="polite">No project index loaded.</p>
+              </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Developer workflows</h3><p>Reusable project tasks run through the existing Agent runtime. Custom workflows are stored with this workspace context.</p></div></div>
+                <div class="agent-settings-fields">
+                  <div class="setting-field"><label for="developerWorkflowSelect">Workflow</label><select id="developerWorkflowSelect"><option value="understand-project">Understand this project</option></select></div>
+                  <div class="setting-field"><label for="developerWorkflowContext">Task context (optional)</label><textarea id="developerWorkflowContext" rows="3" placeholder="Describe the feature, bug, or release target…"></textarea></div>
+                </div>
+                <div class="agent-settings-actions agent-settings-actions-wrap">
+                  <button type="button" class="button primary" id="runDeveloperWorkflow">Start workflow</button>
+                  <button type="button" class="button" id="saveDeveloperWorkflow">Save custom workflow</button>
+                  <button type="button" class="setting-reset danger-text" id="deleteDeveloperWorkflow">Delete custom workflow</button>
+                </div>
+                <p class="agent-settings-status" id="developerWorkflowStatus" aria-live="polite">Built-in workflows are ready.</p>
+              </section>
             </section>
 
             <section class="agent-settings-page" id="agentSettingsPageSkills" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabSkills" hidden>
@@ -607,6 +629,8 @@
   <script src="ChatWindow/scripts/agent/web.js"></script>
   <script src="ChatWindow/scripts/agent/artifacts.js"></script>
   <script src="ChatWindow/scripts/agent/workflow.js"></script>
+  <script src="ChatWindow/scripts/agent/project-index.js"></script>
+  <script src="ChatWindow/scripts/agent/developer-workflows.js"></script>
   <script src="ChatWindow/scripts/agent/tools.js"></script>
   <script src="ChatWindow/scripts/agent/documents.js"></script>
   <script src="ChatWindow/scripts/agent/runtime.js"></script>

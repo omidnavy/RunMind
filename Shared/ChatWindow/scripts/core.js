@@ -606,6 +606,15 @@
       if (agentDirectoryHandle) rebuildActiveToolDefinitions(deepResearchEnabled);
     }
     async function persistAgentFolderHandle(handle) {
+      const previousHandle = persistedDirectoryHandle || agentDirectoryHandle;
+      if (previousHandle) {
+        let sameEntry = false;
+        try { sameEntry = await previousHandle.isSameEntry(handle); } catch (_) {}
+        if (!sameEntry && typeof projectIndexKey === 'function') {
+          try { await workspaceDbAction('readwrite', 'delete', undefined, projectIndexKey()); } catch (_) {}
+          try { projectIndexStatus?.(null); } catch (_) {}
+        }
+      }
       persistedDirectoryHandle = handle;
       workspaceContext.folderName = String(handle?.name || '').slice(0, 256);
       await workspaceDbAction('readwrite', 'put', handle);
@@ -615,6 +624,8 @@
     }
     async function clearPersistedAgentFolderHandle() {
       await workspaceDbAction('readwrite', 'delete');
+      try { if (typeof projectIndexKey === 'function') await workspaceDbAction('readwrite', 'delete', undefined, projectIndexKey()); } catch (_) {}
+      try { projectIndexStatus?.(null); } catch (_) {}
       persistedDirectoryHandle = null;
       agentDirectoryHandle = null;
       workspaceContext.folderName = '';

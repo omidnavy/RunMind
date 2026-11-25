@@ -305,6 +305,82 @@
       });
     });
     selectAgentSettingsTab(0);
+    const projectIndexStatusElement = $('#projectIndexStatus');
+    let projectIndexController = null;
+    function projectIndexStatus(index) {
+      if (!projectIndexStatusElement) return;
+      if (!index) { projectIndexStatusElement.textContent = 'No project index loaded.'; return; }
+      const stats = index.stats || {};
+      projectIndexStatusElement.textContent = `${stats.files || 0} indexed files · ${index.technologies?.length || 0} languages · ${(index.frameworks || []).join(', ') || 'frameworks not detected'} · ${stats.reused || 0} reused · updated ${new Date(index.updatedAt).toLocaleString()}${stats.truncated ? ` · Partial: ${stats.reason || 'scan limit reached'}` : ''}`;
+    }
+    async function refreshProjectIndexStatus() {
+      if (!agentDirectoryHandle) { projectIndexStatusElement.textContent = 'Select a workspace folder to access its project index.'; return; }
+      try { const index = await loadProjectIndex(); projectIndexStatus(index); }
+      catch (error) { if (projectIndexStatusElement) projectIndexStatusElement.textContent = String(error?.message || error); }
+    }
+    async function refreshDeveloperWorkflowList() {
+      const select = $('#developerWorkflowSelect');
+      if (!select) return;
+      const prior = select.value;
+      let workflows;
+      try { workflows = await loadDeveloperWorkflows(); }
+      catch (error) { $('#developerWorkflowStatus').textContent = `Workflow storage unavailable: ${error?.message || error}`; return; }
+      select.replaceChildren();
+      for (const workflow of workflows) {
+        const option = document.createElement('option'); option.value = workflow.id;
+        option.textContent = `${workflow.name}${workflow.builtIn ? '' : ' · custom'}`;
+        select.appendChild(option);
+      }
+      if (workflows.some(item => item.id === prior)) select.value = prior;
+      $('#developerWorkflowStatus').textContent = `${workflows.length} workflows available · ${workflows.filter(item => item.builtIn).length} built-in`;
+    }
+    $('#buildProjectIndex').addEventListener('click', async () => {
+      if (!agentDirectoryHandle) { showToast('Select a workspace folder before building its project index.'); return; }
+      const button = $('#buildProjectIndex'); button.disabled = true; button.textContent = 'Indexing…';
+      const cancelButton = $('#cancelProjectIndex'); cancelButton.disabled = false;
+      projectIndexController = new AbortController();
+      try {
+        const result = await buildProjectIndex({ force: false, signal: projectIndexController.signal, onProgress: progress => { projectIndexStatusElement.textContent = `Indexing ${progress.files} files · scanned ${progress.scanned}…`; } });
+        projectIndexStatusElement.textContent = `${result.files} files indexed · ${result.technologies.length} languages · ${(result.frameworks || []).join(', ') || 'no framework hints'} · ${result.reused} reused · ${result.readBytes.toLocaleString()} bytes read${result.truncated ? ` · Partial: ${result.reason}` : ''}`;
+        showToast(`Project index refreshed: ${result.files} files.`);
+      } catch (error) { projectIndexStatusElement.textContent = error?.name === 'AbortError' ? 'Indexing cancelled; the previous index was retained.' : String(error?.message || error); if (error?.name !== 'AbortError') showToast('Project indexing failed.'); }
+      finally { projectIndexController = null; button.disabled = false; button.textContent = 'Build / refresh index'; cancelButton.disabled = true; }
+    });
+    $('#cancelProjectIndex').addEventListener('click', () => { projectIndexController?.abort(); });
+    $('#clearProjectIndex').addEventListener('click', async () => {
+      try { await workspaceDbAction('readwrite','delete',undefined,projectIndexKey()); projectIndexStatus(null); showToast('Project index cleared.'); }
+      catch (error) { showToast(`Could not clear project index: ${error?.message || error}`); }
+    });
+    $('#runDeveloperWorkflow').addEventListener('click', () => {
+      if (!agentDirectoryHandle) { showToast('Select a workspace folder before starting a developer workflow.'); return; }
+      const workflow = $('#developerWorkflowSelect').value;
+      const context = $('#developerWorkflowContext').value.trim();
+      const prompt = `Run the developer workflow '${workflow}'. ${context ? `Task context: ${context}` : 'Use the current conversation request as the task context.'} First call start_developer_workflow to load its exact instructions, then follow them using the existing Agent tools.`;
+      promptInput.value = prompt; promptInput.dispatchEvent(new Event('input', { bubbles: true }));
+      $('#sendButton').click();
+    });
+    $('#saveDeveloperWorkflow').addEventListener('click', async () => {
+      if (!agentDirectoryHandle) { showToast('Select a workspace folder before saving a custom workflow.'); return; }
+      try {
+        const selected = (await loadDeveloperWorkflows()).find(item => item.id === $('#developerWorkflowSelect').value);
+        const name = window.prompt('Name for this custom workflow:', selected && !selected.builtIn ? selected.name : '');
+        if (!name) return;
+        const prompt = window.prompt('Workflow instructions (the Agent will execute these through its existing tools):', selected && !selected.builtIn ? selected.prompt : '');
+        if (!prompt) return;
+        const saved = await saveDeveloperWorkflow({ id: selected && !selected.builtIn ? selected.id : null, name, prompt, description: 'Custom workspace workflow' });
+        await refreshDeveloperWorkflowList(); $('#developerWorkflowSelect').value = saved.id; showToast(`Workflow '${name}' saved.`);
+      } catch (error) { showToast(`Could not save workflow: ${error?.message || error}`); }
+    });
+    $('#deleteDeveloperWorkflow').addEventListener('click', async () => {
+      try {
+        const id = $('#developerWorkflowSelect').value;
+        const workflow = (await loadDeveloperWorkflows()).find(item => item.id === id);
+        if (!workflow || workflow.builtIn) { showToast('Built-in workflows cannot be deleted.'); return; }
+        await deleteDeveloperWorkflow(id); await refreshDeveloperWorkflowList(); showToast(`Workflow '${workflow.name}' deleted.`);
+      } catch (error) { showToast(`Could not delete workflow: ${error?.message || error}`); }
+    });
+    void refreshProjectIndexStatus();
+    void refreshDeveloperWorkflowList();
     $('#agentSaveSettings').addEventListener('click', saveAgentSettings);
     const persistReaderCredentialInputs = () => {
       saveReaderCredentials({ jinaApiKey: agentJinaApiKey.value.trim(), customGatewayToken: agentCustomReaderToken.value.trim() });
@@ -395,7 +471,7 @@
       const profile = projectProfiles.get(projectProfileSelect.value);
       projectProfileName.value = profile?.name || '';
     });
-    $('#applyProjectProfile').addEventListener('click', () => { void applyProjectProfile(); });
+    $('#applyProjectProfile').addEventListener('click', async () => { try { await applyProjectProfile(); await refreshProjectIndexStatus(); await refreshDeveloperWorkflowList(); } catch (error) { showToast(`Could not apply Project Profile: ${error?.message || error}`); } });
     $('#deleteProjectProfile').addEventListener('click', () => { void deleteProjectProfile(); });
     $('#refreshProjectProfiles').addEventListener('click', () => { void refreshProjectProfiles(); });
     $('#refreshAgentSkills').addEventListener('click', () => { void refreshAgentSkillManager(); });
@@ -503,7 +579,7 @@
       })();
       workspaceRestorePromise = restoreAgentFolderHandle({ allowLegacyMigration: !BOOT.initialConversation?.workspaceContext });
       void refreshProjectProfiles();
-      void workspaceRestorePromise.then(() => refreshAgentSkillManager());
+      void workspaceRestorePromise.then(async () => { await refreshAgentSkillManager(); await refreshProjectIndexStatus(); await refreshDeveloperWorkflowList(); });
       void loadSharedPermissionPolicy();
       renderAgentTaskHistory();
       setAgentMode(false);

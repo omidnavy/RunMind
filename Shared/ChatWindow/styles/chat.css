@@ -790,3 +790,7 @@
       .message-thinking:not([open]) > .thinking-body { display: block !important; }
       .message-thinking summary { color: #333 !important; }
     }
+
+/* Project intelligence and reusable developer workflows */
+#projectIndexStatus, #developerWorkflowStatus { overflow-wrap: anywhere; }
+#developerWorkflowContext { width: 100%; min-height: 76px; resize: vertical; }

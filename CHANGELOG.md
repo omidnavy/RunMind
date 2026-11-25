@@ -1,3 +1,22 @@
+## [2.3.0] — Project intelligence and reusable developer workflows (2026-11-17)
+
+### Added
+- Add an explicit, persistent project index stored locally in the existing per-workspace IndexedDB store. Indexing is user-triggered and supports incremental refresh by file size and modification time.
+- Index bounded text source files and common project manifests; capture file paths, language hints, supported import declarations, symbol declarations, and dependencies from common npm, Python, Cargo, Go, NuGet, Maven, Gradle, Composer, and Bundler manifests.
+- Add project-index search for paths, indexed text, imports, and supported symbols, plus an index overview and bounded static project-validation tool for Agent tasks.
+- Exclude common dependency/build/cache directories, secret/credential directories and files, binary formats, and files larger than 256 KiB; common secret assignments and token patterns are redacted before indexed text is persisted. Bound indexing to 10,000 files, 50,000 directory entries, depth 10, and 24 MiB of newly read file data per refresh.
+- Add reusable built-in developer workflows for project understanding, feature implementation, bug investigation, change review, and release preparation. Add workspace-scoped custom workflow storage.
+- Integrate project indexing and developer workflows with the existing Agent tool contract, task plan, approval flow, cancellation, task history, Skills, workspace tools, and Git operations. No general shell/process execution tool or second workflow executor is introduced.
+- Add Project settings controls for building/refreshing/clearing the index and selecting/starting/saving/deleting developer workflows.
+
+### Preserved
+- Standalone, PowerToys Run, and PowerToys Command Palette continue to use the same shared ChatWindow and Agent runtime.
+- Existing Project Profiles, Workspace Context, folder grants, Agent Skills, Deep Research templates, workflow operation history, approvals, and Git behavior remain in place.
+
+### Validation
+- JavaScript syntax and static integration checks, JSON/XML parsing, version synchronization, source archive integrity, and SHA-256 verification are included in this release validation report.
+- Windows/.NET compilation, WebView2 IndexedDB quota behavior, and live indexing against representative projects require validation on the target Windows machine.
+
 ## [2.2.7] — Theme-matched startup and PowerToys Run installer (2026-11-15)
 
 ### Fixed

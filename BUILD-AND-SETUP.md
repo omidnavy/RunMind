@@ -1,4 +1,4 @@
-# RunMind 2.2.7 — Build and setup
+# RunMind 2.3.0 — Build and setup
 
 This guide covers the current full-source release and retains explicitly labeled historical notes where useful.
 
@@ -142,3 +142,12 @@ The Command Palette extension settings have separate optional **API key** and **
 ### Enter and Shift+Enter in inline conversations
 
 The Command Palette extension uses the host's Adaptive Card form control. The current host submits Enter only when the focused text box is single-line (`AcceptsReturn` is false). The RunMind prompt needs a multiline text box, so Enter inserts a newline and the Send action must be clicked. Enter-to-send plus Shift+Enter-newline requires a PowerToys Command Palette host change; an out-of-process extension cannot handle that host keyboard event. See `docs/COMMAND-PALETTE-KEYBOARD-HOST-PATCH.md` for the exact host-side behavior needed.
+
+
+## Project intelligence and developer workflows (2.3.0)
+
+Open Agent settings → Project and authorize the project folder in the current host. Select **Build / refresh index** to create a local index. The index is scoped to the active Workspace Context and stored in the existing WebView IndexedDB database; it is not exported with conversation files or Project Profiles. Refresh after changes made outside RunMind. The index is deliberately bounded and heuristic: it captures source text, file metadata, common manifests, supported import declarations, selected symbol declarations, and dependency/framework hints, but it is not a compiler-grade semantic index or language server. Agent tasks can call `project_validate` to parse JSON/XML manifests and discover likely test files/scripts; this is static inspection, not command execution.
+
+The same Project page provides built-in developer workflows and workspace-scoped custom workflows. They are instruction templates executed by the existing Agent runtime; approvals, cancellation, task history, Skills, workspace tools, and Git operations remain the existing mechanisms. There is still no general shell/process execution tool.
+
+Indexing skips common dependency/build/cache folders and credential/secret paths, ignores binary/unsupported files, and skips individual files over 256 KiB. Common secret assignments, bearer tokens, credentialed URLs, private-key blocks, and recognizable token patterns are redacted before indexed text is stored. A refresh is limited to 10,000 files, 50,000 directory entries, depth 10, and 24 MiB of newly read data. A partial index reports the limit that stopped the scan. Rebuild after external project changes; unchanged files are reused using relative path, size, and last-modified timestamp.

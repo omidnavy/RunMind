@@ -55,7 +55,7 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic']);
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_validate', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic']);
       if (name.startsWith('mcp_')) return await executeMcpTool(name, args, signal);
       const gitRoutes = {
         git_status: ['status','gitRead'], git_diff: ['diff','gitRead'], git_log: ['log','gitRead'], git_show: ['show','gitRead'], git_branches: ['branches','gitRead'], git_remotes: ['remotes','gitRead'],
@@ -564,6 +564,63 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
           const items = scan.results;
           return { root: agentDirectoryHandle.name || 'workspace', itemCount: items.length, files: items.filter(item => item.type === 'file').length, folders: items.filter(item => item.type === 'directory').length, filesScanned: scan.filesScanned, directoryEntriesScanned: scan.directoryEntriesScanned, truncated: scan.truncated, stopReason: scan.stopReason || undefined, items };
         }
+        case 'project_index': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          return await buildProjectIndex({ force: !!args.force, signal });
+        }
+        case 'project_search': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          return await searchProjectIndex(args.query, { kind: args.kind || 'all', limit: args.limit || 30 });
+        }
+        case 'project_index_overview': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          return await getProjectIndexOverview();
+        }
+        case 'project_validate': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const index = await loadProjectIndex();
+          if (!index) throw new Error('Build the project index before running project validation.');
+          const maximum = Math.max(1, Math.min(50, Number(args.max_manifests) || 30));
+          const checks = [], packageScripts = {}, frameworks = index.frameworks || [];
+          for (const item of index.manifests.slice(0, maximum)) {
+            if (signal?.aborted) throw new DOMException('Project validation cancelled.', 'AbortError');
+            try {
+              const source = await readWorkspaceText(item.path, 256 * 1024);
+              const path = item.path.toLowerCase(), text = source.text;
+              if (path.endsWith('.json')) {
+                const data = JSON.parse(text);
+                if (path === 'package.json' && data.scripts && typeof data.scripts === 'object') {
+                  for (const key of Object.keys(data.scripts).slice(0, 30)) packageScripts[key] = String(data.scripts[key]).slice(0, 240);
+                }
+                checks.push({ path: item.path, status: 'valid', format: 'json' });
+              } else if (path.endsWith('.xml') || path.endsWith('.csproj')) {
+                const document = new DOMParser().parseFromString(text, 'application/xml');
+                const parseError = document.getElementsByTagName('parsererror')[0];
+                if (parseError) throw new Error(String(parseError.textContent || 'Malformed XML').replace(/\s+/g, ' ').slice(0, 300));
+                const targetFramework = document.getElementsByTagName('TargetFramework')[0]?.textContent?.trim() || document.getElementsByTagName('TargetFrameworks')[0]?.textContent?.trim() || '';
+                checks.push({ path: item.path, status: 'valid', format: 'xml', ...(targetFramework ? { targetFramework } : {}) });
+              } else if (path.endsWith('.sln')) {
+                const valid = /^Microsoft Visual Studio Solution File/m.test(text) && /Project\(/.test(text);
+                checks.push({ path: item.path, status: valid ? 'valid' : 'warning', format: 'solution', message: valid ? 'Solution header and project entries found.' : 'Expected Visual Studio solution header or project entries were not found.' });
+              } else if (path === 'go.mod') {
+                const module = text.match(/^module\s+([^\s]+)/m)?.[1] || '';
+                checks.push({ path: item.path, status: module ? 'valid' : 'warning', format: 'go.mod', ...(module ? { module } : { message: 'No module directive found.' }) });
+              } else if (path === 'cargo.toml') {
+                const hasPackage = /^\s*\[package\]/m.test(text), hasDependencies = /^\s*\[(?:dev-|build-)?dependencies\]/m.test(text);
+                checks.push({ path: item.path, status: hasPackage ? 'valid' : 'warning', format: 'toml', hasPackageSection: hasPackage, hasDependenciesSection: hasDependencies });
+              } else if (path === 'pyproject.toml') {
+                const hasProject = /^\s*\[project\]/m.test(text), hasTool = /^\s*\[tool\./m.test(text);
+                checks.push({ path: item.path, status: hasProject || hasTool ? 'valid' : 'warning', format: 'toml', hasProjectSection: hasProject, hasToolSection: hasTool });
+              } else {
+                checks.push({ path: item.path, status: 'inspected', format: path.endsWith('.txt') ? 'text' : 'manifest', note: 'No full parser is available for this manifest format.' });
+              }
+            } catch (error) { checks.push({ path: item.path, status: 'invalid', error: String(error?.message || error).slice(0, 400) }); }
+          }
+          const testFiles = index.files.filter(file => /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$|(?:^|\/)test_[^/]+\.py$/i.test(file.path)).map(file => file.path).slice(0, 100);
+          return { root: index.rootName, indexedAt: index.updatedAt, manifestsChecked: checks.length, valid: checks.filter(item => item.status === 'valid').length, invalid: checks.filter(item => item.status === 'invalid').length, warnings: checks.filter(item => item.status === 'warning').length, checks, frameworks, packageScripts, testFilesFound: testFiles.length, testFiles, executionPerformed: false, note: 'Static manifest and test-file discovery only. RunMind has no general command-execution bridge, so build, lint, and test commands were not executed.' };
+        }
+        case 'list_developer_workflows': return { workflows: (await loadDeveloperWorkflows()).map(({id,name,description,builtIn})=>({id,name,description,builtIn})) };
+        case 'start_developer_workflow': return await startDeveloperWorkflow(args.id, args.context || '');
         case 'validate_json': {
           const input = await readWorkspaceText(args.path); const value = JSON.parse(input.text);
           const type = Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;

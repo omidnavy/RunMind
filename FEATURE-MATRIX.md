@@ -1,3 +1,17 @@
+## RunMind 2.3.0 — Project intelligence and reusable developer workflows
+
+
+| Area | Feature | Current behavior | Status / limits |
+|---|---|---|---|
+| Project intelligence | Persistent local index | Explicitly build or incrementally refresh a project index in IndexedDB, scoped to the active Workspace Context. Unchanged files are reused by relative path, size, and last-modified timestamp; removed files disappear on refresh. | **Implemented**; local to the WebView profile/context; no index data is exported with `.runmind` conversations or Project Profiles. |
+| Project intelligence | Source and manifest inventory | Indexes bounded text sources and common manifests; records paths, file sizes/timestamps, language hints, import declarations, symbol declarations, and dependencies from common npm, Python, Cargo, Go, NuGet, Maven, Gradle, Composer, and Bundler manifests. | **Implemented**; heuristic import/symbol extraction for JavaScript/TypeScript, Python, C#, Go, Rust, and Java/Kotlin; broader language hints are metadata only. Not a compiler-grade AST, language server, or full reference resolver. |
+| Project intelligence | Incremental scan limits | Skips common dependency/build/cache directories, secret/credential directories and filenames, binaries, and files over 256 KiB; common secret assignments, bearer tokens, credentialed URLs, private-key blocks, and recognizable token patterns are redacted before persistence. | **Bounded**; maximum 10,000 files, 50,000 directory entries, depth 10, and 24 MiB newly read per refresh. Partial scans report their stop reason. |
+| Project intelligence | Agent search, overview, and static validation | `project_index`, `project_search`, `project_index_overview`, and `project_validate` build, query, summarize, and statically inspect the indexed project. | **Implemented**; static validation parses JSON/XML manifests and discovers test files/scripts; it does not execute builds, linters, or tests. Refresh after external changes. |
+| Developer workflows | Built-in workflow catalog | Project understanding, feature implementation, bug investigation, repository change review, and release preparation templates. | **Implemented**; workflows use the existing Agent tool loop, plan, approvals, cancellation, history, Skills, workspace, and Git tools. |
+| Developer workflows | Workspace-specific custom workflows | Save and reuse custom named instruction templates within the active Workspace Context. | **Implemented**; stored locally in IndexedDB; not included in conversation exports or Project Profile snapshots. |
+| Unified project experience | Shared host integration | Project index and workflow controls are part of Agent Settings → Project and use the same shared page in all three hosts. | **Implemented**; folder access remains a separate explicit grant in each WebView profile. |
+
+
 ## RunMind 2.1.6 — Reliability, bounded processing, and workspace safety
 
 | Area | Feature | Current behavior | Status / limits |
@@ -62,7 +76,7 @@
 
 ### 2.1.x not included
 
-Project indexing, semantic search, reusable workflows, and the Standalone Launcher remain future-release work. The PowerToys Command Palette host integration is tracked separately in the 2.2.0 development section below; it hosts the canonical shared chat UI in its own process rather than launching the Standalone executable. Command Palette now has a native inline conversation fallback with provider/model settings shared with PowerToys Run.
+Compiler-grade semantic indexing, full reference resolution, and the Standalone Launcher remain future-release work. The PowerToys Command Palette host integration is tracked separately in the 2.2.0 development section below; it hosts the canonical shared chat UI in its own process rather than launching the Standalone executable. Command Palette now has a native inline conversation fallback with provider/model settings shared with PowerToys Run.
 
 ## RunMind 2.0.9 — configurable inline timeouts
 

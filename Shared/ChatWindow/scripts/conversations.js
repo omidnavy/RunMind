@@ -527,6 +527,8 @@
       await Promise.all([workspaceRestorePromise, workspaceMcpRestorePromise]);
       updateMcpModeButton();
       await refreshAgentSkillManager();
+      await refreshProjectIndexStatus();
+      await refreshDeveloperWorkflowList();
     }
     async function applySessionData(data, restored, fileName, branchWorkspace = null, savedWorkspaceContext = null) {
       const contextToApply = savedWorkspaceContext || (Number(data.version) === 1 ? workspaceContext : null);
