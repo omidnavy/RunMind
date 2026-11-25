@@ -1963,6 +1963,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         {
             Title = "RunMind", Width = 1120, Height = 836, MinWidth = 680, MinHeight = 520,
             Icon = LoadWindowIcon(assemblyDirectory),
+            Background = CreateInitialWindowBackgroundBrush(),
             WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = webView,
         };
         appWindow.Closed += async (_, _) => await DisposeWebViewWithSessionCleanupAsync(webView);
@@ -1989,6 +1990,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             MinWidth = 680,
             MinHeight = 520,
             Icon = LoadWindowIcon(Path.GetDirectoryName(typeof(Main).Assembly.Location) ?? AppContext.BaseDirectory),
+            Background = CreateInitialWindowBackgroundBrush(),
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
             Content = webView,
         };
@@ -2059,6 +2061,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             MinWidth = 680,
             MinHeight = 520,
             Icon = LoadWindowIcon(assemblyDirectory),
+            Background = CreateInitialWindowBackgroundBrush(),
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
             Content = webView,
         };
@@ -2098,6 +2101,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             MinWidth = 680,
             MinHeight = 520,
             Icon = LoadWindowIcon(assemblyDirectory),
+            Background = CreateInitialWindowBackgroundBrush(),
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
             Content = webView,
         };
@@ -2846,9 +2850,16 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
         }
     }
 
+    private static System.Windows.Media.Brush CreateInitialWindowBackgroundBrush()
+    {
+        var color = AppearancePreferenceStore.GetInitialBackgroundColor();
+        return new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromArgb(color.A, color.R, color.G, color.B));
+    }
+
     private static WebView2 CreateChatWebView() => new()
     {
-        DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24),
+        DefaultBackgroundColor = AppearancePreferenceStore.GetInitialBackgroundColor(),
         AllowExternalDrop = false,
     };
 

@@ -5,7 +5,7 @@ rem One release entry point for all RunMind hosts:
 rem   1) Standalone desktop app
 rem   2) PowerToys Run plugin
 rem   3) PowerToys Command Palette extension (signed MSIX)
-rem Installation is intentionally separate: Install-RunMind-CommandPalette.bat.
+rem Installation is intentionally separate: Install-RunMind-PowerToys-Run.bat and Install-RunMind-CommandPalette.bat.
 cd /d "%~dp0"
 
 rem Opt out of .NET CLI telemetry and suppress first-run/logo noise for this
@@ -122,7 +122,7 @@ echo [SUCCESS] All three RunMind hosts were built for Release x64.
 echo [SUCCESS] The Command Palette MSIX and public signing certificate are in:
 echo          "%~dp0Release\CommandPalette\x64"
 echo.
-echo Nothing was installed. Use Install-RunMind-CommandPalette.bat separately.
+echo Nothing was installed. Use Install-RunMind-PowerToys-Run.bat and Install-RunMind-CommandPalette.bat separately.
 goto :finish
 
 :help_error

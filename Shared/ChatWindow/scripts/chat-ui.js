@@ -1861,6 +1861,7 @@
             root.dataset.appearanceMode = 'dark';
             root.dataset.theme = 'dark';
             root.dataset.colorTheme = 'warm-graphite';
+            root.style.backgroundColor = '#171613';
           }
           root.dataset.themeReady = 'true';
           finishInitialThemeApplication();

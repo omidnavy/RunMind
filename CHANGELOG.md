@@ -1,3 +1,20 @@
+## [2.2.7] — Theme-matched startup and PowerToys Run installer (2026-11-15)
+
+### Fixed
+- Read the saved appearance before the WebView's first page paint and resolve the selected light/dark palette background from the runtime-discovered theme catalog.
+- Set the initial WPF window and WebView2 surface backgrounds to the selected palette color, so the host's default dark surface no longer flashes before the chat theme appears.
+- Keep the page body transparent and hidden until the selected stylesheet is loaded; the saved palette color fills the page behind it. Remove the temporary root background only after the themed page has rendered.
+- Keep normal theme-switch transitions unchanged; transition suppression still applies only during initial appearance setup.
+
+### Added
+- Add `Install-RunMind-PowerToys-Run.bat` to install the already-built PowerToys Run plugin into `%LOCALAPPDATA%\Microsoft\PowerToys\PowerToys Run\Plugins\Community.PowerToys.Run.Plugin.RunMind`.
+- The installer checks for running PowerToys processes and refuses to copy while PowerToys is open. It mirrors the complete Release x64 plugin output, removes obsolete files from older plugin deployments, and verifies required files after copying.
+- Keep PowerToys Run installation separate from `Build-Release-x64.bat`; the build script still builds/packages but does not install either host.
+
+### Validation
+- JavaScript syntax, theme metadata/background parsing, project XML, plugin/manifest JSON, installer structure, and source ZIP integrity were checked.
+- A Windows/.NET compilation and live WebView2 startup test remain required on the target machine.
+
 ## [2.2.6] — Unified runtime themes and first-paint stability (2026-11-15)
 
 ### Changed

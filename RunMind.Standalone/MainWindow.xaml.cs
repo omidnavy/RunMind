@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using RunMind.Shared;
@@ -17,7 +18,7 @@ public partial class MainWindow : Window
     private readonly AgentHostBridge _agentHostBridge = new();
     private readonly WebView2 _webView = new()
     {
-        DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24),
+        DefaultBackgroundColor = AppearancePreferenceStore.GetInitialBackgroundColor(),
         AllowExternalDrop = false,
     };
     private bool _closing;
@@ -90,6 +91,8 @@ public partial class MainWindow : Window
         _freshConversationConnectionId = initialConnectionId;
         _freshConversationThinkEnabled = initialThinkEnabled;
         InitializeComponent();
+        var initialBackground = AppearancePreferenceStore.GetInitialBackgroundColor();
+        Background = new SolidColorBrush(Color.FromArgb(initialBackground.A, initialBackground.R, initialBackground.G, initialBackground.B));
         _windowThemeSynchronizer = new WindowThemeSynchronizer(this);
         Root.Children.Add(_webView);
         Closed += OnClosed;

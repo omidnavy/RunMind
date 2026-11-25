@@ -77,7 +77,7 @@ function finishInitialThemeApplication() {
   const root = document.documentElement;
   if (root.dataset.themeInitializing !== 'true') return;
   const release = () => {
-    if (root.dataset.themeReady === 'true') root.removeAttribute('data-theme-initializing');
+    if (root.dataset.themeReady === 'true') { root.style.removeProperty('background-color'); root.removeAttribute('data-theme-initializing'); }
   };
   if (typeof requestAnimationFrame === 'function')
     requestAnimationFrame(() => requestAnimationFrame(release));

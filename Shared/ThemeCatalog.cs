@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 
 namespace RunMind.Shared;
 
-internal sealed record ThemeDefinition(string Id, string Name, string Mode, string FileName, string Version);
+internal sealed record ThemeDefinition(string Id, string Name, string Mode, string FileName, string Version, string BackgroundColor);
 
 /// <summary>
 /// Discovers self-contained theme files. Each file declares its identity and supported
@@ -66,11 +66,11 @@ internal static class ThemeCatalog
                 var info = new FileInfo(path);
                 if (info.Length is <= 0 or > MaximumThemeBytes) continue;
                 var css = File.ReadAllText(path, new UTF8Encoding(false, true));
-                if (!TryReadTheme(css, fileMatch.Groups["id"].Value, out var id, out var name, out var modes)) continue;
+                if (!TryReadTheme(css, fileMatch.Groups["id"].Value, out var id, out var name, out var palettes)) continue;
 
                 var version = $"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}";
-                foreach (var mode in modes)
-                    themes.Add(new ThemeDefinition(id, name, mode, fileName, version));
+                foreach (var palette in palettes)
+                    themes.Add(new ThemeDefinition(id, name, palette.Key, fileName, version, palette.Value));
             }
             catch
             {
@@ -91,11 +91,11 @@ internal static class ThemeCatalog
         string expectedId,
         out string id,
         out string name,
-        out IReadOnlyList<string> modes)
+        out IReadOnlyDictionary<string, string> palettes)
     {
         id = string.Empty;
         name = string.Empty;
-        modes = Array.Empty<string>();
+        palettes = new Dictionary<string, string>(StringComparer.Ordinal);
         var metadataMatch = MetadataPattern.Match(css);
         if (!metadataMatch.Success) return false;
 
@@ -130,34 +130,41 @@ internal static class ThemeCatalog
             var rules = PaletteRulePattern.Matches(withoutComments);
             var foundModes = new HashSet<string>(StringComparer.Ordinal);
             var invalidModes = new HashSet<string>(StringComparer.Ordinal);
+            var backgroundColors = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (Match rule in rules)
             {
                 var mode = rule.Groups["mode"].Value.ToLowerInvariant();
                 var ruleId = rule.Groups["id"].Value;
                 if (!declaredModes.Contains(mode) || !string.Equals(ruleId, id, StringComparison.Ordinal))
                     return false;
-                if (!foundModes.Add(mode) || !HasRequiredProperties(rule.Groups["body"].Value, mode))
+                var body = rule.Groups["body"].Value;
+                if (!foundModes.Add(mode) || !HasRequiredProperties(body, mode)
+                    || !TryReadBackgroundColor(body, out var backgroundColor))
                 {
                     invalidModes.Add(mode);
                     continue;
                 }
+                backgroundColors[mode] = backgroundColor;
             }
 
             // A syntactically complete but incomplete palette only disables that mode;
             // a malformed/unexpected remainder invalidates the file to avoid CSS injection.
             var remainder = PaletteRulePattern.Replace(withoutComments, string.Empty);
             if (!string.IsNullOrWhiteSpace(remainder)) return false;
-            var validModes = foundModes.Except(invalidModes).ToArray();
+            var validModes = foundModes.Except(invalidModes)
+                .Where(backgroundColors.ContainsKey)
+                .OrderBy(mode => mode, StringComparer.Ordinal)
+                .ToArray();
             if (validModes.Length == 0) return false;
 
-            modes = validModes.OrderBy(mode => mode, StringComparer.Ordinal).ToArray();
+            palettes = validModes.ToDictionary(mode => mode, mode => backgroundColors[mode], StringComparer.Ordinal);
             return true;
         }
         catch
         {
             id = string.Empty;
             name = string.Empty;
-            modes = Array.Empty<string>();
+            palettes = new Dictionary<string, string>(StringComparer.Ordinal);
             return false;
         }
     }
@@ -171,6 +178,19 @@ internal static class ThemeCatalog
         }
         var colorScheme = Regex.Match(body, @"(?:^|;)\s*color-scheme\s*:\s*(?<value>light|dark)\s*;?", RegexOptions.CultureInvariant | RegexOptions.Multiline);
         return colorScheme.Success && string.Equals(colorScheme.Groups["value"].Value, mode, StringComparison.OrdinalIgnoreCase);
+    }
+
+
+    private static bool TryReadBackgroundColor(string body, out string backgroundColor)
+    {
+        backgroundColor = string.Empty;
+        var match = Regex.Match(
+            body,
+            @"(?:^|;)\s*--color-bg\s*:\s*(?<value>#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})\s*;?",
+            RegexOptions.CultureInvariant | RegexOptions.Multiline);
+        if (!match.Success) return false;
+        backgroundColor = match.Groups["value"].Value;
+        return true;
     }
 
     private static bool IsReparsePoint(string path)

@@ -8,7 +8,7 @@ RunMind is available through three Windows entry points:
 
 - **Standalone Windows app** — a full chat window that can be launched independently, with support for multiple windows.
 - **PowerToys Run plugin** — start a RunMind conversation directly from PowerToys Run using `llm <prompt>` or search for RunMind. The retained inline query can be opened in multiple independent chat windows, including after the first window takes over an in-progress answer.
-- **PowerToys Command Palette extension** — an independent host with a branded **RunMind** inline fallback, **Open chat with empty context**, and an extension settings page for the shared provider/model configuration. The fallback streams local model answers directly into a Command Palette conversation page and supports follow-up turns. It starts its own chat process from the packaged Command Palette executable and hosts the canonical shared chat UI; it does not launch or require the Standalone executable. Inline settings are shared with PowerToys Run. The helper package is hidden from Start and Windows Search because it is a COM host, not a separately launchable app. `Build-Release-x64.bat` builds all three Release x64 hosts and creates/signs the Command Palette MSIX without installing it; `Install-RunMind-CommandPalette.bat` separately installs or uninstalls the already-built package.
+- **PowerToys Command Palette extension** — an independent host with a branded **RunMind** inline fallback, **Open chat with empty context**, and an extension settings page for the shared provider/model configuration. The fallback streams local model answers directly into a Command Palette conversation page and supports follow-up turns. It starts its own chat process from the packaged Command Palette executable and hosts the canonical shared chat UI; it does not launch or require the Standalone executable. Inline settings are shared with PowerToys Run. The helper package is hidden from Start and Windows Search because it is a COM host, not a separately launchable app. `Build-Release-x64.bat` builds all three Release x64 hosts and creates/signs the Command Palette MSIX without installing it. `Install-RunMind-PowerToys-Run.bat` separately installs the already-built PowerToys Run plugin after checking that PowerToys is closed; `Install-RunMind-CommandPalette.bat` separately installs or uninstalls the already-built Command Palette package.
 
 ## What you can do with RunMind
 
@@ -245,7 +245,7 @@ Some generation formats have intentionally focused scope: DOCX supports a bounde
 
 ## Build from source
 
-Run `Build-Release-x64.bat` from the repository root to prepare runtime resources, clean/build all three hosts in Release x64 mode, and package/sign the Command Palette MSIX. It does not install anything. The MSIX and its public signing certificate are written to `Release\CommandPalette\x64`. Use `Install-RunMind-CommandPalette.bat` to install that prebuilt package; it does not need the .NET SDK or rebuild the project. Use `Install-RunMind-CommandPalette.bat uninstall` to remove it. The release build environment requires the .NET 10 SDK. PowerToys reference assemblies are included under `lib\x64`:
+Run `Build-Release-x64.bat` from the repository root to prepare runtime resources, clean/build all three hosts in Release x64 mode, and package/sign the Command Palette MSIX. It does not install anything. Use `Install-RunMind-PowerToys-Run.bat` to install the already-built PowerToys Run plugin; it checks that PowerToys is closed and mirrors the complete plugin output to the per-user plugin directory. Use `Install-RunMind-CommandPalette.bat` to install the prebuilt MSIX, or `Install-RunMind-CommandPalette.bat uninstall` to remove it. Both installers are separate from the build and do not rebuild the projects. The release build environment requires the .NET 10 SDK. PowerToys reference assemblies are included under `lib\x64`:
 
 - `PowerToys.Common.UI.dll`
 - `PowerToys.ManagedCommon.dll`
@@ -259,15 +259,10 @@ See [BUILD-AND-SETUP.md](BUILD-AND-SETUP.md) for detailed build and deployment i
 
 ### PowerToys Run plugin
 
-1. Close PowerToys completely.
-2. If upgrading from LocalLLM, remove the old `Community.PowerToys.Run.Plugin.LocalLLM` plugin folder; the plugin ID is unchanged, so do not keep both deployed folders.
-3. Copy the contents of the `Community.PowerToys.Run.Plugin.RunMind` build output into:
-
-   `%LOCALAPPDATA%\Microsoft\PowerToys\PowerToys Run\Plugins\Community.PowerToys.Run.Plugin.RunMind`
-
-4. Keep the deployed `ChatWindow` folder (its `styles` and `scripts` subfolders), `ChatWindow.html`, and `ArtifactTools.js` together in the plugin directory.
-5. Start PowerToys again.
-5. Enter `llm explain Git rebase` in PowerToys Run, or search for **RunMind** to launch the standalone app through application search.
+1. Build all three hosts with `Build-Release-x64.bat`.
+2. Exit PowerToys completely from its system-tray menu.
+3. Run `Install-RunMind-PowerToys-Run.bat`. It verifies that PowerToys is closed, copies the complete Release x64 plugin output into the correct per-user Plugins folder, removes stale deployment files, and checks the required resources.
+4. Start PowerToys again and use `llm <prompt>` or search for RunMind.
 
 ### Standalone app
 

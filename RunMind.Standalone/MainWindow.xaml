@@ -4,6 +4,6 @@
         Title="RunMind" Icon="pack://application:,,,/Assets/Brand/Icon.ico" Height="836" Width="1120"
         MinHeight="520" MinWidth="680"
         WindowStartupLocation="Manual"
-        Background="#111318">
+        Background="#171613">
   <Grid x:Name="Root" />
 </Window>
