@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text;
@@ -92,7 +92,7 @@ public partial class MainWindow : Window
         _freshConversationThinkEnabled = initialThinkEnabled;
         InitializeComponent();
         var initialBackground = AppearancePreferenceStore.GetInitialBackgroundColor();
-        Background = new SolidColorBrush(Color.FromArgb(initialBackground.A, initialBackground.R, initialBackground.G, initialBackground.B));
+        Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(initialBackground.A, initialBackground.R, initialBackground.G, initialBackground.B));
         _windowThemeSynchronizer = new WindowThemeSynchronizer(this);
         Root.Children.Add(_webView);
         Closed += OnClosed;

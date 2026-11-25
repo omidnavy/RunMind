@@ -182,6 +182,19 @@ internal sealed partial class InlineModelSettingsPage : ContentPage
 
                 if (action.Equals("refresh", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (providerOrEndpointChanged)
+                    {
+                        // The provider dropdown is submitted with the refresh action.
+                        // Persist a changed provider/endpoint before discovering models,
+                        // so reopening settings does not silently revert the selection.
+                        var refreshSavedAt = InlineModelSettingsStore.Save(snapshot);
+                        var refreshPersisted = InlineModelSettingsStore.Load();
+                        if (!SameProviderEndpoint(snapshot, refreshPersisted))
+                            throw new InvalidOperationException("The selected provider or endpoint did not persist to the shared settings file.");
+                        lock (_sync) _settings = refreshPersisted;
+                        RunMindCommandPaletteDiagnostics.Write(
+                            $"Provider selection persisted before model refresh; provider='{refreshPersisted.Provider}'; write-time-utc={refreshSavedAt:O}.");
+                    }
                     RefreshModelsInBackground(snapshot.ModelDiscoveryTimeoutSeconds);
                     return CommandResult.KeepOpen();
                 }
@@ -222,9 +235,12 @@ internal sealed partial class InlineModelSettingsPage : ContentPage
                 .OrderBy(model => model, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var choices = models.Count == 0
-                ? new[] { new { title = "No models discovered — refresh or enter a model ID below", value = string.Empty } }
-                : models.Select(model => new { title = model, value = model }).ToArray();
+            var choices = new[]
+                {
+                    new { title = "— Select a discovered model —", value = string.Empty },
+                }
+                .Concat(models.Select(model => new { title = model, value = model }))
+                .ToArray();
             var selectedModel = models.Contains(_settings.Model, StringComparer.OrdinalIgnoreCase)
                 ? _settings.Model
                 : string.Empty;
@@ -234,21 +250,67 @@ internal sealed partial class InlineModelSettingsPage : ContentPage
                 new { type = "TextBlock", text = "RunMind inline model", size = "Large", weight = "Bolder", wrap = true },
                 new { type = "TextBlock", text = "These settings are shared by PowerToys Run and Command Palette. The model list is discovered from the provider you select; you can also enter any model ID manually.", wrap = true },
                 new { type = "TextBlock", text = _modelStatus, isSubtle = true, wrap = true },
-                new { type = "TextBlock", text = "Provider — choose one to save it and refresh its models automatically", weight = "Bolder", spacing = "Medium" },
-                new { type = "ActionSet", actions = new object[]
+                new { type = "TextBlock", text = "Provider", weight = "Bolder", spacing = "Medium" },
+                new
+                {
+                    type = "ActionSet",
+                    actions = new object[]
                     {
-                        new { type = "Action.Submit", title = _settings.Provider == "ollama" ? "✓ Ollama" : "Use Ollama", data = new { action = "useProvider", provider = "ollama" } },
-                        new { type = "Action.Submit", title = _settings.Provider == "lmstudio" ? "✓ LM Studio" : "Use LM Studio", data = new { action = "useProvider", provider = "lmstudio" } },
-                    }
+                        new
+                        {
+                            type = "Action.Submit",
+                            title = _settings.Provider == "ollama" ? "✓ Ollama" : "Use Ollama",
+                            data = new { action = "useProvider", provider = "ollama" },
+                        },
+                        new
+                        {
+                            type = "Action.Submit",
+                            title = _settings.Provider == "lmstudio" ? "✓ Open-AI Compatible" : "Use Open-AI Compatible",
+                            data = new { action = "useProvider", provider = "lmstudio" },
+                        },
+                    },
                 },
-                new { type = "Input.Text", id = "ollamaEndpoint", label = "Ollama API endpoint", value = _settings.OllamaEndpoint, placeholder = "http://localhost:11434/api/generate" },
-                new { type = "Input.Text", id = "commandPaletteOllamaApiKey", label = "Ollama API key (optional; sent as Bearer token)", style = "password", value = _settings.CommandPaletteOllamaApiKey, placeholder = "Leave empty if authentication is not required", maxLength = 4096 },
-                new { type = "Input.Text", id = "commandPaletteOllamaAuthHeader", label = "Ollama custom auth header (optional; Name: value)", style = "password", value = _settings.CommandPaletteOllamaAuthHeader, placeholder = "For example: X-API-Key: your-token", maxLength = 8192 },
-                new { type = "Input.Text", id = "lmStudioBaseUrl", label = "LM Studio base URL", value = _settings.LMStudioBaseUrl, placeholder = "http://localhost:1234/v1" },
-                new { type = "Input.Text", id = "commandPaletteLMStudioApiKey", label = "LM Studio API key (optional; sent as Bearer token)", style = "password", value = _settings.CommandPaletteLMStudioApiKey, placeholder = "Leave empty if authentication is not required", maxLength = 4096 },
-                new { type = "Input.Text", id = "commandPaletteLMStudioAuthHeader", label = "LM Studio custom auth header (optional; Name: value)", style = "password", value = _settings.CommandPaletteLMStudioAuthHeader, placeholder = "For example: X-API-Key: your-token", maxLength = 8192 },
+                new { type = "Input.Text", id = "ollamaEndpoint", label = "Ollama API endpoint", value = _settings.OllamaEndpoint, placeholder = "http://localhost:11434/api/generate", isVisible = _settings.Provider == "ollama" },
+                new { type = "Input.Text", id = "commandPaletteOllamaApiKey", label = "Ollama API key (optional; sent as Bearer token)", style = "password", value = _settings.CommandPaletteOllamaApiKey, placeholder = "Leave empty if authentication is not required", maxLength = 4096, isVisible = _settings.Provider == "ollama" },
+                new { type = "Input.Text", id = "commandPaletteOllamaAuthHeader", label = "Ollama custom auth header (optional; Name: value)", style = "password", value = _settings.CommandPaletteOllamaAuthHeader, placeholder = "For example: X-API-Key: your-token", maxLength = 8192, isVisible = _settings.Provider == "ollama" },
+                new { type = "Input.Text", id = "lmStudioBaseUrl", label = "LM Studio base URL", value = _settings.LMStudioBaseUrl, placeholder = "http://localhost:1234/v1", isVisible = _settings.Provider == "lmstudio" },
+                new { type = "Input.Text", id = "commandPaletteLMStudioApiKey", label = "LM Studio API key (optional; sent as Bearer token)", style = "password", value = _settings.CommandPaletteLMStudioApiKey, placeholder = "Leave empty if authentication is not required", maxLength = 4096, isVisible = _settings.Provider == "lmstudio" },
+                new { type = "Input.Text", id = "commandPaletteLMStudioAuthHeader", label = "LM Studio custom auth header (optional; Name: value)", style = "password", value = _settings.CommandPaletteLMStudioAuthHeader, placeholder = "For example: X-API-Key: your-token", maxLength = 8192, isVisible = _settings.Provider == "lmstudio" },
                 new { type = "TextBlock", text = "Credentials are used for both model discovery and generation. A custom header with the same name overrides the API-key header. These Command Palette credentials are separate from PowerToys Run. They are stored in the local RunMind settings JSON and are not written to logs; the file is not DPAPI-encrypted, so protect your Windows user account.", isSubtle = true, wrap = true },
-                new { type = "Input.ChoiceSet", id = "model", label = "Models discovered from this provider", style = "compact", value = selectedModel, choices },
+                new { type = "TextBlock", text = "Models discovered from this provider", weight = "Bolder", spacing = "Medium" },
+                new
+                {
+                    type = "ColumnSet",
+                    columns = new object[]
+                    {
+                        new
+                        {
+                            type = "Column",
+                            width = "stretch",
+                            items = new object[]
+                            {
+                                new { type = "Input.ChoiceSet", id = "model", style = "compact", value = selectedModel, choices },
+                            },
+                        },
+                        new
+                        {
+                            type = "Column",
+                            width = "auto",
+                            verticalContentAlignment = "Center",
+                            items = new object[]
+                            {
+                                new
+                                {
+                                    type = "ActionSet",
+                                    actions = new object[]
+                                    {
+                                        new { type = "Action.Submit", title = "Refresh models", data = new { action = "refresh" } },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
                 new { type = "Input.Text", id = "customModel", label = "Or enter any model ID", value = _customModelInput, placeholder = "Custom Ollama tag or LM Studio model key", maxLength = 512 },
                 new { type = "TextBlock", text = "Generation", weight = "Bolder", spacing = "Medium" },
                 new { type = "Input.ChoiceSet", id = "thinking", label = "Thinking / reasoning mode (both providers)", style = "compact", value = _settings.Thinking, choices = new[] { new { title = "Auto — use model default", value = "auto" }, new { title = "On", value = "on" }, new { title = "Off", value = "off" }, new { title = "Low", value = "low" }, new { title = "Medium", value = "medium" }, new { title = "High", value = "high" } } },
@@ -272,9 +334,7 @@ internal sealed partial class InlineModelSettingsPage : ContentPage
 
             var actions = new object[]
             {
-                new { type = "Action.Submit", title = "Refresh models", data = new { action = "refresh" } },
                 new { type = "Action.Submit", title = "Save settings", data = new { action = "save" } },
-                new { type = "Action.OpenUrl", title = "Visit omid.navy", url = "https://omid.navy" },
             };
 
             TemplateJson = JsonSerializer.Serialize(new Dictionary<string, object?>
@@ -292,7 +352,7 @@ internal sealed partial class InlineModelSettingsPage : ContentPage
                 && string.Equals(left.OllamaEndpoint, right.OllamaEndpoint, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(left.LMStudioBaseUrl, right.LMStudioBaseUrl, StringComparison.OrdinalIgnoreCase);
 
-        private static string ProviderName(string provider) => provider == "lmstudio" ? "LM Studio" : "Ollama";
+        private static string ProviderName(string provider) => provider == "lmstudio" ? "Open-AI Compatible" : "Ollama";
 
         private static JsonObject FlattenPayload(string inputs, string data)
         {
