@@ -1,40 +1,40 @@
-# RunMind 2.4.0 validation report
+# RunMind 2.5.0 validation report
 
 ## Release
 
-**RunMind 2.4.0 — Developer Workbench & Native Automation**
+**RunMind 2.5.0 — Debugging, Quality, Skills & System Manager**
 
-Source baseline: `RunMind-2.3.0-Project-Intelligence-Workflows.zip` (131 files).
+Source baseline: verified `RunMind-2.4.0-Developer-Workbench-Native-Automation.zip`.
 
 ## Checks performed
 
 | Check | Result | Notes |
 |---|---|---|
-| JavaScript syntax | Passed | `node --check` run for every `.js` file in the source tree. |
+| JavaScript syntax | Passed | `node --check` run for every JavaScript file in `Shared/ChatWindow/scripts`. |
+| HTML structure and IDs | Passed | Parsed `ChatWindow.html`; no duplicate IDs; new Settings page and Skill URL controls exist. |
 | Project JSON | Passed | All `.json` files parsed successfully. |
 | Project XML | Passed | All `.csproj` files and the Command Palette MSIX manifest parsed successfully. |
-| Version synchronization | Passed | PowerToys Run plugin, Standalone, Command Palette project, plugin metadata, and MSIX manifest report 2.4.0 / 2.4.0.0 consistently. |
-| Native bridge static integration | Passed | Verified shared bridge dispatch entries, native tool definitions, per-call approval routes, workspace-context checks, process-tree termination, bounded output, and argument-list execution. |
-| C# lexical delimiter check | Passed | Braces, brackets, and parentheses in `Shared/AgentHostBridge.cs` passed a lightweight lexical balance check. This is not a compiler check. |
-| Project index runtime checks | Passed | Node VM harness verified initial index creation, unchanged-file reuse, changed-file reread, deleted-file removal, and automatic refresh scheduling. |
-| Source file count | Passed | 131 source files retained; no host or shared source directories removed. |
-| Windows/.NET compilation | Not run | `dotnet`, `csc`, and `mcs` are unavailable in this environment. |
-| Live WebView2 / native process testing | Not run | Requires Windows. PowerShell discovery, native folder picker, process cancellation/timeouts, and all three host integrations still need target-machine testing. |
+| Version synchronization | Passed | Standalone, Command Palette, PowerToys Run plugin, plugin metadata, and MSIX manifest report 2.5.0 / 2.5.0.0 consistently. |
+| System Manager tool wiring | Passed | Verified conditional tool definitions, JS executor routes, native dispatch entries, shared source inclusion in all three host projects, and settings gating. |
+| Skill installer wiring | Passed | Verified URL preview/content install dispatch, URL and pasted-content UI flows, frontmatter validation route, and Global/Project scope handlers. |
+| C# lexical delimiter check | Passed | Braces, parentheses, and brackets balance in `AgentHostBridge.cs` and `SystemManager.cs` after ignoring comments and string literals. This is not a compiler check. |
+| Workflow definitions | Passed | Build, test, static analysis, Playwright CLI, API smoke-test, and dependency audit workflows are present in the shared developer workflow catalog. |
+| Source count | Passed | 133 files in the release source tree; all three host projects and shared source directories retained. |
+| Windows/.NET compilation | Not run | `dotnet`, `csc`, and `mcs` are unavailable in this environment. No compile success is claimed. |
+| Live WebView2 / Windows testing | Not run | Requires Windows. Native confirmation dialogs, registry/Start Menu/PATH discovery, process enumeration/termination, `sc.exe`, network diagnostics, PowerShell and all three host integrations require target-machine testing. |
 
-## Implementation notes and boundaries
+## Implementation boundaries
 
-- PowerShell scripts are written to the child process standard input; they are not interpolated into a shell command line.
-- Native executable calls use `ProcessStartInfo.ArgumentList` and accept `.exe` names resolved through PATH. Batch files and arbitrary shell command strings are not accepted by that tool.
-- Every PowerShell/native process invocation requires fresh in-chat approval. Processes inherit the current Windows user's permissions; approval is not a sandbox or privilege boundary.
-- The native execution workspace is selected separately with an OS folder picker and is scoped to the current conversation context. Relative working directories are checked to remain inside that selected directory, but PowerShell scripts can access other resources available to the current user.
-- Process execution is cancellable, has a 1–900 second timeout, and captures at most 512 KB of stdout and 512 KB of stderr.
-- The project index is automatically built on workspace selection/restoration and periodically refreshed every 60 seconds while the chat is visible. This is polling, not a real-time filesystem watcher. Unchanged-file reuse depends on size and modification-time metadata.
-- Native process tools are excluded from Deep Research and delegated sub-agent tasks.
+- System Manager is disabled by default. The native bridge independently checks the master switch, group, and individual capability for every System Manager operation. The Agent tool definitions are refreshed before each user turn so another host's settings changes are reflected.
+- Application discovery is bounded to registered App Paths, Start Menu shortcuts, and top-level executable entries in a bounded set of PATH directories. A local catalog is reused for five minutes and refreshed on a search miss. Launch requires a catalogued executable/shortcut.
+- Application adapters use argument arrays only. Built-in adapters are provided for VS Code, Windows Terminal, Firefox, Notepad++, and Blender. User adapters are declarative JSON manifests; they cannot contain scripts, shell commands, executable paths, or arbitrary code. Adapter installation requires native confirmation.
+- Launch/open operations use native confirmation unless the user explicitly chooses Allow automatically under Balanced or Custom. Restricted always asks. Process termination always shows a native Windows confirmation, revalidates PID/name/start time and executable path when available, and refuses selected protected process names.
+- System diagnostics are read-only. Service status is collected through the Windows `sc.exe query` command; no service control is implemented. Network information is read-only.
+- Skill URL imports require HTTPS, reject local/private network destinations, limit `SKILL.md` to 128 KB, validate `name` and `description` frontmatter, and require a preview/confirmation before install. GitHub/GitLab folder URLs are resolved to a raw `SKILL.md`. Direct URL and pasted-content imports currently install `SKILL.md` only; linked resources and archive imports are not included.
+- Pasted valid Skill content is detected before normal message submission. Accepting the preview installs it; declining leaves the text to be sent as a normal chat message. Skill scripts are never executed.
+- Playwright support is a workflow that invokes a project's already-installed Playwright CLI through approved PowerShell. It is not an embedded browser automation runtime. API checks are workflow-guided PowerShell requests, not a dedicated API-client UI.
+- PowerShell/native process execution is inherited from 2.4.0. Processes run with current-user privileges and are not sandboxed. Every native process invocation still requires the existing explicit approval path.
 
-## Required target-machine regression tests
+## Remaining validation
 
-1. Build `RunMind.sln` with the .NET 10 Windows targeting pack and existing package dependencies.
-2. Launch Standalone, PowerToys Run, and PowerToys Command Palette; confirm each host exposes the same native process tools.
-3. Select a native execution workspace. Verify approval denial, PowerShell output/error/exit code, native `.exe` argument handling, cancellation, timeout, large-output truncation, and rejection of absolute or traversal working directories.
-4. Select and reconnect browser workspaces. Verify first-time automatic indexing, incremental refresh, deleted-file removal, 60-second periodic checks, cancellation, and unchanged-file reuse.
-5. Re-run existing Git, Skills, MCP, Deep Research, conversation, Project Profile, and workspace file-operation regression tests.
+A Windows/.NET build and live tests are required before treating the release as production-verified. In particular, verify WPF confirmation behavior in each host, Windows App Paths/Start Menu discovery, service/network diagnostics, and end-to-end Skill installation with representative public sources.

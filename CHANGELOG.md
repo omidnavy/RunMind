@@ -1,3 +1,14 @@
+## [2.5.0] — Debugging, Quality, Skills & System Manager (2026-11-17)
+
+- Added reusable developer workflows for project builds/tests, static analysis/lint, Playwright test-runner checks, API smoke testing, and dependency security audits. They rely on existing explicit PowerShell/native execution approval and report actual command results.
+- Added automatic recognition of pasted Agent Skill content, with preview and confirmation before installation.
+- Added direct HTTPS `SKILL.md` import and GitHub/GitLab repository-folder URL resolution, with frontmatter validation, duplicate protection, source metadata, and global/project scope.
+- Added optional Windows System Manager, disabled by default, with master/group/individual switches and shared native enforcement.
+- Added local application catalog discovery from Start Menu shortcuts, registered App Paths and PATH; generic application launch, file/folder/HTTPS URL opening, built-in and user-authored declarative application adapters, process listing/termination, and read-only OS/environment/service/network diagnostics.
+- Process termination requires a native Windows confirmation, revalidates PID/name/start time and executable identity when available, and blocks selected critical Windows processes. Application launch/open permissions are enforced by the native bridge.
+- Preserved Standalone, PowerToys Run, PowerToys Command Palette, and the shared Agent Core.
+- Limitations: URL Skill import currently imports `SKILL.md` only; archive import and recursive download of linked Skill resources are not included. Playwright is invoked through the project's installed CLI, not an embedded browser runtime.
+
 ## [2.4.0] — Developer Workbench & Native Automation (2026-11-17)
 
 ### Added

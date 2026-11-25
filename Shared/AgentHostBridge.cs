@@ -28,7 +28,7 @@ namespace RunMind.Shared;
 /// shared profile storage, Git and explicitly approved process execution, global Agent Skills,
 /// and resumable downloads. Process execution is not sandboxed and inherits current-user rights.
 /// </summary>
-public sealed class AgentHostBridge : IDisposable
+public sealed partial class AgentHostBridge : IDisposable
 {
     private const int MaximumMessageBytes = 1024 * 1024;
     private const int MaximumOutputCharacters = 512 * 1024;
@@ -122,10 +122,23 @@ public sealed class AgentHostBridge : IDisposable
             "profiles.save" => Task.FromResult(SaveProfile(args)),
             "profiles.delete" => Task.FromResult(DeleteProfile(ReadString(args, "id", 100))),
             "permissions.get" => Task.FromResult(ReadPermissionPolicy()),
+            "systemManager.settings.get" => Task.FromResult(SystemManagerSettingsGet()),
+            "systemManager.settings.save" => Task.FromResult(SystemManagerSettingsSave(args)),
+            "systemManager.apps.list" => Task.FromResult(SystemManagerListApplications(ReadString(args, "query", 120))),
+            "systemManager.adapters.list" => Task.FromResult(SystemManagerListAdapters()),
+            "systemManager.adapters.save" => Task.FromResult(SystemManagerSaveAdapter(args)),
+            "systemManager.adapters.launch" => Task.FromResult(SystemManagerLaunchAdapter(args)),
+            "systemManager.apps.launch" => Task.FromResult(SystemManagerLaunchApplication(args)),
+            "systemManager.open.target" => Task.FromResult(SystemManagerOpenTarget(args)),
+            "systemManager.process.list" => Task.FromResult(SystemManagerListProcesses(ReadString(args, "query", 120))),
+            "systemManager.process.terminate" => Task.FromResult(SystemManagerTerminateProcess(args)),
+            "systemManager.diagnostics" => Task.FromResult(SystemManagerDiagnostics()),
             "themes.list" => Task.FromResult(ListThemes()),
             "skills.list" => Task.FromResult(ListGlobalSkills()),
             "skills.load" => Task.FromResult(LoadGlobalSkill(ReadString(args, "name", 100), ReadStringArray(args, "references", 10, 160))),
             "skills.install" => Task.FromResult(InstallGlobalSkill()),
+            "skills.previewUrl" => PreviewSkillUrlAsync(ReadString(args, "url", 2048), cancellationToken),
+            "skills.installContent" => Task.FromResult(InstallGlobalSkillContent(args.TryGetProperty("content", out var skillContent) && skillContent.ValueKind == JsonValueKind.String ? skillContent.GetString() ?? string.Empty : string.Empty, ReadString(args, "source", 2048))),
             "skills.remove" => Task.FromResult(RemoveGlobalSkill(ReadString(args, "name", 100))),
             "git.select" => Task.FromResult(SelectGitWorkspace(ReadString(args, "contextId", 64))),
             "process.selectWorkspace" => Task.FromResult(SelectProcessWorkspace(ReadString(args, "contextId", 64))),
@@ -469,6 +482,120 @@ public sealed class AgentHostBridge : IDisposable
             throw;
         }
         return new { installed = true, name = metadata.Name, description = metadata.Description, scope = "global", files = counter.Files, bytes = counter.Bytes, root = @"%LOCALAPPDATA%\RunMind\Skills" };
+    }
+
+    private static readonly HttpClient SkillHttpClient = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(20) };
+
+    private static async Task<object> PreviewSkillUrlAsync(string rawUrl, CancellationToken cancellationToken)
+    {
+        var url = NormalizeSkillUrl(rawUrl);
+        for (var redirects = 0; redirects <= 4; redirects++)
+        {
+            await ValidatePublicSkillHostAsync(url, cancellationToken).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.UserAgent.ParseAdd("RunMind-SkillInstaller/2.5");
+            request.Headers.Accept.ParseAdd("text/markdown, text/plain;q=0.9, */*;q=0.1");
+            using var response = await SkillHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            if ((int)response.StatusCode is >= 300 and < 400)
+            {
+                if (redirects == 4 || response.Headers.Location is null) throw new InvalidDataException("The Skill URL redirected too many times or supplied an invalid redirect.");
+                url = response.Headers.Location.IsAbsoluteUri ? response.Headers.Location : new Uri(url, response.Headers.Location);
+                url = NormalizeSkillUrl(url.AbsoluteUri);
+                continue;
+            }
+            if (!response.IsSuccessStatusCode) throw new HttpRequestException($"Skill download returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).");
+            if (response.Content.Headers.ContentLength is long length && length > 128 * 1024) throw new InvalidDataException("SKILL.md exceeds the 128 KB limit.");
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using var memory = new MemoryStream(); var buffer = new byte[8192]; int read;
+            while ((read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                if (memory.Length + read > 128 * 1024) throw new InvalidDataException("SKILL.md exceeds the 128 KB limit.");
+                memory.Write(buffer, 0, read);
+            }
+            var content = Encoding.UTF8.GetString(memory.ToArray());
+            var metadata = ParseSkillFrontmatter(content);
+            if (metadata.Name.Length == 0 || metadata.Description.Length == 0) throw new InvalidDataException("The downloaded file is not a valid Agent Skill SKILL.md with name and description frontmatter.");
+            return new { valid = true, name = metadata.Name, description = metadata.Description, source = url.AbsoluteUri, content, preview = content.Length > 5000 ? content[..5000] : content, bytes = memory.Length, scope = "global", note = "This direct URL installer currently imports SKILL.md only. Additional referenced resource files must be installed from a repository or local folder." };
+        }
+        throw new InvalidOperationException("Could not retrieve the Skill URL.");
+    }
+
+    private static Uri NormalizeSkillUrl(string raw)
+    {
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Fragment) || !uri.IsDefaultPort)
+            throw new InvalidDataException("Skill sources must be credential-free HTTPS URLs on the standard HTTPS port.");
+        if (uri.Query.Length > 0) throw new InvalidDataException("Skill URLs with query parameters are not accepted. Use a stable raw SKILL.md URL.");
+        if (uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 2) uri = new Uri($"https://raw.githubusercontent.com/{parts[0]}/{parts[1]}/main/SKILL.md");
+            else if (parts.Length >= 4 && (parts[2].Equals("tree", StringComparison.OrdinalIgnoreCase) || parts[2].Equals("blob", StringComparison.OrdinalIgnoreCase)))
+            {
+                var owner = parts[0]; var repo = parts[1]; var branch = parts[3]; var itemPath = string.Join('/', parts.Skip(4));
+                var filePath = parts[2].Equals("blob", StringComparison.OrdinalIgnoreCase) && itemPath.EndsWith("SKILL.md", StringComparison.OrdinalIgnoreCase)
+                    ? itemPath : (itemPath.Length > 0 ? itemPath.TrimEnd('/') + "/" : string.Empty) + "SKILL.md";
+                uri = new Uri($"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{filePath}");
+            }
+        }
+        else if (uri.Host.Equals("gitlab.com", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var marker = Array.FindIndex(parts, item => item == "-");
+            if (marker >= 0 && parts.Length > marker + 2 && (parts[marker + 1] is "tree" or "blob"))
+            {
+                var project = string.Join('/', parts.Take(marker)); var branch = parts[marker + 2]; var itemPath = string.Join('/', parts.Skip(marker + 3));
+                var filePath = parts[marker + 1] == "blob" && itemPath.EndsWith("SKILL.md", StringComparison.OrdinalIgnoreCase)
+                    ? itemPath : (itemPath.Length > 0 ? itemPath.TrimEnd('/') + "/" : string.Empty) + "SKILL.md";
+                uri = new Uri($"https://gitlab.com/{project}/-/raw/{branch}/{filePath}");
+            }
+        }
+        return uri;
+    }
+
+    private static async Task ValidatePublicSkillHostAsync(Uri uri, CancellationToken cancellationToken)
+    {
+        if (uri.IsLoopback || uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Local and private network Skill sources are not allowed.");
+        System.Net.IPAddress[] addresses;
+        if (System.Net.IPAddress.TryParse(uri.Host, out var literal)) addresses = new[] { literal };
+        else addresses = await System.Net.Dns.GetHostAddressesAsync(uri.Host, cancellationToken).ConfigureAwait(false);
+        if (addresses.Length == 0 || addresses.Any(address => System.Net.IPAddress.IsLoopback(address) || address.IsIPv6LinkLocal || address.IsIPv6SiteLocal || IsPrivateIpv4(address)))
+            throw new InvalidDataException("Skill sources resolving to local or private network addresses are not allowed.");
+    }
+
+    private static bool IsPrivateIpv4(System.Net.IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6) return IsPrivateIpv4(address.MapToIPv4());
+        var bytes = address.GetAddressBytes();
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            return bytes[0] == 0 || bytes[0] == 10 || bytes[0] == 127 || bytes[0] >= 224 ||
+                (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127) ||
+                (bytes[0] == 169 && bytes[1] == 254) || (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
+                (bytes[0] == 192 && (bytes[1] == 168 || bytes[1] == 0 || (bytes[1] == 0 && bytes[2] == 0))) ||
+                (bytes[0] == 198 && (bytes[1] == 18 || bytes[1] == 19));
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            return address.Equals(System.Net.IPAddress.IPv6Any) || bytes[0] == 0xff || (bytes[0] & 0xfe) == 0xfc || (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80) || address.IsIPv6SiteLocal;
+        return true;
+    }
+
+    private static object InstallGlobalSkillContent(string content, string source)
+    {
+        if (string.IsNullOrWhiteSpace(content) || Encoding.UTF8.GetByteCount(content) > 128 * 1024) throw new InvalidDataException("Skill content is empty or exceeds the 128 KB limit.");
+        var metadata = ParseSkillFrontmatter(content);
+        if (metadata.Name.Length == 0 || metadata.Description.Length == 0) throw new InvalidDataException("Skill content must have valid name and description frontmatter.");
+        var root = GlobalSkillsRoot; Directory.CreateDirectory(root); EnsureNoReparseAncestors(root);
+        var destination = Path.Combine(root, metadata.Name);
+        if (Directory.Exists(destination) || File.Exists(destination)) throw new IOException($"A global Skill named '{metadata.Name}' is already installed. Remove it before installing a replacement.");
+        var staging = Path.Combine(root, ".install-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(staging); EnsureNoReparseAncestors(staging);
+            File.WriteAllText(Path.Combine(staging, "SKILL.md"), content, new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(staging, "runmind-source.txt"), Limit(source, 2048), new UTF8Encoding(false));
+            Directory.Move(staging, destination);
+        }
+        catch { try { if (Directory.Exists(staging)) Directory.Delete(staging, true); } catch { } throw; }
+        return new { installed = true, name = metadata.Name, description = metadata.Description, scope = "global", files = 2, source = Limit(source, 2048), root = @"%LOCALAPPDATA%\RunMind\Skills", note = "Skill instructions are untrusted content. Scripts and commands were not executed." };
     }
 
     private sealed class SkillCopyCounter

@@ -277,6 +277,7 @@
               <button type="button" class="agent-settings-tab" id="agentSettingsTabProject" role="tab" aria-controls="agentSettingsPageProject" aria-selected="false" tabindex="-1"><span aria-hidden="true">02</span> Project</button>
               <button type="button" class="agent-settings-tab" id="agentSettingsTabSkills" role="tab" aria-controls="agentSettingsPageSkills" aria-selected="false" tabindex="-1"><span aria-hidden="true">03</span> Skills</button>
               <button type="button" class="agent-settings-tab" id="agentSettingsTabSecurity" role="tab" aria-controls="agentSettingsPageSecurity" aria-selected="false" tabindex="-1"><span aria-hidden="true">04</span> Security</button>
+              <button type="button" class="agent-settings-tab" id="agentSettingsTabSystemManager" role="tab" aria-controls="agentSettingsPageSystemManager" aria-selected="false" tabindex="-1"><span aria-hidden="true">05</span> System Manager</button>
             </div>
 
             <section class="agent-settings-page" id="agentSettingsPageAgent" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabAgent">
@@ -360,9 +361,11 @@
                   <div class="setting-field"><label for="agentSkillSelect">Installed skills</label><select id="agentSkillSelect" size="5"><option value="">Refresh to list skills</option></select></div>
                 </div>
                 <div class="agent-skill-description" id="agentSkillDescription">Select a Skill to view its description.</div>
+                <div class="setting-field"><label for="agentSkillSourceUrl">Install from URL</label><input id="agentSkillSourceUrl" type="url" placeholder="https://.../SKILL.md or GitHub skill folder URL"></div>
                 <p class="agent-settings-status" id="agentSkillsStatus" aria-live="polite">Skills are discovered on demand by the Agent.</p>
                 <div class="agent-settings-actions agent-settings-actions-wrap">
                   <button type="button" class="button primary" id="installAgentSkill">Install Skill folder</button>
+                  <button type="button" class="button" id="installAgentSkillUrl">Preview &amp; install URL</button>
                   <button type="button" class="button" id="refreshAgentSkills">Refresh list</button>
                   <button type="button" class="setting-reset danger-text" id="removeAgentSkill" disabled>Remove selected</button>
                 </div>
@@ -375,6 +378,46 @@
               </section>
             </section>
 
+            <section class="agent-settings-page" id="agentSettingsPageSystemManager" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabSystemManager" hidden>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Windows System Manager</h3><p>Optional native Windows capabilities. When disabled, System Manager tools are withheld from the Agent and the native bridge rejects all operations.</p></div></div>
+                <label class="agent-settings-checkbox" for="systemManagerEnabled"><input id="systemManagerEnabled" type="checkbox"><span>Enable System Manager</span></label>
+                <p class="agent-settings-status" id="systemManagerStatus" aria-live="polite">Loading native settings…</p>
+                <div class="setting-field"><label for="systemManagerProfile">Permission profile</label><select id="systemManagerProfile"><option value="restricted">Restricted · ask before actions</option><option value="balanced">Balanced · allow configured ordinary actions</option><option value="custom">Custom · individual settings</option></select></div>
+                <div class="agent-settings-fields">
+                  <div class="setting-field"><label for="systemManagerLaunchPermission">Application launch permission</label><select id="systemManagerLaunchPermission"><option value="ask">Ask every time</option><option value="allow">Allow automatically</option></select></div>
+                  <div class="setting-field"><label for="systemManagerOpenPermission">Open file/folder/URL permission</label><select id="systemManagerOpenPermission"><option value="ask">Ask every time</option><option value="allow">Allow automatically</option></select></div>
+                </div>
+              </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Application Management</h3><p>Discover and launch installed applications, and open files, folders or HTTPS URLs.</p></div></div>
+                <label class="agent-settings-checkbox"><input id="systemManagerGroupApplications" type="checkbox"><span>Enable Application Management</span></label>
+                <div class="agent-settings-fields">
+                  <label class="agent-settings-checkbox"><input id="systemManagerDiscoverApplications" type="checkbox"><span>Discover installed applications</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerLaunchApplications" type="checkbox"><span>Launch applications and adapters</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerOpenTargets" type="checkbox"><span>Open files, folders and HTTPS URLs</span></label>
+                </div>
+              </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Process Management</h3><p>Inspect running processes. Termination always requires fresh confirmation.</p></div></div>
+                <label class="agent-settings-checkbox"><input id="systemManagerGroupProcesses" type="checkbox"><span>Enable Process Management</span></label>
+                <div class="agent-settings-fields">
+                  <label class="agent-settings-checkbox"><input id="systemManagerListProcesses" type="checkbox"><span>List processes</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerInspectProcesses" type="checkbox"><span>Inspect process details</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerTerminateProcesses" type="checkbox"><span>Allow process termination (confirmation always required)</span></label>
+                </div>
+              </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>System Diagnostics</h3><p>Read-only operating-system, environment, service and network information.</p></div></div>
+                <label class="agent-settings-checkbox"><input id="systemManagerGroupDiagnostics" type="checkbox"><span>Enable System Diagnostics</span></label>
+                <div class="agent-settings-fields">
+                  <label class="agent-settings-checkbox"><input id="systemManagerSystemInformation" type="checkbox"><span>Operating system and runtime information</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerEnvironmentInformation" type="checkbox"><span>Environment information</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerServiceInformation" type="checkbox"><span>Windows service inspection</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerNetworkInformation" type="checkbox"><span>Network diagnostics</span></label>
+                </div>
+              </section>
+            </section>
             <section class="agent-settings-page" id="agentSettingsPageSecurity" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabSecurity" hidden>
               <section class="agent-settings-card">
                 <div class="agent-settings-card-heading"><div><h3>Conversation permissions</h3><p>These policies are saved with this conversation and can be reused in a Project Profile. Destructive Git operations always require fresh approval.</p></div></div>

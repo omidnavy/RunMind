@@ -277,7 +277,8 @@
       ['agentSettingsTabAgent', 'agentSettingsPageAgent'],
       ['agentSettingsTabProject', 'agentSettingsPageProject'],
       ['agentSettingsTabSkills', 'agentSettingsPageSkills'],
-      ['agentSettingsTabSecurity', 'agentSettingsPageSecurity']
+      ['agentSettingsTabSecurity', 'agentSettingsPageSecurity'],
+      ['agentSettingsTabSystemManager', 'agentSettingsPageSystemManager']
     ].map(([tabId, pageId]) => ({ tab: document.getElementById(tabId), page: document.getElementById(pageId) }));
     function selectAgentSettingsTab(index, focusTab = false) {
       const bounded = Math.max(0, Math.min(agentSettingsTabs.length - 1, index));
@@ -475,8 +476,12 @@
     $('#applyProjectProfile').addEventListener('click', async () => { try { await applyProjectProfile(); await refreshProjectIndexStatus(); await refreshDeveloperWorkflowList(); } catch (error) { showToast(`Could not apply Project Profile: ${error?.message || error}`); } });
     $('#deleteProjectProfile').addEventListener('click', () => { void deleteProjectProfile(); });
     $('#refreshProjectProfiles').addEventListener('click', () => { void refreshProjectProfiles(); });
+    for (const id of ['systemManagerEnabled','systemManagerProfile','systemManagerLaunchPermission','systemManagerOpenPermission','systemManagerGroupApplications','systemManagerGroupProcesses','systemManagerGroupDiagnostics','systemManagerDiscoverApplications','systemManagerLaunchApplications','systemManagerOpenTargets','systemManagerListProcesses','systemManagerInspectProcesses','systemManagerTerminateProcesses','systemManagerSystemInformation','systemManagerEnvironmentInformation','systemManagerServiceInformation','systemManagerNetworkInformation']) {
+      document.getElementById(id)?.addEventListener('change', () => { void saveSystemManagerSettingsFromUi(); });
+    }
     $('#refreshAgentSkills').addEventListener('click', () => { void refreshAgentSkillManager(); });
     $('#installAgentSkill').addEventListener('click', () => { void installManagedAgentSkill(); });
+    $('#installAgentSkillUrl').addEventListener('click', () => { void installAgentSkillFromUrl(); });
     agentSkillScope.addEventListener('change', () => { void refreshAgentSkillManager(); });
     agentSkillSelect.addEventListener('change', updateManagedSkillSelection);
     agentSkillRemoveButton.addEventListener('click', () => { void removeManagedAgentSkill(); });
@@ -584,6 +589,7 @@
       void refreshProjectProfiles();
       void workspaceRestorePromise.then(async () => { await refreshAgentSkillManager(); await refreshProjectIndexStatus(); await refreshDeveloperWorkflowList(); });
       void loadSharedPermissionPolicy();
+      void loadSystemManagerSettings();
       renderAgentTaskHistory();
       setAgentMode(false);
       try {

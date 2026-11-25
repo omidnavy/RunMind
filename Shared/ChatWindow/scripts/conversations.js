@@ -4,6 +4,8 @@
       if (activeController || isConfirmingAttachments) return false;
       const typedContent = promptInput.value.trim();
       if (!typedContent && !pendingAttachments.length) return false;
+      if (typedContent && !pendingAttachments.length) { try { if (await tryInstallSkillUrlMessage(typedContent) || await tryInstallPastedSkill(typedContent)) { promptInput.value=''; autoResizePrompt(); return false; } } catch(error) { showToast(`Skill installation failed: ${error?.message || error}`); return false; } }
+      if (window.chrome?.webview && typeof loadSystemManagerSettings === 'function') await loadSystemManagerSettings();
       const selection = snapshotModelSelection();
       if (!selection) { showToast('No model is selected. Refresh model lists and choose a model.'); return false; }
       applyConnectionForSelection(selection);

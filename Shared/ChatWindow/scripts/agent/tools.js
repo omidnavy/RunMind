@@ -55,7 +55,28 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_validate', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic']);
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_validate', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_diagnostics']);
+      if (name.startsWith('system_manager_')) {
+        if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in Agent Settings first.');
+        if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
+        if (name === 'system_manager_find_applications') return await callAgentHost('systemManager.apps.list',{query:String(args.query||'')},signal);
+        if (name === 'system_manager_list_adapters') return await callAgentHost('systemManager.adapters.list',{},signal);
+        if (name === 'system_manager_install_adapter') return await callAgentHost('systemManager.adapters.save',{adapter:args.adapter||{}},signal);
+        if (name === 'system_manager_list_processes') return await callAgentHost('systemManager.process.list',{query:String(args.query||'')},signal);
+        if (name === 'system_manager_diagnostics') return await callAgentHost('systemManager.diagnostics',{},signal);
+        if (name === 'system_manager_launch_application') {
+          return await callAgentHost('systemManager.apps.launch',{path:String(args.path||''),arguments:Array.isArray(args.arguments)?args.arguments:[]},signal);
+        }
+        if (name === 'system_manager_application_action') {
+          return await callAgentHost('systemManager.adapters.launch',{adapterId:String(args.adapterId||''),operation:String(args.operation||''),target:String(args.target||''),line:args.line},signal);
+        }
+        if (name === 'system_manager_open_target') {
+          return await callAgentHost('systemManager.open.target',{target:String(args.target||'')},signal);
+        }
+        if (name === 'system_manager_terminate_process') {
+          return await callAgentHost('systemManager.process.terminate',{processId:args.processId,expectedName:String(args.expectedName||''),expectedPath:String(args.expectedPath||''),expectedStartedAtUtc:String(args.expectedStartedAtUtc||'')},signal);
+        }
+      }
       if (name.startsWith('mcp_')) return await executeMcpTool(name, args, signal);
       const gitRoutes = {
         git_status: ['status','gitRead'], git_diff: ['diff','gitRead'], git_log: ['log','gitRead'], git_show: ['show','gitRead'], git_branches: ['branches','gitRead'], git_remotes: ['remotes','gitRead'],
@@ -655,7 +676,7 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
             } catch (error) { checks.push({ path: item.path, status: 'invalid', error: String(error?.message || error).slice(0, 400) }); }
           }
           const testFiles = index.files.filter(file => /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$|(?:^|\/)test_[^/]+\.py$/i.test(file.path)).map(file => file.path).slice(0, 100);
-          return { root: index.rootName, indexedAt: index.updatedAt, manifestsChecked: checks.length, valid: checks.filter(item => item.status === 'valid').length, invalid: checks.filter(item => item.status === 'invalid').length, warnings: checks.filter(item => item.status === 'warning').length, checks, frameworks, packageScripts, testFilesFound: testFiles.length, testFiles, executionPerformed: false, note: 'Static manifest and test-file discovery only. RunMind has no general command-execution bridge, so build, lint, and test commands were not executed.' };
+          return { root: index.rootName, indexedAt: index.updatedAt, manifestsChecked: checks.length, valid: checks.filter(item => item.status === 'valid').length, invalid: checks.filter(item => item.status === 'invalid').length, warnings: checks.filter(item => item.status === 'warning').length, checks, frameworks, packageScripts, testFilesFound: testFiles.length, testFiles, executionPerformed: false, note: 'This tool performs static manifest and test-file discovery only. For actual build, lint, test, Playwright, or audit execution, use the native PowerShell tool after selecting a native workspace and obtaining fresh approval.' };
         }
         case 'list_developer_workflows': return { workflows: (await loadDeveloperWorkflows()).map(({id,name,description,builtIn})=>({id,name,description,builtIn})) };
         case 'start_developer_workflow': return await startDeveloperWorkflow(args.id, args.context || '');

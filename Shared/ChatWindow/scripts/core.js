@@ -413,6 +413,7 @@
     let researchLastAssistantMessage = null;
     let mcpModeEnabled = false;
     let activeToolDefinitions = [];
+    let systemManagerSettingsCache = null;
     const MCP_STORAGE_KEY = 'local-llm.mcp-servers.v1';
     // Recent Agent Tasks use the same host-assigned per-window namespace as research checkpoints.
     const mcpServers = new Map();
@@ -767,6 +768,47 @@
       try { await callAgentHost('profiles.delete', { id }); projectProfiles.delete(id); projectProfileName.value = ''; await refreshProjectProfiles(); showToast(`Project Profile '${profile.name}' deleted.`); }
       catch (error) { showToast(`Could not delete Project Profile: ${error?.message || error}`); }
     }
+    async function loadSystemManagerSettings() {
+      try {
+        const result = await callAgentHost('systemManager.settings.get');
+        systemManagerSettingsCache = result?.settings && typeof result.settings === 'object' ? result.settings : null;
+      } catch (_) { systemManagerSettingsCache = null; }
+      if (typeof rebuildActiveToolDefinitions === 'function') rebuildActiveToolDefinitions(deepResearchEnabled);
+      renderSystemManagerSettings();
+    }
+    function renderSystemManagerSettings() {
+      const settings = systemManagerSettingsCache;
+      const enabled = document.getElementById('systemManagerEnabled');
+      const profile = document.getElementById('systemManagerProfile');
+      if (!enabled || !profile) return;
+      enabled.checked = !!settings?.enabled;
+      profile.value = settings?.profile || 'restricted';
+      const launchPermission=document.getElementById('systemManagerLaunchPermission'); if(launchPermission) launchPermission.value=settings?.permissions?.launchApplications || 'ask';
+      const openPermission=document.getElementById('systemManagerOpenPermission'); if(openPermission) openPermission.value=settings?.permissions?.openTargets || 'ask';
+      for (const [key,id] of Object.entries({applications:'systemManagerGroupApplications',processes:'systemManagerGroupProcesses',diagnostics:'systemManagerGroupDiagnostics'})) {
+        const control=document.getElementById(id); if(control) control.checked = !!settings?.groups?.[key];
+      }
+      for (const [key,id] of Object.entries({discoverApplications:'systemManagerDiscoverApplications',launchApplications:'systemManagerLaunchApplications',openTargets:'systemManagerOpenTargets',listProcesses:'systemManagerListProcesses',inspectProcesses:'systemManagerInspectProcesses',terminateProcesses:'systemManagerTerminateProcesses',systemInformation:'systemManagerSystemInformation',environmentInformation:'systemManagerEnvironmentInformation',serviceInformation:'systemManagerServiceInformation',networkInformation:'systemManagerNetworkInformation'})) {
+        const control=document.getElementById(id); if(control) control.checked = !!settings?.capabilities?.[key];
+      }
+      const status=document.getElementById('systemManagerStatus'); if(status) status.textContent=settings?.enabled?'System Manager is enabled. Native operations still enforce these settings.':'System Manager is disabled. Its tools are not exposed to the Agent.';
+    }
+    async function saveSystemManagerSettingsFromUi() {
+      const current=systemManagerSettingsCache || {};
+      const read=(id,fallback=false)=>document.getElementById(id)?.checked ?? fallback;
+      const settings={
+        enabled:read('systemManagerEnabled'), profile:document.getElementById('systemManagerProfile')?.value || 'restricted',
+        groups:{applications:read('systemManagerGroupApplications'),processes:read('systemManagerGroupProcesses'),diagnostics:read('systemManagerGroupDiagnostics')},
+        capabilities:{discoverApplications:read('systemManagerDiscoverApplications'),launchApplications:read('systemManagerLaunchApplications'),openTargets:read('systemManagerOpenTargets'),listProcesses:read('systemManagerListProcesses'),inspectProcesses:read('systemManagerInspectProcesses'),terminateProcesses:read('systemManagerTerminateProcesses'),systemInformation:read('systemManagerSystemInformation'),environmentInformation:read('systemManagerEnvironmentInformation'),serviceInformation:read('systemManagerServiceInformation'),networkInformation:read('systemManagerNetworkInformation')},
+        permissions:{launchApplications:document.getElementById('systemManagerLaunchPermission')?.value || 'ask',openTargets:document.getElementById('systemManagerOpenPermission')?.value || 'ask'}
+      };
+      try {
+        const result=await callAgentHost('systemManager.settings.save',{settings});
+        systemManagerSettingsCache=result?.settings || settings;
+        rebuildActiveToolDefinitions(deepResearchEnabled); renderSystemManagerSettings();
+        showToast('System Manager settings saved.');
+      } catch(error) { showToast(`Could not save System Manager settings: ${error?.message || error}`); await loadSystemManagerSettings(); }
+    }
     async function loadSharedPermissionPolicy() {
       try {
         const result = await callAgentHost('permissions.get');
@@ -892,6 +934,69 @@
       try { await copySkillFolderContents(source, destination, { files: 0, bytes: 0 }); }
       catch (error) { try { await skills.removeEntry(metadata.name, { recursive: true }); } catch (_) {} throw error; }
       return metadata;
+    }
+    async function writeProjectSkillContent(content, source) {
+      if (!agentDirectoryHandle) throw new Error('Select and authorize a project workspace before installing a project Skill.');
+      const metadata=parseAgentSkillFrontmatter(content);
+      if(!metadata.name || !metadata.description) throw new Error('Skill content needs valid name and description frontmatter.');
+      const agents=await agentDirectoryHandle.getDirectoryHandle('.agents',{create:true});
+      const skills=await agents.getDirectoryHandle('skills',{create:true});
+      try { await skills.getDirectoryHandle(metadata.name); throw new Error(`Project Skill '${metadata.name}' already exists.`); } catch(error) { if(error?.name!=='NotFoundError') throw error; }
+      const folder=await skills.getDirectoryHandle(metadata.name,{create:true});
+      try {
+        for(const [name,value] of [['SKILL.md',content],['runmind-source.txt',source]]) {
+          const file=await folder.getFileHandle(name,{create:true}), writable=await file.createWritable();
+          try { await writable.write(value); } finally { await writable.close(); }
+        }
+      } catch(error) { try { await skills.removeEntry(metadata.name,{recursive:true}); } catch(_) {} throw error; }
+      return metadata;
+    }
+    async function installSkillContentWithPreview(content, source='pasted conversation content') {
+      const metadata=parseAgentSkillFrontmatter(content);
+      if(!metadata.name || !metadata.description || String(content).length>128*1024) throw new Error('This content is not a valid Agent Skill SKILL.md or exceeds 128 KB.');
+      const preview=String(content).slice(0,2600);
+      if(!window.confirm(`Install this Agent Skill?\n\nName: ${metadata.name}\nDescription: ${metadata.description}\nSource: ${source}\n\nPreview:\n${preview}\n\nSkill instructions are untrusted. Scripts are not executed.`)) return {cancelled:true};
+      const scope=agentSkillScope?.value==='project'?'project':'global';
+      if(scope==='project') await writeProjectSkillContent(content,source);
+      else await callAgentHost('skills.installContent',{content,source});
+      await refreshAgentSkillManager();
+      showToast(`Installed ${scope} Skill '${metadata.name}'.`);
+      return {installed:true,name:metadata.name,scope};
+    }
+    async function installAgentSkillFromUrl(rawOverride = '') {
+      const raw=String(rawOverride || document.getElementById('agentSkillSourceUrl')?.value||'').trim();
+      if(!raw) { showToast('Enter a direct SKILL.md URL or supported GitHub/GitLab skill-folder URL.'); return false; }
+      try {
+        agentSkillsStatus.textContent='Fetching and validating Skill source…';
+        const preview=await callAgentHost('skills.previewUrl',{url:raw});
+        const metadata={name:preview.name,description:preview.description};
+        if(!metadata.name||!metadata.description||!preview.content) throw new Error('The source did not return a valid SKILL.md.');
+        const confirmed=window.confirm(`Skill preview\n\nName: ${metadata.name}\nDescription: ${metadata.description}\nSource: ${preview.source}\nSize: ${preview.bytes} bytes\n\n${preview.preview}\n\nInstall to ${agentSkillScope.value==='project'?'the current project':'Global Skills'}?\n\n${preview.note||''}\nScripts are never executed automatically.`);
+        if(!confirmed) { agentSkillsStatus.textContent='Installation cancelled.'; return true; }
+        const scope=agentSkillScope.value==='project'?'project':'global';
+        if(scope==='project') await writeProjectSkillContent(preview.content,preview.source);
+        else await callAgentHost('skills.installContent',{content:preview.content,source:preview.source});
+        document.getElementById('agentSkillSourceUrl').value='';
+        await refreshAgentSkillManager(); showToast(`Installed ${scope} Skill '${metadata.name}'.`); return true;
+      } catch(error) { agentSkillsStatus.textContent=`URL installation failed: ${error?.message||error}`; showToast(`Could not install Skill URL: ${error?.message||error}`); return true; }
+    }
+    async function tryInstallSkillUrlMessage(content) {
+      const value=String(content||'');
+      if(!/\b(?:install|add|import)\b/i.test(value) || !/\bskill\b/i.test(value)) return false;
+      const match=value.match(/https:\/\/[^\s<>"']+/i);
+      if(!match) return false;
+      const url=match[0].replace(/[),.;!?]+$/,'');
+      await installAgentSkillFromUrl(url);
+      return true;
+    }
+    async function tryInstallPastedSkill(content) {
+      let value=String(content||'').trim();
+      value=value.replace(/^```(?:markdown|md|text)?\s*\r?\n/i,'').replace(/\r?\n```\s*$/,'').trim();
+      if(value.length>128*1024 || !/^---\s*\r?\n[\s\S]*?\r?\n---(?:\r?\n)/.test(value)) return false;
+      const metadata=parseAgentSkillFrontmatter(value);
+      if(!metadata.name||!metadata.description||!/(?:^|\n)#\s+|(?:^|\n)##\s+|\b(?:instructions|when to use|workflow|examples)\b/i.test(value.slice(0,12000))) return false;
+      const result=await installSkillContentWithPreview(value,'pasted conversation content');
+      return !!result?.installed;
     }
     async function installManagedAgentSkill() {
       const scope = agentSkillScope.value === 'project' ? 'project' : 'global';

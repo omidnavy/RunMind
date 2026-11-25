@@ -1,23 +1,23 @@
-# RunMind 2.4.0 — Developer Workbench & Native Automation
+# RunMind 2.5.0 — Debugging, Quality, Skills & System Manager
 
 ## Release bundle status
 
-- Source baseline: RunMind 2.3.0 Project Intelligence & Workflows (131 files).
-- Shared Agent runtime now exposes explicitly approved PowerShell and native `.exe` execution through the common native bridge.
-- Native execution workspaces are selected with an OS folder picker and scoped to the active conversation context. Relative working directories are confined to the selected folder.
-- Process execution supports cancellation, a maximum 15-minute timeout, bounded stdout/stderr, exit code, and duration reporting. Processes run with current-user privileges and are not sandboxed.
-- Project indexing starts automatically after a workspace is selected/restored and performs incremental refreshes every 60 seconds while the chat is visible.
-- Standalone, PowerToys Run, and PowerToys Command Palette continue to consume the same shared ChatWindow, Agent tool definitions, and native bridge implementation.
-- Project/host metadata synchronized to 2.4.0; Command Palette package version synchronized to 2.4.0.0.
+- Source baseline: verified RunMind 2.4.0 Developer Workbench & Native Automation bundle.
+- Preserved Standalone, PowerToys Run, and PowerToys Command Palette hosts and the shared Agent Core/native bridge.
+- Added developer workflows for project builds/tests, static analysis/lint, Playwright test-runner checks, API smoke tests, and dependency security audits. They use existing native execution tools and require explicit per-command approval.
+- Extended Skills Manager with direct HTTPS `SKILL.md` imports, GitHub/GitLab repository-folder URL resolution, pasted Skill-content detection, preview/confirmation, Global/Project scope, frontmatter validation, duplicate protection, and source metadata. Scripts are never executed.
+- Added optional Windows System Manager, disabled by default, with shared native settings, group/individual switches, application discovery/catalog, generic launch/open operations, declarative application adapters, process inspection/termination, and read-only system diagnostics.
+- Added `Shared/SystemManager.cs` to all three host projects and synchronized project/package metadata to 2.5.0 / 2.5.0.0.
 
 ## Validation performed in this environment
 
-See `VALIDATION-REPORT.md` for exact checks and limitations. JavaScript syntax, JSON/XML parsing, version synchronization, static process-bridge checks, and ZIP integrity can be checked here. No Windows/.NET build or live WebView2/process execution is claimed.
+See `VALIDATION-REPORT.md` for exact checks and limitations. JavaScript syntax, HTML ID consistency, JSON/XML parsing, tool-to-native-dispatch wiring, C# lexical delimiter balance, release metadata, ZIP integrity, and SHA-256 are checked here.
 
 ## Target-machine validation still required
 
-- Build `RunMind.sln` with the .NET 10 Windows targeting pack and the repository's existing package dependencies.
-- Launch all three hosts and confirm the shared native bridge handles process workspace selection and process results.
-- Select a native execution workspace; test PowerShell and native `.exe` commands, approval denial, cancellation, timeout, large output truncation, non-zero exit codes, and relative-directory traversal rejection.
-- Select/reconnect a browser workspace and verify automatic first index creation, incremental updates, deleted-file handling, periodic refresh, cancellation, and unchanged-file reuse.
-- Re-run existing Git, Skills, MCP, Deep Research, conversation, and Project Profile regression checks.
+- Build the full solution with the .NET 10 Windows targeting pack and repository package dependencies.
+- Run Standalone, PowerToys Run, and PowerToys Command Palette and verify the shared System Manager settings are consistent across hosts.
+- Test System Manager master/group/capability switches, Restricted/Balanced/Custom prompts, application discovery/launch, built-in/custom adapters, process listing, native termination confirmation, services and network diagnostics.
+- Test direct HTTPS/GitHub/GitLab Skill import, pasted Skill auto-detection, preview/decline/confirm behavior, Global/Project installation, duplicate handling, and malicious/invalid URL rejection.
+- Test build/test/lint/Playwright/API/dependency workflows against real projects with native execution approval.
+- Re-run existing Git, workspace, indexing, conversation, Project Profile, Skills, MCP, Deep Research, and PowerShell/native execution regression checks.

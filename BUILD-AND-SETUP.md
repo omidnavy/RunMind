@@ -1,4 +1,4 @@
-# RunMind 2.4.0 — Build and setup
+# RunMind 2.5.0 — Build and setup
 
 This guide covers the current full-source release and retains explicitly labeled historical notes where useful.
 
@@ -153,7 +153,7 @@ The same Project page provides built-in developer workflows and workspace-scoped
 Indexing skips common dependency/build/cache folders and credential/secret paths, ignores binary/unsupported files, and skips individual files over 256 KiB. Common secret assignments, bearer tokens, credentialed URLs, private-key blocks, and recognizable token patterns are redacted before indexed text is stored. A refresh is limited to 10,000 files, 50,000 directory entries, depth 10, and 24 MiB of newly read data. A partial index reports the limit that stopped the scan. Rebuild after external project changes; unchanged files are reused using relative path, size, and last-modified timestamp.
 
 
-## Native PowerShell and command execution (2.4.0)
+## Native PowerShell and command execution (2.5.0)
 
 1. In an Agent chat hosted by Standalone, PowerToys Run, or Command Palette, ask RunMind to call `select_native_workspace` and choose the project directory in the native folder picker. This is separate from the browser workspace grant because WebView2 does not expose an absolute path for its directory handle.
 2. Ask the Agent to run a PowerShell script with `powershell_execute`, or an executable found on PATH with `run_native_command`. Every execution displays a fresh approval card.

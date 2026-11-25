@@ -9,8 +9,8 @@
     <PlatformTarget>$(Platform)</PlatformTarget>
     <AssemblyName>RunMind.CommandPalette</AssemblyName>
     <RootNamespace>RunMind.CommandPalette</RootNamespace>
-    <Version>2.4.0</Version>
-    <AppxPackageVersion>2.4.0.0</AppxPackageVersion>
+    <Version>2.5.0</Version>
+    <AppxPackageVersion>2.5.0.0</AppxPackageVersion>
     <AppxPackageIdentityName>RunMind.CommandPalette</AppxPackageIdentityName>
     <AppxPackagePublisher>CN=Omid Navy</AppxPackagePublisher>
     <EnableMsixTooling>true</EnableMsixTooling>
@@ -79,6 +79,7 @@
     <Compile Include="..\Shared\WindowThemeSynchronizer.cs" Link="Shared\WindowThemeSynchronizer.cs" />
     <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
     <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
+    <Compile Include="..\Shared\SystemManager.cs" Link="Shared\SystemManager.cs" />
     <Compile Include="..\Shared\InlineModelSettings.cs" Link="Shared\InlineModelSettings.cs" />
     <Resource Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" />
     <Content Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
