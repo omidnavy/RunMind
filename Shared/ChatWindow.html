@@ -322,14 +322,14 @@
                 </div>
               </section>
               <section class="agent-settings-card">
-                <div class="agent-settings-card-heading"><div><h3>Workspace access</h3><p>Folder access belongs to this conversation and must be granted separately in each host.</p></div></div>
+                <div class="agent-settings-card-heading"><div><h3>Workspace access</h3><p>Browser folder access belongs to this conversation and must be granted separately in each host. Native PowerShell/command execution uses a separate OS folder picker and fresh approval for every run.</p></div></div>
                 <div class="agent-settings-actions agent-settings-actions-wrap">
                   <button type="button" class="button" id="changeAgentFolder">Change workspace folder</button>
                   <button type="button" class="setting-reset danger-text" id="clearAgentFolder">Clear folder access</button>
                 </div>
               </section>
               <section class="agent-settings-card">
-                <div class="agent-settings-card-heading"><div><h3>Project intelligence</h3><p>Build a local, persistent index of source files, manifests, imports, and symbols. Indexing is explicit; credentials, secrets, binaries, and generated/dependency folders are excluded.</p></div></div>
+                <div class="agent-settings-card-heading"><div><h3>Project intelligence</h3><p>RunMind automatically builds this local index when you select a workspace and checks for changes every 60 seconds while the chat is visible. Manual refresh remains available; credentials, secrets, binaries, and generated/dependency folders are excluded.</p></div></div>
                 <div class="agent-settings-actions agent-settings-actions-wrap">
                   <button type="button" class="button primary" id="buildProjectIndex">Build / refresh index</button>
                   <button type="button" class="button" id="cancelProjectIndex" disabled>Cancel indexing</button>

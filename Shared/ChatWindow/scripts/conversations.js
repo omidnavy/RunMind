@@ -514,6 +514,8 @@
       bootWorkspaceContextId = null;
       agentDirectoryHandle = null;
       persistedDirectoryHandle = null;
+      if (typeof projectIndexController !== 'undefined') projectIndexController?.abort();
+      if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace context changed');
       applyAgentSettings();
       if (workspaceContext.instructions !== null) {
         settingSystemPrompt.value = workspaceContext.instructions;

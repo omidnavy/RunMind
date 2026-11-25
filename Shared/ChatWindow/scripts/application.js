@@ -336,6 +336,7 @@
     }
     $('#buildProjectIndex').addEventListener('click', async () => {
       if (!agentDirectoryHandle) { showToast('Select a workspace folder before building its project index.'); return; }
+      if (typeof projectIndexAutoRefreshPromise !== 'undefined' && projectIndexAutoRefreshPromise) await projectIndexAutoRefreshPromise;
       const button = $('#buildProjectIndex'); button.disabled = true; button.textContent = 'Indexing…';
       const cancelButton = $('#cancelProjectIndex'); cancelButton.disabled = false;
       projectIndexController = new AbortController();
@@ -348,7 +349,7 @@
     });
     $('#cancelProjectIndex').addEventListener('click', () => { projectIndexController?.abort(); });
     $('#clearProjectIndex').addEventListener('click', async () => {
-      try { await workspaceDbAction('readwrite','delete',undefined,projectIndexKey()); projectIndexStatus(null); showToast('Project index cleared.'); }
+      try { await workspaceDbAction('readwrite','delete',undefined,projectIndexKey()); projectIndexStatus(null); showToast('Project index cleared. Automatic refresh remains enabled for this workspace.'); }
       catch (error) { showToast(`Could not clear project index: ${error?.message || error}`); }
     });
     $('#runDeveloperWorkflow').addEventListener('click', () => {
@@ -532,6 +533,8 @@
         if (change.workspaceContextId !== workspaceContext.id) return;
         if (change.action === 'cleared') {
           persistedDirectoryHandle = null; agentDirectoryHandle = null; workspaceContext.folderName = '';
+          if (typeof projectIndexController !== 'undefined') projectIndexController?.abort();
+          if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace cleared in another window');
           updateAgentFolderButton(); rebuildActiveToolDefinitions(deepResearchEnabled);
           void refreshAgentSkillManager();
         } else workspaceRestorePromise = restoreAgentFolderHandle().then(() => refreshAgentSkillManager());

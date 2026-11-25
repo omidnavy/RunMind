@@ -25,12 +25,12 @@ namespace RunMind.Shared;
 
 /// <summary>
 /// Narrow native capability bridge for operations that browser APIs cannot provide:
-/// shared profile storage, Git process execution, global Agent Skills, and resumable downloads.
-/// Every mutating operation is approved by the shared Agent UI before this bridge is called.
+/// shared profile storage, Git and explicitly approved process execution, global Agent Skills,
+/// and resumable downloads. Process execution is not sandboxed and inherits current-user rights.
 /// </summary>
 public sealed class AgentHostBridge : IDisposable
 {
-    private const int MaximumMessageBytes = 128 * 1024;
+    private const int MaximumMessageBytes = 1024 * 1024;
     private const int MaximumOutputCharacters = 512 * 1024;
     private const long MaximumDownloadBytes = 4L * 1024 * 1024 * 1024;
     private static readonly TimeSpan GitTimeout = TimeSpan.FromMinutes(2);
@@ -40,6 +40,8 @@ public sealed class AgentHostBridge : IDisposable
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _requests = new(StringComparer.Ordinal);
     private string? _gitWorkspaceRoot;
     private string? _gitWorkspaceContextId;
+    private string? _processWorkspaceRoot;
+    private string? _processWorkspaceContextId;
     private int _disposed;
 
     public bool TryHandleMessage(string? source, string? messageJson, CoreWebView2 core, Dispatcher dispatcher)
@@ -126,6 +128,9 @@ public sealed class AgentHostBridge : IDisposable
             "skills.install" => Task.FromResult(InstallGlobalSkill()),
             "skills.remove" => Task.FromResult(RemoveGlobalSkill(ReadString(args, "name", 100))),
             "git.select" => Task.FromResult(SelectGitWorkspace(ReadString(args, "contextId", 64))),
+            "process.selectWorkspace" => Task.FromResult(SelectProcessWorkspace(ReadString(args, "contextId", 64))),
+            "process.powershell" => RunPowerShellAsync(args, cancellationToken),
+            "process.run" => RunNativeProcessAsync(args, cancellationToken),
             "git.run" => RunGitAsync(args, cancellationToken),
             "git.clone" => CloneRepositoryAsync(args, cancellationToken, progress),
             "download.file" => DownloadFileAsync(args, cancellationToken, (bytes, total) => progress(bytes, total, null)),
@@ -661,6 +666,204 @@ public sealed class AgentHostBridge : IDisposable
         _gitWorkspaceRoot = root;
         _gitWorkspaceContextId = contextId;
         return new { selected = true, folder = Path.GetFileName(root), repository = true };
+    }
+
+
+    private object SelectProcessWorkspace(string contextId)
+    {
+        if (!Guid.TryParse(contextId, out _)) throw new InvalidDataException("A valid conversation workspace context is required before selecting a native execution workspace.");
+        string? selected = null;
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            using var dialog = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "Choose the project folder where RunMind may execute approved commands",
+                UseDescriptionForTitle = true,
+                ShowNewFolderButton = false,
+            };
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) selected = dialog.SelectedPath;
+        });
+        if (string.IsNullOrWhiteSpace(selected)) return new { cancelled = true };
+        var root = Path.GetFullPath(selected);
+        EnsureNoReparseAncestors(root);
+        if (!Directory.Exists(root) || IsReparsePoint(root)) throw new InvalidDataException("The selected native execution workspace is not a normal directory.");
+        _processWorkspaceRoot = root;
+        _processWorkspaceContextId = contextId;
+        return new { selected = true, folder = Path.GetFileName(root), note = "Native process execution is scoped to this folder for relative working directories. Commands still run with the current Windows user's permissions." };
+    }
+
+    private string GetProcessWorkingDirectory(JsonElement args)
+    {
+        var contextId = ReadString(args, "contextId", 64);
+        var root = _processWorkspaceRoot;
+        if (!Guid.TryParse(contextId, out _) || !string.Equals(contextId, _processWorkspaceContextId, StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            throw new InvalidOperationException("Select a native execution workspace first with select_native_workspace.");
+        root = Path.GetFullPath(root);
+        EnsureNoReparseAncestors(root);
+        var relative = ReadString(args, "working_directory", 1024).Replace('/', Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(relative)) throw new InvalidDataException("working_directory must be relative to the selected native execution workspace.");
+        var working = Path.GetFullPath(Path.Combine(root, relative));
+        var prefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!string.Equals(working, root, StringComparison.OrdinalIgnoreCase) && !working.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("working_directory cannot escape the selected native execution workspace.");
+        EnsureNoReparseAncestors(working);
+        if (!Directory.Exists(working)) throw new DirectoryNotFoundException("The requested working directory does not exist inside the selected native workspace.");
+        return working;
+    }
+
+    private async Task<object> RunPowerShellAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        var script = ReadString(args, "script", 100_000);
+        if (script.Length == 0) throw new InvalidDataException("A non-empty PowerShell script is required.");
+        script = "$ErrorActionPreference = 'Stop'\r\n" + script;
+        var working = GetProcessWorkingDirectory(args);
+        var executable = FindExecutable("pwsh.exe") ?? FindPowerShellExecutable()
+            ?? throw new FileNotFoundException("PowerShell was not found. Install PowerShell 7 (pwsh) or enable Windows PowerShell.");
+        var start = new ProcessStartInfo(executable)
+        {
+            WorkingDirectory = working,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardInputEncoding = Encoding.UTF8,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        start.ArgumentList.Add("-NoLogo");
+        start.ArgumentList.Add("-NoProfile");
+        start.ArgumentList.Add("-NonInteractive");
+        start.ArgumentList.Add("-Command");
+        start.ArgumentList.Add("-");
+        return await ExecuteBoundedProcessAsync(start, "PowerShell", working, args, cancellationToken, script).ConfigureAwait(false);
+    }
+
+    private async Task<object> RunNativeProcessAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        var command = ReadString(args, "executable", 260);
+        if (command.Length == 0) throw new InvalidDataException("An executable name is required.");
+        if (command.Contains('\\') || command.Contains('/') || Path.IsPathRooted(command) || !command.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Use an executable name ending in .exe, not a path, script, batch file, or shell command. PowerShell is available through powershell_execute.");
+        var executable = FindExecutable(command) ?? throw new FileNotFoundException($"Executable '{command}' was not found on PATH.");
+        var working = GetProcessWorkingDirectory(args);
+        var start = new ProcessStartInfo(executable)
+        {
+            WorkingDirectory = working,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        if (args.TryGetProperty("arguments", out var values) && values.ValueKind == JsonValueKind.Array)
+        {
+            if (values.GetArrayLength() > 100) throw new InvalidDataException("A maximum of 100 command arguments is allowed.");
+            var totalArgumentCharacters = 0;
+            foreach (var value in values.EnumerateArray())
+            {
+                if (value.ValueKind != JsonValueKind.String) throw new InvalidDataException("Every command argument must be a string.");
+                var argument = value.GetString() ?? string.Empty;
+                if (argument.Length > 8192) throw new InvalidDataException("A command argument exceeds 8 KB.");
+                totalArgumentCharacters += argument.Length;
+                if (totalArgumentCharacters > 64 * 1024) throw new InvalidDataException("Combined command arguments exceed 64 KB.");
+                start.ArgumentList.Add(argument);
+            }
+        }
+        return await ExecuteBoundedProcessAsync(start, command, working, args, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string? FindPowerShellExecutable()
+    {
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var system = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        var candidates = new[]
+        {
+            Path.Combine(programFiles, "PowerShell", "7", "pwsh.exe"),
+            Path.Combine(system, "WindowsPowerShell", "v1.0", "powershell.exe"),
+        };
+        foreach (var candidate in candidates)
+        {
+            try { if (File.Exists(candidate) && !IsReparsePoint(candidate)) return Path.GetFullPath(candidate); }
+            catch { }
+        }
+        return FindExecutable("powershell.exe");
+    }
+
+    private static string? FindExecutable(string name)
+    {
+        var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            try
+            {
+                var candidate = Path.Combine(directory.Trim('"'), name);
+                if (File.Exists(candidate) && !IsReparsePoint(candidate)) return Path.GetFullPath(candidate);
+            }
+            catch { }
+        }
+        return null;
+    }
+
+    private static async Task<object> ExecuteBoundedProcessAsync(ProcessStartInfo start, string label, string working, JsonElement args, CancellationToken cancellationToken, string? standardInput = null)
+    {
+        var timeoutSeconds = 300;
+        if (args.TryGetProperty("timeout_seconds", out var timeoutValue) && timeoutValue.TryGetInt32(out var requested)) timeoutSeconds = Math.Clamp(requested, 1, 900);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        using var process = new Process { StartInfo = start, EnableRaisingEvents = true };
+        var stopwatch = Stopwatch.StartNew();
+        if (!process.Start()) throw new InvalidOperationException($"Could not start {label}.");
+        var stdoutTask = ReadBoundedProcessOutputAsync(process.StandardOutput, timeout.Token);
+        var stderrTask = ReadBoundedProcessOutputAsync(process.StandardError, timeout.Token);
+        try
+        {
+            if (standardInput is not null)
+            {
+                await process.StandardInput.WriteAsync(standardInput.AsMemory(), timeout.Token).ConfigureAwait(false);
+                process.StandardInput.Close();
+            }
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+            try { await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false); } catch { }
+            if (cancellationToken.IsCancellationRequested) throw;
+            throw new TimeoutException($"{label} exceeded its {timeoutSeconds}-second execution limit; the process tree was terminated.");
+        }
+        catch
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+            try { await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false); } catch { }
+            throw;
+        }
+        var output = await stdoutTask.ConfigureAwait(false);
+        var error = await stderrTask.ConfigureAwait(false);
+        stopwatch.Stop();
+        return new { executable = start.FileName, workingDirectory = working, exitCode = process.ExitCode, durationMs = stopwatch.ElapsedMilliseconds, stdout = output.text, stderr = error.text, outputTruncated = output.truncated || error.truncated, note = "Executed as the current Windows user; approval is not a sandbox or privilege boundary." };
+    }
+
+    private static async Task<(string text, bool truncated)> ReadBoundedProcessOutputAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        const int maximum = 512 * 1024;
+        var buffer = new char[8192];
+        var output = new StringBuilder(Math.Min(maximum, 32 * 1024));
+        var truncated = false;
+        while (true)
+        {
+            var read = await reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+            if (read == 0) break;
+            var remaining = maximum - output.Length;
+            if (remaining > 0) output.Append(buffer, 0, Math.Min(remaining, read));
+            if (read > remaining) truncated = true;
+        }
+        if (truncated) output.Append("\n[output truncated at 512 KB]");
+        return (output.ToString(), truncated);
     }
 
     private async Task<object> CloneRepositoryAsync(JsonElement args, CancellationToken cancellationToken, Action<long, long?, string?> progress)

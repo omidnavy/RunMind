@@ -142,12 +142,13 @@
       await visit(agentDirectoryHandle,'',0);
       if(signal?.aborted) throw new DOMException('Project indexing cancelled.','AbortError');
       if(truncated && previous) for(const [path,record] of oldFiles) { if(files.length>=PROJECT_INDEX_LIMITS.files) break; if(!visitedPaths.has(path)) files.push(record); }
+      const removed = truncated ? 0 : [...oldFiles.keys()].filter(path => !visitedPaths.has(path)).length;
       const dependencies=projectIndexDependencies(manifests);
       const frameworks=projectIndexFrameworks(dependencies);
-      const index={version:1,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,stats:{files:files.length,scanned,entries,readBytes,reused,skipped,truncated,reason}};
+      const index={version:1,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
       await workspaceDbAction('readwrite','put',index,projectIndexKey());
       projectIndexStatus?.(index);
-      return {root:index.rootName,files:index.stats.files,scanned,entries,readBytes,reused,skipped,truncated,reason,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies.slice(0,100),updatedAt:index.updatedAt};
+      return {root:index.rootName,files:index.stats.files,scanned,entries,readBytes,reused,removed,skipped,truncated,reason,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies.slice(0,100),updatedAt:index.updatedAt};
     }
     async function searchProjectIndex(query,{limit=30,kind='all'}={}) {
       const index=await loadProjectIndex();
@@ -163,10 +164,70 @@
         if(score) hits.push({path:file.path,language:file.language,score,matches:[...new Set(matches)].slice(0,12),symbols:(file.symbols||[]).filter(symbol=>terms.some(term=>symbol.toLowerCase().includes(term))).slice(0,20),imports:(file.imports||[]).slice(0,20)});
       }
       hits.sort((a,b)=>b.score-a.score||a.path.localeCompare(b.path));
-      return {query,kind,indexUpdatedAt:index.updatedAt,totalMatches:hits.length,results:hits.slice(0,Math.max(1,Math.min(100,limit))),note:'Search results come from the last explicit index/refresh. Refresh after external workspace changes.'};
+      return {query,kind,indexUpdatedAt:index.updatedAt,totalMatches:hits.length,results:hits.slice(0,Math.max(1,Math.min(100,limit))),note:'The persistent index is refreshed automatically when a workspace is selected and periodically while the chat is open; manual refresh remains available.'};
     }
     async function getProjectIndexOverview() {
       const index=await loadProjectIndex();
       if(!index) return {indexed:false,message:'No project index has been built.'};
       return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
+    }
+
+    let projectIndexAutoRefreshTimer = null;
+    let projectIndexAutoRefreshController = null;
+    let projectIndexAutoRefreshPromise = null;
+    let projectIndexAutoRefreshContextId = '';
+    async function refreshProjectIndexAutomatically(reason = 'workspace selected') {
+      if (!agentDirectoryHandle) return null;
+      const contextId = workspaceContext.id;
+      if (projectIndexAutoRefreshPromise && projectIndexAutoRefreshContextId === contextId) return projectIndexAutoRefreshPromise;
+      projectIndexAutoRefreshController?.abort();
+      const controller = new AbortController();
+      projectIndexAutoRefreshController = controller;
+      projectIndexAutoRefreshContextId = contextId;
+      projectIndexAutoRefreshPromise = (async () => {
+        try {
+          if (typeof projectIndexStatusElement !== 'undefined' && projectIndexStatusElement)
+            projectIndexStatusElement.textContent = `Checking project knowledge · ${reason}…`;
+          const result = await buildProjectIndex({ force: false, signal: controller.signal, onProgress: progress => {
+            if (typeof projectIndexStatusElement !== 'undefined' && projectIndexStatusElement && workspaceContext.id === contextId)
+              projectIndexStatusElement.textContent = `Updating project knowledge · ${progress.files} indexed · ${progress.scanned} scanned…`;
+          } });
+          if (workspaceContext.id !== contextId) return null;
+          if (typeof projectIndexStatusElement !== 'undefined' && projectIndexStatusElement) {
+            const changed = result.readBytes > 0 || result.removed > 0 || result.reused < result.files;
+            projectIndexStatusElement.textContent = `${result.files} indexed files · ${result.reused} reused · ${result.removed} removed · ${result.readBytes.toLocaleString()} bytes read · ${changed ? 'knowledge updated' : 'already current'}${result.truncated ? ` · Partial: ${result.reason}` : ''} · automatic refresh enabled`;
+          }
+          return result;
+        } catch (error) {
+          if (error?.name !== 'AbortError' && workspaceContext.id === contextId && typeof projectIndexStatusElement !== 'undefined' && projectIndexStatusElement)
+            projectIndexStatusElement.textContent = `Automatic project index refresh failed: ${error?.message || error}`;
+          return null;
+        } finally {
+          if (projectIndexAutoRefreshController === controller) projectIndexAutoRefreshController = null;
+          if (projectIndexAutoRefreshContextId === contextId) projectIndexAutoRefreshPromise = null;
+        }
+      })();
+      return projectIndexAutoRefreshPromise;
+    }
+    function scheduleProjectIndexAutoRefresh(reason = 'workspace selected') {
+      if (!agentDirectoryHandle) {
+        projectIndexAutoRefreshController?.abort();
+        projectIndexAutoRefreshController = null;
+        if (projectIndexAutoRefreshTimer) clearInterval(projectIndexAutoRefreshTimer);
+        projectIndexAutoRefreshTimer = null;
+        projectIndexAutoRefreshContextId = '';
+        return;
+      }
+      if (projectIndexAutoRefreshContextId !== workspaceContext.id) {
+        projectIndexAutoRefreshController?.abort();
+        if (projectIndexAutoRefreshTimer) clearInterval(projectIndexAutoRefreshTimer);
+        projectIndexAutoRefreshTimer = null;
+      }
+      void refreshProjectIndexAutomatically(reason);
+      if (!projectIndexAutoRefreshTimer) {
+        projectIndexAutoRefreshTimer = setInterval(() => {
+          if (document.visibilityState === 'hidden' || !agentDirectoryHandle) return;
+          void refreshProjectIndexAutomatically('periodic workspace change check');
+        }, 60_000);
+      }
     }

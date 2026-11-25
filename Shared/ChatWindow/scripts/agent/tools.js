@@ -62,6 +62,44 @@
         git_stage: ['stage','gitWrite'], git_unstage: ['unstage','gitWrite'], git_commit: ['commit','gitWrite'], git_create_branch: ['create_branch','gitWrite'], git_switch_branch: ['switch_branch','gitWrite'], git_merge: ['merge','gitWrite'], git_revert: ['revert','gitWrite'], git_cherry_pick: ['cherry_pick','gitWrite'], git_stash: ['stash','gitWrite'],
         git_fetch: ['fetch','gitRemote'], git_pull: ['pull','gitRemote'], git_push: ['push','gitRemote'], git_reset_hard: ['reset_hard','gitDestructive'], git_clean: ['clean','gitDestructive'], git_restore: ['restore','gitDestructive'], git_delete_branch: ['delete_branch','gitDestructive']
       };
+      if (['select_native_workspace','powershell_execute','run_native_command'].includes(name) && (deepResearchEnabled || taskContext?.deepResearch))
+        throw new Error('Native process execution is disabled in Deep Research and delegated sub-agent tasks. Use Agent Mode for explicitly approved local execution.');
+      if (name === 'select_native_workspace') {
+        const approved = await requireAgentApproval({ title: 'Select a native execution workspace?', subtitle: 'Native process access · this chat window only', detail: 'Choose the local project directory in which approved PowerShell scripts and native executables may run. The OS folder picker is separate from browser workspace access. This does not sandbox processes.', risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true };
+        const result = await callAgentHost('process.selectWorkspace', { contextId: workspaceContext.id }, signal);
+        if (result?.selected) return { ...result, message: `Native execution workspace selected: ${result.folder}. Every process invocation will still require fresh approval.` };
+        return result;
+      }
+      if (name === 'powershell_execute') {
+        const script = String(args.script || '');
+        if (!script.trim()) throw new Error('Provide a non-empty PowerShell script.');
+        const workingDirectory = String(args.working_directory || '').trim();
+        const approved = await requireAgentApproval({ title: 'Run this PowerShell script?', subtitle: 'Native process · current Windows user permissions', detail: `Working directory: ${workingDirectory || '(workspace root)'}
+Timeout: ${Math.max(1, Math.min(900, Number(args.timeout_seconds) || 300))} seconds
+
+Script:
+${script}
+
+PowerShell is not sandboxed and may access files and resources available to your Windows account.`, risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true, message: 'PowerShell execution was declined.' };
+        return await callAgentHost('process.powershell', { script, working_directory: workingDirectory, timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(60000, Math.min(930000, (Number(args.timeout_seconds) || 300) * 1000 + 15000)));
+      }
+      if (name === 'run_native_command') {
+        const executable = String(args.executable || '').trim();
+        const commandArguments = Array.isArray(args.arguments) ? args.arguments.map(value => String(value)) : [];
+        if (!executable) throw new Error('Provide an executable name ending in .exe.');
+        const workingDirectory = String(args.working_directory || '').trim();
+        const approved = await requireAgentApproval({ title: `Run ${executable}?`, subtitle: 'Native executable · current Windows user permissions', detail: `Executable: ${executable}
+Arguments:
+${commandArguments.map((value, index) => `${index + 1}. ${value}`).join('\n') || '(none)'}
+Working directory: ${workingDirectory || '(workspace root)'}
+Timeout: ${Math.max(1, Math.min(900, Number(args.timeout_seconds) || 300))} seconds
+
+The process is not sandboxed and runs with your Windows account permissions.`, risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true, message: 'Native command execution was declined.' };
+        return await callAgentHost('process.run', { executable, arguments: commandArguments, working_directory: workingDirectory, timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(60000, Math.min(930000, (Number(args.timeout_seconds) || 300) * 1000 + 15000)));
+      }
       if (name === 'git_select_repository') {
         const approved = await requireAgentApproval({ title: 'Select a Git repository?', subtitle: 'Native folder access · this chat window only', detail: 'Choose the repository directory RunMind may access. This native Git selection is separate from the browser workspace folder grant. Repository access always requires a fresh confirmation.', risky: true, alwaysAsk: true, permissionCategory: 'gitWrite' }, signal);
         if (!approved) return { cancelled: true };

@@ -1,4 +1,4 @@
-# RunMind 2.3.0 — Build and setup
+# RunMind 2.4.0 — Build and setup
 
 This guide covers the current full-source release and retains explicitly labeled historical notes where useful.
 
@@ -151,3 +151,13 @@ Open Agent settings → Project and authorize the project folder in the current 
 The same Project page provides built-in developer workflows and workspace-scoped custom workflows. They are instruction templates executed by the existing Agent runtime; approvals, cancellation, task history, Skills, workspace tools, and Git operations remain the existing mechanisms. There is still no general shell/process execution tool.
 
 Indexing skips common dependency/build/cache folders and credential/secret paths, ignores binary/unsupported files, and skips individual files over 256 KiB. Common secret assignments, bearer tokens, credentialed URLs, private-key blocks, and recognizable token patterns are redacted before indexed text is stored. A refresh is limited to 10,000 files, 50,000 directory entries, depth 10, and 24 MiB of newly read data. A partial index reports the limit that stopped the scan. Rebuild after external project changes; unchanged files are reused using relative path, size, and last-modified timestamp.
+
+
+## Native PowerShell and command execution (2.4.0)
+
+1. In an Agent chat hosted by Standalone, PowerToys Run, or Command Palette, ask RunMind to call `select_native_workspace` and choose the project directory in the native folder picker. This is separate from the browser workspace grant because WebView2 does not expose an absolute path for its directory handle.
+2. Ask the Agent to run a PowerShell script with `powershell_execute`, or an executable found on PATH with `run_native_command`. Every execution displays a fresh approval card.
+3. The optional working directory is relative to the selected native workspace. The native executable tool accepts `.exe` only and passes arguments separately. Use PowerShell for scripts and package-manager commands that require shell resolution.
+4. Commands run as the current Windows user. They are not sandboxed and can access resources available to that account. Do not approve untrusted scripts. Execution is cancellable, capped at 15 minutes, and captures up to 512 KB of output per stream.
+
+Project indexing now starts automatically when a browser workspace is selected or restored. While the chat is visible, RunMind periodically scans workspace metadata every 60 seconds and incrementally refreshes changed records. Manual refresh remains available. This is polling, not an instantaneous filesystem watcher.

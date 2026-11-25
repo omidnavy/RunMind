@@ -1,19 +1,24 @@
 # RunMind roadmap
 
-## Current release: 2.3.0
+## Current release: 2.4.0
 
-RunMind 2.3.0 adds explicit persistent project indexing and reusable developer workflows to the shared Agent experience. The index is scoped to a Workspace Context and stored locally in the existing IndexedDB database; it incrementally reuses unchanged files, indexes bounded text sources and manifests, and records supported imports and symbol declarations, and derives dependency/framework hints from common manifests. Project search, overview, and static validation tools expose that index to the Agent; static validation does not execute build or test commands. Indexing is opt-in and bounded, and excludes common generated/dependency/cache directories, credential/secret paths, binary files, and oversized files. Reusable developer workflows cover project understanding, feature implementation, bug investigation, change review, and release preparation; workspace-specific custom workflows are also supported. They run through the existing Agent runtime, tool contract, approvals, task history, Skills, workspace tools, and Git operations. All three hosts retain the same shared ChatWindow and native bridge architecture. The index is a local lightweight code/project index, not a full language-server or compiler-grade semantic index; symbol/import extraction is heuristic and language-specific; unchanged-file reuse relies on size and modification-time metadata.
+RunMind 2.4.0 combines the Developer Workbench and PowerShell/Native Automation workstreams. The shared Agent now offers explicitly approved PowerShell script execution and native `.exe` invocation, with a per-conversation native workspace selection, relative working-directory confinement, cancellation, timeouts, bounded output, and exit-code reporting. Processes run with the current Windows user's permissions and are not sandboxed. The persistent local project index is automatically built when a browser workspace is selected or restored, then incrementally refreshed every 60 seconds while the chat is visible. Existing unchanged-file reuse, manual refresh, cancellation, and bounded indexing remain. All three hosts share the same Agent tools and native bridge.
 
 ## Planned release sequence
 
-- **2.2.0 — PowerToys Command Palette Extension:** provide a first-class Command Palette host that shares the canonical RunMind chat UI and native runtime, supports a branded inline fallback with streaming responses and follow-up turns, and opens chat with empty or generated context. A native extension settings page configures the shared Ollama/LM Studio model and generation settings used by PowerToys Run and Command Palette.
-- **2.4.0 — Standalone RunMind Launcher:** a dedicated standalone launcher experience built on the same Agent Core and native host capabilities.
+- **2.5.0 — Debugging & Quality:** interactive debugging, Playwright/browser testing, API testing, diagnostics, and quality workflows.
+- **2.6.0 — Databases & Containers:** database tools and Podman/container integrations.
+- **2.7.0 — Advanced Agent & MCP:** richer orchestration, specialist agents, and expanded MCP capabilities.
+- **2.8.0 — Standalone Launcher:** mature standalone application lifecycle and launcher experience, built on the same Agent Core and host bridge.
 
-These are planned scopes, not shipped features or release-date commitments. The detailed backlog below is retained as historical candidate work from the 1.10.x roadmap and should be re-evaluated against the 2.x plan before implementation.
+These are planning targets, not shipped features or release-date commitments. The older 1.10.x backlog is retained below as historical candidate work and should be re-evaluated against the 2.x plan before implementation.
 
-### 2.2.0 implementation boundary
+## Release 2.4.0 implementation boundaries
 
-The Command Palette extension is an independent MSIX/WinRT COM host. It launches its own chat process from the packaged Command Palette executable and hosts the canonical shared ChatWindow, ArtifactTools, and native bridge. It does not launch or depend on the Standalone executable. Free-text fallback input is handled by a native Command Palette content page, which calls the selected local provider directly and streams the answer in the palette; follow-up questions stay in the same page. The native extension settings page configures a provider/model/generation settings file shared with PowerToys Run; it does not launch the chat window. The Command Palette package's COM-host app entry is hidden from Start/Search; the MSIX remains installed to register the extension. The packaged extension requires deployment/reload through Command Palette.
+- No sandbox or privilege boundary is claimed for PowerShell/native process execution. Fresh approval is required for every invocation, but the child process inherits the current user's permissions.
+- Native process working directories are relative to a separately selected native workspace. The PowerShell script itself is not confined to that folder.
+- The native executable tool accepts `.exe` files resolved through PATH; PowerShell is the script-capable execution route. Interactive terminals, shell sessions, and batch-file execution are not included.
+- Project indexing is a lightweight local heuristic index, not a compiler-grade semantic index or language server. Automatic refresh is periodic polling while the chat is visible, not real-time filesystem notification. Unchanged-file reuse depends on size and modification time.
 
 ---
 

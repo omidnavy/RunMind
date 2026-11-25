@@ -603,7 +603,10 @@
       if (restoredHandle?.name && !workspaceContext.folderName)
         workspaceContext.folderName = String(restoredHandle.name).slice(0, 256);
       updateAgentFolderButton();
-      if (agentDirectoryHandle) rebuildActiveToolDefinitions(deepResearchEnabled);
+      if (agentDirectoryHandle) {
+        rebuildActiveToolDefinitions(deepResearchEnabled);
+        if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace restored');
+      } else if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace access unavailable');
     }
     async function persistAgentFolderHandle(handle) {
       const previousHandle = persistedDirectoryHandle || agentDirectoryHandle;
@@ -621,6 +624,7 @@
       agentDirectoryHandle = handle;
       updateAgentFolderButton();
       rebuildActiveToolDefinitions(deepResearchEnabled);
+      if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace selected');
     }
     async function clearPersistedAgentFolderHandle() {
       await workspaceDbAction('readwrite', 'delete');
@@ -629,6 +633,8 @@
       persistedDirectoryHandle = null;
       agentDirectoryHandle = null;
       workspaceContext.folderName = '';
+      if (typeof projectIndexController !== 'undefined') projectIndexController?.abort();
+      if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace cleared');
       updateAgentFolderButton();
       rebuildActiveToolDefinitions(deepResearchEnabled);
     }

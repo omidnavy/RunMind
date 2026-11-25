@@ -1,21 +1,41 @@
+## [2.4.0] — Developer Workbench & Native Automation (2026-11-17)
+
+### Added
+- Add approved PowerShell execution and native `.exe` command execution to the shared Agent runtime. Each invocation requires fresh in-chat approval, supports cancellation and a 1–900 second timeout, captures bounded stdout/stderr, and reports the exit code and duration.
+- Add native execution workspace selection. The selected directory is scoped to the current conversation context; relative working directories cannot escape it. Native processes run as the current Windows user and are explicitly not a security sandbox.
+- Add separate native executable invocation using `ProcessStartInfo.ArgumentList`; shell command-line parsing, batch files, and script launch are not accepted by this tool. PowerShell is the explicit script-capable route.
+- Automatically build the persistent project index when a workspace is selected or restored. Existing indexes are incrementally refreshed, reusing files whose size and modification time are unchanged.
+- Periodically check the active workspace every 60 seconds while the chat is visible and incrementally refresh changed/deleted/added index records. Manual build/refresh and cancellation remain available.
+- Keep PowerShell and process execution in the shared native Agent bridge so Standalone, PowerToys Run, and Command Palette use the same tool contract and approval UI. Native process tools are excluded from Deep Research and delegated sub-agent tasks.
+
+### Security and boundaries
+- PowerShell and native executables run with the current Windows user's permissions; approval confirms an individual operation but does not sandbox it or reduce its privileges.
+- Native execution requires a separately selected native workspace because browser File System Access handles do not expose absolute paths to the host. Relative working directories are confined to that selected directory; scripts themselves can still access any resource available to the user.
+- Native executable tools accept `.exe` names resolved through PATH and pass arguments individually. PowerShell script text is written to the child process standard input; no command text is interpolated into a shell command line.
+- Process output is capped at 512 KB per stream, and the process tree is terminated on cancellation or timeout.
+- Project indexing remains bounded and local. Periodic refresh is polling-based (60-second interval while visible), not a real-time filesystem watcher; unchanged-file reuse still relies on size and modification-time metadata.
+
+### Preserved
+- Shared Agent Core, all three hosts, existing Git operations, Skills, MCP, Deep Research, workflows, Project Profiles, workspace tools, and approval behavior.
+- Existing manual project-index controls and local IndexedDB storage.
+
+### Validation
+- JavaScript syntax checks, JSON/XML parsing, release-version synchronization, static native-bridge checks, archive integrity, and SHA-256 verification are included in the validation report.
+- Windows/.NET compilation and live PowerShell/native process execution, WebView2 folder selection, and periodic index refresh require validation on a Windows target machine.
+
 ## [2.3.0] — Project intelligence and reusable developer workflows (2026-11-17)
 
 ### Added
-- Add an explicit, persistent project index stored locally in the existing per-workspace IndexedDB store. Indexing is user-triggered and supports incremental refresh by file size and modification time.
+- Add an explicit, persistent project index stored locally in the existing per-workspace IndexedDB store. Indexing was user-triggered and supported incremental refresh by file size and modification time.
 - Index bounded text source files and common project manifests; capture file paths, language hints, supported import declarations, symbol declarations, and dependencies from common npm, Python, Cargo, Go, NuGet, Maven, Gradle, Composer, and Bundler manifests.
 - Add project-index search for paths, indexed text, imports, and supported symbols, plus an index overview and bounded static project-validation tool for Agent tasks.
-- Exclude common dependency/build/cache directories, secret/credential directories and files, binary formats, and files larger than 256 KiB; common secret assignments and token patterns are redacted before indexed text is persisted. Bound indexing to 10,000 files, 50,000 directory entries, depth 10, and 24 MiB of newly read file data per refresh.
 - Add reusable built-in developer workflows for project understanding, feature implementation, bug investigation, change review, and release preparation. Add workspace-scoped custom workflow storage.
-- Integrate project indexing and developer workflows with the existing Agent tool contract, task plan, approval flow, cancellation, task history, Skills, workspace tools, and Git operations. No general shell/process execution tool or second workflow executor is introduced.
-- Add Project settings controls for building/refreshing/clearing the index and selecting/starting/saving/deleting developer workflows.
 
 ### Preserved
 - Standalone, PowerToys Run, and PowerToys Command Palette continue to use the same shared ChatWindow and Agent runtime.
 - Existing Project Profiles, Workspace Context, folder grants, Agent Skills, Deep Research templates, workflow operation history, approvals, and Git behavior remain in place.
 
-### Validation
-- JavaScript syntax and static integration checks, JSON/XML parsing, version synchronization, source archive integrity, and SHA-256 verification are included in this release validation report.
-- Windows/.NET compilation, WebView2 IndexedDB quota behavior, and live indexing against representative projects require validation on the target Windows machine.
+---
 
 ## [2.2.7] — Theme-matched startup and PowerToys Run installer (2026-11-15)
 

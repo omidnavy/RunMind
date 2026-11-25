@@ -1,4 +1,34 @@
-## RunMind 2.3.0 — Project intelligence and reusable developer workflows
+## RunMind 2.4.0 — Developer Workbench & Native Automation
+
+### Developer workbench and project intelligence
+- [x] Persistent, workspace-scoped local project index with bounded source/manifest indexing, heuristic imports/symbols, dependency/framework hints, and indexed search.
+- [x] Automatically build the index when a workspace is selected or restored.
+- [x] Incrementally refresh the index by reusing unchanged files; periodically check for project changes every 60 seconds while the chat is visible.
+- [x] Remove deleted file records during a complete scan; retain the previous index when a refresh is cancelled.
+- [x] Keep manual build/refresh/clear controls, progress reporting, and cancellation.
+- [x] Reusable built-in and workspace-specific developer workflows.
+- [x] Existing workspace file operations, project overview/validation, Git tools, Skills, and task planning.
+
+### PowerShell and native automation
+- [x] Native execution workspace selection scoped to the current conversation.
+- [x] Explicitly approved PowerShell script execution.
+- [x] Explicitly approved `.exe` invocation with argument-list separation (no shell command-line interpolation).
+- [x] Per-invocation approval, cancellation, bounded output, exit-code/duration reporting, and configurable 1–900 second timeout.
+- [x] Relative working-directory confinement to the selected native workspace.
+- [ ] Sandboxed execution, privilege isolation, Windows Job Object resource quotas, and interactive terminal sessions are not provided.
+
+### Shared hosts and preserved capabilities
+- [x] One shared Agent tool contract and native bridge for Standalone, PowerToys Run, and PowerToys Command Palette. Native process tools are disabled in Deep Research and delegated sub-agent tasks.
+- [x] Existing Git, Skills, MCP, Deep Research, workflows, Project Profiles, workspace tools, and approval cards retained.
+
+### Known limitations
+- Project indexing is a lightweight local heuristic index, not compiler-grade semantic analysis or a language server.
+- Periodic indexing uses a 60-second metadata scan while the chat is visible; it is not a native real-time filesystem watcher.
+- Incremental reuse relies on file size and modification-time metadata.
+- Native execution runs with the current Windows user's permissions. Approval is not a sandbox; PowerShell can access any resource available to that account.
+- Native execution workspace selection is separate from browser workspace folder access because WebView2 does not expose the absolute path of a File System Access handle.
+- The native executable tool runs `.exe` files found on PATH. Batch files, arbitrary shell command strings, and interactive processes are not supported by that tool; use the PowerShell tool for scripts.
+
 
 
 | Area | Feature | Current behavior | Status / limits |
