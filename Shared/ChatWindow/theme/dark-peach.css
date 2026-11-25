@@ -1,0 +1,20 @@
+/* Peach — dark palette. */
+:root[data-theme="dark"][data-color-theme="peach"] {
+      color-scheme: dark;
+      --color-bg: #241a17;
+      --color-surface: #30231e;
+      --color-surface-raised: #403027;
+      --color-surface-hover: #514035;
+      --color-input: #291e19;
+      --color-text: #f5eae2;
+      --color-muted: #c3a99a;
+      --color-accent: #efa77f;
+      --color-accent-contrast: #352015;
+      --color-border: #574237;
+      --color-user-bubble: #493126;
+      --color-assistant-bubble: #30231e;
+      --color-danger: #f18b80;
+      --color-success: #9ac69a;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .42);
+      --shadow-float: 0 4px 14px rgba(0, 0, 0, .30);
+    }

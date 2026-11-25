@@ -1,0 +1,31 @@
+:root {
+      color-scheme: dark;
+      /* Default dark palette: Warm Graphite. */
+      --color-bg: #171613;
+      --color-surface: #201e19;
+      --color-surface-raised: #2a2721;
+      --color-surface-hover: #373229;
+      --color-input: #191814;
+      --color-text: #f1ece2;
+      --color-muted: #b0a797;
+      --color-accent: #d5a45f;
+      --color-accent-contrast: #21190e;
+      --color-border: #464035;
+      --color-user-bubble: #352a1e;
+      --color-assistant-bubble: #201e19;
+      --color-danger: #ef8b80;
+      --color-success: #91c6a0;
+      --font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --font-code: Consolas, "Cascadia Code", "Courier New", monospace;
+      --font-size: 14px;
+      --radius-xs: 5px;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --radius-pill: 999px;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .34);
+      --shadow-float: 0 4px 14px rgba(0, 0, 0, .24);
+    }
+
+/* Keep the page hidden until the runtime-selected theme is ready. */
+html[data-theme-ready="false"] body { visibility: hidden; }

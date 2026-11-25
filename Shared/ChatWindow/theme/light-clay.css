@@ -1,0 +1,11 @@
+/* Clay — light palette. */
+:root[data-theme="light"][data-color-theme="clay"] {
+      color-scheme: light;
+      /* Clay Light: exact background, foreground, and accent values from the supplied reference. */
+      --color-bg: #f9f9f7; --color-surface: #fafaf8; --color-surface-raised: #f2f2f0;
+      --color-surface-hover: #eaeae8; --color-input: #ffffff; --color-text: #2d2d2b;
+      --color-muted: #797977; --color-accent: #cc7d5e; --color-accent-contrast: #2d2d2b;
+      --color-border: #e6e6e4; --color-user-bubble: #f6ede9; --color-assistant-bubble: #fafaf8;
+      --color-danger: #b32630; --color-success: #167948;
+      --shadow-panel: 0 12px 36px rgba(45, 45, 43, .09); --shadow-float: 0 3px 12px rgba(45, 45, 43, .07);
+    }

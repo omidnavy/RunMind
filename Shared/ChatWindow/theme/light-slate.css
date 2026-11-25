@@ -1,0 +1,20 @@
+/* Slate — light palette. */
+:root[data-theme="light"][data-color-theme="slate"] {
+      color-scheme: light;
+      --color-bg: #f0f2f5;
+      --color-surface: #fafbfd;
+      --color-surface-raised: #e6eaf0;
+      --color-surface-hover: #d9dfe8;
+      --color-input: #ffffff;
+      --color-text: #29313c;
+      --color-muted: #687482;
+      --color-accent: #526b88;
+      --color-accent-contrast: #ffffff;
+      --color-border: #d1d8e1;
+      --color-user-bubble: #dfe6ef;
+      --color-assistant-bubble: #fafbfd;
+      --color-danger: #b44949;
+      --color-success: #397451;
+      --shadow-panel: 0 12px 36px rgba(38, 49, 64, .09);
+      --shadow-float: 0 3px 12px rgba(38, 49, 64, .07);
+    }

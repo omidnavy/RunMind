@@ -8,7 +8,7 @@
 	<UseWindowsForms>true</UseWindowsForms>
 	<RootNamespace>Community.PowerToys.Run.Plugin.RunMind</RootNamespace>
 	<AssemblyName>Community.PowerToys.Run.Plugin.RunMind</AssemblyName>
-	<Version>2.2.4</Version>
+	<Version>2.2.5</Version>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
@@ -20,6 +20,7 @@
     <Compile Include="..\Shared\WebView2RuntimeBootstrapper.cs" Link="Shared\WebView2RuntimeBootstrapper.cs" />
     <Compile Include="..\Shared\WindowLayout.cs" Link="Shared\WindowLayout.cs" />
     <Compile Include="..\Shared\AppearancePreferences.cs" Link="Shared\AppearancePreferences.cs" />
+    <Compile Include="..\Shared\ThemeCatalog.cs" Link="Shared\ThemeCatalog.cs" />
     <Compile Include="..\Shared\WindowThemeSynchronizer.cs" Link="Shared\WindowThemeSynchronizer.cs" />
     <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
     <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
@@ -51,6 +52,10 @@
     <Content Include="..\Shared\ArtifactTools.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>ArtifactTools.js</Link>
+    </Content>
+    <Content Include="..\Shared\ChatWindow\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>ChatWindow\%(RecursiveDir)%(Filename)%(Extension)</Link>
     </Content>
     <None Update="Images\*.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

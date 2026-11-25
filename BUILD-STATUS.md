@@ -1,11 +1,24 @@
-# RunMind 2.2.4 — PowerToys Run chat handoff isolation
+# RunMind 2.2.5 — Runtime-discovered theme system
 
-- PowerToys Run now passes the inline provider/model only as source provenance when opening the chat window.
-- Opening an in-progress query auto-sends the prompt using the chat window's own selected model.
-- Completed inline response handoff preserves the inline source attribution without overriding chat provider/model selection.
-- Inline endpoint URLs are no longer injected into the full chat window; its own saved provider connections remain authoritative.
+## Dynamic theme organization
 
-Static validation passed for JSON/XML metadata, JavaScript syntax, bootstrap separation, and archive integrity. Windows/.NET compilation and live PowerToys Run testing remain outstanding.
+- `Shared/ChatWindow.html` remains the canonical WebView2 entry page.
+- Shared application CSS remains under `Shared/ChatWindow/styles/`; individual palettes live in `Shared/ChatWindow/theme/`.
+- `theme/base.css` contains the shared fallback tokens. Each selectable palette is a separate `dark-<id>.css` or `light-<id>.css` file.
+- The native `themes.list` operation discovers those files at runtime. The WebView populates the Light and Dark selectors from that response; names are derived from filenames. Adding or removing a theme file does not require editing HTML or JavaScript registries.
+- The active stylesheet is swapped only after the new stylesheet has loaded. The old theme remains active during the load, avoiding an unstyled intermediate frame. The chat page stays hidden during initial theme discovery/loading to avoid a startup flash.
+- `Shared/ThemeCatalog.cs` owns safe theme-file discovery and is compiled into all three hosts. The existing wildcard resource-copy rules deploy the complete `ChatWindow` tree to Standalone, PowerToys Run, and Command Palette.
+- `Build-RunMind-CommandPalette.ps1` now verifies that the MSIX contains the runtime theme loader and theme CSS files.
+- Existing theme palette declarations were extracted without redesigning them. The original Warm Graphite root palette remains as the base fallback and as the selectable `dark-warm-graphite.css` theme.
+
+## Validation status
+
+JavaScript syntax, theme filename/selector matching, CSS extraction coverage, project XML, package metadata, resource-copy rules, and ZIP integrity were checked. A Windows/.NET build and live WebView2 test remain outstanding because the .NET SDK and Windows runtime are unavailable in this environment.
+
+## Previous release: RunMind 2.2.4 — PowerToys Run chat handoff isolation
+
+- Kept the inline provider/model as message provenance when opening a chat, rather than forcing it as the chat window's selected model. The destination uses its own saved provider connections.
+- Fixed completed and in-progress PowerToys Run handoffs to preserve the original prompt and answer behavior.
 
 ## Previous release: RunMind 2.2.3 — Command Palette Think toggle and Dock actions
 

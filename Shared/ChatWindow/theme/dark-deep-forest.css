@@ -1,0 +1,10 @@
+/* Deep Forest — dark palette. */
+:root[data-theme="dark"][data-color-theme="deep-forest"] {
+      color-scheme: dark;
+      --color-bg: #111713; --color-surface: #18211b; --color-surface-raised: #222e25;
+      --color-surface-hover: #2d3b30; --color-input: #131b16; --color-text: #e8efe7;
+      --color-muted: #a1b1a2; --color-accent: #a2c18a; --color-accent-contrast: #182116;
+      --color-border: #3a4a3d; --color-user-bubble: #26372a; --color-assistant-bubble: #18211b;
+      --color-danger: #ed938b; --color-success: #9ccc9c;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .38); --shadow-float: 0 4px 14px rgba(0, 0, 0, .27);
+    }

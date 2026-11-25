@@ -1,0 +1,10 @@
+/* Obsidian — dark palette. */
+:root[data-theme="dark"][data-color-theme="obsidian"] {
+      color-scheme: dark;
+      --color-bg: #151515; --color-surface: #1d1d1d; --color-surface-raised: #282828;
+      --color-surface-hover: #353535; --color-input: #181818; --color-text: #efefec;
+      --color-muted: #aaa8a2; --color-accent: #d0ae78; --color-accent-contrast: #241c10;
+      --color-border: #41403b; --color-user-bubble: #30291f; --color-assistant-bubble: #1d1d1d;
+      --color-danger: #ef8982; --color-success: #91c49d;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .42); --shadow-float: 0 4px 14px rgba(0, 0, 0, .3);
+    }

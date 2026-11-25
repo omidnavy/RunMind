@@ -1,0 +1,10 @@
+/* Burgundy — dark palette. */
+:root[data-theme="dark"][data-color-theme="burgundy"] {
+      color-scheme: dark;
+      --color-bg: #1a1417; --color-surface: #251c20; --color-surface-raised: #32252a;
+      --color-surface-hover: #403137; --color-input: #1d171a; --color-text: #f0e6e8;
+      --color-muted: #b6a2a8; --color-accent: #d18b9c; --color-accent-contrast: #2b171e;
+      --color-border: #4a353d; --color-user-bubble: #38252d; --color-assistant-bubble: #251c20;
+      --color-danger: #f08b85; --color-success: #9bc59f;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .42); --shadow-float: 0 4px 14px rgba(0, 0, 0, .3);
+    }

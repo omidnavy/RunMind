@@ -1,3 +1,20 @@
+## [2.2.5] — Runtime-discovered theme system (2026-11-14)
+
+### Added
+- Split the existing palettes into self-contained `dark-<id>.css` and `light-<id>.css` files under `Shared/ChatWindow/theme/`; retained `base.css` for shared fallback tokens.
+- Added `ThemeCatalog` and the internal native `themes.list` bridge operation. The chat UI discovers available theme files at runtime and builds the Light/Dark selectors from the returned catalog; display names are derived from filenames.
+- Added `ChatWindow/scripts/theme-loader.js`. Theme switching keeps the current stylesheet active until the requested stylesheet has loaded, then swaps the active sheet without an unstyled intermediate frame.
+- Updated the Command Palette MSIX validator to require the dynamic loader and verify packaged theme files. Existing wildcard copy rules deploy new theme files to all three hosts.
+
+### Changed
+- Removed the hard-coded theme option lists and CSS theme registry from HTML/JavaScript. Adding or deleting a matching theme CSS file now updates the selectors at chat initialization and whenever the Appearance menu is opened.
+- Updated native appearance preference validation to accept currently discovered theme IDs and fall back safely when a stored theme file has been removed.
+- Kept the existing palette declarations and visual appearance; no theme redesign was made.
+
+### Validation
+- JavaScript syntax checks, CSS extraction checks, theme filename/selector/catalog checks, project XML parsing, package metadata checks, resource-copy rule checks, and ZIP integrity checks passed.
+- Windows/.NET compilation and live WebView2 theme-switching tests remain outstanding in this environment.
+
 ## [2.2.4] — PowerToys Run chat handoff isolation (2026-11-12)
 
 ### Fixed

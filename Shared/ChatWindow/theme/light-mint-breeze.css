@@ -1,0 +1,20 @@
+/* Mint Breeze — light palette. */
+:root[data-theme="light"][data-color-theme="mint-breeze"] {
+      color-scheme: light;
+      --color-bg: #eef6ef;
+      --color-surface: #fbfefa;
+      --color-surface-raised: #e2eee3;
+      --color-surface-hover: #d2e5d5;
+      --color-input: #ffffff;
+      --color-text: #283b2e;
+      --color-muted: #637a67;
+      --color-accent: #47865a;
+      --color-accent-contrast: #ffffff;
+      --color-border: #ccddce;
+      --color-user-bubble: #dcecdf;
+      --color-assistant-bubble: #fbfefa;
+      --color-danger: #b34d47;
+      --color-success: #36744b;
+      --shadow-panel: 0 12px 36px rgba(37, 73, 44, .09);
+      --shadow-float: 0 3px 12px rgba(37, 73, 44, .07);
+    }

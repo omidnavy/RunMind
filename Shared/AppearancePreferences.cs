@@ -2,6 +2,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -50,8 +51,8 @@ internal static class AppearancePreferenceStore
         var json = JsonSerializer.Serialize(CreateBootstrapValue());
         return "(() => { const a = " + json + "; if (!a) return; "
             + "const mode = ['system','light','dark'].includes(a.mode) ? a.mode : 'system'; "
-            + "const light = ['classic-light','soft-ivory','sage-garden','rose-clay','sandstone','clay'].includes(a.lightTheme) ? a.lightTheme : 'classic-light'; "
-            + "const dark = ['warm-graphite','obsidian','deep-forest','mocha','burgundy','clay'].includes(a.darkTheme) ? a.darkTheme : 'warm-graphite'; "
+            + "const light = typeof a.lightTheme === 'string' ? a.lightTheme : 'classic-light'; "
+            + "const dark = typeof a.darkTheme === 'string' ? a.darkTheme : 'warm-graphite'; "
             + "const apply = () => { const root = document.documentElement; if (!root) return false; "
             + "const effective = mode === 'system' ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode; "
             + "root.dataset.appearanceMode = mode; root.dataset.theme = effective; root.dataset.colorTheme = effective === 'dark' ? dark : light; return true; }; "
@@ -92,10 +93,13 @@ internal static class AppearancePreferenceStore
     private static AppearancePreferences Normalize(string? mode, string? lightTheme, string? darkTheme)
     {
         var safeMode = mode is "system" or "light" or "dark" ? mode : DefaultMode;
-        var safeLightTheme = lightTheme is "classic-light" or "soft-ivory" or "sage-garden" or "rose-clay" or "sandstone" or "clay"
-            ? lightTheme : DefaultLightTheme;
-        var safeDarkTheme = darkTheme is "warm-graphite" or "obsidian" or "deep-forest" or "mocha" or "burgundy" or "clay"
-            ? darkTheme : DefaultDarkTheme;
+        var available = ThemeCatalog.Discover();
+        var lightIds = available.Where(theme => theme.Mode == "light").Select(theme => theme.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var darkIds = available.Where(theme => theme.Mode == "dark").Select(theme => theme.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var safeLightDefault = lightIds.Contains(DefaultLightTheme) ? DefaultLightTheme : lightIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase).FirstOrDefault() ?? DefaultLightTheme;
+        var safeDarkDefault = darkIds.Contains(DefaultDarkTheme) ? DefaultDarkTheme : darkIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase).FirstOrDefault() ?? DefaultDarkTheme;
+        var safeLightTheme = !string.IsNullOrWhiteSpace(lightTheme) && lightIds.Contains(lightTheme) ? lightTheme! : safeLightDefault;
+        var safeDarkTheme = !string.IsNullOrWhiteSpace(darkTheme) && darkIds.Contains(darkTheme) ? darkTheme! : safeDarkDefault;
         return new AppearancePreferences(safeMode, safeLightTheme, safeDarkTheme);
     }
 

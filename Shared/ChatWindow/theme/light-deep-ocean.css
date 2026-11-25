@@ -1,0 +1,20 @@
+/* Deep Ocean — light palette. */
+:root[data-theme="light"][data-color-theme="deep-ocean"] {
+      color-scheme: light;
+      --color-bg: #edf6f5;
+      --color-surface: #f9fdfc;
+      --color-surface-raised: #e0efed;
+      --color-surface-hover: #cfe5e2;
+      --color-input: #ffffff;
+      --color-text: #203536;
+      --color-muted: #5d7777;
+      --color-accent: #267f83;
+      --color-accent-contrast: #ffffff;
+      --color-border: #c7dcda;
+      --color-user-bubble: #d8eeeb;
+      --color-assistant-bubble: #f9fdfc;
+      --color-danger: #b54c48;
+      --color-success: #337a56;
+      --shadow-panel: 0 12px 36px rgba(25, 66, 65, .10);
+      --shadow-float: 0 3px 12px rgba(25, 66, 65, .08);
+    }

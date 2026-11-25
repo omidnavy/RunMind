@@ -18,7 +18,7 @@
       let value = n;
       for (let bit = 0; bit < 8; bit++) value = value & 1 ? 0xEDB88320 ^ (value >>> 1) : value >>> 1;
       table[n] = value >>> 0;
-    }
+    };
     return table;
   })();
 

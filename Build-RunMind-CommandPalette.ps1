@@ -138,6 +138,23 @@ try {
             'Microsoft.Web.WebView2.Wpf.dll',
             'ChatWindow.html',
             'ArtifactTools.js',
+            'ChatWindow/theme/base.css',
+            'ChatWindow/styles/chat.css',
+            'ChatWindow/scripts/theme-loader.js',
+            'ChatWindow/scripts/core.js',
+            'ChatWindow/scripts/chat-ui.js',
+            'ChatWindow/scripts/providers.js',
+            'ChatWindow/scripts/agent/mcp.js',
+            'ChatWindow/scripts/agent/workspace.js',
+            'ChatWindow/scripts/agent/web.js',
+            'ChatWindow/scripts/agent/artifacts.js',
+            'ChatWindow/scripts/agent/workflow.js',
+            'ChatWindow/scripts/agent/tools.js',
+            'ChatWindow/scripts/agent/documents.js',
+            'ChatWindow/scripts/agent/runtime.js',
+            'ChatWindow/scripts/research.js',
+            'ChatWindow/scripts/conversations.js',
+            'ChatWindow/scripts/application.js',
             'Assets/Brand/Icon.ico',
             'Assets/Brand/Icon.svg',
             'Assets/StoreLogo.png',
@@ -148,6 +165,19 @@ try {
         foreach ($entry in $requiredEntries) {
             if ($entryNames -notcontains $entry) {
                 throw "The generated MSIX is missing '$entry'. The release package will not be accepted."
+            }
+        }
+        $themeDirectory = Join-Path $root 'Shared\ChatWindow\theme'
+        $sourceThemeFiles = @(Get-ChildItem -LiteralPath $themeDirectory -Filter '*.css' -File)
+        $darkThemeEntries = @($entryNames | Where-Object { $_ -match '^ChatWindow/theme/dark-[a-z0-9]+(?:-[a-z0-9]+)*\.css$' })
+        $lightThemeEntries = @($entryNames | Where-Object { $_ -match '^ChatWindow/theme/light-[a-z0-9]+(?:-[a-z0-9]+)*\.css$' })
+        if ($darkThemeEntries.Count -lt 1 -or $lightThemeEntries.Count -lt 1) {
+            throw "The generated MSIX must contain at least one dynamically discovered dark theme and one light theme."
+        }
+        foreach ($themeFile in $sourceThemeFiles) {
+            $themeEntry = 'ChatWindow/theme/' + $themeFile.Name
+            if ($entryNames -notcontains $themeEntry) {
+                throw "The generated MSIX is missing theme '$($themeFile.Name)'."
             }
         }
 

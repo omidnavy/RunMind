@@ -1,0 +1,10 @@
+/* Soft Ivory — light palette. */
+:root[data-theme="light"][data-color-theme="soft-ivory"] {
+      color-scheme: light;
+      --color-bg: #f7f4ec; --color-surface: #fffdf8; --color-surface-raised: #f0ece2;
+      --color-surface-hover: #e8e1d4; --color-input: #fffdf8; --color-text: #302b23;
+      --color-muted: #766d5f; --color-accent: #a26831; --color-accent-contrast: #ffffff;
+      --color-border: #ded5c5; --color-user-bubble: #f1e4d0; --color-assistant-bubble: #fffdf8;
+      --color-danger: #ae4f43; --color-success: #477b59;
+      --shadow-panel: 0 12px 36px rgba(67, 49, 28, .1); --shadow-float: 0 3px 12px rgba(67, 49, 28, .08);
+    }

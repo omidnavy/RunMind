@@ -1,0 +1,10 @@
+/* Sage Garden — light palette. */
+:root[data-theme="light"][data-color-theme="sage-garden"] {
+      color-scheme: light;
+      --color-bg: #f1f5ef; --color-surface: #fbfdf9; --color-surface-raised: #e8efe6;
+      --color-surface-hover: #dce8dc; --color-input: #fcfefb; --color-text: #263329;
+      --color-muted: #627164; --color-accent: #56785b; --color-accent-contrast: #ffffff;
+      --color-border: #d1ddd0; --color-user-bubble: #e1eee0; --color-assistant-bubble: #fbfdf9;
+      --color-danger: #ae514d; --color-success: #3e7651;
+      --shadow-panel: 0 12px 36px rgba(37, 61, 42, .09); --shadow-float: 0 3px 12px rgba(37, 61, 42, .07);
+    }

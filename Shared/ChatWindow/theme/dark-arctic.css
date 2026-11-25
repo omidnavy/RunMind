@@ -1,0 +1,20 @@
+/* Arctic — dark palette. */
+:root[data-theme="dark"][data-color-theme="arctic"] {
+      color-scheme: dark;
+      --color-bg: #101b27;
+      --color-surface: #172637;
+      --color-surface-raised: #22364a;
+      --color-surface-hover: #30485f;
+      --color-input: #132131;
+      --color-text: #eaf5fc;
+      --color-muted: #a5bfce;
+      --color-accent: #80c7ed;
+      --color-accent-contrast: #132b3b;
+      --color-border: #354e63;
+      --color-user-bubble: #27435a;
+      --color-assistant-bubble: #172637;
+      --color-danger: #ef928e;
+      --color-success: #8dcdb4;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .44);
+      --shadow-float: 0 4px 14px rgba(0, 0, 0, .30);
+    }

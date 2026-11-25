@@ -120,6 +120,7 @@ public sealed class AgentHostBridge : IDisposable
             "profiles.save" => Task.FromResult(SaveProfile(args)),
             "profiles.delete" => Task.FromResult(DeleteProfile(ReadString(args, "id", 100))),
             "permissions.get" => Task.FromResult(ReadPermissionPolicy()),
+            "themes.list" => Task.FromResult(ListThemes()),
             "skills.list" => Task.FromResult(ListGlobalSkills()),
             "skills.load" => Task.FromResult(LoadGlobalSkill(ReadString(args, "name", 100), ReadStringArray(args, "references", 10, 160))),
             "skills.install" => Task.FromResult(InstallGlobalSkill()),
@@ -278,6 +279,21 @@ public sealed class AgentHostBridge : IDisposable
         ["gitDestructive"] = "always-ask",
         ["downloads"] = "ask",
     };
+
+    private static object ListThemes()
+    {
+        var themes = ThemeCatalog.Discover()
+            .Select(theme => new
+            {
+                id = theme.Id,
+                name = theme.Name,
+                mode = theme.Mode,
+                fileName = theme.FileName,
+                version = theme.Version,
+            })
+            .ToArray();
+        return new { themes, count = themes.Length, source = "native-theme-folder" };
+    }
 
     private static object ReadPermissionPolicy() => WithSharedStoreLock<object>(() =>
     {

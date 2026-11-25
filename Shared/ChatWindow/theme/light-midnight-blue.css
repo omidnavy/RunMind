@@ -1,0 +1,20 @@
+/* Midnight Blue — light palette. */
+:root[data-theme="light"][data-color-theme="midnight-blue"] {
+      color-scheme: light;
+      --color-bg: #edf2fa;
+      --color-surface: #f9fbff;
+      --color-surface-raised: #e3eaf5;
+      --color-surface-hover: #d6e1f0;
+      --color-input: #ffffff;
+      --color-text: #202e43;
+      --color-muted: #5e6f87;
+      --color-accent: #356cc5;
+      --color-accent-contrast: #ffffff;
+      --color-border: #cbd6e5;
+      --color-user-bubble: #dce8fb;
+      --color-assistant-bubble: #f9fbff;
+      --color-danger: #b83d49;
+      --color-success: #28744e;
+      --shadow-panel: 0 12px 36px rgba(27, 47, 79, .10);
+      --shadow-float: 0 3px 12px rgba(27, 47, 79, .08);
+    }

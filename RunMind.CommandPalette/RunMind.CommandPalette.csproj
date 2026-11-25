@@ -9,8 +9,8 @@
     <PlatformTarget>$(Platform)</PlatformTarget>
     <AssemblyName>RunMind.CommandPalette</AssemblyName>
     <RootNamespace>RunMind.CommandPalette</RootNamespace>
-    <Version>2.2.4</Version>
-    <AppxPackageVersion>2.2.4.0</AppxPackageVersion>
+    <Version>2.2.5</Version>
+    <AppxPackageVersion>2.2.5.0</AppxPackageVersion>
     <AppxPackageIdentityName>RunMind.CommandPalette</AppxPackageIdentityName>
     <AppxPackagePublisher>CN=Omid Navy</AppxPackagePublisher>
     <EnableMsixTooling>true</EnableMsixTooling>
@@ -75,6 +75,7 @@
     <Compile Include="..\Shared\WebView2RuntimeBootstrapper.cs" Link="Shared\WebView2RuntimeBootstrapper.cs" />
     <Compile Include="..\Shared\WindowLayout.cs" Link="Shared\WindowLayout.cs" />
     <Compile Include="..\Shared\AppearancePreferences.cs" Link="Shared\AppearancePreferences.cs" />
+    <Compile Include="..\Shared\ThemeCatalog.cs" Link="Shared\ThemeCatalog.cs" />
     <Compile Include="..\Shared\WindowThemeSynchronizer.cs" Link="Shared\WindowThemeSynchronizer.cs" />
     <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
     <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
@@ -84,6 +85,7 @@
     <Content Include="..\Assets\Brand\Icon.svg" Link="Assets\Brand\Icon.svg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\Shared\ChatWindow.html" Link="ChatWindow.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\Shared\ArtifactTools.js" Link="ArtifactTools.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Shared\ChatWindow\**\*.*" Link="ChatWindow\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\Vendor\**\*.*" Link="Vendor\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\OCR\tessdata\**\*.*" Link="OCR\tessdata\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
