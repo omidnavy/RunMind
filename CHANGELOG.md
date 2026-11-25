@@ -1,3 +1,21 @@
+## [2.2.6] — Unified runtime themes and first-paint stability (2026-11-15)
+
+### Changed
+- Consolidate each theme into one `Shared/ChatWindow/theme/<id>.css` file. Its `RunMind-Theme` metadata declares the ID, display name, and supported modes (`light`, `dark`, or both); the same file can provide both palettes.
+- Update native theme discovery to read the metadata, validate each declared palette independently, and ignore malformed, unreadable, oversized, or unexpected CSS files without blocking the remaining themes.
+- Update the WebView theme loader to load the selected single-file theme and validate the CSSOM palette before activation. A failed theme is skipped in favor of another valid theme for the requested mode; the previously active stylesheet stays in place during switches.
+- Update Command Palette package validation to verify theme metadata and ensure every theme file is included in the MSIX.
+- Suppress CSS transitions and animations only during initial theme application. The chat remains hidden until a valid theme is ready; normal theme-switch transitions remain available afterward.
+
+### Preserved
+- All existing palette declarations and colors. Paired light/dark palettes were combined without redesign; light-only and dark-only themes remain limited to their declared mode.
+- The built-in Warm Graphite base palette remains the final fallback if no valid dark theme can be loaded.
+- Existing chat UI, native bridge messages, appearance preferences, and all three host integrations.
+
+### Validation
+- CSS consolidation coverage, metadata parsing, per-mode selector/property checks, JavaScript syntax, project XML, manifest/plugin JSON, host resource-copy rules, packaging-script checks, and ZIP integrity were checked.
+- Windows/.NET compilation and live WebView2 initialization/theme-switch tests remain to be run on the target Windows machine.
+
 ## [2.2.5] — Runtime-discovered theme system (2026-11-14)
 
 ### Added

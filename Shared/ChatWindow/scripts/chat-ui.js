@@ -1854,10 +1854,16 @@
         .catch(error => {
           console.warn('RunMind could not load the selected theme; retaining the available fallback.', error);
           const root = document.documentElement;
-          root.dataset.appearanceMode = currentAppearance.mode;
-          root.dataset.theme = effective;
-          root.dataset.colorTheme = themeId;
+          // If no selectable stylesheet could be loaded on first startup, expose the
+          // built-in Warm Graphite tokens from base.css. During a later switch, retain
+          // the previously active stylesheet and its matching root attributes.
+          if (!document.getElementById('activeThemeStylesheet')) {
+            root.dataset.appearanceMode = 'dark';
+            root.dataset.theme = 'dark';
+            root.dataset.colorTheme = 'warm-graphite';
+          }
           root.dataset.themeReady = 'true';
+          finishInitialThemeApplication();
           return false;
         });
       return appearanceStylesheetPromise;

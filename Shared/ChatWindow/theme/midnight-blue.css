@@ -1,0 +1,42 @@
+/* RunMind-Theme: {"id":"midnight-blue","name":"Midnight Blue","modes":["light","dark"]} */
+
+/* Midnight Blue — light palette. */
+:root[data-theme="light"][data-color-theme="midnight-blue"] {
+      color-scheme: light;
+      --color-bg: #edf2fa;
+      --color-surface: #f9fbff;
+      --color-surface-raised: #e3eaf5;
+      --color-surface-hover: #d6e1f0;
+      --color-input: #ffffff;
+      --color-text: #202e43;
+      --color-muted: #5e6f87;
+      --color-accent: #356cc5;
+      --color-accent-contrast: #ffffff;
+      --color-border: #cbd6e5;
+      --color-user-bubble: #dce8fb;
+      --color-assistant-bubble: #f9fbff;
+      --color-danger: #b83d49;
+      --color-success: #28744e;
+      --shadow-panel: 0 12px 36px rgba(27, 47, 79, .10);
+      --shadow-float: 0 3px 12px rgba(27, 47, 79, .08);
+    }
+/* Midnight Blue — dark palette. */
+:root[data-theme="dark"][data-color-theme="midnight-blue"] {
+      color-scheme: dark;
+      --color-bg: #111827;
+      --color-surface: #192436;
+      --color-surface-raised: #24334a;
+      --color-surface-hover: #30435e;
+      --color-input: #141f30;
+      --color-text: #eaf0fa;
+      --color-muted: #a3b2c8;
+      --color-accent: #78aaff;
+      --color-accent-contrast: #101c30;
+      --color-border: #354761;
+      --color-user-bubble: #293d5b;
+      --color-assistant-bubble: #192436;
+      --color-danger: #f08d91;
+      --color-success: #83cba8;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .42);
+      --shadow-float: 0 4px 14px rgba(0, 0, 0, .30);
+    }

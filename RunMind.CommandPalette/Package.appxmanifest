@@ -6,7 +6,7 @@
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap uap3 rescap">
-  <Identity Name="RunMind.CommandPalette" Publisher="CN=Omid Navy" Version="2.2.5.0" />
+  <Identity Name="RunMind.CommandPalette" Publisher="CN=Omid Navy" Version="2.2.6.0" />
   <Properties>
     <DisplayName>RunMind for Command Palette</DisplayName>
     <PublisherDisplayName>Omid Navy</PublisherDisplayName>

@@ -1,19 +1,19 @@
-# RunMind 2.2.5 — Runtime-discovered theme system
+# RunMind 2.2.6 — Unified runtime-discovered themes and startup stability
 
 ## Dynamic theme organization
 
 - `Shared/ChatWindow.html` remains the canonical WebView2 entry page.
 - Shared application CSS remains under `Shared/ChatWindow/styles/`; individual palettes live in `Shared/ChatWindow/theme/`.
-- `theme/base.css` contains the shared fallback tokens. Each selectable palette is a separate `dark-<id>.css` or `light-<id>.css` file.
-- The native `themes.list` operation discovers those files at runtime. The WebView populates the Light and Dark selectors from that response; names are derived from filenames. Adding or removing a theme file does not require editing HTML or JavaScript registries.
-- The active stylesheet is swapped only after the new stylesheet has loaded. The old theme remains active during the load, avoiding an unstyled intermediate frame. The chat page stays hidden during initial theme discovery/loading to avoid a startup flash.
+- `theme/base.css` contains the shared fallback tokens. Each theme is one `<id>.css` file with a `RunMind-Theme` metadata comment declaring its display name and supported modes (`light`, `dark`, or both).
+- The native `themes.list` operation discovers and validates theme metadata at runtime. It emits one catalog entry for each valid mode, so a theme appears in the Light selector, Dark selector, or both. Malformed files are skipped, and a syntactically complete but incomplete palette disables only that mode when another declared palette in the same file remains valid. Adding or removing a theme file does not require editing HTML or JavaScript registries.
+- The active stylesheet is swapped only after the new stylesheet has loaded. The old theme remains active during the load, avoiding an unstyled intermediate frame. The chat page stays hidden during initial theme discovery/loading, and transitions/animations are suppressed only until the first valid palette is applied. Normal transitions remain enabled for later user-initiated theme changes.
 - `Shared/ThemeCatalog.cs` owns safe theme-file discovery and is compiled into all three hosts. The existing wildcard resource-copy rules deploy the complete `ChatWindow` tree to Standalone, PowerToys Run, and Command Palette.
 - `Build-RunMind-CommandPalette.ps1` now verifies that the MSIX contains the runtime theme loader and theme CSS files.
-- Existing theme palette declarations were extracted without redesigning them. The original Warm Graphite root palette remains as the base fallback and as the selectable `dark-warm-graphite.css` theme.
+- Existing theme palette declarations were consolidated without redesigning them. The original Warm Graphite root palette remains the base fallback and the selectable `warm-graphite.css` theme.
 
 ## Validation status
 
-JavaScript syntax, theme filename/selector matching, CSS extraction coverage, project XML, package metadata, resource-copy rules, and ZIP integrity were checked. A Windows/.NET build and live WebView2 test remain outstanding because the .NET SDK and Windows runtime are unavailable in this environment.
+The 28 original mode-specific palette declarations were preserved and consolidated into 19 theme files. JavaScript syntax, theme metadata and selector matching, per-mode fallback behavior for incomplete palettes, browser CSSOM/color/shadow validation, project XML, package metadata, resource-copy rules, and ZIP integrity were checked. A Windows/.NET build and live WebView2 test remain outstanding because the .NET SDK and Windows runtime are unavailable in this environment.
 
 ## Previous release: RunMind 2.2.4 — PowerToys Run chat handoff isolation
 

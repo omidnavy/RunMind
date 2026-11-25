@@ -29,3 +29,12 @@
 
 /* Keep the page hidden until the runtime-selected theme is ready. */
 html[data-theme-ready="false"] body { visibility: hidden; }
+
+/* Prevent a default-to-saved palette transition during first paint only. */
+html[data-theme-initializing="true"],
+html[data-theme-initializing="true"] *,
+html[data-theme-initializing="true"] *::before,
+html[data-theme-initializing="true"] *::after {
+  transition: none !important;
+  animation: none !important;
+}

@@ -2,9 +2,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace RunMind.Shared;
@@ -12,14 +13,32 @@ namespace RunMind.Shared;
 internal sealed record ThemeDefinition(string Id, string Name, string Mode, string FileName, string Version);
 
 /// <summary>
-/// Discovers self-contained light/dark CSS themes deployed beside the chat page.
-/// Theme filenames are the catalog: light-&lt;id&gt;.css and dark-&lt;id&gt;.css.
+/// Discovers self-contained theme files. Each file declares its identity and supported
+/// appearance modes in a RunMind-Theme comment; malformed files/modes are ignored.
 /// </summary>
 internal static class ThemeCatalog
 {
+    private const int MaximumThemeBytes = 512 * 1024;
     private static readonly Regex ThemeFilePattern = new(
-        "^(?<mode>light|dark)-(?<id>[a-z0-9]+(?:-[a-z0-9]+)*)\\.css$",
+        "^(?<id>[a-z0-9]+(?:-[a-z0-9]+)*)\\.css$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex MetadataPattern = new(
+        @"\A\s*/\*\s*RunMind-Theme:\s*(?<json>\{[\s\S]{1,2048}?\})\s*\*/",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex CommentPattern = new(
+        @"/\*[\s\S]*?\*/",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex PaletteRulePattern = new(
+        @":root\s*\[\s*data-theme\s*=\s*""(?<mode>light|dark)""\s*\]\s*\[\s*data-color-theme\s*=\s*""(?<id>[a-z0-9]+(?:-[a-z0-9]+)*)""\s*\]\s*\{(?<body>[^{}]*)\}",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly string[] RequiredPaletteProperties =
+    {
+        "--color-bg", "--color-surface", "--color-surface-raised", "--color-surface-hover",
+        "--color-input", "--color-text", "--color-muted", "--color-accent",
+        "--color-accent-contrast", "--color-border", "--color-user-bubble",
+        "--color-assistant-bubble", "--color-danger", "--color-success",
+        "--shadow-panel", "--shadow-float",
+    };
 
     public static IReadOnlyList<ThemeDefinition> Discover()
     {
@@ -39,25 +58,23 @@ internal static class ThemeCatalog
         {
             try
             {
+                if (IsReparsePoint(path)) continue;
                 var fileName = Path.GetFileName(path);
-                var match = ThemeFilePattern.Match(fileName);
-                if (!match.Success || IsReparsePoint(path)) continue;
+                var fileMatch = ThemeFilePattern.Match(fileName);
+                if (!fileMatch.Success) continue;
 
-                var mode = match.Groups["mode"].Value.ToLowerInvariant();
-                var id = match.Groups["id"].Value.ToLowerInvariant();
                 var info = new FileInfo(path);
-                if (info.Length is <= 0 or > 512 * 1024) continue;
+                if (info.Length is <= 0 or > MaximumThemeBytes) continue;
+                var css = File.ReadAllText(path, new UTF8Encoding(false, true));
+                if (!TryReadTheme(css, fileMatch.Groups["id"].Value, out var id, out var name, out var modes)) continue;
 
-                themes.Add(new ThemeDefinition(
-                    id,
-                    Humanize(id),
-                    mode,
-                    fileName,
-                    $"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}"));
+                var version = $"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}";
+                foreach (var mode in modes)
+                    themes.Add(new ThemeDefinition(id, name, mode, fileName, version));
             }
             catch
             {
-                // Ignore an individual theme that disappears or becomes unreadable during discovery.
+                // A malformed, unreadable, or concurrently removed theme never blocks discovery.
             }
         }
 
@@ -69,15 +86,96 @@ internal static class ThemeCatalog
             .ToArray();
     }
 
+    private static bool TryReadTheme(
+        string css,
+        string expectedId,
+        out string id,
+        out string name,
+        out IReadOnlyList<string> modes)
+    {
+        id = string.Empty;
+        name = string.Empty;
+        modes = Array.Empty<string>();
+        var metadataMatch = MetadataPattern.Match(css);
+        if (!metadataMatch.Success) return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(metadataMatch.Groups["json"].Value, new JsonDocumentOptions { MaxDepth = 4 });
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("id", out var idElement) || idElement.ValueKind != JsonValueKind.String
+                || !root.TryGetProperty("name", out var nameElement) || nameElement.ValueKind != JsonValueKind.String
+                || !root.TryGetProperty("modes", out var modesElement) || modesElement.ValueKind != JsonValueKind.Array)
+                return false;
+
+            id = idElement.GetString() ?? string.Empty;
+            name = nameElement.GetString() ?? string.Empty;
+            if (!string.Equals(id, expectedId, StringComparison.Ordinal)
+                || name.Length is < 1 or > 64
+                || name.Any(char.IsControl)) return false;
+
+            var declaredModes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in modesElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.String) return false;
+                var mode = item.GetString();
+                if (mode is not ("light" or "dark") || !declaredModes.Add(mode)) return false;
+            }
+            if (declaredModes.Count is < 1 or > 2) return false;
+
+            // Validate each declared palette block. Only self-scoped root palette rules
+            // are accepted; extra selectors or malformed blocks invalidate that file.
+            var withoutComments = CommentPattern.Replace(css, string.Empty);
+            var rules = PaletteRulePattern.Matches(withoutComments);
+            var foundModes = new HashSet<string>(StringComparer.Ordinal);
+            var invalidModes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (Match rule in rules)
+            {
+                var mode = rule.Groups["mode"].Value.ToLowerInvariant();
+                var ruleId = rule.Groups["id"].Value;
+                if (!declaredModes.Contains(mode) || !string.Equals(ruleId, id, StringComparison.Ordinal))
+                    return false;
+                if (!foundModes.Add(mode) || !HasRequiredProperties(rule.Groups["body"].Value, mode))
+                {
+                    invalidModes.Add(mode);
+                    continue;
+                }
+            }
+
+            // A syntactically complete but incomplete palette only disables that mode;
+            // a malformed/unexpected remainder invalidates the file to avoid CSS injection.
+            var remainder = PaletteRulePattern.Replace(withoutComments, string.Empty);
+            if (!string.IsNullOrWhiteSpace(remainder)) return false;
+            var validModes = foundModes.Except(invalidModes).ToArray();
+            if (validModes.Length == 0) return false;
+
+            modes = validModes.OrderBy(mode => mode, StringComparer.Ordinal).ToArray();
+            return true;
+        }
+        catch
+        {
+            id = string.Empty;
+            name = string.Empty;
+            modes = Array.Empty<string>();
+            return false;
+        }
+    }
+
+    private static bool HasRequiredProperties(string body, string mode)
+    {
+        foreach (var property in RequiredPaletteProperties)
+        {
+            var pattern = $@"(?:^|;)\s*{Regex.Escape(property)}\s*:\s*[^;{{}}]+;?";
+            if (!Regex.IsMatch(body, pattern, RegexOptions.CultureInvariant | RegexOptions.Multiline)) return false;
+        }
+        var colorScheme = Regex.Match(body, @"(?:^|;)\s*color-scheme\s*:\s*(?<value>light|dark)\s*;?", RegexOptions.CultureInvariant | RegexOptions.Multiline);
+        return colorScheme.Success && string.Equals(colorScheme.Groups["value"].Value, mode, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsReparsePoint(string path)
     {
         try { return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0; }
         catch { return true; }
-    }
-
-    private static string Humanize(string id)
-    {
-        return string.Join(" ", id.Split('-', StringSplitOptions.RemoveEmptyEntries)
-            .Select(part => part.Length == 0 ? part : char.ToUpper(part[0], CultureInfo.InvariantCulture) + part[1..]));
     }
 }

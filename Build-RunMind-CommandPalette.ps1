@@ -168,17 +168,45 @@ try {
             }
         }
         $themeDirectory = Join-Path $root 'Shared\ChatWindow\theme'
-        $sourceThemeFiles = @(Get-ChildItem -LiteralPath $themeDirectory -Filter '*.css' -File)
-        $darkThemeEntries = @($entryNames | Where-Object { $_ -match '^ChatWindow/theme/dark-[a-z0-9]+(?:-[a-z0-9]+)*\.css$' })
-        $lightThemeEntries = @($entryNames | Where-Object { $_ -match '^ChatWindow/theme/light-[a-z0-9]+(?:-[a-z0-9]+)*\.css$' })
-        if ($darkThemeEntries.Count -lt 1 -or $lightThemeEntries.Count -lt 1) {
-            throw "The generated MSIX must contain at least one dynamically discovered dark theme and one light theme."
-        }
+        $sourceThemeFiles = @(Get-ChildItem -LiteralPath $themeDirectory -Filter '*.css' -File | Where-Object { $_.Name -ne 'base.css' })
+        $declaredModes = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
         foreach ($themeFile in $sourceThemeFiles) {
             $themeEntry = 'ChatWindow/theme/' + $themeFile.Name
             if ($entryNames -notcontains $themeEntry) {
                 throw "The generated MSIX is missing theme '$($themeFile.Name)'."
             }
+            try { $themeCss = Get-Content -LiteralPath $themeFile.FullName -Raw -ErrorAction Stop }
+            catch {
+                Write-Warning "Ignoring unreadable theme '$($themeFile.Name)' in package validation; runtime discovery will skip it."
+                continue
+            }
+            $metadataMatch = [regex]::Match($themeCss, '(?s)^\s*/\*\s*RunMind-Theme:\s*(\{.{1,2048}?\})\s*\*/')
+            if (-not $metadataMatch.Success) {
+                Write-Warning "Ignoring malformed theme '$($themeFile.Name)' in package validation; runtime discovery will skip it."
+                continue
+            }
+            try { $metadata = $metadataMatch.Groups[1].Value | ConvertFrom-Json -ErrorAction Stop }
+            catch {
+                Write-Warning "Ignoring theme '$($themeFile.Name)' with malformed metadata; runtime discovery will skip it."
+                continue
+            }
+            if ($themeFile.BaseName -ne $metadata.id -or -not $metadata.modes) {
+                Write-Warning "Ignoring theme '$($themeFile.Name)' whose metadata does not match its filename."
+                continue
+            }
+            foreach ($mode in @($metadata.modes)) {
+                if ($mode -notin @('light', 'dark')) {
+                    Write-Warning "Ignoring unsupported '$mode' palette in theme '$($themeFile.Name)'."
+                    continue
+                }
+                $selector = ':root\s*\[\s*data-theme\s*=\s*"' + [regex]::Escape([string]$mode) + '"\s*\]\s*\[\s*data-color-theme\s*=\s*"' + [regex]::Escape([string]$metadata.id) + '"\s*\]\s*\{'
+                if ([regex]::IsMatch($themeCss, $selector, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                    [void]$declaredModes.Add([string]$mode)
+                }
+            }
+        }
+        if (-not $declaredModes.Contains('dark') -or -not $declaredModes.Contains('light')) {
+            throw 'The generated MSIX must contain at least one valid dark theme and one valid light theme.'
         }
 
         $manifestEntry = $archive.GetEntry('AppxManifest.xml')

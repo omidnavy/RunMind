@@ -21,7 +21,25 @@ RunMind is available through three Windows entry points:
 - Create and manage conversation branches, compare branch responses with AI, and continue a separate discussion about a comparison without changing the original branches.
 - Start a fresh conversation in the current or a separate window, and save or reopen conversations in RunMind's `.runmind` format.
 - Choose from curated light and dark palettes, use Windows System appearance, and move or resize open toolbar flyouts.
-- Themes are discovered at runtime from `Shared/ChatWindow/theme/`. Add a `dark-<id>.css` or `light-<id>.css` file with the matching `data-color-theme` selector; RunMind derives the display name from the filename and adds it to the corresponding selector automatically. Remove the file to remove that theme. No HTML or JavaScript theme registry needs editing. The normal build/deployment copies the complete theme folder to all three hosts.
+- Themes are discovered at runtime from `Shared/ChatWindow/theme/`. Add one `<id>.css` file with a `RunMind-Theme` metadata comment declaring its `id`, `name`, and supported `modes` (`light`, `dark`, or both), plus the matching palette rules. Remove the file to remove that theme. No HTML or JavaScript theme registry or build-time catalog is needed. Malformed themes are skipped independently. The normal build/deployment copies the complete theme folder to all three hosts.
+
+Example theme header:
+
+```css
+/* RunMind-Theme: {"id":"ocean","name":"Ocean","modes":["light","dark"]} */
+
+:root[data-theme="light"][data-color-theme="ocean"] {
+  color-scheme: light;
+  /* Define the light palette tokens. */
+}
+
+:root[data-theme="dark"][data-color-theme="ocean"] {
+  color-scheme: dark;
+  /* Define the dark palette tokens. */
+}
+```
+
+For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
 
 ## Built-in capabilities and tool catalog
 

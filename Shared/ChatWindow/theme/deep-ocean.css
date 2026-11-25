@@ -1,0 +1,42 @@
+/* RunMind-Theme: {"id":"deep-ocean","name":"Deep Ocean","modes":["light","dark"]} */
+
+/* Deep Ocean — light palette. */
+:root[data-theme="light"][data-color-theme="deep-ocean"] {
+      color-scheme: light;
+      --color-bg: #edf6f5;
+      --color-surface: #f9fdfc;
+      --color-surface-raised: #e0efed;
+      --color-surface-hover: #cfe5e2;
+      --color-input: #ffffff;
+      --color-text: #203536;
+      --color-muted: #5d7777;
+      --color-accent: #267f83;
+      --color-accent-contrast: #ffffff;
+      --color-border: #c7dcda;
+      --color-user-bubble: #d8eeeb;
+      --color-assistant-bubble: #f9fdfc;
+      --color-danger: #b54c48;
+      --color-success: #337a56;
+      --shadow-panel: 0 12px 36px rgba(25, 66, 65, .10);
+      --shadow-float: 0 3px 12px rgba(25, 66, 65, .08);
+    }
+/* Deep Ocean — dark palette. */
+:root[data-theme="dark"][data-color-theme="deep-ocean"] {
+      color-scheme: dark;
+      --color-bg: #101c20;
+      --color-surface: #17272b;
+      --color-surface-raised: #20383d;
+      --color-surface-hover: #2b484d;
+      --color-input: #122125;
+      --color-text: #e5f3f2;
+      --color-muted: #9eb9b9;
+      --color-accent: #65c9ce;
+      --color-accent-contrast: #102326;
+      --color-border: #345257;
+      --color-user-bubble: #234348;
+      --color-assistant-bubble: #17272b;
+      --color-danger: #ee918b;
+      --color-success: #88c9a5;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .42);
+      --shadow-float: 0 4px 14px rgba(0, 0, 0, .30);
+    }

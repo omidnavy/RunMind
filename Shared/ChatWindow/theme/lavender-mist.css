@@ -1,0 +1,42 @@
+/* RunMind-Theme: {"id":"lavender-mist","name":"Lavender Mist","modes":["light","dark"]} */
+
+/* Lavender Mist — light palette. */
+:root[data-theme="light"][data-color-theme="lavender-mist"] {
+      color-scheme: light;
+      --color-bg: #f4f1f4;
+      --color-surface: #fcfafc;
+      --color-surface-raised: #ebe5eb;
+      --color-surface-hover: #ded5df;
+      --color-input: #ffffff;
+      --color-text: #37303a;
+      --color-muted: #796e7b;
+      --color-accent: #896d87;
+      --color-accent-contrast: #ffffff;
+      --color-border: #ded4df;
+      --color-user-bubble: #eee5ed;
+      --color-assistant-bubble: #fcfafc;
+      --color-danger: #b34b50;
+      --color-success: #4b7957;
+      --shadow-panel: 0 12px 36px rgba(57, 43, 59, .09);
+      --shadow-float: 0 3px 12px rgba(57, 43, 59, .07);
+    }
+/* Lavender Mist — dark palette. */
+:root[data-theme="dark"][data-color-theme="lavender-mist"] {
+      color-scheme: dark;
+      --color-bg: #211e27;
+      --color-surface: #2b2732;
+      --color-surface-raised: #383340;
+      --color-surface-hover: #484250;
+      --color-input: #25212c;
+      --color-text: #eeeaf0;
+      --color-muted: #b9b0c0;
+      --color-accent: #c0a8bd;
+      --color-accent-contrast: #302634;
+      --color-border: #504858;
+      --color-user-bubble: #403644;
+      --color-assistant-bubble: #2b2732;
+      --color-danger: #ef9292;
+      --color-success: #9bc7a8;
+      --shadow-panel: 0 16px 42px rgba(0, 0, 0, .40);
+      --shadow-float: 0 4px 14px rgba(0, 0, 0, .28);
+    }

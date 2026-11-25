@@ -53,7 +53,7 @@ internal static class AppearancePreferenceStore
             + "const mode = ['system','light','dark'].includes(a.mode) ? a.mode : 'system'; "
             + "const light = typeof a.lightTheme === 'string' ? a.lightTheme : 'classic-light'; "
             + "const dark = typeof a.darkTheme === 'string' ? a.darkTheme : 'warm-graphite'; "
-            + "const apply = () => { const root = document.documentElement; if (!root) return false; "
+            + "const apply = () => { const root = document.documentElement; if (!root) return false; root.dataset.themeInitializing = 'true'; root.dataset.themeReady = 'false'; "
             + "const effective = mode === 'system' ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode; "
             + "root.dataset.appearanceMode = mode; root.dataset.theme = effective; root.dataset.colorTheme = effective === 'dark' ? dark : light; return true; }; "
             + "if (!apply()) { const observer = new MutationObserver(() => { if (apply()) observer.disconnect(); }); observer.observe(document, { childList: true, subtree: true }); } })();";
