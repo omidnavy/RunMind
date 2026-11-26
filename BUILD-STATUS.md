@@ -143,3 +143,25 @@ The user reported two remaining visual defects in the Runner settings/launcher U
 - **Launcher search input:** the primary inline search TextBox is now 52 DIPs high with zero extra vertical padding, centered content, and explicit ClearType text rendering. The surrounding 68-DIP search surface remains unchanged.
 
 Validation on the current source: **282/282** full Node regression tests; **57/57** JavaScript syntax checks; **12/12** XML/XAML/project/manifest parse checks. The final archive is tested again after extraction. Windows/.NET compilation and interactive WPF rendering remain pending because this environment has no Windows desktop runtime or .NET SDK.
+
+## Follow-up: compact launcher, quick starts and direction-aware growth
+
+The latest user review requested direction-aware expansion, removal of redundant launcher labels, a more compact search input and a useful empty state. The current source now includes:
+
+- Removed the `RUNNER · QUICK AI` subtitle, the plugin inventory tagline and the `RUNMIND ↵` chip inside the search field.
+- Reduced default width to 680 DIPs. The search row is 54 DIPs high and the TextBox is 40 DIPs with 17-DIP text, transparent background and centered text/caret.
+- Empty query state shows four clickable quick-start suggestions: Notepad, Calculator, RunMind and a website. RunMind's suggestion respects the user's global-mode or configured action-keyword setting, and checks whether the RunMind plugin is enabled before populating the query.
+- A non-empty query with no matches collapses the results panel. A matching query shows only the unified results list without an additional Results heading/count row.
+- Dynamic height uses the current window's monitor and physical bounds. If the window center is in the lower half of the work area, it keeps the old bottom edge and expands upward; in the upper half it keeps the old top edge and expands downward. The adjusted window is clamped to the monitor work area.
+- Added source-level regression tests for these behaviors.
+
+Latest portable validation on this source tree:
+
+- Full regression suite: **285/285 passed** (`node --test`).
+- Runner-specific contract and window UX tests: **30/30 passed**.
+- XML/XAML/project/manifest parsing: **12/12 passed**.
+- JSON parsing: **4/4 passed**.
+- MainWindow XAML event-handler references: **12 unique handlers verified**.
+- Obsolete launcher labels: **0 remain**.
+
+Node.js version: 22.16.0. This environment does not provide the .NET SDK/MSBuild or Windows Desktop runtime. Consequently, the updated WPF/C# source has not been compiled or visually exercised on Windows. Re-run `Build-Release-x64.bat` and complete the Windows acceptance checks for lower-half window growth, no-match behavior, suggestion actions and 100–200% DPI scaling before accepting this change.

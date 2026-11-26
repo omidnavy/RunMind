@@ -35,7 +35,7 @@ test('Runner automatically sizes to result count but permits a fixed user-sized 
   const code = await read('RunMind.Runner/MainWindow.xaml.cs');
   const ui = await read('RunMind.Runner/RunnerSettingsWindow.xaml');
   assert.match(settings, /AutoResizeToResults\s*\{\s*get;\s*set;\s*\}\s*=\s*true/);
-  assert.match(code, /UpdateWindowHeightForResults\(query\.Length == 0\)/);
+  assert.match(code, /UpdateWindowHeightForResults\(isInitialState\)/);
   assert.match(code, /Math\.Clamp\(_results\.Count, 0, 8\)/);
   assert.match(code, /if \(!_settings\.AutoResizeToResults\) return/);
   assert.match(ui, /AutoResizeToResultsCheckBox/);
@@ -80,7 +80,7 @@ test('Runner text inputs and ComboBox popup use consistent themed dimensions and
   assert.match(app, /<Style TargetType="ComboBox">[\s\S]*?<Setter Property="Height" Value="38" \/>/);
   assert.match(app, /<Popup x:Name="PART_Popup"[\s\S]*?Background="\{DynamicResource RunnerSurface\}"/);
   assert.match(app, /SelectionTextBrush="\{DynamicResource RunnerAccentContrast\}"/);
-  assert.match(main, /SearchBox" Height="52" MinHeight="52"/);
+  assert.match(main, /SearchBox" Height="40" MinHeight="40"/);
   assert.match(main, /Padding="0" FocusVisualStyle="\{x:Null\}"/);
 });
 
@@ -97,9 +97,44 @@ test('Runner inline search input has a consistent centered height without extra 
   const main = await read('RunMind.Runner/MainWindow.xaml');
   const match = main.match(/<TextBox x:Name="SearchBox"[\s\S]*?\/>/);
   assert.ok(match, 'Runner search TextBox exists');
-  assert.match(match[0], /Height="52" MinHeight="52"/);
+  assert.match(match[0], /Height="40" MinHeight="40"/);
   assert.match(match[0], /VerticalContentAlignment="Center"/);
   assert.match(match[0], /Padding="0"/);
   assert.match(match[0], /TextRenderingMode="ClearType"/);
   assert.doesNotMatch(match[0], /Padding="0,4"/);
+});
+
+
+test('Runner removes redundant branding and renders a compact unified search field', async () => {
+  const xaml = await read('RunMind.Runner/MainWindow.xaml');
+  const search = xaml.match(/<TextBox x:Name="SearchBox"[\s\S]*?\/>/);
+  assert.ok(search);
+  assert.doesNotMatch(xaml, /QUICK AI|One search ·|RUNMIND  ↵/);
+  assert.match(xaml, /Text="RUNMIND"/);
+  assert.match(search[0], /FontSize="17"/);
+  assert.match(search[0], /Height="40" MinHeight="40"/);
+  assert.match(xaml, /Text="Search anything…"/);
+});
+
+test('Runner empty state provides actionable quick starts and hides results for no-match queries', async () => {
+  const xaml = await read('RunMind.Runner/MainWindow.xaml');
+  const code = await read('RunMind.Runner/MainWindow.xaml.cs');
+  assert.match(xaml, /x:Name="ResultsPanel"[\s\S]*?Visibility="Collapsed"/);
+  assert.match(xaml, /Text="Try something"/);
+  for (const tag of ['notepad', '12 * 8', '__runmind_suggestion__', 'https://example.com'])
+    assert.ok(xaml.includes(`Tag="${tag}"`), `missing quick-start suggestion ${tag}`);
+  assert.match(code, /ResultsPanel\.Visibility = isInitialState \|\| hasResults \? Visibility\.Visible : Visibility\.Collapsed/);
+  assert.match(code, /EmptyState\.Visibility = isInitialState \? Visibility\.Visible : Visibility\.Collapsed/);
+  assert.match(code, /Suggestion_Click/);
+  assert.match(code, /_settings\.RunMindGlobalMode[\s\S]*_settings\.RunMindActionKeyword/);
+});
+
+test('Runner expands upward when its current position is in the lower half of the monitor', async () => {
+  const code = await read('RunMind.Runner/MainWindow.xaml.cs');
+  assert.match(code, /Forms\.Screen\.FromHandle\(handle\)/);
+  assert.match(code, /GetWindowRect\(handle, out previousBounds\)/);
+  assert.match(code, /previousBounds\.Top[\s\S]*?workingArea\.Top \+ \(workingArea\.Height \/ 2\)/);
+  assert.match(code, /previousBounds\.Bottom - newHeightPixels/);
+  assert.match(code, /Math\.Clamp\(targetY, workingArea\.Top/);
+  assert.match(code, /GetWindowRect\(IntPtr hwnd, out NativeRect rectangle\)/);
 });

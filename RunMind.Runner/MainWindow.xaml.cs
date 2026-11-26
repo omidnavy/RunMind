@@ -202,27 +202,48 @@ public partial class MainWindow : Window
         foreach (var result in _pluginRegistry.Search(query, enabled, _settings.RunMindGlobalMode,
                      _settings.RunMindActionKeyword, _settings.PluginWeights)) _results.Add(result);
 
-        if (_results.Count == 0)
-        {
-            EmptyState.Visibility = Visibility.Visible;
-            ResultCountText.Text = _catalogLoaded ? "No matches" : "Indexing apps…";
-        }
-        else
-        {
-            EmptyState.Visibility = Visibility.Collapsed;
-            ResultCountText.Text = $"{_results.Count} found";
-        }
-        ResultsList.SelectedIndex = _results.Count > 0 ? 0 : -1;
-        UpdateWindowHeightForResults(query.Length == 0);
-        if (query.Length == 0)
+        var isInitialState = query.Length == 0;
+        var hasResults = _results.Count > 0;
+        ResultsPanel.Visibility = isInitialState || hasResults ? Visibility.Visible : Visibility.Collapsed;
+        ResultsList.Visibility = hasResults ? Visibility.Visible : Visibility.Collapsed;
+        EmptyState.Visibility = isInitialState ? Visibility.Visible : Visibility.Collapsed;
+        ResultsList.SelectedIndex = hasResults ? 0 : -1;
+
+        if (!isInitialState && !hasResults)
+            StatusText.Text = _catalogLoaded ? "No matches · Try another search or press Esc to clear" : "Searching applications…";
+        else if (isInitialState)
+            StatusText.Text = _hotkeyStatus ?? $"Esc to hide  ·  Enter to open  ·  {_settings.Hotkey} to summon";
+
+        UpdateWindowHeightForResults(isInitialState);
+        if (isInitialState)
         {
             InlineStatusText.Text = "Inline assistant · Ollama / LM Studio";
-            InlineAnswerText.Text = "Type llm followed by a question to get an inline answer. Ordinary searches stay local to the launcher.";
+            InlineAnswerText.Text = "Type your question to get an inline answer.";
             InlineAnswerText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerMuted");
             InlineModelText.Text = string.IsNullOrWhiteSpace(_inlineSettings.Model)
                 ? "Set a model in Settings to enable inline answers"
                 : $"{(_inlineSettings.Provider == "lmstudio" ? "LM Studio" : "Ollama")} · {_inlineSettings.Model}";
         }
+    }
+
+    private void Suggestion_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string tag }) return;
+        if (tag == "__runmind_suggestion__" &&
+            (!_inlineSettings.Enabled || !_settings.EnabledPlugins.Contains("runmind", StringComparer.Ordinal)))
+        {
+            StatusText.Text = "Enable the RunMind launcher plugin in Settings to use inline answers.";
+            return;
+        }
+
+        var query = tag == "__runmind_suggestion__"
+            ? (_settings.RunMindGlobalMode
+                ? "What can you help me with?"
+                : $"{_settings.RunMindActionKeyword} What can you help me with?")
+            : tag;
+        SearchBox.Text = query;
+        SearchBox.Focus();
+        SearchBox.CaretIndex = SearchBox.Text.Length;
     }
 
     private void ScheduleInlineGeneration(string query)
@@ -540,22 +561,55 @@ public partial class MainWindow : Window
         try
         {
             var visibleRows = emptyQuery ? 0 : Math.Clamp(_results.Count, 0, 8);
-            var resultAreaHeight = emptyQuery || visibleRows == 0 ? 88 : 48 + visibleRows * 54;
-            var targetHeight = 218 + resultAreaHeight;
-            var cursorPoint = Forms.Cursor.Position;
-            var screen = _settings.OpenOnActiveMonitor
-                ? Forms.Screen.FromPoint(cursorPoint)
-                : Forms.Screen.PrimaryScreen ?? Forms.Screen.FromPoint(cursorPoint);
-            var dpi = GetMonitorDpi(screen);
-            var scale = dpi / 96d;
-            var maximumHeight = Math.Max(190, screen.WorkingArea.Height / scale - 56);
+            var contentHeight = emptyQuery ? 150 : visibleRows > 0 ? 16 + visibleRows * 56 : 0;
+            const double compactWindowHeight = 184;
+            var targetHeight = compactWindowHeight + contentHeight;
+
+            var handle = new WindowInteropHelper(this).Handle;
+            var screen = handle != IntPtr.Zero && IsVisible
+                ? Forms.Screen.FromHandle(handle)
+                : GetConfiguredTargetScreen();
+            var workingArea = screen.WorkingArea;
+            var scale = GetMonitorDpi(screen) / 96d;
+            var maximumHeight = Math.Max(MinHeight, workingArea.Height / scale - 24);
+            var targetHeightDip = Math.Min(targetHeight, maximumHeight);
+
+            var previousBounds = default(NativeRect);
+            var hasPreviousBounds = handle != IntPtr.Zero && GetWindowRect(handle, out previousBounds);
+            var anchorToBottom = hasPreviousBounds &&
+                previousBounds.Top + ((previousBounds.Bottom - previousBounds.Top) / 2) >=
+                workingArea.Top + (workingArea.Height / 2);
+
             MaxHeight = maximumHeight;
-            Height = Math.Min(targetHeight, maximumHeight);
+            Height = targetHeightDip;
+            UpdateLayout();
+
+            // Preserve the top edge in the upper half of the display. In the lower half,
+            // preserve the bottom edge so additional results expand upward instead.
+            if (hasPreviousBounds && GetWindowRect(handle, out var resizedBounds))
+            {
+                var newHeightPixels = resizedBounds.Bottom - resizedBounds.Top;
+                var newWidthPixels = resizedBounds.Right - resizedBounds.Left;
+                var targetY = anchorToBottom
+                    ? previousBounds.Bottom - newHeightPixels
+                    : previousBounds.Top;
+                targetY = Math.Clamp(targetY, workingArea.Top, Math.Max(workingArea.Top, workingArea.Bottom - newHeightPixels));
+                var targetX = Math.Clamp(previousBounds.Left, workingArea.Left, Math.Max(workingArea.Left, workingArea.Right - newWidthPixels));
+                SetWindowPos(handle, IntPtr.Zero, targetX, targetY, 0, 0, SwpNoSize | SwpNoZOrder | SwpNoActivate);
+            }
         }
         catch
         {
             Height = Math.Clamp(Height, MinHeight, 700);
         }
+    }
+
+    private Forms.Screen GetConfiguredTargetScreen()
+    {
+        var cursorPoint = Forms.Cursor.Position;
+        return _settings.OpenOnActiveMonitor
+            ? Forms.Screen.FromPoint(cursorPoint)
+            : Forms.Screen.PrimaryScreen ?? Forms.Screen.FromPoint(cursorPoint);
     }
 
     private static uint GetMonitorDpi(Forms.Screen screen)
@@ -590,6 +644,19 @@ public partial class MainWindow : Window
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rectangle);
 
     private void CreateTrayIcon()
     {
