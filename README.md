@@ -1,428 +1,156 @@
-# RunMind
+<h1 align="center">RunMind</h1>
 
-**A local-first AI workspace for Windows.** RunMind connects local language models and OpenAI-compatible providers to a chat application that can research the web, work with files, analyze data, create documents and visual assets, and coordinate multi-step tasks—with user approval for operations that change your workspace.
+<p align="center">
+  <strong>Understand your projects. Take control of your systems.</strong><br>
+  A local-first AI workspace for Windows — bringing chat, research, developer intelligence, and system management together.
+</p>
 
-![Screenshot](screenshots/Screenshot-1.png)
+<p align="center">
+  <sub>Windows 11 x64&nbsp; · &nbsp;.NET 10&nbsp; · &nbsp;C# / JavaScript&nbsp; · &nbsp;MIT License</sub>
+</p>
 
-RunMind is available through four Windows entry points:
+<p align="center">
+  <img src="screenshots/README-Workspace.png" alt="RunMind chat workspace" width="920">
+</p>
 
-- **Standalone Windows app** — a full chat window that can be launched independently, with support for multiple windows.
-- **RunMind Runner (optional)** — a separate native launcher with a global shortcut, plugin-based search, application/file/folder/URL actions, a safe Calculator plugin, and the real RunMind inline-answer plugin activated with `llm <prompt>`. It includes its own Ollama/LM Studio inline profile, DPAPI-protected credentials, lazy shared RunMind chat, shared themes, tray lifecycle and independent installer. It does not require PowerToys. Quick Agentic Mode is a later shared milestone. See `docs/RUNNER-IMPLEMENTATION.md`.
-- **PowerToys Run plugin** — start a RunMind conversation directly from PowerToys Run using `llm <prompt>` or search for RunMind. The retained inline query can be opened in multiple independent chat windows, including after the first window takes over an in-progress answer.
-- **PowerToys Command Palette extension** — an independent host with a branded **RunMind** inline fallback, **Open chat with empty context**, and an extension settings page for the shared provider/model configuration. The fallback streams local model answers directly into a Command Palette conversation page and supports follow-up turns. It starts its own chat process from the packaged Command Palette executable and hosts the canonical shared chat UI; it does not launch or require the Standalone executable. Inline settings are shared with PowerToys Run. The helper package is hidden from Start and Windows Search because it is a COM host, not a separately launchable app. `Build-Release-x64.bat` builds the three existing Release x64 hosts, publishes the optional Runner, and creates/signs the Command Palette MSIX without installing any host. `Install-RunMind-PowerToys-Run.bat` separately installs the already-built PowerToys Run plugin after checking that PowerToys is closed; `Install-RunMind-CommandPalette.bat` separately installs or uninstalls the already-built Command Palette package. `Install-RunMind-Runner.ps1` independently installs Runner for the current user.
+RunMind is built for more than asking a model a question. It gives local and OpenAI-compatible models a practical workspace: understand a codebase, investigate a problem, work with files and data, run approved development tools, research a topic, or inspect the health of a Windows machine.
 
-## What you can do with RunMind
+Use the full workspace when a task needs context and tools. Use one of the lightweight launchers when you just need to find something or ask a quick question. Your model connection, workspace access, and permissions stay under your control.
 
-- Chat with local models hosted by Ollama or LM Studio, or connect additional OpenAI-compatible endpoints.
-- Switch between configured providers and models, including custom API keys and authentication headers.
-- Ask questions, work through code and technical problems, inspect images and documents, and use model tool-calling capabilities.
-- Use **Agent Mode** for multi-step tasks that combine web research, workspace files, data processing, artifact creation, Git operations, approved PowerShell/native execution, on-demand Agent Skills, a Global/Project Skills Manager, and organized Agent Settings for Agent, Project, Skills, and Security, plus a dedicated Windows System Manager flyout. Tall flyouts remain anchored to their toolbar buttons.
-- Use **Deep Research** for structured investigations with editable plans, source collection, evidence notes, checkpoints, and report export.
-- Connect external **Model Context Protocol (MCP)** servers over Streamable HTTP to make their tools, resources, and prompts available to RunMind.
-- Create and manage conversation branches, compare branch responses with AI, and continue a separate discussion about a comparison without changing the original branches.
-- Start a fresh conversation in the current or a separate window, and save or reopen conversations in RunMind's `.runmind` format.
-- Choose from curated light and dark palettes, use Windows System appearance, and move or resize open toolbar flyouts.
-- Themes are discovered at runtime from `Shared/ChatWindow/theme/`. Add one `<id>.css` file with a `RunMind-Theme` metadata comment declaring its `id`, `name`, and supported `modes` (`light`, `dark`, or both), plus the matching palette rules. Remove the file to remove that theme. No HTML or JavaScript theme registry or build-time catalog is needed. Malformed themes are skipped independently. The normal build/deployment copies the complete theme folder to all three hosts.
+## One workspace. Four ways to open it.
 
-Example theme header:
+| Host | Best for | What it provides |
+|---|---|---|
+| **Standalone** | The complete RunMind experience | A native Windows desktop app with the full chat, Agent, Deep Research, project tools, and System Manager. No PowerToys required. |
+| **PowerToys Run** | Fast access from search | Search for RunMind or enter `llm <prompt>` for an inline model answer, then continue in the full workspace. |
+| **Command Palette** | A keyboard-first workflow | Inline model answers and a RunMind chat experience hosted inside the Command Palette extension. |
+| **RunMind Runner** | A separate, lightweight launcher | Quick search for applications, files, folders and URLs, a calculator, and an inline Ollama/LM Studio answer using `llm <prompt>`. It does not require PowerToys. |
 
-```css
-/* RunMind-Theme: {"id":"ocean","name":"Ocean","modes":["light","dark"]} */
+**Know the boundary:** Runner is intentionally a Quick Host, not another Full Agent. It does not provide project/workspace access, file attachments, developer tools, MCP, Skills, or System Manager. Open the full RunMind chat when a task needs those capabilities.
 
-:root[data-theme="light"][data-color-theme="ocean"] {
-  color-scheme: light;
-  /* Define the light palette tokens. */
-}
+## What you can do
 
-:root[data-theme="dark"][data-color-theme="ocean"] {
-  color-scheme: dark;
-  /* Define the dark palette tokens. */
-}
-```
+### Work with real projects
 
-For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
+RunMind can map and explain a project, inspect its structure, diagnose issues, and build a picture of its architecture and development workflow. Project intelligence includes:
 
+- **Project Understanding, Diagnostics, and Mission Control** for architecture, scripts, dependencies, tests, and project health.
+- **Change Impact Explorer** for Git-aware changed-file and symbol impact, reverse dependencies, asset references, candidate tests, coverage evidence, and a confidence-aware blast-radius report.
+- **Developer workflows** for Node.js debugging and profiling, Playwright browser checks, API testing, development-server lifecycle, SQLite inspection, and container workflows.
+- **Development Session Timeline** to review recorded Agent operations, checkpoints, interruptions, and outcomes before deciding what to resume.
 
-## RunMind Runner — 3.4.0 Complete Runner
+The analysis is evidence-led: static analysis and runtime observations have limits, and RunMind reports uncertainty rather than pretending every dependency or cause is known.
 
-The optional Runner is a fourth, independently installable Windows host. Its plugin-based launcher includes Applications, Files & Folders, URLs, Calculator and RunMind. Type `llm <prompt>` for the inline Ollama/LM Studio answer; ordinary searches do not trigger model requests. `llm > model > prompt` overrides the selected model. Open Chat lazily loads the canonical shared RunMind ChatWindow and transfers completed or partial inline answers into the transcript. Runner uses the actual RunMind theme catalogue and shared appearance preferences, while its inline provider profile and DPAPI-protected credentials remain separate from full chat and the two PowerToys hosts.
+### Let the Agent do the work
 
-The native launcher starts without initializing WebView2 or contacting the model provider; Start Menu indexing is asynchronous and ChatWindow starts only when requested. Runner remains a restricted Quick Host: no Full Agent, workspace/project access, file attachments, developer tools, MCP, Skills or System Manager native capabilities. Quick Agentic Mode is deliberately deferred until the same restricted Core and approval boundary can be integrated into all three quick hosts. See `3.4.0-RELEASE-NOTES.md` and `docs/RUNNER-IMPLEMENTATION.md`.
+Agent Mode turns a request into a multi-step plan and uses the tools that are available in the current session. It can combine web research, selected workspace files, Git, structured data processing, document creation, developer tools, native Windows capabilities, Agent Skills, and connected MCP servers.
 
-## RunMind 3.3.1 — Stabilization (P0–P6 retained)
+Independent read-only work can be orchestrated in parallel. Changes and other side effects remain controlled by the relevant approval and confirmation rules. Checkpoints help explain what happened when a task is interrupted; RunMind does not blindly replay unfinished side effects.
 
-RunMind 3.3.1 is a stabilization patch, not a new feature phase. It hardens bounded native process output and timeout cleanup, closes Standalone WebView2 navigation by default, applies strict trusted-origin checks before native message dispatch across hosts, removes inline JavaScript from the chat page CSP, and bounds WebView2 bootstrapper lock/installer waits. The same shared fixes are used by Standalone, PowerToys Run and PowerToys Command Palette.
+### Research with a trail of evidence
 
-Portable regression coverage is **255/255 passed** in the packaging environment (Node.js 22.16.0). This does not certify the .NET 10 Windows builds or live WebView2/PowerToys behavior. Windows certification remains pending, and credentials stored in WebView localStorage or the Command Palette per-user settings JSON are not DPAPI-encrypted. Do not treat 3.3.1 as production-ready until the credential-protection and Windows acceptance gates in `docs/STABILIZATION-AUDIT.md` and `docs/STABILIZATION-WINDOWS-ACCEPTANCE.md` are closed. See `STABILIZATION-RELEASE-NOTES.md`.
+Deep Research builds an editable plan, gathers sources, keeps evidence notes and claim assessments, supports pause and resume, and exports a Markdown report. Source collection, quoted material, and model-generated assessments are kept distinguishable; a model's conclusion is not presented as independently proven fact.
 
-## RunMind 3.3.0 — P6 Development Intelligence (P0–P5 retained)
+### Understand and manage Windows
 
-RunMind 3.3.0 adds Git-aware change review with architecture/test/asset impact, build/test script intelligence, local flakiness and repeated-failure signals, supplied CI result comparison, dependency/lockfile and approved advisory/outdated checks, JavaScript toolchain environment probes, before/after Agent change receipts and bounded local project decisions/checkpoint continuity. The same tools and five new developer workflows are shared across all three hosts. Git review is read-only; script execution, dependency audits, environment probes, decision memory and backup restoration require the applicable approval. CI is not queried automatically, package dependencies are never updated automatically, and interrupted operations are never automatically replayed. See `P6-RELEASE-NOTES.md` and `docs/DEVELOPMENT-INTELLIGENCE.md`.
+The optional **System Manager** brings application and process management together with Windows diagnostics. Depending on the capabilities you enable, it can inspect services, events, crashes, network connections, storage, security posture, applications, and processes. Actions that change system state use separate native permission checks and confirmation.
 
-## RunMind 3.2.0 — P5 System Manager Health Intelligence (P0–P4 retained)
+**Live Resource Intelligence** adds an explicitly started, bounded monitor with CPU, memory, GPU utilization, dedicated/shared GPU-memory, network, and process-I/O charts. It includes process ranking and CSV export. Monitoring continues when the flyout is closed and ends when stopped, when its session expires, or when the RunMind window closes. Samples are held in memory for the session; there is no always-on monitoring service or persistent raw telemetry store. GPU readings depend on the counters exposed by the installed Windows graphics driver.
 
-RunMind 3.2.0 connects Windows service, event, crash, resource, network and storage evidence into a shared on-demand diagnostic workflow across Standalone, PowerToys Run and PowerToys Command Palette.
+### Create useful deliverables
 
-P5 adds structured Windows service startup/dependency/recovery inspection, bounded dependency trees, recurring service/application/network failure groups, a read-only evidence-based health report, five-minute event correlation, optional bounded local history, active TCP/UDP process ownership, possible listener-conflict candidates, targeted DNS/route/single-endpoint TCP diagnosis, and expanded CPU/physical memory/per-process/disk telemetry. CPU/memory pressure findings include the leading sampled processes when available. Time overlap is presented as investigative context, not causality.
-
-Health history is disabled by default. When explicitly enabled, it stores at most 30 compact local summaries within 512 KB. The report runs only on demand; it does not install a background monitor. Service start/stop/restart and the optional TCP endpoint probe retain fresh native confirmation. See `P5-RELEASE-NOTES.md`, `docs/SYSTEM-MANAGER-HEALTH-INTELLIGENCE.md`, `docs/P5-IMPLEMENTATION-AUDIT.md` and `docs/P5-WINDOWS-ACCEPTANCE.md`.
-
-Source checks are reported in `BUILD-STATUS.md`. Windows/.NET 10 certification remains a target-machine gate; run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete the P0–P6 acceptance checklists in all three hosts before calling the release Windows-certified.
-
-## RunMind 3.1.0 — P4 Agent Capabilities (P0–P3 retained)
-
-RunMind 3.1.0 strengthens the shared Agent Core across Standalone, PowerToys Run and PowerToys Command Palette. It retains P0 reliability, P1 Project Intelligence/Mission Control, P2 System Manager Intelligence and P3 Developer Infrastructure.
-
-P4 adds eight Agent capabilities:
-
-- **MCP resource discovery:** paginated tool/resource/resource-template/prompt catalogues, server metadata/capabilities, metadata search, bounded pagination, exact URI-template expansion and honest incomplete/error reporting. Reading resource contents, retrieving prompts and running remote MCP tools remain separately approved.
-- **Multi-tool orchestration:** independent read-only calls can run concurrently (configurable 1–4); duplicate calls, writes, approval-gated actions, MCP calls and delegated agents remain serialized barriers. Dependency layers and operation outcomes appear in the existing Workflow panel.
-- **Task checkpoints and recovery:** bounded redacted per-chat checkpoints, plan/progress and operation links. Interrupted operations are marked unknown; resume is user-initiated, requires the same workspace and inspects uncertain external outcomes before any retry. No automatic replay.
-- **Tool-result summarization:** bounded/redacted structured results for model context and local operation history, excluding raw request/response bodies, HTML and binary/base64 content.
-- **Skills and project context:** bounded project instructions, package metadata, project-index coverage/architecture and relevance-ranked Skill metadata are included as context. Skills remain explicitly loaded guidance; neither Skills nor project files grant permissions.
-- **Change Impact Explorer v2:** Git-aware working-tree/local-base-ref analysis, automatic AST symbol inference, TypeScript checker consumers, direct/transitive modules, expanded HTML/CSS/SVG/media/font assets, dynamic dependency signals, removed-module importers, Istanbul/LCOV changed-line evidence, affected-test candidates and transparent blast-radius/risk/confidence reporting. It is read-only and does not run tests.
-- **Development Session Timeline:** chronological checkpoint, tool-operation/dependency-layer and sub-agent events shown in Workflow and exposed as a read-only Agent tool.
-- **Artifact Verification:** structural checks and SHA-256 over exact artifact bytes, optional independently supplied expected digest comparison and a bounded receipt. A matching digest is not proof of provenance or signature authenticity.
-
-P4 adds no package/runtime dependency. Project analysis remains JavaScript, TypeScript, JSX/TSX, HTML and CSS, with SVG as a vector asset. See `P4-RELEASE-NOTES.md`, `docs/AGENT-CAPABILITIES-P4.md` and `docs/P4-IMPLEMENTATION-AUDIT.md`. Windows/.NET certification remains a target-machine gate; complete `docs/P4-WINDOWS-ACCEPTANCE.md` alongside the P0–P3 regression checklists before calling the three Windows hosts certified.
-
-## RunMind 3.0.0 — P3 Developer Infrastructure (P0 + P1 + P2 retained)
-
-RunMind 3.0.0 adds the P3 Developer Infrastructure workbench to the same shared Agent Core and native bridge used by Standalone, PowerToys Run and PowerToys Command Palette. It retains the P0 reliability foundation, P1 Project Intelligence/Mission Control and all seven P2 System Manager intelligence capabilities.
-
-P3 adds five focused areas:
-
-- **Podman/Docker Development Workbench:** fixed-argument Podman/Docker CLI integration for runtime/container/image/volume/network inspection, exact container inspect/logs/stats/start/stop/restart, and Compose config/ps/up/down/build/logs. Every operation requires fresh approval. Compose down preserves volumes; arbitrary shell commands, prune, image deletion and volume deletion are not exposed. Command completion does not imply container health; state changes require a subsequent inspection/health check.
-- **SQLite workbench:** Node.js built-in `node:sqlite` for existing workspace-contained `.db`, `.sqlite` and `.sqlite3` files. Supports integrity inspection, tables, schema/foreign keys, parameterized read-only queries and query plans. One DML/DDL statement can be executed transactionally after fresh approval. Database file creation, deletion and migration tooling are not included. The Node 24 `node:sqlite` API is currently a release-candidate API; see the [Node.js SQLite API documentation](https://nodejs.org/api/sqlite.html).
-- **API contract and OpenAPI testing:** bounded OpenAPI 3.0/3.1 operation generation from explicit examples/defaults/enums; local JSON Pointer references; response status and status-specific JSON Schema validation. JSON specs work without an extra dependency; YAML needs an already-installed `yaml` or `js-yaml` parser. The user supplies an explicit base URL; specification server entries never select the target. POST/PUT/PATCH/DELETE are excluded unless explicitly enabled and freshly approved.
-- **Runtime/log correlation:** an ephemeral timeline for exact RunMind-owned development-server and Node Inspector sessions plus explicitly supplied Playwright/API event slices. It correlates trace/request/correlation/Journey IDs, distinguishes source timestamps from read-time timestamps, redacts common credentials and does not create a persistent log store or infer causality.
-- **Advanced browser debugging:** expanded Playwright console/page-error diagnostics, source locations, request/response timing, failed-request and HTTP-error inspection, screenshots and optional local trace ZIP artifacts. Browser contexts are temporary; trace capture needs fresh approval and may contain sensitive page content. Arbitrary page JavaScript evaluation and live source-level browser breakpoints are deliberately not exposed.
-
-The five P3 developer workflows are available through the existing workflow manager. MySQL and PostgreSQL support are deliberately deferred to a later milestone; P3 ships SQLite only. Project language-aware code analysis remains JavaScript, TypeScript, JSX/TSX, HTML and CSS, with SVG as a first-class vector asset rather than a programming language.
-
-P3 implementation details, limitations and target-Windows validation steps are documented in `docs/DEVELOPER-INFRASTRUCTURE-P3.md`, `docs/P3-IMPLEMENTATION-AUDIT.md` and `docs/P3-WINDOWS-ACCEPTANCE.md`. Portable tests and source contracts do not certify the Windows-native hosts or the installed Podman/Docker runtime. Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete the P0, P1, P2 and P3 acceptance checklists before calling the release Windows-certified.
-
-## RunMind 2.9.0 — P2 System Manager Intelligence (P0 + P1 retained)
-
-RunMind 2.9.0 adds seven optional Windows System Manager intelligence capabilities while retaining the complete P0 reliability foundation and P1 Project Intelligence/Mission Control implementation. All three Windows hosts share the same native System Manager bridge, Agent Core tools, settings and capability checks.
-
-P2 adds read-only Windows Event Log investigation (Application, System and Setup only), crash correlation (Application Error, Windows Error Reporting, .NET Runtime and Service Control Manager records), finite CPU/process resource sampling (maximum 60 seconds), Scheduled Task inventory plus confirmed enable/disable/start/stop actions, best-effort physical-disk and volume health, a read-only Defender/Firewall/BitLocker/Secure Boot/TPM/UAC posture snapshot, and a single-host DNS/selected-route/optional single-port TCP diagnostic. P2 capabilities are individually opt-in and remain disabled by default. Scheduled Task state changes and TCP probes require fresh native confirmation; state-changing results are verified where Windows exposes a verifiable state. The Scheduled Task adapter cannot create/delete tasks or edit definitions/triggers. None of these features is a persistent monitoring service, network scanner, malware scan or compliance certification.
-
-SVG is now a first-class indexed vector asset alongside JavaScript, TypeScript, JSX/TSX, HTML and CSS. Project Understanding records normalized local SVG references from HTML, CSS and SVG `href`/`xlink:href` attributes, and Project Mission Control displays their coverage and evidence. SVG is an asset format, not a programming language. Other programming-language source files remain generic text for reading/search only.
-
-P2 implementation details and limitations are documented in `docs/SYSTEM-MANAGER-P2.md`, `docs/P2-IMPLEMENTATION-AUDIT.md` and `docs/P2-WINDOWS-ACCEPTANCE.md`. Portable tests validate shared JS/Agent wiring and native-source contracts; they do not replace compiling and exercising the Windows native hosts. Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete the P0, P1 and P2 acceptance checklists before calling the release Windows-certified.
-
-## RunMind 2.8.1 — P1 Project Intelligence and Mission Control refinement
-
-RunMind 2.8.1 builds on the P0 foundation and refines the P1 project-intelligence implementation: richer Project Understanding, operational Project Diagnostics, Project Mission Control, Test Impact Analysis, and static Release Readiness. The persistent index and one canonical workspace remain shared across Standalone, PowerToys Run and Command Palette.
-
-Project Mission Control is available in Agent Settings and through Agent Mode. It reports index freshness/completeness, architecture evidence, detailed diagnostics, release criteria and prioritized recommendations; a stale index is incrementally refreshed when possible. The Settings dashboard accepts explicit changed paths for Test Impact Analysis, which uses the static JS/TS import graph to select JS/TS tests; unsupported file types are reported as unanalysed, confidence is labeled, and tests are never run automatically. Release Readiness reports static evidence separately from Git status, actual builds/tests, live dependency audits, signing, packaging and publication. These tools are read-only and do not install packages or mutate release metadata.
-
-At the 2.8.1 P1 release, language-aware code analysis and project-specific tooling covered **JavaScript, TypeScript, JSX/TSX, HTML and CSS**. RunMind 2.9.0 adds SVG as a first-class vector asset with local-reference analysis; it does not treat SVG as a programming language. Other source files remain available for generic reading and search only.
-
-The Mission Control report contract and freshness/safety behavior are documented in `docs/PROJECT-MISSION-CONTROL.md`. The portable suite and source checks are recorded in `BUILD-STATUS.md`. P0 target-Windows certification remains a separate gate: run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete `docs/P0-WINDOWS-ACCEPTANCE.md`. Do not treat a portable test pass as Windows certification.
-
-## Built-in capabilities and tool catalog
-
-RunMind exposes tools to Agent Mode and, where applicable, Deep Research. Tools that access local files require one user-selected conversation workspace. In the Windows hosts, the native host owns this canonical root and shares it with Agent file operations; users are not asked to select the same folder again for native tools. Mutating operations—such as creating, editing, moving, or deleting files—require approval and follow the application's no-overwrite and backup safeguards. Some web-search tools appear only when the corresponding search service is configured; MCP tools depend on connected servers.
-
-### Planning, reasoning support, and diagnostics
-
-| Tool | What it does |
-|---|---|
-| `current_datetime` | Returns the computer's current local date and time. |
-| `update_plan` | Creates or updates a concise task plan with pending, active, and completed steps. |
-| `calculate` | Evaluates basic arithmetic expressions, including parentheses, percentages, and exponentiation. |
-| `regex_test` | Tests JavaScript regular expressions in an isolated worker with a hard timeout. |
-| `diagnose_connection` | Checks the selected model connection, model discovery, selected-model availability, and likely configuration or CORS issues. |
-| `delegate_subagent` | Delegates a bounded, read-only subtask to a Researcher, Coder, Security Analyst, Reviewer, or Summarizer sub-agent. |
-
-### Web research and website inspection
-
-| Tool | What it does |
-|---|---|
-| `fetch_webpage` | Reads the exact supplied URL using the native Reader and configured Reader fallbacks. |
-| `page_to_markdown` | Retrieves a webpage as clean Markdown with available page metadata. |
-| `web_search` | Searches the web through a configured SearXNG endpoint. |
-| `research_topic` | Runs a bounded multi-query web investigation and deduplicates results by URL. |
-| `extract_links` | Extracts HTTP/HTTPS links from a webpage. |
-| `extract_metadata` | Reads page title, description, canonical URL, Open Graph data, and selected metadata. |
-| `extract_tables` | Extracts bounded HTML tables into headers and row data. |
-| `read_sitemap` | Recursively traverses same-host sitemap indexes, deduplicates URLs, and searches URL and sitemap metadata. |
-| `read_rss_feed` | Reads recent items from public RSS and Atom feeds. |
-| `check_links` | Checks the reachability of a bounded set of links; CORS failures are reported as unverified rather than broken. |
-| `compare_webpages` | Compares readable text from two webpages and reports shared and differing passages. |
-| `crawl_website` | Performs a bounded, same-origin breadth-first crawl of a website. |
-
-### Workspace and file operations
-
-| Tool | What it does |
-|---|---|
-| `request_folder_access` | Requests that the user select a local workspace folder before file operations. |
-| `list_files` | Lists files and folders in the selected workspace. |
-| `search_files` | Searches workspace filenames and, optionally, bounded UTF-8 file contents. |
-| `read_file` | Reads a UTF-8 text file. |
-| `create_file` | Creates a new text file without overwriting an existing file. |
-| `download_webpage` | Downloads webpage content through the Reader pipeline and saves it locally. |
-| `download_file` | Downloads original response bytes. Uses browser fetch for smaller CORS-accessible files or the native streaming/resumable downloader for larger or browser-restricted downloads. |
-| `file_info` | Returns file size, MIME type, last-modified time, and name. |
-| `edit_file` | Replaces a text file after approval and creates a recovery backup. |
-| `restore_file_backup` | Restores a previous backup after approval. |
-| `delete_file` | Deletes a file after approval and creates a recovery backup. |
-| `create_folder` | Creates a workspace folder after approval. |
-| `copy_file` | Copies a file to a new path after approval. |
-| `move_file` | Moves a file to a new path after approval. |
-| `rename_file` | Renames a file after approval. |
-| `checksum_file` | Calculates a file's SHA-256 checksum. |
-| `compare_files` | Compares two UTF-8 text files and identifies the first differing line. |
-| `project_overview` | Builds a bounded overview of a project workspace. |
-| `find_duplicates` | Finds files with identical SHA-256 content within configured scan limits. |
-| `compare_folders` | Compares two folders by relative file paths and sizes. |
-
-### Git integration, Project Profiles, and Agent Skills
-
-| Tool / capability | What it does |
-|---|---|
-| `git_clone` | Clones an HTTP/HTTPS Git repository into a new folder using Git for Windows and the native folder picker. Supports self-hosted Gogs/Gitea endpoints. |
-| `git_select_repository` | Grants native Git access to one existing normal working tree for the active conversation. |
-| `git_status`, `git_diff`, `git_log`, `git_show`, `git_branches`, `git_remotes` | Read working-tree status, diffs, history, commit summaries, branches, and configured remotes. |
-| `git_stage`, `git_unstage`, `git_commit`, `git_create_branch`, `git_switch_branch`, `git_merge`, `git_revert`, `git_cherry_pick`, `git_stash` | Perform common local Git operations subject to the active conversation's approval policy. |
-| `git_fetch`, `git_pull`, `git_push` | Perform remote operations with an explicitly named remote and branch. |
-| `git_reset_hard`, `git_clean`, `git_restore`, `git_delete_branch` | Perform destructive operations; these always require a fresh approval. |
-| `list_agent_skills` | Discover `SKILL.md` metadata in global and selected-project Skill folders. |
-| `load_agent_skill` | Load the selected Skill instructions and explicitly requested references on demand. Scripts are not automatically executed. |
-| Branch comparison | Compare each branch’s latest completed response to its own latest user prompt; different branch lengths are supported. |
-| Project Profiles | Save and reuse project instructions, provider/model connection, safe Agent settings, Skill names, MCP references, and conversation permission policy across both desktop hosts. |
-| Agent Skills Manager | Browse Global and Current Project Skills, inspect descriptions, install a local Skill folder, and remove a selected installation after confirmation. |
-
-Git requires Git for Windows on `PATH`. This release supports normal repositories with a local `.git` directory, not linked worktrees. A native Git folder selection is separate from the browser workspace grant. Project Profiles are shared through `%LOCALAPPDATA%\RunMind\ProjectProfiles`; browser folder handles remain in IndexedDB in the current WebView profile and must be reconnected when switching hosts/devices. Credential fields and filesystem handles are not copied into profiles or portable conversations; do not place secrets in freeform project instructions.
-
-Global Skills are stored under `%LOCALAPPDATA%\RunMind\Skills`; project Skills live under `.agents\skills` inside the selected browser workspace. Use **Agent Settings → Agent Skills** to manage either scope. Manual installation remains supported: copy a Skill folder containing `SKILL.md` to `%LOCALAPPDATA%\RunMind\Skills\<skill-name>\` for global use, or `.agents\skills\<skill-name>\` for project use. The required `SKILL.md` metadata fields are `name` and `description`. Skills load on demand and cannot grant themselves permissions; scripts are never executed automatically.
-
-The Skills Manager also accepts direct HTTPS `SKILL.md` URLs and GitHub/GitLab repository folder URLs. RunMind previews metadata and content and requires confirmation before installing. A chat message that explicitly asks to install a Skill from a URL is recognized, and valid `SKILL.md` content pasted into chat is detected automatically; both are offered for preview/installation; declining the offer sends the text as a normal chat message. URL and pasted-content imports support Global and Current Project scopes, but currently import `SKILL.md` only rather than recursively fetching linked resources. Skills remain untrusted instructions; scripts and commands are never executed by the installer.
-
-### Developer diagnostics and quality workflows
-
-RunMind includes reusable workflows for project builds and tests, static analysis/lint, Playwright test-runner checks, API smoke tests, dependency security audits, feature implementation, and issue diagnosis. They inspect the project before choosing commands and use the existing native PowerShell execution path with explicit approval. In addition, the Phase 2 browser integration provides structured Playwright automation through the project-installed package, the API/backend integration provides a dedicated approval-gated HTTP test runner using Node.js built-in fetch, and Development Server Management discovers and runs approved `package.json` scripts with bounded logs, readiness/health checks, port-conflict detection, and ownership-only stop. `project_validate` performs static manifest/test-file discovery only and does not claim to run builds or tests.
-
-The native process tools are `powershell_execute` and `run_native_command`. They use the selected conversation workspace; `working_directory` is a relative subdirectory. Process invocations require fresh approval and run with the current Windows user's permissions; they are not sandboxed. The workspace is selected once through the Agent folder-access flow, not through a second native folder picker.
-
-### Windows System Manager (optional)
-
-Open System Manager from its own toolbar flyout, separate from Agent Settings. System Manager is disabled by default. When enabled, users can independently enable Application Management, Process Management, and System Diagnostics, then toggle individual capabilities within each group. The settings are shared across Standalone, PowerToys Run, and Command Palette. The native bridge re-checks the master switch, group, and capability for every operation; disabled System Manager tools are not offered to the Agent.
-
-- **Application Management:** discover applications from Start Menu shortcuts, registered App Paths, and PATH; keep a local catalog with five-minute freshness and on-demand refresh; launch catalogued applications; open existing files/folders and HTTPS URLs.
-- **Application adapters:** built-in adapters for VS Code, Windows Terminal, Firefox, Notepad++, and Blender, plus user-defined declarative JSON adapters. Adapters use argument arrays only—no scripts, shell commands, or arbitrary executable paths. See `docs/SYSTEM-MANAGER-ADAPTERS.md`.
-- **Process Management:** list and inspect processes. Termination is disabled by default and always requires a native Windows confirmation; RunMind verifies PID, process name and start time, checks executable path when available, and refuses selected critical Windows processes.
-- **System Diagnostics:** read OS/runtime details, PATH entries, Windows service status, network adapters, active TCP connections and listeners, depending on individually enabled capabilities. Diagnostics do not change system configuration.
-- **Live Resource Intelligence:** open the Live Monitor tab for an explicitly started, read-only session with live CPU, physical-memory, GPU utilization and dedicated/shared GPU-memory, network and process-I/O charts, process ranking and CSV export. Closing the flyout or changing tabs leaves monitoring running; closing the RunMind window ends the session. GPU values depend on driver-exposed Windows performance counters, and memory is reported as usage rather than a fabricated capacity percentage. Sessions last 1–15 minutes with 1/2/5-second sampling; up to 900 samples remain in window memory only. Network interface totals can overlap on VPN/virtual adapters, and process I/O transfer is not physical-disk-only throughput. The Agent resource report remains finite at 60 seconds. See `docs/LIVE-RESOURCE-INTELLIGENCE.md`.
-- **Permissions:** Restricted, Balanced and Custom profiles. Launch/open actions require native confirmation unless the user explicitly allows them in Balanced or Custom. Process termination and adapter installation always require confirmation.
-
-System Manager Agent tools (only exposed when the master switch and relevant capabilities are enabled) include `system_manager_find_applications`, `system_manager_launch_application`, `system_manager_open_target`, `system_manager_list_adapters`, `system_manager_install_adapter`, `system_manager_application_action`, `system_manager_list_processes`, `system_manager_find_port_owner`, `system_manager_process_tree`, `system_manager_terminate_process`, service operations, container operations, and `system_manager_diagnostics`. A specific port conflict should use the targeted port-owner tool rather than requesting the full hardware/driver inventory. Native launch/open/process actions re-check settings and confirmation policy independently of the Agent tool definitions.
-
-System Manager does not provide administrator elevation or arbitrary GUI automation. It exposes bounded service inspection/control and reversible, explicitly confirmed startup-entry operations through native capabilities. It does not depend on the user enabling arbitrary PowerShell execution.
-
-Unsaved conversations and Deep Research checkpoints use per-window temporary sessions in IndexedDB, with the session identifier in `sessionStorage`. A new window never inherits another window's conversation or research checkpoint. Normal window close removes temporary conversation data; abandoned sessions are cleaned up on a later startup after a 24-hour grace period. Workspace folder handles remain in their separate IndexedDB store. Save a `.runmind` file explicitly to retain a conversation.
-
-### Documents, archives, and structured data
-
-| Tool | What it does |
-|---|---|
-| `read_pdf` | Extracts PDF text and can OCR pages with missing or suspicious text using the languages selected in PDF OCR settings. |
-| `inspect_archive` | Inspects ZIP entries, sizes, compression, encryption, and safety-limit violations without extracting the archive. |
-| `extract_archive` | Extracts a supported ZIP archive into a new workspace folder after approval, with path-traversal and archive-safety checks. |
-| `validate_json` | Parses a JSON file and reports its top-level type and basic structure. |
-| `validate_json_schema` | Validates JSON data against an inline or file-based JSON Schema, including local `$ref` and common schema constraints. |
-| `transform_json` | Pretty-prints, minifies, sorts keys, picks or omits fields, renames keys, flattens or unflattens objects, filters arrays, and maps values. |
-| `infer_dataset_schema` | Infers CSV column types, nullability, uniqueness, and sample values. |
-| `analyze_csv` | Reports CSV columns, row count, sample rows, and numeric summaries. |
-| `generate_statistics` | Calculates descriptive numeric statistics for CSV columns. |
-| `validate_dataset` | Validates CSV/TSV required and unique columns and applies per-column rules such as numeric ranges, membership, email, and URL checks. |
-| `filter_dataset` | Filters CSV rows by column values and writes a new dataset. |
-| `deduplicate_dataset` | Removes duplicate CSV rows or duplicates based on selected columns. |
-| `merge_csv` | Appends CSV files with matching headers. |
-| `join_datasets` | Joins two CSV datasets using selected keys and an inner, left, or full join. |
-| `compare_datasets` | Compares CSV headers and row contents. |
-
-### Reports, documents, charts, and diagrams
-
-| Tool | What it does |
-|---|---|
-| `create_markdown_report` | Creates a Markdown report in the workspace after approval. |
-| `create_html_report` | Creates a standalone HTML report with safe Markdown rendering, optional summary, and table of contents. |
-| `create_docx` | Creates a Microsoft Word document from a supported Markdown subset, including headings, lists, emphasis, code, and simple tables. |
-| `create_xlsx` | Creates multi-sheet Excel workbooks with typed cells, styled headers, frozen header rows, and filters. Text values are stored as text, not formulas. |
-| `create_pdf` | Creates a paginated, text-focused PDF from Markdown content. |
-| `create_chart` | Creates editable SVG bar, line, pie, and doughnut charts, including multiple data series. |
-| `create_diagram` | Creates flow diagrams as SVG and editable Mermaid source. |
-| `verify_artifact` | Checks the basic structure of generated or existing DOCX, XLSX, PDF, SVG, HTML, Mermaid, Markdown, JSON, CSV, and TSV artifacts. |
-
-### Images and media
-
-| Tool | What it does |
-|---|---|
-| `image_metadata` | Reads image dimensions, MIME type, and file size. |
-| `read_image` | Attaches a workspace image to the next model turn for visual analysis by a vision-capable model. |
-| `resize_image` | Resizes an image to fit within specified maximum dimensions. |
-| `convert_image` | Converts an image to PNG, JPEG, or WebP. |
-| `crop_image` | Crops an image using pixel coordinates. |
-| `generate_thumbnail` | Creates a WebP thumbnail up to 256 × 256 pixels. |
-| `generate_qr_code` | Generates an offline SVG QR code from text or a URL. |
-| `create_image_gallery` | Creates a responsive standalone HTML gallery that references selected workspace images. |
-
-### Connected MCP tools
-
-When an MCP Streamable HTTP server is connected, RunMind can discover and call that server's tools. It can also list available knowledge resources, read a selected resource, and retrieve named prompts. These are supplied by the connected server, not bundled as fixed RunMind tools.
-
-## Example workflows
-
-RunMind's tools can be combined in one Agent task. For example:
-
-- **Research to report:** search for a topic, open and read relevant pages, extract tables, compare sources, then create a Markdown, HTML, DOCX, or PDF report.
-- **Dataset cleanup:** inspect a CSV, infer its schema, validate required columns and rules, filter or deduplicate rows, join another dataset, and export the result.
-- **Project review:** request workspace access, map the project structure, search for relevant files, compare or checksum files, and prepare a findings report. File changes remain approval-gated.
-- **Document production:** turn structured information into a Word document or Excel workbook, create charts or a flow diagram, then verify the generated artifacts' structure.
-- **Image preparation:** inspect image metadata, resize, crop, or convert images, generate thumbnails or QR codes, and build an HTML gallery.
-- **Website inspection:** crawl a bounded same-origin section, traverse its sitemap, inspect metadata and links, and compare pages.
+The Agent can work with structured data and create Markdown/HTML reports, Word documents, Excel workbooks, PDFs, editable SVG charts, and diagrams. It can also inspect, resize, crop, and convert images, prepare thumbnails, generate QR codes, and build image galleries. These tools have documented size and format limits; artifact verification checks structure, not the correctness of every calculation or visual detail.
 
 ## Models and integrations
 
-### Model providers
+RunMind is designed to work especially well with local model servers, while allowing other OpenAI-compatible endpoints when configured.
 
-- **Ollama** — default local API address: `http://localhost:11434`.
-- **LM Studio** — use its local server with the OpenAI-compatible API, commonly `http://localhost:1234/v1`.
-- **PowerToys Run authentication** — the plugin settings expose separate optional API key and custom auth-header fields for Ollama and LM Studio. API keys use Bearer authorization; a custom header uses `Header-Name: value` and overrides the Bearer value when its name is `Authorization`.
-- **Other providers** — add an OpenAI-compatible endpoint, with optional API key and custom authentication headers.
+| Provider or service | Use |
+|---|---|
+| **Ollama** | Local models through the native API (`http://localhost:11434`). |
+| **LM Studio** | Local models through its native or OpenAI-compatible server (commonly `http://localhost:1234/v1`). |
+| **OpenAI-compatible endpoints** | Additional hosted or self-hosted model endpoints, with configurable authentication. |
+| **SearXNG** | Optional web search and multi-query research. |
+| **MCP (Streamable HTTP)** | Connect external tools, resources, and prompts to the Full Agent. STDIO transport is not included. |
 
-PowerToys Run API keys and custom auth headers are stored in the per-user RunMind settings JSON without DPAPI encryption, and the PowerToys Run text fields are not masked. Use only credentials appropriate for local storage on that Windows account.
+Model features such as vision, tool calling, and context size depend on the selected model and provider. Web search, remote endpoints, and connected MCP servers may send data outside your machine; configure only services you trust.
 
-RunMind supports multiple configured connections. Model availability and capabilities such as vision and tool calling depend on the selected model and provider.
+## Control is part of the design
 
-### Web search and Reader services
+RunMind is a desktop application with real capabilities, not a sandbox. Its safety boundaries are explicit:
 
-- **SearXNG** provides web search and multi-query research when configured.
-- **Native Reader** is used by desktop hosts for webpage retrieval. A configured custom Reader-compatible gateway can be used as a fallback, followed by Jina Reader for public URLs.
-- Reader retrieval and ordinary web search are separate: opening a supplied URL uses the Reader path; discovery uses the configured search service.
+- **Workspace-scoped files:** select the folder the Agent may work in. File operations stay within that workspace; applicable changes require approval, and edits/deletions create recovery backups.
+- **Native actions:** process, service, application, and other system-changing actions are independently checked and may require a Windows confirmation. System Manager is disabled until you enable it.
+- **Current-user execution:** approved PowerShell and native process commands run with the permissions of your Windows account. They are not isolated in a security sandbox, and RunMind does not provide administrator elevation or arbitrary GUI automation.
+- **Untrusted extensions:** MCP responses, Skills, and adapter metadata cannot grant themselves permissions. Skill scripts are not automatically executed.
+- **Local data:** conversations and settings are stored in the relevant local host/WebView profile. Credential protection differs between hosts; some settings are not DPAPI-encrypted. Protect your Windows account and do not commit local credentials or settings.
 
-### Model Context Protocol
+## Get started
 
-Connect MCP servers using **Streamable HTTP**. RunMind can discover server tools, resources, and prompts and make supported capabilities available to the agent. STDIO transport is not included.
+### Requirements
 
-## Modes and conversation features
+- **Windows 11 x64**, build 22621 or later. ARM64 is not currently provided.
+- **.NET 10 SDK** to build the source. The published Standalone and Runner hosts are framework-dependent and require the **.NET 10 Desktop Runtime**.
+- **Microsoft Edge WebView2 Runtime**. RunMind checks for it at startup and can install the Evergreen runtime for the current user if it is missing.
+- **Ollama, LM Studio, or another OpenAI-compatible model server** to use model features.
+- **Git for Windows** on `PATH` for native Git workflows.
+- **Microsoft PowerToys** only for the PowerToys Run plugin and Command Palette extension.
+- **Node.js 24+** for the automated JavaScript regression suite and Node-based development integrations.
 
-### Chat
+### Build the Windows hosts
 
-Use RunMind as a regular streaming chat interface with model/provider selection, conversation branches, attachments, and explicitly saved `.runmind` conversations.
+From the repository root, run:
 
-### Agent Mode
+```bat
+Build-Release-x64.bat
+```
 
-Agent Mode can plan and execute multi-step tasks using built-in tools, selected workspace files, configured web services, connected MCP servers, native Git operations, and Agent Skills loaded on demand. Project Profiles provide reusable project instructions and safe settings shared by Standalone and PowerToys Run. Each conversation retains its own Workspace Context and permission policy; applying a profile does not silently transfer folder handles or native Git grants. Independent read-only operations can run in parallel where safe; mutating operations are approval-gated. Specialized sub-agents are bounded, read-only, and cannot delegate further.
+This builds the four x64 hosts, publishes Standalone and Runner, and packages/signs the Command Palette MSIX. It does **not** install them. On the first build, the script prepares the pinned PDF/OCR runtime assets; that preparation requires an internet connection.
 
-### Deep Research
+The Standalone executable is published to:
 
-Deep Research supports editable research plans, bounded search and page budgets, source collection, evidence and claim assessments, source notes, pause/resume/cancel controls, checkpoints, and Markdown report export. Research claims and model assessments remain distinguishable from application-checked quotation presence; the application does not claim to independently establish the truth of a model's verdict.
+```text
+Release\Standalone\win-x64\publish\RunMind.exe
+```
 
-### Branches and AI Branch Comparison
+Install optional hosts separately:
 
-Create and switch between conversation branches, rename or delete branches, and compare branch content in two modes. **Single response** (default) compares one question/answer turn from each branch, initially selecting each branch's latest turn; users can independently choose any answered turn in Branch A and Branch B. **Whole branch** compares the complete ordered histories, including prompts, answers, per-message provider/model attribution, available text attachments, and recorded model thinking. **Compare with AI** opens a separate discussion over an immutable snapshot of the selected mode and content. It supports follow-up questions, model switching, re-examination, copying messages, and Markdown export. Large whole-branch dossiers may exceed the selected model's context limit; RunMind displays an approximate estimate rather than silently dropping turns. Comparison does not modify either branch or change the main chat model.
+- **PowerToys Run:** close PowerToys completely, then run `Install-RunMind-PowerToys-Run.bat` and restart PowerToys.
+- **Command Palette:** run `Install-RunMind-CommandPalette.bat`.
+- **Runner:** run `Install-RunMind-Runner.ps1` for the current user.
 
-## Workspace safety and limits
+See [Build and setup](BUILD-AND-SETUP.md) for deployment details and troubleshooting. The repository is a source project; the build script creates the host outputs locally.
 
-- A browser workspace folder is selected by the user before local file operations are offered. Native Git repository selection is a separate, conversation-scoped authorization.
-- File paths are workspace-relative; absolute paths and traversal outside the selected folder are rejected.
-- Creating, editing, deleting, copying, moving, renaming, extracting, and generating files uses explicit approval where applicable.
-- New-file operations do not overwrite existing files. Editing and deletion create recovery backups; restore operations are also approval-gated.
-- File searches, web crawling, dataset operations, archive extraction, and artifact generation use explicit size, count, or depth limits to keep work bounded.
-- Artifact verification checks file structure and basic readability. It does not guarantee visual layout, formula calculation, or semantic correctness.
+### Connect a local model
 
-Some generation formats have intentionally focused scope: DOCX supports a bounded Markdown subset; XLSX has worksheet, row, column, and cell limits; PDF is text-focused and uses built-in fonts; QR payloads are limited to 106 UTF-8 bytes; image galleries reference existing workspace images rather than copying them. See the [Feature Matrix](FEATURE-MATRIX.md) for exact limits and implementation details.
+1. Start Ollama or LM Studio and make sure a model is available.
+2. Open RunMind and select/configure the provider and model in its model settings.
+3. Allow the RunMind WebView origin `https://localhost` in the model server's CORS settings. For Ollama, include it in `OLLAMA_ORIGINS`; for LM Studio, enable CORS in the local server settings.
 
-## Requirements
+For other OpenAI-compatible services, configure the endpoint's CORS policy to allow `https://localhost` and provide the required authentication settings in RunMind.
 
-- Windows 11 x64 (build 22621 or later). An ARM64 build is not currently provided.
-- Microsoft PowerToys is required for the PowerToys Run plugin and Command Palette extension; the standalone app does not require PowerToys.
-- .NET 10 Desktop Runtime (x64) for framework-dependent standalone builds.
-- The .NET 10 SDK to build the Command Palette extension. Its pinned Windows SDK/MSIX build tools are restored through NuGet. The first local MSIX installation requests administrator approval to trust the development signing certificate.
-- Ollama, LM Studio, or another supported model server.
-- Git for Windows on `PATH` for native Git tools.
-- The Microsoft Edge WebView2 Runtime. RunMind checks for it at startup and, if missing, downloads Microsoft's Evergreen bootstrapper and installs the runtime for the current Windows user. An internet connection is needed for that one-time setup.
+## Explore the project
 
-## Build from source
+| Guide | What it covers |
+|---|---|
+| [Feature Matrix](FEATURE-MATRIX.md) | Detailed capability status, behavior, and implementation limits. |
+| [Advanced Intelligence & Extensibility](docs/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md) | Change Impact Explorer, Development Session Timeline, System Intelligence, Agent orchestration, MCP, Skills, adapters, and Runner boundaries. |
+| [Project Understanding & Diagnostics](docs/PROJECT-UNDERSTANDING-AND-DIAGNOSTICS.md) | Project indexing, architecture understanding, diagnostics, and Mission Control. |
+| [Development Intelligence](docs/DEVELOPMENT-INTELLIGENCE.md) | Developer tools and evidence-driven workflows. |
+| [Live Resource Intelligence](docs/LIVE-RESOURCE-INTELLIGENCE.md) | Live monitoring behavior, metrics, bounds, and telemetry limitations. |
+| [System Manager health intelligence](docs/SYSTEM-MANAGER-HEALTH-INTELLIGENCE.md) | Windows health reports, event correlation, services, network, and storage. |
+| [Runner implementation](docs/RUNNER-IMPLEMENTATION.md) | Runner architecture, plugins, and the Quick Host boundary. |
+| [Build and setup](BUILD-AND-SETUP.md) | Build prerequisites, packaging, and host deployment. |
+| [Build status](BUILD-STATUS.md) | Current source checks and Windows validation status. |
+| [3.4.0 release notes](3.4.0-RELEASE-NOTES.md) · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md) | Release history and project direction — kept out of this front page. |
 
-Run `Build-Release-x64.bat` from the repository root to prepare runtime resources, clean/build all three hosts in Release x64 mode, and package/sign the Command Palette MSIX. It does not install anything. Use `Install-RunMind-PowerToys-Run.bat` to install the already-built PowerToys Run plugin; it checks that PowerToys is closed and mirrors the complete plugin output to the per-user plugin directory. Use `Install-RunMind-CommandPalette.bat` to install the prebuilt MSIX, or `Install-RunMind-CommandPalette.bat uninstall` to remove it. Both installers are separate from the build and do not rebuild the projects. The release build environment requires the .NET 10 SDK. PowerToys reference assemblies are included under `lib\x64`:
+## Contributing and license
 
-- `PowerToys.Common.UI.dll`
-- `PowerToys.ManagedCommon.dll`
-- `PowerToys.Settings.UI.Lib.dll`
-- `Wox.Infrastructure.dll`
-- `Wox.Plugin.dll`
-
-See [BUILD-AND-SETUP.md](BUILD-AND-SETUP.md) for detailed build and deployment instructions.
-
-## Install and launch
-
-### PowerToys Run plugin
-
-1. Build all three hosts with `Build-Release-x64.bat`.
-2. Exit PowerToys completely from its system-tray menu.
-3. Run `Install-RunMind-PowerToys-Run.bat`. It verifies that PowerToys is closed, copies the complete Release x64 plugin output into the correct per-user Plugins folder, removes stale deployment files, and checks the required resources.
-4. Start PowerToys again and use `llm <prompt>` or search for RunMind.
-
-### Standalone app
-
-Launch `RunMind.exe` from the standalone build output. Each launch opens an independent chat window; multiple standalone windows can run alongside PowerToys-hosted chats.
-
-### PowerToys Command Palette extension
-
-The extension is installed as a signed MSIX package by `Install-RunMind-CommandPalette.bat`. The installer also attempts to set the direct **RunMind** alias to **Open chat with empty context**; if Command Palette was open, close it and rerun `Configure-RunMind-CommandPalette-Alias.ps1`. The extension About section links to [omid.navy](https://omid.navy). On first installation, Windows requests administrator approval to trust the public certificate whose publisher matches the package. This trust step does not enable Developer Mode; Windows 10 version 2004 and later and Windows 11 enable sideloading by default unless a policy disables it. After installation, run Command Palette's **Reload Command Palette extensions** command; fully restart PowerToys if the extension list does not refresh. The extension provides a branded **RunMind** fallback and **Open chat with empty context**. Inline model configuration is available from Command Palette's Installed Extensions settings for RunMind; there is deliberately no searchable **Configure RunMind** command.
-
-Command Palette starts a chat process from its own packaged executable and hosts the canonical `Shared/ChatWindow.html`, `Shared/ArtifactTools.js`, `Shared/ChatWindow/styles/`, `Shared/ChatWindow/theme/`, `Shared/ChatWindow/scripts/`, and shared native bridge directly. It does not require the Standalone executable or a configured path to `RunMind.exe`. The branded **RunMind** fallback accepts a plain natural-language query or a `RunMind <question>` prefix. Selecting the fallback opens a Command Palette content page; model inference starts only after selection, streams the local model's answer, and accepts follow-up questions. The page's **Open chat with context** action transfers the complete ordered inline transcript—including every completed user/assistant turn—into the Command Palette-owned chat window. If generation is still running, it transfers the current question without presenting a partial answer as complete. The destination restores the transcript as its real conversation state, so follow-up requests retain the prior context. The package does not create a Start-menu or Windows Search entry because its executable is a COM host, not a user-launchable app.
-
-## Connect your local model server
-
-The WebView2 chat page uses the origin `https://localhost`. The model server must allow requests from that origin:
-
-- For Ollama, include `https://localhost` in `OLLAMA_ORIGINS` and restart Ollama.
-- For LM Studio, enable CORS in the local server settings.
-- For another OpenAI-compatible provider, configure its CORS policy to allow the RunMind page origin.
-
-## Conversations, settings, and privacy notes
-
-RunMind saves resumable conversations as `.runmind` files. When opening one, choose **Open in this window** to replace the current conversation or **Open in new window** to keep the current chat and open another window. The saved filename becomes the conversation title.
-
-Standalone and PowerToys use separate WebView2 profiles. Their chat settings, credentials, Agent task history, and Deep Research checkpoints are therefore separate. PowerToys Run and Command Palette inline-answer configuration is separate from full chat preferences, but both inline hosts read and write the same `%LOCALAPPDATA%\RunMind\Shared\inline-model-settings.json` file. API keys and MCP tokens are stored in the local WebView2 profile's `localStorage`; they are not encrypted by RunMind. Protect access to your Windows account and profile accordingly.
-
-## Documentation
-
-- [Build and setup](BUILD-AND-SETUP.md) — build prerequisites, release packaging, and deployment details.
-- [Feature matrix](FEATURE-MATRIX.md) — detailed capability status, behavior, and limits.
-- [Advanced Intelligence & Extensibility](docs/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md) — consolidated guide to Change Impact Explorer v2, Development Session Timeline, System Intelligence, Agent Orchestration, MCP, Skills, application adapters, Runner plugins and their safety boundaries. See also the [Change Impact Explorer v2 technical contract](docs/CHANGE-IMPACT-EXPLORER-V2.md).
-- [Changelog](CHANGELOG.md) — release-by-release changes and fixes.
-- [Roadmap](ROADMAP.md) — planned work and project direction.
+RunMind is released under the [MIT License](LICENSE.txt). The source is organized around shared chat/Agent logic and native Windows hosts, so changes to shared behavior should be validated across the hosts that consume it. Start with the relevant guide and `BUILD-STATUS.md`; portable JavaScript tests do not replace a Windows x64 build and host-level acceptance.
 
 ---
 
-![Screenshot](screenshots/Screenshot-3.png)
-![Screenshot](screenshots/Screenshot-2.png)
-
-
-## About RunMind
-
-RunMind for Command Palette includes an About section in its extension settings. Website: [https://omid.navy](https://omid.navy).
-
-
-### System Manager (2.6.1)
-
-Windows System Manager has a dedicated toolbar flyout and remains disabled by default. Application discovery uses ranked name/alias matching across registered desktop applications, Start Menu shortcuts, bounded common install locations, PATH and packaged Windows Apps. Launches use stable IDs from current discovery, reuse and activate existing desktop windows by default, and distinguish verified foreground activation from process startup or unverified application handoff. Ask/reuse/new-window/new-process behavior and persistent per-app preferences are supported with application-specific limits. Graceful close requests always require native confirmation and never force-kill processes. Packaged-app activation is supported but does not claim visible-window or navigation verification. The flyout also includes an Application Adapters manager: inspect built-in/custom adapters, install JSON-only declarative adapters, and remove custom manifests with native confirmation. The first-party RunMind adapter can launch RunMind with a supplied prompt through its existing `--prompt` argument; it reuses the normal discovery, launch, and permission path. Native action results distinguish process startup, foreground activation, new-window requests, existing-instance handoff, and unverified navigation. The Agent policy is merged into the single leading system message for compatibility with stricter model chat templates.
-
-Agent introspection now includes `list_available_tools` for the exact tools exposed in the current session. RunMind bundles on-demand skills and can discover/load built-in, global, and authorized project skills. The skill manager supports validated local-folder, URL, and pasted-content installation plus scoped removal. Skills never grant permissions; native operations remain authoritative.
-
-
-### Agent System Management Skills (2.6.2)
-
-RunMind bundles three on-demand skills: `system-management`, `container-management`, and `runmind-management`. They are discoverable through `list_agent_skills` and loadable through `load_agent_skill`. Skills provide operational guidance only; native tools remain responsible for validation, permissions, confirmations, execution, and result verification. Adapter inventory includes descriptive operation metadata.
-
-
-### Historical Developer Intelligence additions (2.6.3)
-
-RunMind includes coding, debugging, testing-and-quality, code-review, file-history, skill-management, create-skill, and install-skill skills alongside the existing system-management, container-management, and runmind-management skills. System Manager provides a dedicated Application Adapters tab with bounded scrolling, built-in adapter Edit/Reset overrides, Windows Notepad and File Explorer adapters, and Docker/Podman container operations (list, inspect, start, stop, restart, logs). Container lifecycle changes require native confirmation. RunMind conversation storage remains WebView IndexedDB; native conversation-management operations beyond the existing prompt handoff are not yet exposed.
+<p align="center">
+  <strong>RunMind</strong><br>
+  <sub>One workspace for your models, your projects, and your Windows machine.</sub>
+</p>
