@@ -71,7 +71,7 @@ test('launcher is plugin-driven and registers all five built-in plugins includin
   assert.match(window, /MaximumInlineDisplayCharacters/);
   assert.match(window, /CopyAnswerButton/);
   assert.match(window, /case RunnerPluginAction\.ShowInlineAnswer/);
-  assert.match(window, /private void Chat_Click[\s\S]{0,260}OpenChat\(prompt\)/);
+  assert.match(window, /private void Chat_Click[\s\S]{0,420}OpenChat\(prompt\)/);
 });
 
 test('RunMind launcher activation mirrors the PowerToys Run llm action keyword', async () => {
@@ -80,15 +80,15 @@ test('RunMind launcher activation mirrors the PowerToys Run llm action keyword',
   const powerToys = await read('Community.PowerToys.Run.Plugin.RunMind/plugin.json');
   assert.match(powerToys, /\"ActionKeyword\"\s*:\s*\"llm\"/);
   assert.match(plugin, /const string ActionKeyword = \"llm\"/);
-  assert.match(plugin, /StartsWith\(ActionKeyword, StringComparison\.OrdinalIgnoreCase\)/);
-  assert.match(plugin, /char\.IsWhiteSpace\(value\[ActionKeyword\.Length\]\)/);
-  assert.match(plugin, /TryExtractPrompt\(query, out var prompt\)/);
-  assert.match(main, /RunMindInlinePlugin\.TryExtractPrompt\(query, out var prompt\)/);
+  assert.match(plugin, /StartsWith\(keyword, StringComparison\.OrdinalIgnoreCase\)/);
+  assert.match(plugin, /char\.IsWhiteSpace\(value\[keyword\.Length\]\)/);
+  assert.match(plugin, /TryExtractPrompt\(query, false, ActionKeyword, out prompt\)/);
+  assert.match(main, /RunMindInlinePlugin\.TryExtractPrompt\(query, _settings\.RunMindGlobalMode, _settings\.RunMindActionKeyword, out var prompt\)/);
   assert.match(main, /GenerateAsync\(prompt, _inlineSettings/);
   assert.match(main, /ResetInlineAnswerForNonRunMindQuery/);
   assert.match(main, /GenerateInlineAfterDelayAsync\(query, prompt, cancellation\)/);
   assert.match(plugin, /Value: prompt/);
-  assert.match(plugin, /runMindActivated && !string\.Equals\(plugin\.Id, "runmind"/);
+  assert.match(plugin, /runMindActivated && !runMindGlobalMode && !string\.Equals\(plugin\.Id, "runmind"/);
   assert.match(main, /var wasGenerating = _inlineIsRunning/);
   assert.match(main, /partialInlineResponse/);
 });
@@ -209,7 +209,7 @@ test('RunMind is a true inline launcher result and chat is a separate handoff', 
   assert.match(pluginSource, /RunnerPluginAction\.ShowInlineAnswer/);
   assert.match(main, /UpdateRunMindResult\("RunMind", "Generating inline answer/);
   assert.match(main, /CreateAnswerPreview\(response\)/);
-  assert.match(main, /case RunnerPluginAction\.ShowInlineAnswer:[\s\S]{0,260}InlineAnswerText\.Focus\(\)/);
+  assert.match(main, /case RunnerPluginAction\.ShowInlineAnswer:[\s\S]{0,320}StatusText\.Text/);
   assert.match(xaml, /Content="Open chat" Click="Chat_Click"/);
   assert.match(main, /new RunnerChatWindow\(contextPrompt, contextResponse/);
   assert.doesNotMatch(main, /new RunnerChatWindow\([\s\S]{0,180}Owner = this/);
@@ -289,4 +289,32 @@ test('Runner uses explicit IO and WPF types to avoid Windows Forms global-using 
   assert.match(client, /HttpRequestException when|HttpRequestException \{ StatusCode: null \}/);
   assert.match(client, /StatusCode is \{ \} statusCode/);
   assert.doesNotMatch(client, /\(int\)http\.StatusCode\b/);
+});
+
+
+test('Runner mirrors PowerToys Run global mode and configurable action keyword', async () => {
+  const settings = await read('RunMind.Runner/RunnerSettings.cs');
+  const settingsUi = await read('RunMind.Runner/RunnerSettingsWindow.xaml');
+  const settingsCode = await read('RunMind.Runner/RunnerSettingsWindow.xaml.cs');
+  const plugins = await read('RunMind.Runner/RunnerPlugins.cs');
+  const main = await read('RunMind.Runner/MainWindow.xaml.cs');
+  assert.match(settings, /RunMindGlobalMode\s*\{\s*get;\s*set;\s*\}/);
+  assert.match(settings, /RunMindActionKeyword\s*\{\s*get;\s*set;\s*\}\s*=\s*"llm"/);
+  assert.match(settings, /NormalizeKeyword/);
+  assert.match(settingsUi, /RunMindGlobalModeCheck/);
+  assert.match(settingsUi, /RunMindKeywordBox/);
+  assert.match(settingsCode, /RunMindGlobalMode = RunMindGlobalModeCheck\.IsChecked == true/);
+  assert.match(settingsCode, /RunMindActionKeyword = RunMindKeywordBox\.Text\.Trim\(\)/);
+  assert.match(plugins, /TryExtractPrompt\(string\? query, bool globalMode, string\? actionKeyword, out string prompt\)/);
+  assert.match(plugins, /if \(globalMode\) \{ prompt = value; return true; \}/);
+  assert.match(main, /Search\(query, enabled, _settings\.RunMindGlobalMode, _settings\.RunMindActionKeyword\)/);
+});
+
+test('Runner search input uses explicit themed foreground, caret and selection colors', async () => {
+  const xaml = await read('RunMind.Runner/MainWindow.xaml');
+  assert.match(xaml, /x:Name="SearchBox"[\s\S]{0,500}Foreground="\{DynamicResource RunnerText\}"/);
+  assert.match(xaml, /CaretBrush="\{DynamicResource RunnerAccent\}"/);
+  assert.match(xaml, /SelectionBrush="\{DynamicResource RunnerAccent\}"/);
+  assert.match(xaml, /SelectionTextBrush="\{DynamicResource RunnerAccentContrast\}"/);
+  assert.doesNotMatch(xaml, /Grid\.Column="2"[\s\S]{0,100}InlineAnswerText/);
 });

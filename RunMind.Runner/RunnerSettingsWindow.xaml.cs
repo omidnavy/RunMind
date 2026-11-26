@@ -38,6 +38,8 @@ public partial class RunnerSettingsWindow : Window
         UrlsPluginCheck.IsChecked = currentSettings.EnabledPlugins.Contains("urls", StringComparer.Ordinal);
         CalculatorPluginCheck.IsChecked = currentSettings.EnabledPlugins.Contains("calculator", StringComparer.Ordinal);
         RunMindPluginCheck.IsChecked = currentSettings.EnabledPlugins.Contains("runmind", StringComparer.Ordinal);
+        RunMindGlobalModeCheck.IsChecked = currentSettings.RunMindGlobalMode;
+        RunMindKeywordBox.Text = currentSettings.RunMindActionKeyword;
 
         InlineEnabledCheck.IsChecked = currentInlineSettings.Enabled;
         SelectTag(ProviderBox, currentInlineSettings.Provider);
@@ -129,6 +131,8 @@ public partial class RunnerSettingsWindow : Window
             if (UrlsPluginCheck.IsChecked == true) enabledPlugins.Add("urls");
             if (CalculatorPluginCheck.IsChecked == true) enabledPlugins.Add("calculator");
             if (RunMindPluginCheck.IsChecked == true) enabledPlugins.Add("runmind");
+            if (RunMindKeywordBox.Text.Trim().Length is < 1 or > 32 || RunMindKeywordBox.Text.Trim().Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_')))
+                throw new InvalidOperationException("RunMind keyword must be 1–32 letters, numbers, hyphens or underscores.");
             if (enabledPlugins.Count == 0)
                 throw new InvalidOperationException("Enable at least one launcher plugin.");
 
@@ -137,6 +141,8 @@ public partial class RunnerSettingsWindow : Window
                 Hotkey = hotkey,
                 StartWithWindows = StartWithWindowsCheckBox.IsChecked == true,
                 EnabledPlugins = enabledPlugins,
+                RunMindGlobalMode = RunMindGlobalModeCheck.IsChecked == true,
+                RunMindActionKeyword = RunMindKeywordBox.Text.Trim(),
             };
             InlineSettings = BuildInlineSettings(validate: true);
             Credentials = BuildCredentials();

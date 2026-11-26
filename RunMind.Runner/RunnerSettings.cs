@@ -11,6 +11,8 @@ internal sealed class RunnerSettings
 
     public string Hotkey { get; set; } = "Ctrl+Alt+Space";
     public bool StartWithWindows { get; set; }
+    public bool RunMindGlobalMode { get; set; }
+    public string RunMindActionKeyword { get; set; } = "llm";
     public List<string> EnabledPlugins { get; set; } = new() { "applications", "files", "urls", "calculator", "runmind" };
 
     public static string SettingsDirectory => Path.Combine(
@@ -65,8 +67,17 @@ internal sealed class RunnerSettings
         {
             Hotkey = hotkey,
             StartWithWindows = settings.StartWithWindows,
+            RunMindGlobalMode = settings.RunMindGlobalMode,
+            RunMindActionKeyword = NormalizeKeyword(settings.RunMindActionKeyword),
             EnabledPlugins = NormalizePluginIds(settings.EnabledPlugins),
         };
+    }
+
+    private static string NormalizeKeyword(string? value)
+    {
+        var keyword = (value ?? "llm").Trim();
+        if (keyword.Length is < 1 or > 32 || keyword.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_'))) return "llm";
+        return keyword;
     }
 
     private static List<string> NormalizePluginIds(List<string>? ids)

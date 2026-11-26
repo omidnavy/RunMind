@@ -27,6 +27,15 @@
             <CheckBox x:Name="UrlsPluginCheck" Content="URLs · Open HTTP and HTTPS addresses" />
             <CheckBox x:Name="CalculatorPluginCheck" Content="Calculator · Safe local arithmetic" />
             <CheckBox x:Name="RunMindPluginCheck" Content="RunMind · Inline answers from Ollama or LM Studio" />
+            <Border Background="{DynamicResource RunnerSurfaceRaised}" CornerRadius="10" Padding="12" Margin="0,10,0,0">
+              <StackPanel>
+                <TextBlock Text="RunMind query behavior" FontWeight="SemiBold" Foreground="{DynamicResource RunnerText}" />
+                <CheckBox x:Name="RunMindGlobalModeCheck" Content="Global mode · let RunMind answer every search without a keyword" Margin="0,8,0,4" />
+                <TextBlock Text="When disabled, RunMind activates only when the keyword below is typed. This mirrors the PowerToys Run global/action-keyword choice." Foreground="{DynamicResource RunnerMuted}" FontSize="10" TextWrapping="Wrap" />
+                <TextBlock Text="Action keyword" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,4" />
+                <TextBox x:Name="RunMindKeywordBox" Width="180" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
             <Separator Margin="0,14,0,14" Background="{DynamicResource RunnerBorder}" />
             <TextBlock Text="Appearance" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
             <Grid>
@@ -47,8 +56,9 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel Margin="16">
             <TextBlock Text="RunMind inline provider" FontSize="15" FontWeight="SemiBold" />
-            <TextBlock Text="Activate inline answers with llm &lt;prompt&gt;. This provider is used only by the RunMind launcher plugin. Full chat-window provider connections remain separate." FontSize="11" Foreground="{DynamicResource RunnerMuted}" TextWrapping="Wrap" Margin="0,5,0,12" />
+            <TextBlock Text="Choose whether RunMind participates in every search or only after your own action keyword. This provider is used only by Runner. Full chat-window provider connections remain separate." FontSize="11" Foreground="{DynamicResource RunnerMuted}" TextWrapping="Wrap" Margin="0,5,0,12" />
             <CheckBox x:Name="InlineEnabledCheck" Content="Enable inline model answers" />
+            <TextBlock Text="Query behavior is configured under General → RunMind query behavior. Global mode sends each non-empty search to RunMind; keyword mode activates only when the configured keyword is used." Foreground="{DynamicResource RunnerMuted}" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,8" />
             <TextBlock Text="Provider" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
             <ComboBox x:Name="ProviderBox" Width="260" HorizontalAlignment="Left" SelectionChanged="ProviderBox_SelectionChanged"><ComboBoxItem Content="Ollama" Tag="ollama"/><ComboBoxItem Content="LM Studio" Tag="lmstudio"/></ComboBox>
             <TextBlock Text="Ollama full generate endpoint" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,12,0,5" />

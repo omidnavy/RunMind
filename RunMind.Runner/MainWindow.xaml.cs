@@ -187,7 +187,7 @@ public partial class MainWindow : Window
     private void ResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (ResultsList.SelectedItem is RunnerPluginResult { PluginId: "runmind" })
-            StatusText.Text = "RunMind inline answer is shown on the right · Open chat to continue";
+            StatusText.Text = "RunMind result · Enter to open or continue in chat";
     }
 
     private void RefreshSearch()
@@ -197,7 +197,7 @@ public partial class MainWindow : Window
         var query = SearchBox.Text.Trim();
         var enabled = _settings.EnabledPlugins.ToHashSet(StringComparer.Ordinal);
         if (!_inlineSettings.Enabled) enabled.Remove("runmind");
-        foreach (var result in _pluginRegistry.Search(query, enabled)) _results.Add(result);
+        foreach (var result in _pluginRegistry.Search(query, enabled, _settings.RunMindGlobalMode, _settings.RunMindActionKeyword)) _results.Add(result);
 
         if (_results.Count == 0)
         {
@@ -224,7 +224,7 @@ public partial class MainWindow : Window
     private void ScheduleInlineGeneration(string query)
     {
         CancelInlineGeneration();
-        if (!RunMindInlinePlugin.TryExtractPrompt(query, out var prompt)
+        if (!RunMindInlinePlugin.TryExtractPrompt(query, _settings.RunMindGlobalMode, _settings.RunMindActionKeyword, out var prompt)
             || !_inlineSettings.Enabled
             || !_settings.EnabledPlugins.Contains("runmind", StringComparer.Ordinal))
         {
@@ -293,6 +293,7 @@ public partial class MainWindow : Window
             _lastInlineResponse = response;
             UpdateRunMindResult("RunMind", "Inline answer · " + CreateAnswerPreview(response), prompt);
             InlineStatusText.Text = "Answer ready";
+            StatusText.Text = "RunMind answer ready · select its result to continue in chat";
             InlineAnswerText.Text = response.Length > MaximumInlineDisplayCharacters
                 ? response[..MaximumInlineDisplayCharacters] + "\n\n[Display limit reached. Open chat to continue.]"
                 : response;
@@ -311,6 +312,7 @@ public partial class MainWindow : Window
                 _lastInlineResponse = exception.Message;
                 UpdateRunMindResult("RunMind", "Could not answer · " + CreateAnswerPreview(exception.Message), prompt);
                 InlineStatusText.Text = "RunMind could not answer";
+                StatusText.Text = "RunMind request failed · see the RunMind result for details";
                 InlineAnswerText.Text = exception.Message;
                 InlineAnswerText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerDanger");
                 CopyAnswerButton.IsEnabled = true;
@@ -394,7 +396,7 @@ public partial class MainWindow : Window
                 case RunnerPluginAction.ShowInlineAnswer:
                     InlineAnswerText.Focus();
                     InlineAnswerScroll.ScrollToEnd();
-                    StatusText.Text = "RunMind generated its answer inside the launcher. Use Open chat to continue.";
+                    StatusText.Text = "RunMind answer is available in the unified result · Open chat to continue.";
                     break;
             }
         }
@@ -406,7 +408,7 @@ public partial class MainWindow : Window
 
     private void Chat_Click(object sender, RoutedEventArgs e)
     {
-        var prompt = RunMindInlinePlugin.TryExtractPrompt(SearchBox.Text, out var currentPrompt)
+        var prompt = RunMindInlinePlugin.TryExtractPrompt(SearchBox.Text, _settings.RunMindGlobalMode, _settings.RunMindActionKeyword, out var currentPrompt)
             ? currentPrompt
             : (_lastInlineQuery.Length > 0 ? _lastInlineQuery : null);
         OpenChat(prompt);

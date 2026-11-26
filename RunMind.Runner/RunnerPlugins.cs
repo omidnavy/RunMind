@@ -67,20 +67,22 @@ internal sealed class RunnerPluginRegistry
     public IReadOnlyList<(string Id, string Name, string Description)> DescribePlugins()
         => _plugins.Select(plugin => (plugin.Id, plugin.Name, plugin.Description)).ToArray();
 
-    public IReadOnlyList<RunnerPluginResult> Search(string query, IReadOnlySet<string>? enabledPlugins = null)
+    public IReadOnlyList<RunnerPluginResult> Search(string query, IReadOnlySet<string>? enabledPlugins = null, bool runMindGlobalMode = false, string? runMindKeyword = null)
     {
         var normalized = (query ?? string.Empty).Trim();
         if (normalized.Length == 0) return Array.Empty<RunnerPluginResult>();
 
         var results = new List<RunnerPluginResult>();
-        var runMindActivated = RunMindInlinePlugin.TryExtractPrompt(normalized, out _);
+        var runMindActivated = RunMindInlinePlugin.TryExtractPrompt(normalized, runMindGlobalMode, runMindKeyword, out _);
         foreach (var plugin in _plugins)
         {
             if (enabledPlugins is not null && !enabledPlugins.Contains(plugin.Id)) continue;
             // Match PowerToys Run's action-keyword behavior: an explicit llm query is
             // handled by RunMind, not mixed with unrelated application/path results.
-            if (runMindActivated && !string.Equals(plugin.Id, "runmind", StringComparison.Ordinal)) continue;
-            try { results.AddRange(plugin.Search(normalized)); }
+            if (runMindActivated && !runMindGlobalMode && !string.Equals(plugin.Id, "runmind", StringComparison.Ordinal)) continue;
+            try { results.AddRange(plugin is RunMindInlinePlugin runMindPlugin
+                ? runMindPlugin.Search(normalized, runMindGlobalMode, runMindKeyword)
+                : plugin.Search(normalized)); }
             catch { /* A single plugin must never prevent the remaining launcher plugins from responding. */ }
         }
 
@@ -175,24 +177,30 @@ internal sealed class RunMindInlinePlugin : IRunnerLauncherPlugin
 
     public string Id => "runmind";
     public string Name => "RunMind";
-    public string Description => "Generate an inline answer with the selected Ollama or LM Studio model. Activate with 'llm <prompt>'.";
+    public string Description => "Generate an inline answer globally or with the configured action keyword.";
 
     public static bool TryExtractPrompt(string? query, out string prompt)
+        => TryExtractPrompt(query, false, ActionKeyword, out prompt);
+
+    public static bool TryExtractPrompt(string? query, bool globalMode, string? actionKeyword, out string prompt)
     {
         prompt = string.Empty;
-        var value = (query ?? string.Empty).TrimStart();
-        if (value.Length <= ActionKeyword.Length
-            || !value.StartsWith(ActionKeyword, StringComparison.OrdinalIgnoreCase)
-            || !char.IsWhiteSpace(value[ActionKeyword.Length]))
-            return false;
-
-        prompt = value[ActionKeyword.Length..].Trim();
+        var value = (query ?? string.Empty).Trim();
+        if (value.Length == 0) return false;
+        if (globalMode) { prompt = value; return true; }
+        var keyword = string.IsNullOrWhiteSpace(actionKeyword) ? ActionKeyword : actionKeyword.Trim();
+        if (value.Length <= keyword.Length || !value.StartsWith(keyword, StringComparison.OrdinalIgnoreCase)
+            || !char.IsWhiteSpace(value[keyword.Length])) return false;
+        prompt = value[keyword.Length..].Trim();
         return prompt.Length > 0;
     }
 
     public IReadOnlyList<RunnerPluginResult> Search(string query)
+        => Search(query, false, ActionKeyword);
+
+    public IReadOnlyList<RunnerPluginResult> Search(string query, bool globalMode, string? actionKeyword)
     {
-        if (!TryExtractPrompt(query, out var prompt)) return Array.Empty<RunnerPluginResult>();
+        if (!TryExtractPrompt(query, globalMode, actionKeyword, out var prompt)) return Array.Empty<RunnerPluginResult>();
         var preview = prompt.Length <= 96 ? prompt : prompt[..93] + "…";
         return new[]
         {

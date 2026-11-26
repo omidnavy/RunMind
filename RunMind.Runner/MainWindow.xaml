@@ -34,113 +34,80 @@
         <Button Grid.Column="4" Content="×" Click="Hide_Click" FontSize="20" Padding="0,-3,0,0" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource RunnerMuted}" />
       </Grid>
 
-      <TextBlock Grid.Row="1" Text="Search apps, files, folders, URLs and calculations — use llm &lt;prompt&gt; for RunMind" Foreground="{DynamicResource RunnerMuted}" FontSize="12" VerticalAlignment="Center" />
+      <TextBlock Grid.Row="1" Text="One search · Applications · Files · URLs · Calculator · RunMind" Foreground="{DynamicResource RunnerMuted}" FontSize="12" VerticalAlignment="Center" />
 
-      <Border Grid.Row="2" Background="{DynamicResource RunnerInput}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="12" Padding="16,0">
+      <Border Grid.Row="2" Background="{DynamicResource RunnerInput}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="12" Padding="16,0" SnapsToDevicePixels="True">
         <Grid>
-          <TextBox x:Name="SearchBox" VerticalContentAlignment="Center" FontSize="21" Background="Transparent" BorderThickness="0"
+          <TextBox x:Name="SearchBox" VerticalContentAlignment="Center" VerticalAlignment="Stretch" FontSize="21"
+                   Foreground="{DynamicResource RunnerText}" CaretBrush="{DynamicResource RunnerAccent}"
+                   SelectionBrush="{DynamicResource RunnerAccent}" SelectionTextBrush="{DynamicResource RunnerAccentContrast}"
+                   Background="Transparent" BorderThickness="0" Padding="0,4" FocusVisualStyle="{x:Null}"
                    TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown"
-                   ToolTip="Search apps, enter a file or folder path, paste a URL, calculate, or type llm &lt;prompt&gt;" />
-          <TextBlock x:Name="SearchPlaceholder" Text="Search or type llm &lt;prompt&gt;…" Foreground="{DynamicResource RunnerMuted}" Opacity="0.72" FontSize="21" VerticalAlignment="Center" IsHitTestVisible="False" />
+                   ToolTip="Search apps, enter a file or folder path, paste a URL, calculate, or use the RunMind keyword" />
+          <TextBlock x:Name="SearchPlaceholder" Text="Search RunMind…" Foreground="{DynamicResource RunnerMuted}" Opacity="0.72" FontSize="21" VerticalAlignment="Center" IsHitTestVisible="False" />
           <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="{DynamicResource RunnerSurfaceRaised}" CornerRadius="6" Padding="7,4" Margin="0,0,0,0">
             <TextBlock Text="RUNMIND  ↵" Foreground="{DynamicResource RunnerMuted}" FontSize="9" FontWeight="SemiBold" />
           </Border>
         </Grid>
       </Border>
 
-      <Grid Grid.Row="4">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="0.95*" />
-          <ColumnDefinition Width="14" />
-          <ColumnDefinition Width="1.35*" />
-        </Grid.ColumnDefinitions>
-        <Border Grid.Column="0" Background="{DynamicResource RunnerSurface}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="12" Padding="8">
-          <Grid>
-            <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-            <Grid Grid.Row="0" Margin="8,0,8,4">
-              <TextBlock Text="RESULTS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" />
-              <TextBlock x:Name="ResultCountText" Text="Ready" FontSize="10" Foreground="{DynamicResource RunnerMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
-            </Grid>
-            <ListBox x:Name="ResultsList" Grid.Row="1" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource RunnerText}"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto" MouseDoubleClick="ResultsList_MouseDoubleClick"
-                     KeyDown="ResultsList_KeyDown" SelectionChanged="ResultsList_SelectionChanged">
-              <ListBox.Resources>
-                <Style TargetType="ListBoxItem">
-                  <Setter Property="Padding" Value="10,9" />
-                  <Setter Property="Margin" Value="0,2" />
-                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                  <Setter Property="Background" Value="Transparent" />
-                  <Setter Property="Foreground" Value="{DynamicResource RunnerText}" />
-                  <Setter Property="Template">
-                    <Setter.Value>
-                      <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                          <ContentPresenter />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                          <Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RunnerSurfaceHover}" /></Trigger>
-                          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RunnerSurfaceRaised}" /></Trigger>
-                        </ControlTemplate.Triggers>
-                      </ControlTemplate>
-                    </Setter.Value>
-                  </Setter>
-                </Style>
-              </ListBox.Resources>
-              <ListBox.ItemTemplate>
-                <DataTemplate>
-                  <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="28" Height="28" CornerRadius="8" Background="{DynamicResource RunnerSurfaceRaised}" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Icon}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+      <Border Grid.Row="4" Background="{DynamicResource RunnerSurface}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="12" Padding="8">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+          <Grid Grid.Row="0" Margin="8,0,8,4">
+            <TextBlock Text="RESULTS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" />
+            <TextBlock x:Name="ResultCountText" Text="Ready" FontSize="10" Foreground="{DynamicResource RunnerMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+          </Grid>
+          <ListBox x:Name="ResultsList" Grid.Row="1" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource RunnerText}"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto" MouseDoubleClick="ResultsList_MouseDoubleClick"
+                   KeyDown="ResultsList_KeyDown" SelectionChanged="ResultsList_SelectionChanged">
+            <ListBox.Resources>
+              <Style TargetType="ListBoxItem">
+                <Setter Property="Padding" Value="12,11" />
+                <Setter Property="Margin" Value="0,2" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{DynamicResource RunnerText}" />
+                <Setter Property="Template"><Setter.Value>
+                  <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="9" Padding="{TemplateBinding Padding}">
+                      <ContentPresenter />
                     </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource RunnerText}" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Text="{Binding Subtitle}" FontSize="10" Foreground="{DynamicResource RunnerMuted}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
-                    </StackPanel>
-                  </Grid>
-                </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
-            <StackPanel x:Name="EmptyState" Grid.Row="1" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="18">
-              <TextBlock Text="Your launcher plugins are ready" Foreground="{DynamicResource RunnerText}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" />
-              <TextBlock Text="Try an app name, 2 × 3, a path, a URL, or llm explain DNS caching." Foreground="{DynamicResource RunnerMuted}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,7,0,0" />
-            </StackPanel>
-          </Grid>
-        </Border>
-
-        <Border Grid.Column="2" Background="{DynamicResource RunnerSurface}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="12" Padding="15">
-          <Grid>
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="10"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <Grid Grid.Row="0">
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Border Width="28" Height="28" Background="{DynamicResource RunnerSurfaceRaised}" CornerRadius="8" Margin="0,0,9,0">
-                  <TextBlock Text="✦" Foreground="{DynamicResource RunnerAccent}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RunnerSurfaceHover}" /></Trigger>
+                      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RunnerSurfaceRaised}" /></Trigger>
+                    </ControlTemplate.Triggers>
+                  </ControlTemplate>
+                </Setter.Value></Setter>
+              </Style>
+            </ListBox.Resources>
+            <ListBox.ItemTemplate><DataTemplate>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource RunnerSurfaceRaised}" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Icon}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
-                <StackPanel>
-                  <TextBlock Text="RunMind" Foreground="{DynamicResource RunnerText}" FontSize="14" FontWeight="SemiBold" />
-                  <TextBlock x:Name="InlineStatusText" Text="Inline assistant · Ollama / LM Studio" Foreground="{DynamicResource RunnerMuted}" FontSize="10" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource RunnerText}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="{DynamicResource RunnerMuted}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0" />
                 </StackPanel>
-              </StackPanel>
-              <Button x:Name="StopButton" Content="Stop" Click="StopInline_Click" HorizontalAlignment="Right" Padding="10,5" Visibility="Collapsed" />
-            </Grid>
-            <Border Grid.Row="2" Background="{DynamicResource RunnerAssistantBubble}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="9" Padding="12">
-              <ScrollViewer x:Name="InlineAnswerScroll" VerticalScrollBarVisibility="Auto">
-                <TextBlock x:Name="InlineAnswerText" Text="Type llm followed by a question. RunMind answers here without opening a separate chat window." Foreground="{DynamicResource RunnerMuted}" FontSize="12" TextWrapping="Wrap" />
-              </ScrollViewer>
-            </Border>
-            <Grid Grid.Row="3" Margin="0,10,0,0">
-              <TextBlock x:Name="InlineModelText" Text="Configure a local model in Settings" Foreground="{DynamicResource RunnerMuted}" FontSize="10" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="CopyAnswerButton" Content="Copy" Click="CopyAnswer_Click" Padding="10,5" Margin="0,0,6,0" IsEnabled="False" />
-                <Button Content="Open chat" Click="Chat_Click" Padding="10,5" />
-              </StackPanel>
-            </Grid>
-          </Grid>
-        </Border>
-      </Grid>
+                <TextBlock Grid.Column="2" Text="↵" Foreground="{DynamicResource RunnerMuted}" FontSize="12" VerticalAlignment="Center" Margin="12,0,4,0" />
+              </Grid>
+            </DataTemplate></ListBox.ItemTemplate>
+          </ListBox>
+          <StackPanel x:Name="EmptyState" Grid.Row="1" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="18">
+            <TextBlock Text="Ready when you are" Foreground="{DynamicResource RunnerText}" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Text="Search apps, files, folders, URLs or calculations. RunMind can answer globally or with your chosen keyword." Foreground="{DynamicResource RunnerMuted}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,7,0,0" />
+          </StackPanel>
+        </Grid>
+      </Border>
 
+      <StackPanel Grid.Row="5" Visibility="Collapsed">
+        <TextBlock x:Name="InlineStatusText"/><TextBlock x:Name="InlineAnswerText"/><ScrollViewer x:Name="InlineAnswerScroll"/>
+        <TextBlock x:Name="InlineModelText"/><Button x:Name="CopyAnswerButton"/><Button x:Name="StopButton"/>
+      </StackPanel>
       <Grid Grid.Row="5" Margin="2,8,2,0">
-        <TextBlock x:Name="StatusText" Text="Esc to hide  ·  Enter to open  ·  Ctrl+Alt+Space to summon" Foreground="{DynamicResource RunnerMuted}" FontSize="10" VerticalAlignment="Center" />
+        <TextBlock x:Name="StatusText" Text="Esc to hide  ·  ↑↓ navigate  ·  Enter to open  ·  Ctrl+Alt+Space to summon" Foreground="{DynamicResource RunnerMuted}" FontSize="10" VerticalAlignment="Center" />
         <TextBlock Text="PLUGINS · LOCAL FIRST" Foreground="{DynamicResource RunnerMuted}" Opacity="0.7" FontSize="9" VerticalAlignment="Center" HorizontalAlignment="Right" />
       </Grid>
     </Grid>
