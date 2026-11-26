@@ -877,17 +877,66 @@ public sealed partial class AgentHostBridge : IDisposable
         if (!Guid.TryParse(contextId, out _) || !string.Equals(contextId, _processWorkspaceContextId, StringComparison.OrdinalIgnoreCase)
             || string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             throw new InvalidOperationException("Select a native execution workspace first with select_native_workspace.");
-        root = Path.GetFullPath(root);
+
+        var relative = ReadString(args, "working_directory", 1024).Trim();
+        return ResolveProcessWorkspacePath(relative, "working_directory", requireDirectory: true);
+    }
+
+    /// <summary>
+    /// Resolves paths inside the selected native workspace. The Agent may report a path
+    /// relative to the repository even when the user selected a nested project folder as
+    /// the native workspace. When that causes a duplicated path, recognise the selected
+    /// workspace's trailing path segments and resolve the remainder from the workspace root.
+    /// Both resolution paths remain strictly contained by the selected workspace.
+    /// </summary>
+    private string ResolveProcessWorkspacePath(string relativePath, string parameterName, bool requireDirectory)
+    {
+        var root = Path.GetFullPath(_processWorkspaceRoot
+            ?? throw new InvalidOperationException("Select a native execution workspace first with select_native_workspace."));
         EnsureNoReparseAncestors(root);
-        var relative = ReadString(args, "working_directory", 1024).Replace('/', Path.DirectorySeparatorChar);
-        if (Path.IsPathRooted(relative)) throw new InvalidDataException("working_directory must be relative to the selected native execution workspace.");
-        var working = Path.GetFullPath(Path.Combine(root, relative));
+
+        if (string.IsNullOrWhiteSpace(relativePath)) return root;
+        var relative = relativePath.Trim().Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(relative))
+            throw new InvalidDataException($"{parameterName} must be relative to the selected native execution workspace.");
+
         var prefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        if (!string.Equals(working, root, StringComparison.OrdinalIgnoreCase) && !working.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("working_directory cannot escape the selected native execution workspace.");
-        EnsureNoReparseAncestors(working);
-        if (!Directory.Exists(working)) throw new DirectoryNotFoundException("The requested working directory does not exist inside the selected native workspace.");
-        return working;
+        bool IsInsideWorkspace(string candidate) =>
+            string.Equals(candidate, root, StringComparison.OrdinalIgnoreCase)
+            || candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        bool Exists(string candidate) => requireDirectory ? Directory.Exists(candidate) : File.Exists(candidate);
+
+        var direct = Path.GetFullPath(Path.Combine(root, relative));
+        if (!IsInsideWorkspace(direct))
+            throw new InvalidDataException($"{parameterName} cannot escape the selected native execution workspace.");
+        EnsureNoReparseAncestors(direct);
+        if (Exists(direct)) return direct;
+
+        // Compatibility for callers that still send a repository-relative path after
+        // the user has selected that nested project directory itself as the workspace.
+        var rootSegments = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+        var relativeSegments = relative
+            .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+        var maximumOverlap = Math.Min(rootSegments.Length, relativeSegments.Length);
+        for (var overlap = maximumOverlap; overlap > 0; overlap--)
+        {
+            if (!rootSegments.Skip(rootSegments.Length - overlap)
+                .SequenceEqual(relativeSegments.Take(overlap), StringComparer.OrdinalIgnoreCase))
+                continue;
+
+            var remainder = relativeSegments.Skip(overlap).ToArray();
+            var aliased = remainder.Length == 0
+                ? root
+                : Path.GetFullPath(Path.Combine(root, Path.Combine(remainder)));
+            if (!IsInsideWorkspace(aliased)) continue;
+            EnsureNoReparseAncestors(aliased);
+            if (Exists(aliased)) return aliased;
+        }
+
+        if (requireDirectory)
+            throw new DirectoryNotFoundException("The requested working directory does not exist inside the selected native workspace. Select the package folder as the workspace and leave working_directory empty, or select the repository root and use a workspace-relative subfolder.");
+        throw new FileNotFoundException($"The requested {parameterName} does not exist inside the selected native workspace.", direct);
     }
 
     private async Task<object> RunPowerShellAsync(JsonElement args, CancellationToken cancellationToken)

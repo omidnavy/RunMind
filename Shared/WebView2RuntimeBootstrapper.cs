@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Web.WebView2.Core;
@@ -27,6 +29,43 @@ internal static class WebView2RuntimeBootstrapper
     {
         Timeout = TimeSpan.FromMinutes(3),
     };
+
+    /// <summary>
+    /// Serializes the first WebView2 environment/controller initialization for a user-data
+    /// folder across RunMind processes. WebView2 sessions are shared by controls using the
+    /// same UDF; racing two fresh controller initializations against that UDF can disconnect
+    /// the COM controller before WPF finishes attaching it.
+    /// </summary>
+    public static async Task<FileStream> AcquireUserDataFolderInitializationLockAsync(string userDataFolder)
+    {
+        if (string.IsNullOrWhiteSpace(userDataFolder))
+            throw new ArgumentException("A WebView2 user-data folder is required.", nameof(userDataFolder));
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localAppData))
+            throw new InvalidOperationException("Windows did not provide a Local AppData path for WebView2 initialization coordination.");
+
+        var normalizedFolder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(userDataFolder));
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedFolder.ToUpperInvariant()))).ToLowerInvariant();
+        var lockFolder = Path.Combine(localAppData, "RunMind", "WebView2Locks");
+        Directory.CreateDirectory(lockFolder);
+        var lockPath = Path.Combine(lockFolder, key + ".lock");
+
+        for (var attempt = 0; attempt < 600; attempt++)
+        {
+            try
+            {
+                return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.None);
+            }
+            catch (IOException)
+            {
+                if (attempt == 599) break;
+                await Task.Delay(200).ConfigureAwait(false);
+            }
+        }
+
+        throw new TimeoutException("Another RunMind window did not finish initializing WebView2 with the same user-data folder within two minutes. Close the other window or retry.");
+    }
 
     public static async Task EnsureInstalledAsync()
     {

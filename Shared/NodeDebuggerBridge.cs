@@ -28,15 +28,12 @@ public sealed partial class AgentHostBridge
     {
         EnsureDebuggerSessionCapacity();
         var working = GetProcessWorkingDirectory(args);
-        var root = Path.GetFullPath(_processWorkspaceRoot ?? throw new InvalidOperationException("Select a native workspace first."));
         var scriptPath = ReadString(args, "script_path", 2048).Trim();
         if (scriptPath.Length == 0 || Path.IsPathRooted(scriptPath)) throw new InvalidDataException("script_path must be a workspace-relative JavaScript entry file.");
         if (!new[] { ".js", ".mjs", ".cjs" }.Contains(Path.GetExtension(scriptPath), StringComparer.OrdinalIgnoreCase)) throw new InvalidDataException("Node debugger launch currently supports JavaScript entry files ending in .js, .mjs, or .cjs.");
-        var fullScript = Path.GetFullPath(Path.Combine(root, scriptPath.Replace('/', Path.DirectorySeparatorChar)));
-        var rootPrefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        if (!fullScript.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("The debug target must remain inside the selected native workspace.");
+        var fullScript = ResolveProcessWorkspacePath(scriptPath, "script_path", requireDirectory: false);
         EnsureNoReparseAncestors(fullScript);
-        if (!File.Exists(fullScript) || (File.GetAttributes(fullScript) & FileAttributes.ReparsePoint) != 0) throw new FileNotFoundException("The JavaScript debug target does not exist or is a reparse point.", fullScript);
+        if ((File.GetAttributes(fullScript) & FileAttributes.ReparsePoint) != 0) throw new FileNotFoundException("The JavaScript debug target is a reparse point.", fullScript);
 
         var node = FindExecutable("node.exe") ?? throw new FileNotFoundException("Node.js was not found on PATH.");
         var start = new ProcessStartInfo(node)

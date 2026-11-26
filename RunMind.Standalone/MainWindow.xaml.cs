@@ -125,15 +125,23 @@ public partial class MainWindow : Window
             _initializationStage = "Ensure Microsoft Edge WebView2 Runtime";
             await WebView2RuntimeBootstrapper.EnsureInstalledAsync();
             if (_closing) return;
-            _initializationStage = "Create standalone WebView2 environment";
-            var environment = await CoreWebView2Environment.CreateAsync(
-                null,
-                profile,
-                new CoreWebView2EnvironmentOptions());
-            if (_closing) return;
-            _initializationStage = "Initialize standalone WebView2 control";
-            await _webView.EnsureCoreWebView2Async(environment);
-            if (_closing) return;
+            // A second standalone launch can reach this point while the first process is
+            // attaching a controller to the same persistent UDF. Serialize environment and
+            // controller initialization across processes, then release the lock once WPF
+            // has a live CoreWebView2 instance.
+            await using (var initializationLock = await WebView2RuntimeBootstrapper.AcquireUserDataFolderInitializationLockAsync(profile))
+            {
+                if (_closing) return;
+                _initializationStage = "Create standalone WebView2 environment";
+                var environment = await CoreWebView2Environment.CreateAsync(
+                    null,
+                    profile,
+                    new CoreWebView2EnvironmentOptions());
+                if (_closing) return;
+                _initializationStage = "Initialize standalone WebView2 control";
+                await _webView.EnsureCoreWebView2Async(environment);
+                if (_closing) return;
+            }
 
             _initializationStage = "Configure standalone WebView2 navigation";
             var core = _webView.CoreWebView2;

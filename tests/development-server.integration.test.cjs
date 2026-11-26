@@ -12,6 +12,10 @@ const bridge = read('Shared/DevelopmentServerManager.cs');
 const dispatch = read('Shared/AgentHostBridge.cs');
 const tools = read('Shared/ChatWindow/scripts/agent/tools.js');
 const providers = read('Shared/ChatWindow/scripts/providers.js');
+const nativeDebugger = read('Shared/NodeDebuggerBridge.cs');
+const webViewBootstrapper = read('Shared/WebView2RuntimeBootstrapper.cs');
+const standaloneWindow = read('RunMind.Standalone/MainWindow.xaml.cs');
+const powerToysHost = read('Community.PowerToys.Run.Plugin.RunMind/Main.cs');
 
 test('server manager is dispatched through the existing native Agent bridge', () => {
   assert.match(dispatch, /"developmentServer\.manage"\s*=>\s*DevelopmentServerManageAsync/);
@@ -117,4 +121,71 @@ test('System Manager timeout input uses shared field styling and settings tabs u
   const css = read('Shared/ChatWindow/styles/chat.css');
   assert.match(html, /class="agent-settings-field setting-field"><span>Native command timeout/);
   assert.match(css, /\.agent-settings-tabs \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+});
+
+
+test('native workspace resolver handles both repository-root and selected-project-root paths', () => {
+  assert.match(dispatch, /ResolveProcessWorkspacePath\(relative, "working_directory", requireDirectory: true\)/);
+  assert.match(dispatch, /var maximumOverlap = Math\.Min\(rootSegments\.Length, relativeSegments\.Length\)/);
+  assert.match(dispatch, /SequenceEqual\(relativeSegments\.Take\(overlap\), StringComparer\.OrdinalIgnoreCase\)/);
+  assert.match(dispatch, /Select the package folder as the workspace and leave working_directory empty/);
+  assert.match(nativeDebugger, /ResolveProcessWorkspacePath\(scriptPath, "script_path", requireDirectory: false\)/);
+  assert.match(providers, /If the selected workspace is the fixture folder itself, pass server\.cjs/);
+
+  const resolve = (workspace, relative, exists) => {
+    const path = require('node:path').win32;
+    const root = path.resolve(workspace);
+    const direct = path.resolve(root, relative);
+    if (direct === root || direct.startsWith(root + path.sep)) {
+      if (exists(direct)) return direct;
+    } else {
+      throw new Error('path escaped workspace');
+    }
+    const rootParts = root.replace(/[\\/]+$/, '').split(/[\\/]+/);
+    const relativeParts = relative.replace(/[\\/]+/g, path.sep).split(path.sep).filter(Boolean);
+    for (let overlap = Math.min(rootParts.length, relativeParts.length); overlap > 0; overlap--) {
+      const suffix = rootParts.slice(rootParts.length - overlap);
+      if (suffix.every((part, index) => part.toLowerCase() === relativeParts[index].toLowerCase())) {
+        const candidate = path.resolve(root, ...relativeParts.slice(overlap));
+        if (candidate === root || candidate.startsWith(root + path.sep)) {
+          if (exists(candidate)) return candidate;
+        }
+      }
+    }
+    throw new Error('path not found');
+  };
+
+  const fixture = path.join(root, 'test-fixtures', 'development-server');
+  const winPath = require('node:path').win32;
+  const absoluteFixture = winPath.resolve('C:\\RunMind\\test-fixtures\\development-server');
+  const fixtureFile = winPath.join(absoluteFixture, 'server.cjs');
+  const exists = candidate => [absoluteFixture, fixtureFile].some(expected => winPath.normalize(candidate).toLowerCase() === winPath.normalize(expected).toLowerCase());
+  assert.equal(resolve(absoluteFixture, 'test-fixtures/development-server', exists), absoluteFixture);
+  assert.equal(resolve(absoluteFixture, 'test-fixtures/development-server/server.cjs', exists), fixtureFile);
+  assert.equal(resolve(absoluteFixture, 'server.cjs', exists), fixtureFile);
+  assert.ok(fs.existsSync(path.join(fixture, 'server.cjs')));
+});
+
+test('API, Playwright, server management, and debugger all share the native workspace resolver', () => {
+  assert.match(dispatch, /var working = GetProcessWorkingDirectory\(args\);/);
+  assert.match(dispatch, /private string GetProcessWorkingDirectory\(JsonElement args\)/);
+  assert.match(nativeDebugger, /var working = GetProcessWorkingDirectory\(args\);/);
+  assert.match(dispatch, /"api\.test\.run"\s*=>\s*ApiTestRunAsync/);
+  assert.match(dispatch, /"playwright\.run"\s*=>\s*PlaywrightRunAsync/);
+  assert.match(dispatch, /"developmentServer\.manage"\s*=>\s*DevelopmentServerManageAsync/);
+});
+
+test('WebView2 environment and controller startup is serialized across host processes per user-data folder', () => {
+  assert.match(webViewBootstrapper, /AcquireUserDataFolderInitializationLockAsync/);
+  assert.match(webViewBootstrapper, /FileShare\.None/);
+  assert.match(webViewBootstrapper, /SHA256\.HashData/);
+  assert.match(standaloneWindow, /await using \(var initializationLock = await WebView2RuntimeBootstrapper\.AcquireUserDataFolderInitializationLockAsync\(profile\)\)/);
+  assert.match(standaloneWindow, /await _webView\.EnsureCoreWebView2Async\(environment\);/);
+  assert.match(powerToysHost, /AcquireUserDataFolderInitializationLockAsync\(userDataFolder\)/);
+  assert.match(powerToysHost, /await webView\.EnsureCoreWebView2Async\(environment\);/);
+  for (const project of [
+    'RunMind.Standalone/RunMind.Standalone.csproj',
+    'RunMind.CommandPalette/RunMind.CommandPalette.csproj',
+    'Community.PowerToys.Run.Plugin.RunMind/Community.PowerToys.Run.Plugin.RunMind.csproj',
+  ]) assert.match(read(project), /WebView2RuntimeBootstrapper\.cs/);
 });

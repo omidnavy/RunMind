@@ -57,3 +57,13 @@ A dependency-free fixture is included at `test-fixtures/development-server`. Sel
 9. **Ownership check:** start an external fixture server manually and verify it cannot be stopped using a RunMind session ID; only IDs returned from a RunMind `start` call are eligible.
 
 Use the same test sequence independently in Standalone, PowerToys Run, and Command Palette. Server session ownership is per host process, so stop sessions in the same host that started them. Do not close a host while its test servers are running; sessions are not adopted after restart.
+
+## Selecting the native workspace
+
+The `working_directory` argument is relative to the folder selected in the native-workspace picker. If you select `test-fixtures/development-server` itself, leave `working_directory` empty; if you select the repository root, pass `test-fixtures/development-server`. For Node debugger launch, `script_path` follows the same rule.
+
+## Workspace-path and WebView2 concurrency fixes (2026-11-21)
+
+The native bridge accepts the working-directory path relative to the selected native workspace. If the Agent supplies the repository-relative fixture prefix even though the fixture folder itself is selected, the bridge recognises that duplicated prefix and resolves it back to the selected root. Node debugger entry paths use the same normalisation. Paths are still validated to remain within the selected workspace, and reparse-point checks remain enforced.
+
+Standalone and PowerToys Run WebView2 startup now acquire a short-lived exclusive file lock keyed to the canonical WebView2 user-data-folder path. The lock is held only while creating the environment and attaching the WPF controller, then released. This serializes concurrent launches that share a WebView2 user-data folder; it does not make the app single-instance and it does not change the persisted WebView2 profile location.

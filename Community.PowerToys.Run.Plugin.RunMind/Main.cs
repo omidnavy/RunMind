@@ -2661,12 +2661,18 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             stage = "Ensure Microsoft Edge WebView2 Runtime";
             await WebView2RuntimeBootstrapper.EnsureInstalledAsync();
             if (!appWindow.IsVisible) return;
-            stage = "Create WebView2 environment";
-            var environment = await GetWebView2EnvironmentAsync(useTemporaryUserDataFolder, userDataFolder);
-            if (!appWindow.IsVisible) return;
-            stage = "Initialize WebView2 control";
-            await webView.EnsureCoreWebView2Async(environment);
-            if (!appWindow.IsVisible) return;
+            // Coordinate initial controller attachment for this UDF with any other
+            // RunMind host process that may be opening a WebView2 at the same time.
+            await using (var initializationLock = await WebView2RuntimeBootstrapper.AcquireUserDataFolderInitializationLockAsync(userDataFolder))
+            {
+                if (!appWindow.IsVisible) return;
+                stage = "Create WebView2 environment";
+                var environment = await GetWebView2EnvironmentAsync(useTemporaryUserDataFolder, userDataFolder);
+                if (!appWindow.IsVisible) return;
+                stage = "Initialize WebView2 control";
+                await webView.EnsureCoreWebView2Async(environment);
+                if (!appWindow.IsVisible) return;
+            }
 
             stage = "Configure WebView2 origin and navigation policy";
             var core = webView.CoreWebView2;

@@ -1,3 +1,9 @@
+## Unreleased — Native workspace and WebView2 startup fixes (2026-11-21)
+
+- Fix native workspace path resolution when the selected native workspace is itself a nested project folder. Development-server management, API tests, Playwright, PowerShell/native commands, and Node debugger now share the same normalisation while retaining workspace containment and reparse-point checks.
+- Serialize WebView2 environment/controller initialization per canonical user-data folder across RunMind host processes, reducing concurrent-startup races that can surface as disconnected COM controller errors.
+- Clarify the workspace-relative path rules in tool schemas and test documentation.
+
 ## Unreleased — Phase 2 API & Backend Testing
 
 - Add the shared `api_test_run` Agent tool and native `api.test.run` bridge operation, backed by Node.js built-in `fetch` with no new package dependency.
@@ -109,6 +115,13 @@
 - Retained the existing system-management, container-management, and runmind-management skills.
 
 # Changelog
+
+## 2026-11-21 — Native workspace and WebView2 startup fixes
+
+- Fixed native workspace path resolution when the selected native workspace is itself a nested project folder; server management, API tests, Playwright, and Node debugger now share the corrected resolver.
+- Serialized WebView2 environment/controller initialization per user-data folder across RunMind host processes to avoid overlapping startup against the same profile.
+- Clarified tool schema and runtime test documentation for workspace-relative paths.
+
 
 ## 2.6.2 — System Management Skills & Capability Contracts
 
