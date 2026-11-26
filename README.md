@@ -1,31 +1,18 @@
-<h1 align="center">RunMind</h1>
+# RunMind
 
-<p align="center">
-  <strong>One workspace for your models, your projects, and your Windows machine.</strong><br>
-  A local-first AI workspace that brings chat, research, developer tools, and Windows system intelligence together.
-</p>
+**One workspace for your models, your projects, and your Windows machine.**
 
-<p align="center">
-  <sub>Windows 11 x64&nbsp; · &nbsp;.NET 10&nbsp; · &nbsp;C# and JavaScript&nbsp; · &nbsp;MIT License</sub>
-</p>
+RunMind is a local-first AI workspace that brings chat, research, developer tools, project understanding, and Windows system intelligence together in one desktop environment.
 
-<p align="center">
-  <img src="screenshots/Screenshot-1.png" alt="RunMind Runner showing a local model result over the Windows desktop" width="960">
-</p>
+![RunMind Runner showing a local model result over the Windows desktop](./screenshots/Screenshot-1.png)
 
-RunMind is more than a chat window. Connect a local or OpenAI-compatible model, give the Agent a selected project workspace, and use one desktop environment to understand code, investigate problems, run approved development workflows, research with sources, create deliverables, and inspect Windows system health.
+[Build and setup](./docs/getting-started/BUILD-AND-SETUP.md) · [Documentation](./docs/README.md) · [Feature matrix](./docs/product/FEATURE-MATRIX.md) · [Changelog](./CHANGELOG.md)
 
-RunMind is **local-first, not offline-only**: local model servers can keep inference on your machine, while hosted providers, web search, and connected MCP servers may receive the data sent to them.
+> **Platform:** Windows 11 x64 · **Runtime:** .NET 10 · **Languages:** C# and JavaScript · **License:** MIT
 
-<p align="center">
-  <a href="docs/getting-started/BUILD-AND-SETUP.md"><strong>Build and setup</strong></a>
-  &nbsp; · &nbsp;
-  <a href="docs/README.md"><strong>Documentation</strong></a>
-  &nbsp; · &nbsp;
-  <a href="docs/product/FEATURE-MATRIX.md"><strong>Feature matrix</strong></a>
-  &nbsp; · &nbsp;
-  <a href="CHANGELOG.md"><strong>Changelog</strong></a>
-</p>
+RunMind is more than a chat window. Connect a local or OpenAI-compatible model, select a project workspace for the Agent, and use one desktop environment to understand code, investigate problems, run approved development workflows, research with sources, create deliverables, and inspect Windows system health.
+
+RunMind is **local-first, not offline-only**. Local model servers can keep inference on your machine, while hosted providers, web search, and connected MCP servers may receive the data sent to them.
 
 ## What RunMind brings together
 
@@ -37,7 +24,7 @@ RunMind is **local-first, not offline-only**: local model servers can keep infer
 - **Live Resource and Process Intelligence** — start bounded CPU, memory, GPU, network, and process-I/O monitoring; inspect live processes and use guarded close, terminate, and restart actions for eligible processes.
 - **Useful deliverables** — create Markdown/HTML reports, Word and Excel files, PDFs, SVG charts and diagrams, and image outputs.
 
-The capabilities are evidence-led and deliberately bounded. Static analysis cannot discover every runtime dependency, telemetry depends on Windows providers and drivers, and generated artifacts still need factual and domain review.
+Capabilities are evidence-led and deliberately bounded. Static analysis cannot discover every runtime dependency, telemetry depends on Windows providers and drivers, and generated artifacts still need factual and domain review.
 
 ## Choose how to open RunMind
 
@@ -64,21 +51,17 @@ Vision, tool calling, context size, and other model features depend on the selec
 
 ## See RunMind in action
 
-<p align="center">
-  <img src="screenshots/Screenshot-2.png" alt="RunMind full chat workspace running as a Windows desktop application" width="960">
-</p>
+![RunMind full chat workspace running as a Windows desktop application](./screenshots/Screenshot-2.png)
 
-<p align="center">
-  <sub>RunMind's full workspace and the lightweight Runner are separate hosts built around the same product.</sub>
-</p>
+*RunMind's full workspace and the lightweight Runner are separate hosts built around the same product.*
 
-## Security and privacy are part of the design
+## Security and privacy
 
 - **Workspace boundaries:** the Agent works within the selected workspace. File changes use the applicable approval rules and recovery protections.
 - **Native action checks:** system-changing operations use native permission checks and confirmation. System Manager is disabled until enabled.
 - **No false sandbox promise:** approved PowerShell and native process commands run with the permissions of your Windows account. RunMind does not silently elevate and is not a security sandbox.
 - **Untrusted integrations:** MCP responses, Skills, repository content, and adapter metadata cannot grant themselves permissions. Skill scripts are not automatically executed.
-- **Credential caveat:** credential protection differs between hosts. Full Chat and shared PowerToys Run/Command Palette credential stores are not all DPAPI-protected. Review the [Security and Privacy guide](docs/security/SECURITY-AND-PRIVACY.md) before storing sensitive credentials.
+- **Credential caveat:** credential protection differs between hosts. Full Chat and shared PowerToys Run/Command Palette credential stores are not all DPAPI-protected. Review [Security and Privacy](./docs/security/SECURITY-AND-PRIVACY.md) before storing sensitive credentials.
 
 ## Get started
 
@@ -92,9 +75,9 @@ Vision, tool calling, context size, and other model features depend on the selec
 - Ollama, LM Studio, or another OpenAI-compatible model server for model features.
 - Microsoft PowerToys only for the PowerToys Run plugin and Command Palette extension.
 
-### Build the source
+### Build from source
 
-From the repository root on Windows, run:
+On Windows, run the release build script from the repository root:
 
 ```bat
 Build-Release-x64.bat
@@ -102,21 +85,23 @@ Build-Release-x64.bat
 
 The script builds the four x64 hosts, publishes Standalone and Runner, and packages/signs the Command Palette MSIX. It does **not** install the hosts. Install or update each optional host separately using its corresponding installer script.
 
-For prerequisites, output paths, installation steps, OCR/PDF asset preparation, model-server CORS setup, and validation commands, see the [Build and Setup guide](docs/getting-started/BUILD-AND-SETUP.md).
+For prerequisites, output paths, installation steps, OCR/PDF asset preparation, model-server CORS setup, and validation commands, see the [Build and Setup guide](./docs/getting-started/BUILD-AND-SETUP.md).
 
-> **Source status:** This repository snapshot is labelled 3.4.0, but host/package version metadata is not yet uniform and the current source has not completed native Windows release certification. See the [Build and Validation Status](docs/project/BUILD-STATUS.md) before treating it as a certified release.
+> **Source status:** This repository snapshot is labelled 3.4.0, but host/package version metadata is not yet uniform and the current source has not completed native Windows release certification. Check [Build and Validation Status](./docs/project/BUILD-STATUS.md) before treating it as a certified release.
 
 ## Documentation
 
-- [Documentation index](docs/README.md) — maintained guides grouped by topic.
-- [Feature matrix](docs/product/FEATURE-MATRIX.md) — host capabilities and explicit implementation boundaries.
-- [Advanced Intelligence & Extensibility](docs/product/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md) — Change Impact Explorer, Development Session Timeline, System Intelligence, orchestration, MCP, Skills, adapters, and Runner plugins.
-- [Developer workflows](docs/developer/DEVELOPMENT-INTELLIGENCE.md) — build/test intelligence and project development workflows.
-- [System Manager](docs/system/SYSTEM-MANAGER-OPERATIONS.md) — Windows diagnostics, operations, and safeguards.
-- [Build status](docs/project/BUILD-STATUS.md) and [roadmap](ROADMAP.md) — verification state and remaining priorities.
-- [Release notes](docs/releases/3.4.0-RELEASE-NOTES.md) and [changelog](CHANGELOG.md) — current release summary and product history.
-- [Historical archive](docs/archive/README.md) — milestone audits, acceptance checklists, and prior validation reports.
+- [Documentation index](./docs/README.md) — maintained guides grouped by topic.
+- [Feature matrix](./docs/product/FEATURE-MATRIX.md) — host capabilities and explicit implementation boundaries.
+- [Agent capabilities](./docs/product/AGENT-CAPABILITIES.md) — Agent tools, policies, and capability boundaries.
+- [Advanced Intelligence and Extensibility](./docs/product/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md) — Change Impact Explorer, Development Session Timeline, System Intelligence, orchestration, MCP, Skills, adapters, and Runner plugins.
+- [Developer workflows](./docs/developer/DEVELOPMENT-INTELLIGENCE.md) — build/test intelligence and project development workflows.
+- [System Manager](./docs/system/SYSTEM-MANAGER-OPERATIONS.md) — Windows diagnostics, operations, and safeguards.
+- [Live Resource Intelligence](./docs/LIVE-RESOURCE-INTELLIGENCE.md) and [Process Intelligence](./docs/system/PROCESS-INTELLIGENCE.md) — live monitoring and process inspection.
+- [Build status](./docs/project/BUILD-STATUS.md) and [roadmap](./ROADMAP.md) — verification state and remaining priorities.
+- [Release notes](./docs/releases/3.4.0-RELEASE-NOTES.md) and [changelog](./CHANGELOG.md) — current release summary and product history.
+- [Historical archive](./docs/archive/README.md) — milestone audits, acceptance checklists, and prior validation reports.
 
 ## License
 
-RunMind is released under the [MIT License](LICENSE.txt).
+RunMind is released under the [MIT License](./LICENSE.txt).
