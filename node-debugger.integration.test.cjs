@@ -129,10 +129,13 @@ test('Node Inspector supports launch, pause, source breakpoint, stack evaluation
   assert.equal(evaluation.result.value, 2, 'The paused frame should expose the pre-assignment local value.');
   await inspector.command('Debugger.resume');
   try {
-    // Allow for slower Windows process scheduling while still bounding the integration test.
-    // The validation script runs test files serially so this Inspector process is not competing
-    // with other process-heavy integration tests for startup and event-loop time.
-    await waitFor(() => /runmind-debugger-test\s+5/.test(stdout) || childClosed, 15000, 'debugged script output or process close');
+    // Confirm execution through the Inspector event stream first. The stdout pipe can
+    // deliver its data callback later on Windows even after V8 reports console.log.
+    await inspector.waitEvent(event => {
+      if (event.method !== 'Runtime.consoleAPICalled' || event.params?.type !== 'log') return false;
+      const values = (event.params.args || []).map(argument => argument.value);
+      return values.includes('runmind-debugger-test') && values.includes(5);
+    }, 15000);
   } catch (error) {
     const diagnostic = [
       `Child exit code: ${child.exitCode}`,
@@ -142,8 +145,11 @@ test('Node Inspector supports launch, pause, source breakpoint, stack evaluation
     ].join('\n');
     throw new Error(`${error.message}\n${diagnostic}`, { cause: error });
   }
-  socket.close(); // Node keeps the process alive while an Inspector client remains attached.
-  await waitFor(() => child.exitCode !== null, 5000, 'debugger detach and Node process exit');
+
+  // An attached Inspector client keeps Node alive. Detach before waiting for process close
+  // so stdout/stderr are fully drained and the test cannot wait on its own open socket.
+  socket.close();
+  await waitFor(() => childClosed, 5000, 'debugger detach and Node process close');
   assert.match(stdout, /runmind-debugger-test\s+5/);
 });
 
