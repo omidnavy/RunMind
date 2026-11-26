@@ -330,33 +330,22 @@
     }
     async function requestFolderAccess(signal, forceChoose = false) {
       await workspaceRestorePromise;
-      const nativeHost = !!window.chrome?.webview && typeof window.chrome.webview.postMessage === 'function';
-      if (nativeHost && !forceChoose) {
-        try {
-          const status = await callAgentHost('process.workspace.status', { contextId: workspaceContext.id }, signal, 10000);
-          if (status?.selected && status.selectionId) {
-            const current = agentDirectoryHandle;
-            const matches = current?.isNativeWorkspace === true
-              && current.contextId === workspaceContext.id
-              && current.selectionId === status.selectionId;
-            if (!matches) {
-              // Another RunMind host may have changed the workspace for this conversation.
-              // Rebind to the native host's current selection instead of asking for the same folder again.
-              const handle = createNativeWorkspaceHandle(workspaceContext.id, status.folder || 'workspace', status.selectionId);
-              await persistAgentFolderHandle(handle);
-              notifyWorkspaceHandleChanged('rebound');
-            }
-            return { granted: true, folder: status.folder || agentDirectoryHandle?.name || 'workspace', alreadySelected: true, rebound: !matches, native: true };
+      if (window.chrome?.webview && typeof createNativeWorkspaceDirectoryHandle === 'function') {
+        if (!forceChoose && agentDirectoryHandle?.__runMindNativeWorkspace === true) {
+          const permission = await agentDirectoryHandle.queryPermission({ mode: 'readwrite' });
+          if (permission === 'granted') return { granted: true, folder: agentDirectoryHandle.name, alreadySelected: true };
+          agentDirectoryHandle = null;
+        }
+        if (!forceChoose) {
+          try {
+            const status = await callAgentHost('process.workspace.status', { contextId: workspaceContext.id }, signal, 10000);
+            if (status?.selected) return await activateNativeWorkspace(status);
+          } catch (error) {
+            showToast(`Could not check the selected workspace: ${error?.message || error}`);
           }
-        } catch (error) {
-          const message = `Could not verify the selected native workspace: ${error?.message || error}`;
-          showToast(message);
-          // A failed native status check is not evidence that no workspace exists.
-          // Fail closed rather than prompting the user to pick the same folder again.
-          return { granted: false, error: message };
         }
       }
-      if (!nativeHost && agentDirectoryHandle && !forceChoose) {
+      if (agentDirectoryHandle && !forceChoose) {
         try {
           const permission = await agentDirectoryHandle.queryPermission({ mode: 'readwrite' });
           if (permission === 'granted') return { granted: true, folder: agentDirectoryHandle.name || 'selected folder', alreadySelected: true };
@@ -368,17 +357,20 @@
         }
       }
       if (pendingFolderAccessRequest) return pendingFolderAccessRequest.promise;
-      if (!nativeHost && typeof window.showDirectoryPicker !== 'function' && (forceChoose || !persistedDirectoryHandle)) return Promise.resolve({ granted: false, error: 'This WebView2 runtime does not support folder selection.' });
-      const reconnecting = !nativeHost && !!persistedDirectoryHandle && !forceChoose;
-      agentFolderAccessDetail.textContent = nativeHost
-        ? (forceChoose ? 'Choose a new project folder. This replaces the current workspace for this conversation.' : 'Choose the project folder once. RunMind will use this same native workspace for Agent file access, project indexing, Git, Playwright, API testing, development servers, debugging and approved commands.')
+      if (!window.chrome?.webview && typeof window.showDirectoryPicker !== 'function' && (forceChoose || !persistedDirectoryHandle)) return Promise.resolve({ granted: false, error: 'This browser does not support folder selection.' });
+      const reconnecting = !!persistedDirectoryHandle && !forceChoose;
+      const nativeWorkspace = !!window.chrome?.webview;
+      agentFolderAccessDetail.textContent = nativeWorkspace
+        ? workspaceContext.folderName
+          ? `Select or change the single workspace for '${workspaceContext.folderName}'. The native host will use this same folder for Agent file access, Git, PowerShell, servers, debugging, API tests and Playwright.`
+          : 'Choose one project workspace. RunMind will use this same folder for Agent file access, Git, PowerShell, servers, debugging, API tests and Playwright.'
         : reconnecting
           ? `Reconnect access to the saved folder '${persistedDirectoryHandle.name || 'workspace'}'. You do not need to select it again.`
           : workspaceContext.folderName
             ? `This conversation was saved with the folder name '${workspaceContext.folderName}'. Select it again to grant this device access. The actual folder handle is not exported.`
             : 'Choose a workspace folder. Access is limited to that folder and stays on this device.';
-      agentFolderAccessChoose.textContent = nativeHost ? (forceChoose ? 'Choose new workspace' : 'Choose workspace') : (reconnecting ? 'Reconnect access' : 'Choose folder');
-      agentFolderAccessChange.hidden = nativeHost ? !Boolean(agentDirectoryHandle?.isNativeWorkspace || workspaceContext.folderName) : !reconnecting;
+      agentFolderAccessChoose.textContent = nativeWorkspace ? (forceChoose ? 'Change workspace' : 'Choose workspace') : reconnecting ? 'Reconnect access' : 'Choose folder';
+      agentFolderAccessChange.hidden = nativeWorkspace || !reconnecting;
       agentFolderAccessRequest.hidden = false;
       agentFolderAccessRequest.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       let resolveRequest;
@@ -398,18 +390,13 @@
       agentFolderAccessChoose.onclick = async () => {
         agentFolderAccessChoose.disabled = true;
         try {
-          if (nativeHost) {
-            const selection = await callAgentHost('process.selectWorkspace', { contextId: workspaceContext.id, forceChange: forceChoose }, signal, 120000);
+          if (window.chrome?.webview) {
+            const result = await callAgentHost('process.selectWorkspace', { contextId: workspaceContext.id }, signal, 120000);
             if (settled) return;
-            if (!selection?.selected || !selection.selectionId) {
-              finish({ granted: false, cancelled: true, message: 'Workspace selection was cancelled.' });
-              return;
-            }
-            const handle = createNativeWorkspaceHandle(workspaceContext.id, selection.folder || 'workspace', selection.selectionId);
-            await persistAgentFolderHandle(handle);
-            notifyWorkspaceHandleChanged(forceChoose ? 'changed' : 'selected');
-            finish({ granted: true, folder: handle.name, changed: forceChoose, native: true });
-            showToast(`Shared workspace ${forceChoose ? 'changed' : 'selected'}: ${handle.name}.`);
+            if (!result?.selected) { finish({ granted: false, cancelled: true, message: 'Workspace selection was cancelled.' }); return; }
+            const access = await activateNativeWorkspace(result, { changed: forceChoose });
+            finish(access);
+            showToast(`${forceChoose ? 'Workspace changed' : 'Workspace selected'}: ${access.folder}. All Agent and native tools now share this workspace.`);
             return;
           }
           if (reconnecting && persistedDirectoryHandle) {
@@ -435,23 +422,20 @@
       agentFolderAccessChange.onclick = async () => {
         agentFolderAccessChange.disabled = true;
         try {
-          if (nativeHost) {
-            const selection = await callAgentHost('process.selectWorkspace', { contextId: workspaceContext.id, forceChange: true }, signal, 120000);
-            if (settled) return;
-            if (!selection?.selected || !selection.selectionId) { finish({ granted: false, cancelled: true, message: 'Workspace change was cancelled.' }); return; }
-            const handle = createNativeWorkspaceHandle(workspaceContext.id, selection.folder || 'workspace', selection.selectionId);
-            await persistAgentFolderHandle(handle);
-            notifyWorkspaceHandleChanged('changed');
-            finish({ granted: true, folder: handle.name, changed: true, native: true });
-            showToast(`Workspace changed: ${handle.name}.`);
-          } else {
-            const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-            if (settled) return;
-            await persistAgentFolderHandle(handle);
-            notifyWorkspaceHandleChanged('selected');
-            finish({ granted: true, folder: handle.name || 'selected folder', changed: true });
-            showToast(`Workspace changed: ${handle.name || 'selected folder'}.`);
+          if (window.chrome?.webview) {
+            const result = await callAgentHost('process.selectWorkspace', { contextId: workspaceContext.id }, signal, 120000);
+            if (!result?.selected) { finish({ granted: false, cancelled: true, message: 'Workspace change was cancelled.' }); return; }
+            const access = await activateNativeWorkspace(result, { changed: true });
+            finish(access);
+            showToast(`Workspace changed: ${access.folder}.`);
+            return;
           }
+          const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+          if (settled) return;
+          await persistAgentFolderHandle(handle);
+          notifyWorkspaceHandleChanged('selected');
+          finish({ granted: true, folder: handle.name || 'selected folder', changed: true });
+          showToast(`Workspace changed: ${handle.name || 'selected folder'}.`);
         } catch (error) {
           if (error?.name === 'AbortError') finish({ granted: false, cancelled: true, message: 'Folder selection was cancelled.' });
           else showToast(`Could not change folder: ${error?.message || error}`);

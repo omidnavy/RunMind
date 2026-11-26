@@ -356,7 +356,7 @@
       clearTimeout(pending.timeout);
       pending.signal?.removeEventListener('abort', pending.onAbort);
       if (result.ok) pending.resolve(result.result);
-      else { const error = new Error(String(result.error || 'Native Agent operation failed.')); if (typeof result.errorName === 'string' && result.errorName) error.name = result.errorName; pending.reject(error); }
+      else pending.reject(new Error(String(result.error || 'Native Agent operation failed.')));
     }
     window.chrome?.webview?.addEventListener('message', handleAgentHostMessage);
     function callAgentHost(operation, args = {}, signal, timeoutMs = 2 * 60 * 1000, onProgress = null) {

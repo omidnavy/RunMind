@@ -41,4 +41,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     status.textContent = 'Form cleared.';
   });
+
+  const corsProbe = document.querySelector('#cors-probe');
+  corsProbe?.addEventListener('click', async () => {
+    status.textContent = 'Checking browser cross-origin enforcement…';
+    try {
+      await fetch('http://127.0.0.1:4321/cors-probe');
+      status.textContent = 'The cross-origin request was unexpectedly readable.';
+    } catch (_) {
+      status.textContent = 'The browser correctly blocked the cross-origin response.';
+    }
+  });
 });

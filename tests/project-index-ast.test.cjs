@@ -216,9 +216,9 @@ test('AST records re-export bindings for cross-module symbol resolution', () => 
   assert.deepEqual(Array.from(result.importBindings, item => [item.source,item.imported,item.local,item.kind]), [['./dep.js','value','publicValue','re-export']]);
 });
 
-test('project index schema v7 preserves original manifest text across incremental reuse', () => {
-  assert.match(source, /PROJECT_INDEX_PREFIX = 'runmind\.project-index\.v7\.'/);
-  assert.match(source, /value\.version===7/);
+test('project index schema v6 preserves original manifest text across incremental reuse', () => {
+  assert.match(source, /PROJECT_INDEX_PREFIX = 'runmind\.project-index\.v6\.'/);
+  assert.match(source, /value\.version===6/);
   assert.match(source, /manifestText:isManifest\?text\.slice\(0,64000\):null/);
   assert.match(source, /prior\.manifestText\|\|prior\.text\.slice/);
 });

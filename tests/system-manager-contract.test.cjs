@@ -133,7 +133,7 @@ test('AST refactoring tool is exposed preview-first and applies through approved
 
 test('Windows validation script builds the complete three-host solution after Node tests', () => {
   const script = read('Validate-Phase1-Windows.ps1');
-  assert.match(script, /node --test --test-concurrency=1/);
+  assert.match(script, /& \$node\.Source --test --test-concurrency=1/);
   assert.match(script, /RunMind\.sln/);
   assert.match(script, /dotnet build/);
   assert.match(script, /Platform=\$Platform/);
@@ -184,7 +184,7 @@ test('TypeScript compiler API is bundled offline and loaded before project index
   assert.doesNotMatch(read('Shared/ChatWindow.html'), /vendor\/typescript\/typescript\.js/);
   assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /script\.src = 'ChatWindow\/vendor\/typescript\/typescript\.js'/);
   assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /typescript-compiler-api/);
-  assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /PROJECT_INDEX_PREFIX = 'runmind\.project-index\.v7\.'/);
+  assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /PROJECT_INDEX_PREFIX = 'runmind\.project-index\.v6\.'/);
 });
 
 test('public API rename is preview-first and applies through the approved multi-file editor', () => {

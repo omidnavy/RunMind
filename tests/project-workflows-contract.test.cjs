@@ -22,21 +22,21 @@ test('Project Diagnostics is a separate operational readiness workflow', () => {
   assert.match(workflows, /project_validate/);
   assert.match(workflows, /malformed manifests/);
   assert.match(workflows, /conflicting or ambiguous lockfiles/);
-  assert.match(workflows, /fixed read-only version\/discovery probes/);
+  assert.match(workflows, /fixed read-only Node\.js\/npm and JS\/TS tooling version\/discovery probes/);
   assert.match(workflows, /fresh approval through powershell_execute/);
   assert.match(workflows, /Never install, update, repair, format, or modify project files/);
 });
 
-test('Project diagnostics reuse one shared workspace and avoid duplicate folder selection', () => {
-  assert.match(workflows, /same conversation-scoped workspace identity/);
-  assert.match(workflows, /Never ask the user to select the same folder a second time/);
-  assert.match(workflows, /complete static diagnostics first/);
+test('Project diagnostics use the unified workspace and do not request the same folder twice', () => {
+  assert.match(workflows, /one selected native workspace shared by Agent file access, Git and native developer tools/);
+  assert.match(workflows, /never ask the user to choose the same folder twice/);
 });
 
 test('Playwright tool schema applies action-specific selector and value requirements', () => {
   const line = providers.split(/\r?\n/).find(value => value.includes("name: 'playwright_run'"));
   assert.ok(line);
   assert.match(line, /required: \['action','selector','value'\]/);
-  assert.match(line, /Every action object must include action, selector, and value/);
-  assert.match(line, /RunMind performs action-specific preflight validation/);
+  assert.match(line, /ALWAYS include this string property/);
+  assert.match(line, /Use a non-empty Playwright selector/);
+  assert.match(line, /Use an empty string for goto/);
 });

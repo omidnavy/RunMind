@@ -1,14 +1,19 @@
-# RunMind 2.7.0 — P0 Foundation Feature Matrix
+# RunMind 2.7.0 — Feature Matrix (P0 foundation + Phase 1/2 capabilities)
 
-| Area | Capability | Status in current 2.7.0 release candidate | Notes |
+| Area | Capability | Status in current 2.7.0 source bundle | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
 | Hosts | PowerToys Command Palette | Preserved | Shared Agent Core |
-| Developer | Project index and search | Implemented with limits | Persistent incremental index; Acorn JavaScript AST analysis; lazily loaded TypeScript 5.8.3 compiler API for JSX/TSX/TS syntax and bounded project-wide checker references; HTML/CSS files indexed as text; root tsconfig paths; static module graph; `project_symbol_graph` | Language-aware scope is JavaScript, TypeScript, JSX/TSX, HTML and CSS; compiler checker bounded to 500 JS/JSX/TS/TSX files and 12 MB; no default libs/full diagnostic pass; external Node packages use the native Node resolver tool.
+| Developer | Project index and search | Implemented with limits | Persistent incremental index; Acorn JS analysis; TypeScript compiler API for JS/JSX/TS/TSX semantic references; HTML/CSS project understanding; root tsconfig paths; static module graph; `project_symbol_graph` | Strong semantic support is intentionally scoped to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Compiler checker bounded to 500 source files and 12 MB; no default libs/full diagnostic pass; external installed packages use native Node resolver tool.
 | Developer workflow | Project Understanding | Expanded | Uses the persistent index, symbol graph, AST/checker references and source tracing to map architecture and execution paths; does not execute commands or modify files |
 | Developer workflow | Project Diagnostics | Added | Separate operational readiness workflow for manifests, lockfiles, toolchains, scripts, build/test configuration and optional approval-gated live checks; read-only by default |
-| Workspace | Unified native workspace | Implemented in 2.7.0; Windows acceptance pending | One canonical per-conversation root; native File System Access-compatible bridge; selection identity invalidation; Git, file tools, project indexing and native project execution share it |
+| Workspace | Unified conversation workspace | Implemented in P0 | Native-host-owned canonical root shared by Agent file access, Git and native project tools; path-contained RPC, per-conversation workspace ID, cross-host revalidation, stale-handle invalidation; browser-only fallback retained outside native hosts |
+| Agent reliability | Evidence-based final response | Implemented in P0 | Bounded tool execution ledger and deterministic report fallback after empty model output, tool-step limit, repeated tool failure or generation failure after tool execution |
+| Agent reliability | Tool argument correction | Improved in P0 | Action-specific schema requirements, validation hints, retry fingerprints and no repeated identical malformed tool calls |
+| Developer | Development-server session recovery | Implemented in P0 | Persisted process identity, start/reconcile/stop locking, conservative re-adoption only on PID/start-time/executable match; stale/unknown records never terminated |
+| System Manager | Targeted port-owner lookup | Implemented in P0 | TCP/UDP local port inspection with process identity; available via process or network diagnostics capability; never terminates owners |
+| Browser quality | Expected policy-block classification | Implemented in P0 | CORS/CSP/mixed-content events remain visible; explicitly expected policy events are separated from application errors and correlated transport failures |
 | Developer | Coordinated multi-file editing | Added in integration pass | 2–20 files, one approval, snapshot checks, per-file backups, best-effort rollback; sequential writes are not atomic |
 | Developer | Node runtime module resolution | Implemented with limits | Fresh-approved fixed script invokes Node ESM `import.meta.resolve` and CommonJS `createRequire().resolve`; no target modules are executed; native workspace must match project workspace |
 | Developer | Static project validation | Implemented with limits | JSON/XML and selected manifest checks; test discovery; package manager/lockfile detection; no build/test execution |
@@ -32,7 +37,6 @@
 | System Manager | Application launch | Implemented | Uses stable application IDs; revalidates executable; reuses/activates existing windows by default; distinguishes startup, activation and unverified handoff |
 | System Manager | Open files/folders/HTTPS URLs | Implemented | Windows default-handler request accepted; target application/window/focus/navigation are not verified |
 | System Manager | Process inspection | Expanded | Parent PID, working/private memory, cumulative CPU time, threads, handles, priority, responsiveness, executable path and start time; detail fields individually gated |
-| Development servers | Persistent ownership and reconciliation | Implemented in 2.7.0; Windows runtime acceptance pending | Durable launch record, exact PID/start-time/executable/workspace identity checks, recovered-session logs explicitly unavailable; unknown port owners are never adopted or killed |
 | System Manager | Graceful process close | Added | Identity-checked main-window close request; mandatory confirmation; never force-kills |
 | System Manager | Process termination | Implemented | Disabled by default; mandatory fresh confirmation and identity revalidation |
 | System Manager | OS/environment/service/network diagnostics | Expanded | Uptime, drive capacity, gateways and DNS added; individual switches; read-only |
@@ -43,8 +47,6 @@
 | System Manager | Application adapters | Implemented | Built-ins plus user JSON manifests with argument templates; no scripts/shell |
 | System Manager | RunMind conversation adapter | Added in integration pass | Send prompt, open validated `.runmind` session in Standalone, or start a new conversation window; no attach to already-running WebView sessions |
 | Agent | Current tool inventory | Implemented | Lists exact active Agent/MCP/host/workspace tool definitions |
-| Agent | Tool argument discipline and completion audit | Hardened in 2.7.0 | Targeted tool selection guidance, selector/value preflight, duplicate-failure guard and non-empty audit fallback when model final narration is missing |
-| Browser quality | CORS policy classification | Implemented in 2.7.0 | Preserves raw console/policy evidence and separates expected/undeclared CORS blocks from application exceptions, HTTP failures and unexpected transport failures |
 | Skills | Global discovery/loading | Implemented | Works without an authorized project folder |
 | System Manager | GUI automation/admin/system changes | Not included | Explicitly out of scope |
 | Security | Skill scripts auto-execution | Not allowed | Never executed by installer |
@@ -68,13 +70,13 @@
 | Runtime quality | Heap snapshots | Implemented; Windows build/runtime verified by user | Streamed `.heapsnapshot` output; 128 MB cap; fresh approval; incomplete snapshots discarded |
 | Runtime quality | Memory-over-time sampling | Implemented; Windows build/runtime verified by user | Timestamped V8 heap samples; 1–60 second interval; 5–600 second duration; 120-sample ring |
 | Runtime quality | Heap dominator/leak UI | Not included | Open exported V8 snapshots in Chrome/Edge DevTools; native analysis UI is a later candidate |
-| Browser quality | Structured Playwright automation | Implemented in working bundle; Windows build pending | Shared native runner; Chromium/Firefox/WebKit; 1–30 structured actions; fresh approval per run; ephemeral contexts; assertions, console/network diagnostics and screenshots; project-installed package required |
+| Browser quality | Structured Playwright automation | Implemented in working bundle; Windows build pending | Shared native runner; Chromium/Firefox/WebKit; 1–30 structured actions; fresh approval per run; ephemeral contexts; assertions, console/network diagnostics, semantic page inspection and screenshots; expected/unexpected CORS/CSP/mixed-content policy events reported separately; project-installed package required |
 | API quality | Structured HTTP/API test runner | Implemented in working bundle; Windows build pending | Shared native Node fetch runner; 1–20 sequential requests; status/header/JSON/body assertions; env-backed secrets; same-origin redirects; fresh approval per suite |
-| Development servers | Start/readiness/log/health/stop lifecycle | Implemented in working bundle; Windows build pending | Shared native process bridge; package.json script discovery; up to eight owned servers; bounded stdout/stderr; loopback readiness/health; port preflight; fresh approval for start/stop; npm CLI required |
+| Development servers | Start/readiness/log/health/stop lifecycle | Implemented in working bundle; Windows build pending | Shared native process bridge; package.json script discovery; up to eight owned servers; persisted process identity; guarded re-adoption and per-session stop locks; stale/unknown processes are never terminated; bounded logs; loopback readiness/health; no HTTP-ready claim without a configured probe; fresh approval for start/stop; npm CLI required |
 
 ## 2.6.1 changes
 
-| Area | Capability | Status in current 2.7.0 release candidate | Notes |
+| Area | Capability | Status in current 2.7.0 source bundle | Notes |
 |---|---|---|---|
 | System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
 | System Manager | First-party RunMind adapter | Extended | Sends prompts, opens a validated `.runmind` session, or starts a fresh Standalone conversation |
@@ -136,7 +138,7 @@
 
 | Area | Capability | Status | Notes |
 |---|---|---|---|
-| Developer | Package-manager and lockfile detection | Implemented in project index | Node.js ecosystem only: npm, pnpm, Yarn and Bun; `packageManager` field takes precedence when present; ambiguous lockfile signals are surfaced |
+| Developer | Package-manager and lockfile detection | Implemented in project index | Detects npm, pnpm, Yarn, Bun, uv, Poetry, Pipenv, Cargo, Go, Composer and Bundler lockfiles; Node packageManager field takes precedence when present |
 | Developer | Declared script command suggestions | Implemented in static validation | Suggestions are derived only from detected Node package manager and scripts declared in package.json; never executed by validation |
 | Developer | Local import relationships | Implemented with limits | Acorn static graph plus bounded TypeScript checker; tsconfig paths; relative/package exports/import aliases/re-exports/cycles; Node runtime resolver tool covers installed dependencies under actual Node ESM/CommonJS rules |
 | System Manager | Container command output and timeout | Hardened | Asynchronous process wait, user-configurable timeout (0 = no automatic timeout), cancellation, process-tree termination, bounded stdout/stderr |
@@ -149,8 +151,8 @@
 
 ### Explicit Phase 1 gaps
 
-- JavaScript (.js/.mjs/.cjs) uses Acorn; JSX/TSX/TypeScript use the bundled TypeScript compiler API. A bounded project Program/checker resolves workspace symbols, but it does not load default libraries or perform a complete diagnostic/type-check pass. Language-aware project analysis is intentionally scoped to JavaScript, TypeScript, JSX/TSX, HTML and CSS; other languages are not in the current developer roadmap.
-- Runtime build, test, lint, Playwright and dependency-audit commands are not executed by static validation. They reuse the conversation's shared workspace and require fresh approval for each command.
+- JavaScript (.js/.mjs/.cjs) uses Acorn; JSX/TSX/TypeScript use the bundled TypeScript compiler API. A bounded project Program/checker resolves workspace symbols, but it does not load default libraries or perform a complete diagnostic/type-check pass. Other languages retain heuristic extraction.
+- Runtime build, test, lint, Playwright and dependency-audit commands are not executed by static validation. They require an explicitly selected native workspace and fresh approval.
 - Native process execution runs as the current Windows user and is not a security sandbox.
 - Multi-host Windows compilation and end-to-end execution must be validated on Windows; this environment cannot establish those results.
 - RunMind's built-in adapter can submit a startup prompt, but does not manage an already-running conversation/session store.
@@ -170,3 +172,7 @@
 | Multi-file recovery tests | Implemented | Source-level ordering/rollback contract tests; browser filesystem failure injection remains outstanding |
 
 | Cross-file symbol references | Implemented (static) | Maps resolved import bindings to lexical use sites in importing modules; dynamic/unresolved references remain outside the graph |
+
+## Developer language scope
+
+RunMind project understanding and project-specific developer workflows are intentionally focused on JavaScript, TypeScript, JSX/TSX, HTML and CSS. No additional language parsers, semantic engines, debuggers or language-specific build/test workflows are introduced in 2.7.0. Existing generic package-manifest/lockfile recognition may observe other ecosystem metadata but does not imply language support.

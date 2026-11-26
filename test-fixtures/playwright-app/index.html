@@ -56,6 +56,11 @@
           </div>
         </form>
         <p class="live-status" id="submission-status" role="status" aria-live="polite" aria-atomic="true">No requests submitted yet.</p>
+        <div class="field security-probe">
+          <p class="muted">Browser security test</p>
+          <button class="secondary-button" id="cors-probe" type="button">Probe expected CORS block</button>
+          <p class="muted">This sends a cross-origin request to the second fixture server, which deliberately does not enable CORS.</p>
+        </div>
       </section>
 
       <section class="panel results-panel" id="results" aria-labelledby="results-title">

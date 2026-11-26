@@ -1,65 +1,56 @@
 # RunMind Roadmap
 
-## Current source baseline: 2.7.0 — P0 Reliability & Unified Workspace Foundation
+## Current source baseline: 2.7.0 — P0 Foundation & Reliability
 
-### P0 status
+## Active milestone: P0 — Reliability and workspace architecture
 
-P0 implementation is present in the 2.7.0 source candidate. The portable Node suite and source-level contract tests pass; the three-host Windows/.NET build and manual acceptance scenarios remain a required user-side release gate.
+P0 source implementation is included in this bundle. The portable Node test suite passes 156/156 tests with Node.js 22.16.0. The three-host Windows Release x64 build and live acceptance must still be run on the target machine using Node.js 24+ and .NET 10; this source snapshot is not described as Windows-certified until that succeeds.
 
-- **Unified Workspace Selection:** native host owns one canonical, persisted workspace root per conversation. Agent file operations use the native file bridge; Git and native execution use the same identity. No browser folder-name path inference is used. The native picker is shown once for first selection and only again for an explicit change or a legacy conversation without native workspace state.
-- **Phase 2 acceptance:** Node debugger/runtime profiling have prior user-confirmed Windows validation. Playwright, API and development-server workflows are implemented; run the full validation script and acceptance guide against 2.7.0 before sign-off.
-- **Agent reliability:** action schema and native preflight validation, targeted tool selection guidance, identical-call retry protection, task completion audit and deterministic non-empty fallback are implemented.
-- **Development-server ownership:** durable server records are scoped to conversation and workspace selection identity. PID, process start time and executable path must match before recovery. Historical logs cannot be reattached after host restart and are reported unavailable.
-- **Playwright CORS classification:** raw browser policy events are retained; expected and undeclared CORS blocks are distinct from application/JavaScript errors and unexpected transport failures. User-declared expected CORS origins are classified as expected policy blocks.
+The full source-scope audit is recorded in `docs/P0-IMPLEMENTATION-AUDIT.md`; the live Windows gate is recorded in `docs/P0-WINDOWS-ACCEPTANCE.md`.
 
-### Supported project-language scope
+### P0 scope implemented in source
 
-Language-aware developer functionality is intentionally limited to **JavaScript, TypeScript, JSX/TSX, HTML and CSS**. Node package managers are npm, pnpm, Yarn and Bun. Other file types can still be read/searched as generic text or configuration, but no additional language parsers, compiler integrations, debuggers, build/test ecosystems or language-specific package managers are planned for the current scope.
+- **Unified Workspace Selection:** one native-host-owned, per-conversation canonical root is shared by Agent file operations, Git and native project tools. The WebView uses a bounded native file RPC; workspace IDs invalidate stale handles; persisted state is revalidated across host processes; a second folder picker is not part of the native-host workflow. Browser-only contexts retain a browser directory-picker fallback.
+- **Agent tool reliability:** tool outcomes are recorded in a bounded execution ledger; unchanged malformed tool calls are not repeated; Playwright action schemas describe required selector/value fields; validation identifies the exact action and correction hint; empty model output, generation failure, repeated tool failure, and tool-step limits after tool execution produce an evidence-based deterministic final report.
+- **Development-server ownership:** session records persist process ID, executable path, process start identity, script, working directory, port, readiness URL and state. Start, reconcile, metadata updates and stop use cross-process locks. Only an exact PID/start-time/executable identity match can be re-adopted or stopped. Stale/unknown records are reported, never killed. No configured HTTP readiness URL means readiness is `not_configured`, not `ready`.
+- **Targeted port investigation:** System Manager provides TCP/UDP port-owner lookup under the existing process or network-diagnostics capability. The Agent is instructed to use it for a specific port instead of broad system inventory.
+- **Playwright policy reporting:** CORS, CSP and mixed-content blocks are distinct policy events. Explicitly expected events remain visible but are not counted as unexpected application console/network failures when safely correlated. Unexpected and missing expected events remain failures.
+- **Project-language scope:** JavaScript, TypeScript, JSX/TSX, HTML and CSS only. No additional project-language parsers, semantic engines, debuggers or language-specific build/test workflows are planned in this milestone.
 
-### P0 validation gate
+### P0 Windows acceptance still required
 
-Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` using Node.js 24 and .NET 10. Then complete `docs/P0-FOUNDATION-ACCEPTANCE.md` across Standalone, PowerToys Run and Command Palette. Do not mark P0 Windows-certified until all three hosts build and the manual workspace, server recovery, tool selection/final response and CORS checks pass.
+- Build all three hosts with `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64`.
+- Verify one folder selection is sufficient for Agent file access, Git, PowerShell/native execution, Node debugger, API runner, Playwright and development-server tools.
+- Verify workspace changes propagate across Standalone, PowerToys Run and Command Palette and invalidate stale handles.
+- Verify development-server reconciliation across host restart, exact identity re-adoption, stale PID handling, port conflict safety, and explicit stop.
+- Verify empty/repeated model tool failures still yield a non-empty final report.
+- Verify Task C in Playwright, including the fixture's submit/reset messages and expected CORS policy classification.
 
-## Next roadmap after P0
+## Next milestone candidates
 
-### P1 — Project Mission Control and change impact
+1. **Project Mission Control:** orchestrate Project Understanding, Project Diagnostics, approved build/test checks, browser/API checks and an evidence-backed readiness report.
+2. **Test Impact Analysis:** use the existing JS/TS symbol graph and dependency edges to select likely affected tests and modules.
+3. **Development Session Timeline:** correlate server sessions, PIDs, browser requests, API tests, debugger events and captured logs without introducing duplicate event stores.
+4. **System Manager diagnostics:** Windows Event Log/crash investigation, bounded resource sampling, Scheduled Task inventory, storage health, security posture and targeted DNS/TCP probes.
+5. **Podman Development Workbench:** Compose/Containerfile inspection, build logs, container-health and service/port/volume/network relationships.
+6. **Database Development Workbench:** start with PostgreSQL and SQLite; schema inspection, read-only query execution, query plans and migration validation.
+7. **API contract testing:** OpenAPI/JSON Schema validation, reusable sequential suites and explicit auth profiles.
+8. **Agent/MCP reliability:** better task checkpoints, resource discovery and structured recovery.
 
-- Project onboarding/readiness workflow coordinating Project Understanding, Project Diagnostics and existing build/test tools.
-- Test Impact Analysis based on the existing JavaScript/TypeScript symbol and dependency graph.
-- Release Readiness report combining tests, browser/API checks, dependency audit, Git status and build artifacts.
+These are candidates, not claims of existing implementation. Keep the current codebase compact: reuse the shared Agent Core, native bridge, project index, approval system and existing runners. Avoid adding a new engine when an existing subsystem can be extended.
 
-### P2 — System Manager intelligence
+### Compatibility and security principles
 
-- Windows Event Log reader and correlated crash investigation.
-- Bounded CPU/memory/disk/network sampling.
-- Scheduled Task inspection and controlled reversible operations.
-- Storage health and targeted DNS/TCP/proxy diagnostics.
-- Windows security posture inventory (Defender, Firewall, BitLocker, Secure Boot, TPM and UAC), read-only first.
+- One shared Agent Core across Standalone, PowerToys Run and PowerToys Command Palette.
+- One native-owned workspace root per conversation; no absolute path guessing from directory names.
+- Native operations are bounded and freshly approved where they change application or system state.
+- Never terminate an unknown process because it occupies a port.
+- Never claim HTTP readiness without an actual configured probe.
+- Browser policy events are not silently discarded; expected and unexpected blocks remain distinguishable.
+- System Manager remains optional and disabled by default.
+- Native process execution runs as the current Windows user and is not a sandbox.
+- Project language support remains JS/TS/JSX/TSX/HTML/CSS until a future explicit scope decision.
 
-### P3 — Developer infrastructure
-
-- Podman-first development workflows: Compose discovery, Containerfile inspection/build diagnostics, service/port/network/volume relationships.
-- PostgreSQL and SQLite tooling, beginning with schema inspection, read-only SQL and migration review.
-- OpenAPI/JSON Schema contract tests and richer API test suites.
-- Log/session timeline correlation across development servers, Node debugger, API calls and Playwright.
-
-### P4 — Agent workflow quality
-
-- Better MCP resource discovery and health reporting.
-- More robust multi-tool orchestration, checkpoints and recovery.
-- Test Impact Analysis and release reports integrated into agent task completion.
-
-No new project-language support is planned in these milestones unless the user explicitly changes the scope. The focus is to deepen the JavaScript/TypeScript/JSX/HTML/CSS toolchain and add cross-cutting capabilities.
-
-### Architecture principles
-
-- One shared Agent Core across Standalone, PowerToys Run and Command Palette.
-- One native-host-owned workspace identity per conversation; no second folder picker for the same selection.
-- No duplicate project indexes, permission engines, Skills engines, Git adapters or process managers.
-- Native process execution is bounded, user-approved and runs with the current Windows user's permissions; workspace path containment is not a process sandbox.
-- Unknown processes and port owners are never terminated. Development-server recovery is identity-verified and approval-gated.
-- Read-only diagnostics first; mutations require explicit approval and verifiable outcomes.
-- Keep implementations proportionate: every abstraction must remove real duplication or satisfy a concrete security/runtime requirement.
 
 ## 2.6.2 — System Management Skills & Capability Contracts
 

@@ -167,7 +167,7 @@
         catch (error) { if (error?.name !== 'NotFoundError') throw error; }
       }
       const handle = await dir.getFileHandle(name, { create: true });
-      const writable = await handle.createWritable({ keepExistingData: false });
+      const writable = await handle.createWritable({ keepExistingData: false, overwrite });
       try { await writable.write(blob); await writable.close(); }
       catch (error) { try { await writable.abort(); } catch (_) {} throw error; }
       return { path, bytes: blob.size };

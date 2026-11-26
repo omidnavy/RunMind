@@ -4,7 +4,7 @@ A dependency-free local HTML application for testing RunMind's Playwright naviga
 
 ## Run it
 
-Select this folder once as the conversation workspace in RunMind. Playwright and Agent file operations reuse this same selection. Install Playwright and Chromium in this fixture folder once:
+Select this folder as the native execution workspace in RunMind. Install Playwright and Chromium in this fixture folder once:
 
 ```powershell
 npm install --save-dev playwright

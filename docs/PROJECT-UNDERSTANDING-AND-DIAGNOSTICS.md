@@ -20,6 +20,6 @@ Project Diagnostics can identify which build/test commands are configured and wh
 
 All three consume Project Understanding rather than duplicating its index or symbol graph.
 
-## Shared workspace
+## Workspace behavior in RunMind 2.7.0
 
-The native host owns one canonical workspace root per conversation. Agent file operations use a path-free directory/file adapter over the native file bridge; project indexing, Skills, Git (when the selected root is a repository), PowerShell, native commands, development servers, API tests, Playwright and Node debugging reuse the same selection identity. The native picker is shown for first selection, an explicit workspace change, or a legacy conversation with no persisted native selection. Every process or test execution still requires its own approval. Workspace containment is path authorization, not a process sandbox.
+The selected conversation workspace is now native-host-owned and shared with Agent file operations through a path-contained file bridge. Project Understanding and static Project Diagnostics use this same workspace. Live environment probes and build/test commands use relative paths inside it and require fresh approval. Browser-only contexts without a native host retain the browser directory-picker fallback.

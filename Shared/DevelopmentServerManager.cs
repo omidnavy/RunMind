@@ -24,17 +24,13 @@ public sealed partial class AgentHostBridge
         public required string Id { get; init; }
         public required string Script { get; init; }
         public required string WorkingDirectory { get; init; }
-        public required string ContextId { get; init; }
-        public required string WorkspaceSelectionId { get; init; }
-        public required string ExecutablePath { get; init; }
-        public required long ProcessStartTimeUtcTicks { get; set; }
         public required Process Process { get; init; }
         public required DateTime StartedAtUtc { get; init; }
+        public DateTime ProcessStartedAtUtc { get; set; }
+        public string ExecutablePath { get; set; } = string.Empty;
+        public bool Recovered { get; set; }
         public string? ReadinessUrl { get; init; }
         public int? Port { get; init; }
-        public bool Recovered { get; init; }
-        public bool LogsAvailable { get; init; } = true;
-        public volatile bool RegistryPersisted;
         public readonly object LogLock = new();
         public readonly Queue<string> Logs = new();
         public int LogCharacters;
@@ -42,6 +38,27 @@ public sealed partial class AgentHostBridge
         public int? ExitCode;
     }
 
+    private sealed class DevelopmentServerMetadata
+    {
+        public int Version { get; set; } = 1;
+        public string Id { get; set; } = string.Empty;
+        public string Script { get; set; } = string.Empty;
+        public string WorkingDirectory { get; set; } = string.Empty;
+        public int ProcessId { get; set; }
+        public string ExecutablePath { get; set; } = string.Empty;
+        public long ProcessStartedAtUtcTicks { get; set; }
+        public DateTime StartedAtUtc { get; set; }
+        public string? ReadinessUrl { get; set; }
+        public int? Port { get; set; }
+        public int? ExitCode { get; set; }
+        public string State { get; set; } = "running";
+    }
+
+    private sealed record StaleDevelopmentServer(string Id, int ProcessId, string Script, string WorkingDirectory, string Reason, DateTime StartedAtUtc);
+    private static readonly object DevelopmentServerReconcileLock = new();
+    private static readonly List<StaleDevelopmentServer> StaleDevelopmentServers = new();
+    private const int MaximumPersistedDevelopmentServerRecords = 64;
+    private const int MaximumDevelopmentServerMetadataBytes = 32 * 1024;
     private const int MaximumDevelopmentServers = 8;
     private const int MaximumDevelopmentServerHistory = 32;
     private const int MaximumServerLogCharacters = 48 * 1024;
@@ -83,24 +100,36 @@ public sealed partial class AgentHostBridge
     private async Task<object> DevelopmentServerManageAsync(JsonElement args, CancellationToken cancellationToken)
     {
         var action = ReadString(args, "action", 20).ToLowerInvariant();
-        if (action is not ("discover" or "start" or "list" or "logs" or "health" or "stop"))
-            throw new InvalidDataException("Development server action must be discover, start, list, logs, health, or stop.");
-        var contextId = ReadString(args, "contextId", 64);
-        var workspaceRoot = RequireWorkspaceRoot(contextId);
-        var selectionId = RequireWorkspaceSelectionId(contextId);
         if (action == "discover") return DevelopmentServerDiscover(args);
-        var recovery = ReconcileDevelopmentServerSessions(contextId, workspaceRoot, selectionId);
-        if (action == "list") return DevelopmentServerList(contextId, selectionId, recovery.Recovered, recovery.Warnings);
+        if (action == "list" || action == "reconcile") return DevelopmentServerReconcile();
         var id = ReadString(args, "server_id", 80);
-        if (action == "logs") return DevelopmentServerLogs(id, contextId, selectionId);
-        if (action == "health") return await DevelopmentServerHealthAsync(id, contextId, selectionId, cancellationToken).ConfigureAwait(false);
-        if (action == "start") return await DevelopmentServerStartAsync(args, contextId, selectionId, cancellationToken).ConfigureAwait(false);
-        if (action == "stop") return await DevelopmentServerStopAsync(id, contextId, selectionId).ConfigureAwait(false);
-        throw new InvalidDataException("Unsupported development server action.");
+        if (action == "logs") return DevelopmentServerLogs(id);
+        if (action == "health") return await DevelopmentServerHealthAsync(id, cancellationToken).ConfigureAwait(false);
+        if (action == "start") return await DevelopmentServerStartAsync(args, cancellationToken).ConfigureAwait(false);
+        if (action == "stop") return await DevelopmentServerStopAsync(id).ConfigureAwait(false);
+        throw new InvalidDataException("Development server action must be discover, start, list, reconcile, logs, health, or stop.");
     }
 
-    private async Task<object> DevelopmentServerStartAsync(JsonElement args, string contextId, string selectionId, CancellationToken cancellationToken)
+    private async Task<object> DevelopmentServerStartAsync(JsonElement args, CancellationToken cancellationToken)
     {
+        Directory.CreateDirectory(DevelopmentServerDirectory);
+        EnsureNoReparseAncestors(DevelopmentServerDirectory);
+        var startLockPath = Path.Combine(DevelopmentServerDirectory, "start.lock");
+        if (File.Exists(startLockPath) && IsReparsePoint(startLockPath))
+            throw new InvalidDataException("The development-server start lock is not a normal file.");
+        FileStream startLock;
+        try { startLock = new FileStream(startLockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+        catch (IOException) { throw new InvalidOperationException("Another RunMind host is currently starting a development server. Reconcile sessions and retry after it finishes."); }
+        using (startLock)
+        {
+            ReconcileDevelopmentServerSessions();
+            return await DevelopmentServerStartCoreAsync(args, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<object> DevelopmentServerStartCoreAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        ReconcileDevelopmentServerSessions();
         if (DevelopmentServers.Values.Count(item => !SafeHasExited(item.Process)) >= MaximumDevelopmentServers) throw new InvalidOperationException($"RunMind manages at most {MaximumDevelopmentServers} development servers per host.");
         var working = GetProcessWorkingDirectory(args);
         var packagePath = Path.Combine(working, "package.json");
@@ -139,7 +168,6 @@ public sealed partial class AgentHostBridge
         }
 
         var readinessUrl = ReadString(args, "readiness_url", 2048);
-        if (readinessUrl.Length == 0 && port.HasValue) readinessUrl = $"http://127.0.0.1:{port.Value}/";
         if (readinessUrl.Length > 0)
         {
             if (!Uri.TryCreate(readinessUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo)
@@ -167,15 +195,10 @@ public sealed partial class AgentHostBridge
         start.ArgumentList.Add("run");
         start.ArgumentList.Add(script);
         var process = new Process { StartInfo = start, EnableRaisingEvents = true };
-        var sessionId = Guid.NewGuid().ToString("N");
-        var executablePath = Path.GetFullPath(node);
-        var processStartTicks = 0L;
         var session = new DevelopmentServerSession
         {
-            Id = sessionId, Script = script, WorkingDirectory = working, ContextId = contextId,
-            WorkspaceSelectionId = selectionId, ExecutablePath = executablePath, ProcessStartTimeUtcTicks = 0,
-            Process = process, StartedAtUtc = DateTime.UtcNow,
-            ReadinessUrl = readinessUrl.Length == 0 ? null : readinessUrl, Port = port,
+            Id = Guid.NewGuid().ToString("N"), Script = script, WorkingDirectory = working, Process = process,
+            StartedAtUtc = DateTime.UtcNow, ReadinessUrl = readinessUrl.Length == 0 ? null : readinessUrl, Port = port,
         };
         process.OutputDataReceived += (_, eventArgs) => { if (eventArgs.Data is not null) AppendDevelopmentServerLog(session, "stdout", eventArgs.Data); };
         process.ErrorDataReceived += (_, eventArgs) => { if (eventArgs.Data is not null) AppendDevelopmentServerLog(session, "stderr", eventArgs.Data); };
@@ -183,25 +206,25 @@ public sealed partial class AgentHostBridge
         {
             session.Exited = true;
             try { session.ExitCode = process.ExitCode; } catch { }
-            if (session.RegistryPersisted) RemoveDevelopmentServerRecord(session.ContextId, session.Id);
+            try { PersistDevelopmentServerMetadata(session); } catch { }
         };
         if (!process.Start()) { process.Dispose(); throw new InvalidOperationException("Could not start the development server process."); }
-        try
-        {
-            try { processStartTicks = process.StartTime.ToUniversalTime().Ticks; }
-            catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception) { throw new InvalidOperationException("RunMind could not verify the newly launched server process start time; the process was not retained as an owned server.", error); }
-            session.ProcessStartTimeUtcTicks = processStartTicks;
-            if (!DevelopmentServers.TryAdd(session.Id, session)) throw new InvalidOperationException("Could not register the development server session.");
-            PersistDevelopmentServerRecord(session);
-            session.RegistryPersisted = true;
-            if (session.Exited || SafeHasExited(process)) RemoveDevelopmentServerRecord(session.ContextId, session.Id);
-        }
+        session.ProcessStartedAtUtc = process.StartTime.ToUniversalTime();
+        try { session.ExecutablePath = Path.GetFullPath(process.MainModule?.FileName ?? node); }
+        catch { session.ExecutablePath = Path.GetFullPath(node); }
+        try { PersistDevelopmentServerMetadata(session); }
         catch
         {
-            DevelopmentServers.TryRemove(session.Id, out _);
-            try { if (!SafeHasExited(process)) process.Kill(true); } catch { }
-            try { process.Dispose(); } catch { }
-            throw;
+            try { process.Kill(true); } catch { }
+            try { process.WaitForExit(3000); } catch { }
+            process.Dispose();
+            throw new InvalidOperationException("The development server started, but RunMind could not persist its process-ownership record. The process tree was stopped to avoid creating an untrackable server.");
+        }
+        if (!DevelopmentServers.TryAdd(session.Id, session))
+        {
+            try { process.Kill(true); } catch { }
+            try { File.Delete(DevelopmentServerMetadataPath(session.Id)); } catch { }
+            process.Dispose(); throw new InvalidOperationException("Could not register the development server session.");
         }
         TrimDevelopmentServerHistory();
         process.BeginOutputReadLine();
@@ -209,12 +232,12 @@ public sealed partial class AgentHostBridge
 
         var waitSeconds = 2;
         if (args.TryGetProperty("readiness_timeout_seconds", out var waitValue) && waitValue.TryGetInt32(out var requestedWait)) waitSeconds = Math.Clamp(requestedWait, 2, 90);
-        var ready = false;
+        bool? ready = null;
         var deadline = DateTime.UtcNow.AddSeconds(readinessUrl.Length == 0 ? 2 : waitSeconds);
         while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
         {
             if (session.Exited || process.HasExited) break;
-            if (readinessUrl.Length == 0) { ready = true; break; }
+            if (readinessUrl.Length == 0) break;
             try
             {
                 using var response = await DevelopmentHealthClient.GetAsync(readinessUrl, cancellationToken).ConfigureAwait(false);
@@ -226,17 +249,18 @@ public sealed partial class AgentHostBridge
             await Task.Delay(500).ConfigureAwait(false);
         }
         var exited = session.Exited || process.HasExited;
+        if (readinessUrl.Length > 0 && ready is null) ready = false;
         string logTail;
         lock (session.LogLock) { logTail = string.Join("\n", session.Logs.TakeLast(12)); }
         var conflict = logTail.Contains("EADDRINUSE", StringComparison.OrdinalIgnoreCase) || logTail.Contains("address already in use", StringComparison.OrdinalIgnoreCase) || logTail.Contains("port is already allocated", StringComparison.OrdinalIgnoreCase);
-        return new { server_id = session.Id, process_id = SafeProcessId(process), script, working_directory = working, port, readiness_url = session.ReadinessUrl, ready, state = exited ? "exited" : ready ? "running" : "starting", startup_failure = exited, port_conflict = conflict, exit_code = session.ExitCode, logs = logTail, recovered = false, logs_available = true, note = "RunMind recorded the exact process identity and workspace selection. It may stop this server only after separate approval and identity revalidation." };
+        try { PersistDevelopmentServerMetadata(session); } catch { }
+        return new { server_id = session.Id, process_id = SafeProcessId(process), script, working_directory = working, port, readiness_url = session.ReadinessUrl, ready, readiness_status = exited ? "exited" : readinessUrl.Length == 0 ? "not_configured" : ready == true ? "ready" : "not_ready", state = exited ? "exited" : "running", process_running = !exited, startup_failure = exited, port_conflict = conflict, exit_code = session.ExitCode, recovered = false, can_stop = VerifyDevelopmentServerIdentity(session), logs = logTail, note = readinessUrl.Length == 0 ? "The process is running, but no readiness_url was configured. HTTP readiness is unknown; configure a loopback readiness_url to verify the application endpoint." : "RunMind persisted the process identity and verified the loopback readiness URL. Termination remains separately approved and revalidates PID, executable path and process start time." };
     }
 
     private static void TrimDevelopmentServerHistory()
     {
         foreach (var session in DevelopmentServers.Values.Where(item => SafeHasExited(item.Process)).OrderBy(item => item.StartedAtUtc).Take(Math.Max(0, DevelopmentServers.Count - MaximumDevelopmentServerHistory)))
         {
-            RemoveDevelopmentServerRecord(session.ContextId, session.Id);
             if (DevelopmentServers.TryRemove(session.Id, out var removed)) { try { removed.Process.Dispose(); } catch { } }
         }
     }
@@ -252,39 +276,230 @@ public sealed partial class AgentHostBridge
         {
             session.Logs.Enqueue(entry); session.LogCharacters += entry.Length;
             while (session.LogCharacters > MaximumServerLogCharacters && session.Logs.Count > 1) session.LogCharacters -= session.Logs.Dequeue().Length;
+            try
+            {
+                var logPath = DevelopmentServerLogPath(session.Id);
+                Directory.CreateDirectory(DevelopmentServerDirectory);
+                EnsureNoReparseAncestors(DevelopmentServerDirectory);
+                if (File.Exists(logPath) && IsReparsePoint(logPath)) return;
+                File.AppendAllText(logPath, entry + Environment.NewLine, new UTF8Encoding(false));
+                if (new FileInfo(logPath).Length > MaximumServerLogCharacters * 2)
+                    File.WriteAllLines(logPath, session.Logs, new UTF8Encoding(false));
+            }
+            catch { /* A log persistence failure must not crash the redirected process stream handlers. */ }
         }
     }
 
-    private object DevelopmentServerList(string contextId, string selectionId, int recoveredCount, string[] recoveryWarnings) => new
+    private static string DevelopmentServerDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RunMind", "DevelopmentServers");
+    private static string DevelopmentServerMetadataPath(string id) => Path.Combine(DevelopmentServerDirectory, id + ".json");
+    private static string DevelopmentServerLogPath(string id) => Path.Combine(DevelopmentServerDirectory, id + ".log");
+
+    private static void PersistDevelopmentServerMetadata(DevelopmentServerSession session)
     {
-        servers = DevelopmentServers.Values.Where(item => item.ContextId == contextId && item.WorkspaceSelectionId == selectionId).OrderBy(item => item.StartedAtUtc).Select(item =>
+        var processId = SafeProcessId(session.Process) ?? throw new InvalidOperationException("The development server process ID is unavailable.");
+        var metadata = new DevelopmentServerMetadata
         {
-            var exited = item.Exited || SafeHasExited(item.Process);
-            if (exited) { RemoveDevelopmentServerRecord(item.ContextId, item.Id); }
-            return new
+            Id = session.Id, Script = session.Script, WorkingDirectory = session.WorkingDirectory,
+            ProcessId = processId, ExecutablePath = session.ExecutablePath,
+            ProcessStartedAtUtcTicks = session.ProcessStartedAtUtc.Ticks, StartedAtUtc = session.StartedAtUtc,
+            ReadinessUrl = session.ReadinessUrl, Port = session.Port, ExitCode = session.ExitCode,
+            State = session.Exited || SafeHasExited(session.Process) ? "exited" : "running"
+        };
+        Directory.CreateDirectory(DevelopmentServerDirectory);
+        EnsureNoReparseAncestors(DevelopmentServerDirectory);
+        var target = DevelopmentServerMetadataPath(session.Id);
+        if (Directory.Exists(target) || (File.Exists(target) && (File.GetAttributes(target) & FileAttributes.ReparsePoint) != 0))
+            throw new InvalidDataException("The development-server metadata path is not a normal file.");
+        var metadataLockPath = target + ".metadata.lock";
+        if (File.Exists(metadataLockPath) && IsReparsePoint(metadataLockPath))
+            throw new InvalidDataException("The development-server metadata lock is a reparse point; ownership metadata was not changed.");
+        FileStream? metadataLock = null;
+        for (var attempt = 0; attempt < 40 && metadataLock is null; attempt++)
+        {
+            try { metadataLock = new FileStream(metadataLockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+            catch (IOException) when (attempt < 39) { Thread.Sleep(25); }
+        }
+        if (metadataLock is null) throw new IOException("Another RunMind host is updating this development-server ownership record.");
+        using (metadataLock)
+        {
+            if (Directory.Exists(target) || (File.Exists(target) && IsReparsePoint(target)))
+                throw new InvalidDataException("The development-server metadata path changed to an unsafe entry.");
+            var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
             {
-                server_id = item.Id, process_id = SafeProcessId(item.Process), script = item.Script, working_directory = item.WorkingDirectory,
-                started_at_utc = item.StartedAtUtc, readiness_url = item.ReadinessUrl, port = item.Port,
-                state = exited ? "exited" : "running", exit_code = item.ExitCode, owned_by_runmind = true,
-                recovered = item.Recovered, logs_available = item.LogsAvailable
-            };
-        }).ToArray(),
-        recovery = new { recovered_sessions_added = recoveredCount, warnings = recoveryWarnings },
-        ownership = "Only sessions with a persisted RunMind record and matching PID, process start time, executable path, conversation and workspace selection are recovered. Unknown port owners are never adopted or terminated."
-    };
+                File.WriteAllText(temporary, JsonSerializer.Serialize(metadata), new UTF8Encoding(false));
+                File.Move(temporary, target, true);
+            }
+            finally { try { if (File.Exists(temporary)) File.Delete(temporary); } catch { } }
+        }
+    }
+
+    private static bool VerifyDevelopmentServerIdentity(DevelopmentServerSession session)
+    {
+        try
+        {
+            if (!session.Process.HasExited && session.Process.Id > 0)
+            {
+                var actualStart = session.Process.StartTime.ToUniversalTime().Ticks;
+                if (Math.Abs(actualStart - session.ProcessStartedAtUtc.Ticks) > TimeSpan.TicksPerSecond) return false;
+                var actualExecutable = Path.GetFullPath(session.Process.MainModule?.FileName ?? string.Empty);
+                if (string.IsNullOrWhiteSpace(actualExecutable) || !string.Equals(actualExecutable, session.ExecutablePath, StringComparison.OrdinalIgnoreCase)) return false;
+                return string.Equals(session.Process.ProcessName, "node", StringComparison.OrdinalIgnoreCase);
+            }
+            return false;
+        }
+        catch { return false; }
+    }
+
+    private static List<string> ReadPersistedServerLogs(string id)
+    {
+        try
+        {
+            var path = DevelopmentServerLogPath(id);
+            if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 || new FileInfo(path).Length > MaximumServerLogCharacters * 2) return new List<string>();
+            return File.ReadLines(path, Encoding.UTF8).TakeLast(120).Select(line => Limit(line, 4000)).ToList();
+        }
+        catch { return new List<string>(); }
+    }
+
+    private static string? ValidateDevelopmentServerMetadata(string metadataPath, out DevelopmentServerMetadata? metadata)
+    {
+        metadata = null;
+        try
+        {
+            if ((File.GetAttributes(metadataPath) & FileAttributes.ReparsePoint) != 0 || new FileInfo(metadataPath).Length > MaximumDevelopmentServerMetadataBytes) return "Ownership record is a reparse point or exceeds the size limit.";
+            metadata = JsonSerializer.Deserialize<DevelopmentServerMetadata>(File.ReadAllText(metadataPath, Encoding.UTF8));
+            if (metadata is null || metadata.Version != 1 || !System.Text.RegularExpressions.Regex.IsMatch(metadata.Id, "^[a-f0-9]{32}$")
+                || !string.Equals(Path.GetFileNameWithoutExtension(metadataPath), metadata.Id, StringComparison.OrdinalIgnoreCase)
+                || metadata.ProcessId <= 0 || metadata.ProcessStartedAtUtcTicks <= 0 || string.IsNullOrWhiteSpace(metadata.ExecutablePath)
+                || string.IsNullOrWhiteSpace(metadata.WorkingDirectory) || metadata.Script.Length > 60
+                || (metadata.Port.HasValue && metadata.Port.Value is < 1 or > 65535)
+                || (metadata.ReadinessUrl is not null && (!Uri.TryCreate(metadata.ReadinessUrl, UriKind.Absolute, out var readiness)
+                    || readiness.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(readiness.UserInfo)
+                    || !(readiness.IsLoopback || readiness.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))))
+                return "Ownership record fields are invalid.";
+            return null;
+        }
+        catch (Exception error) { return "Ownership record could not be read: " + Limit(error.Message, 300); }
+    }
+
+    private static void ReconcileDevelopmentServerSessions()
+    {
+        lock (DevelopmentServerReconcileLock)
+        {
+            foreach (var session in DevelopmentServers.Values.ToArray())
+            {
+                if (!SafeHasExited(session.Process)) continue;
+                session.Exited = true;
+                try { session.ExitCode ??= session.Process.ExitCode; } catch { }
+                try { PersistDevelopmentServerMetadata(session); } catch { }
+            }
+            try
+            {
+                Directory.CreateDirectory(DevelopmentServerDirectory);
+                EnsureNoReparseAncestors(DevelopmentServerDirectory);
+                var reconcileLockPath = Path.Combine(DevelopmentServerDirectory, "reconcile.lock");
+                if (File.Exists(reconcileLockPath) && IsReparsePoint(reconcileLockPath)) return;
+                using var reconcileFileLock = new FileStream(reconcileLockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                foreach (var metadataPath in Directory.EnumerateFiles(DevelopmentServerDirectory, "*.json")
+                    .OrderByDescending(path => File.GetLastWriteTimeUtc(path)).Take(MaximumPersistedDevelopmentServerRecords))
+                {
+                    var recordError = ValidateDevelopmentServerMetadata(metadataPath, out var metadata);
+                    if (recordError is not null || metadata is null) { AddStaleServer(metadata?.Id ?? Path.GetFileNameWithoutExtension(metadataPath), 0, metadata?.Script ?? "", metadata?.WorkingDirectory ?? "", recordError ?? "Invalid ownership record.", metadata?.StartedAtUtc ?? File.GetLastWriteTimeUtc(metadataPath)); continue; }
+                    if (DevelopmentServers.ContainsKey(metadata.Id)) continue;
+                    if (string.Equals(metadata.State, "exited", StringComparison.OrdinalIgnoreCase)) continue;
+                    Process? process = null;
+                    try
+                    {
+                        process = Process.GetProcessById(metadata.ProcessId);
+                        if (process.HasExited)
+                        {
+                            process.Dispose();
+                            AddStaleServer(metadata.Id, metadata.ProcessId, metadata.Script, metadata.WorkingDirectory, "The recorded Node.js process has exited; no process was adopted or terminated.", metadata.StartedAtUtc);
+                            continue;
+                        }
+                        var startTicks = process.StartTime.ToUniversalTime().Ticks;
+                        if (Math.Abs(startTicks - metadata.ProcessStartedAtUtcTicks) > TimeSpan.TicksPerSecond)
+                        { process.Dispose(); AddStaleServer(metadata.Id, metadata.ProcessId, metadata.Script, metadata.WorkingDirectory, "PID is now occupied by a different process start instance; not adopted or terminated.", metadata.StartedAtUtc); continue; }
+                        var executable = Path.GetFullPath(process.MainModule?.FileName ?? string.Empty);
+                        var expectedExecutable = Path.GetFullPath(metadata.ExecutablePath);
+                        if (!string.Equals(executable, expectedExecutable, StringComparison.OrdinalIgnoreCase)
+                            || !string.Equals(process.ProcessName, "node", StringComparison.OrdinalIgnoreCase))
+                        { process.Dispose(); AddStaleServer(metadata.Id, metadata.ProcessId, metadata.Script, metadata.WorkingDirectory, "Live PID executable identity does not match the recorded Node.js process; not adopted or terminated.", metadata.StartedAtUtc); continue; }
+                        if (!Directory.Exists(metadata.WorkingDirectory) || (File.GetAttributes(metadata.WorkingDirectory) & FileAttributes.ReparsePoint) != 0)
+                        { process.Dispose(); AddStaleServer(metadata.Id, metadata.ProcessId, metadata.Script, metadata.WorkingDirectory, "Recorded project working directory is unavailable or unsafe; process was not adopted or terminated.", metadata.StartedAtUtc); continue; }
+                        EnsureNoReparseAncestors(metadata.WorkingDirectory);
+                        var session = new DevelopmentServerSession
+                        {
+                            Id = metadata.Id, Script = metadata.Script, WorkingDirectory = metadata.WorkingDirectory,
+                            Process = process, StartedAtUtc = metadata.StartedAtUtc,
+                            ProcessStartedAtUtc = new DateTime(metadata.ProcessStartedAtUtcTicks, DateTimeKind.Utc),
+                            ExecutablePath = expectedExecutable, ReadinessUrl = metadata.ReadinessUrl,
+                            Port = metadata.Port, Recovered = true
+                        };
+                        foreach (var line in ReadPersistedServerLogs(metadata.Id)) { session.Logs.Enqueue(line); session.LogCharacters += line.Length; }
+                        process.EnableRaisingEvents = true;
+                        process.Exited += (_, _) => { session.Exited = true; try { session.ExitCode = process.ExitCode; } catch { } try { PersistDevelopmentServerMetadata(session); } catch { } };
+                        if (!DevelopmentServers.TryAdd(session.Id, session)) process.Dispose();
+                        else PersistDevelopmentServerMetadata(session);
+                    }
+                    catch (ArgumentException)
+                    {
+                        process?.Dispose();
+                        AddStaleServer(metadata.Id, metadata.ProcessId, metadata.Script, metadata.WorkingDirectory, "Recorded process no longer exists; no action was taken.", metadata.StartedAtUtc);
+                    }
+                    catch (Exception error)
+                    {
+                        process?.Dispose();
+                        AddStaleServer(metadata.Id, metadata.ProcessId, metadata.Script, metadata.WorkingDirectory, "Process identity could not be verified: " + Limit(error.Message, 300) + ". No action was taken.", metadata.StartedAtUtc);
+                    }
+                }
+            }
+            catch { /* Listing must remain available even when the metadata directory is unavailable. */ }
+        }
+    }
+
+    private static void AddStaleServer(string id, int pid, string script, string working, string reason, DateTime started)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return;
+        lock (StaleDevelopmentServers)
+        {
+            StaleDevelopmentServers.RemoveAll(item => item.Id == id);
+            StaleDevelopmentServers.Add(new StaleDevelopmentServer(id, pid, script, working, reason, started));
+            if (StaleDevelopmentServers.Count > 64) StaleDevelopmentServers.RemoveRange(0, StaleDevelopmentServers.Count - 64);
+        }
+    }
+
+    private object DevelopmentServerReconcile()
+    {
+        ReconcileDevelopmentServerSessions();
+        var servers = DevelopmentServers.Values.OrderBy(item => item.StartedAtUtc).Select(item => new
+        {
+            server_id = item.Id, process_id = SafeProcessId(item.Process), script = item.Script, working_directory = item.WorkingDirectory,
+            started_at_utc = item.StartedAtUtc, readiness_url = item.ReadinessUrl, port = item.Port,
+            state = item.Exited || SafeHasExited(item.Process) ? "exited" : "running", exit_code = item.ExitCode,
+            owned_by_runmind = true, recovered = item.Recovered, can_stop = !SafeHasExited(item.Process) && VerifyDevelopmentServerIdentity(item)
+        }).ToArray();
+        StaleDevelopmentServer[] stale;
+        lock (StaleDevelopmentServers) stale = StaleDevelopmentServers.ToArray();
+        return new { servers, stale_sessions = stale, recovered_count = servers.Count(item => item.recovered), stale_count = stale.Length,
+            note = "Only sessions whose PID, Node executable path and process start time matched the persisted RunMind ownership record were re-adopted. Stale or unknown processes were never terminated." };
+    }
 
     private static bool SafeHasExited(Process process) { try { return process.HasExited; } catch { return true; } }
 
-    private object DevelopmentServerLogs(string id, string contextId, string selectionId)
+    private object DevelopmentServerLogs(string id)
     {
-        if (!DevelopmentServers.TryGetValue(id, out var session) || session.ContextId != contextId || session.WorkspaceSelectionId != selectionId) throw new KeyNotFoundException("Development server session was not found in the selected workspace.");
+        ReconcileDevelopmentServerSessions();
+        if (!DevelopmentServers.TryGetValue(id, out var session)) throw new KeyNotFoundException("Development server session was not found in this RunMind host.");
         string[] logs; lock (session.LogLock) logs = session.Logs.TakeLast(120).ToArray();
-        return new { server_id = id, logs, truncated = session.LogCharacters >= MaximumServerLogCharacters, state = session.Exited || SafeHasExited(session.Process) ? "exited" : "running", exit_code = session.ExitCode, recovered = session.Recovered, logs_available = session.LogsAvailable, note = session.LogsAvailable ? null : "This server was recovered after a RunMind host restart. Historical stdout/stderr could not be recovered because live streams are process-bound." };
+        return new { server_id = id, logs, truncated = session.LogCharacters >= MaximumServerLogCharacters, state = session.Exited || SafeHasExited(session.Process) ? "exited" : "running", exit_code = session.ExitCode };
     }
 
-    private async Task<object> DevelopmentServerHealthAsync(string id, string contextId, string selectionId, CancellationToken cancellationToken)
+    private async Task<object> DevelopmentServerHealthAsync(string id, CancellationToken cancellationToken)
     {
-        if (!DevelopmentServers.TryGetValue(id, out var session) || session.ContextId != contextId || session.WorkspaceSelectionId != selectionId) throw new KeyNotFoundException("Development server session was not found in the selected workspace.");
+        ReconcileDevelopmentServerSessions();
+        if (!DevelopmentServers.TryGetValue(id, out var session)) throw new KeyNotFoundException("Development server session was not found in this RunMind host.");
         if (string.IsNullOrWhiteSpace(session.ReadinessUrl)) return new { server_id = id, state = session.Exited || SafeHasExited(session.Process) ? "exited" : "running", health_check = "not_configured", message = "Start the server with readiness_url to enable HTTP health checks." };
         var watch = Stopwatch.StartNew();
         try
@@ -298,19 +513,28 @@ public sealed partial class AgentHostBridge
         }
     }
 
-    private async Task<object> DevelopmentServerStopAsync(string id, string contextId, string selectionId)
+    private async Task<object> DevelopmentServerStopAsync(string id)
     {
-        if (!DevelopmentServers.TryGetValue(id, out var session) || session.ContextId != contextId || session.WorkspaceSelectionId != selectionId) throw new KeyNotFoundException("Development server session was not found in the selected workspace. Unknown or stale processes cannot be stopped.");
-        if (SafeHasExited(session.Process)) { RemoveDevelopmentServerRecord(session.ContextId, session.Id); return new { server_id = id, stopped = false, state = "already_exited", owned_by_runmind = true, recovered = session.Recovered }; }
-        if (!TryClaimDevelopmentServerStop(session, out var verifiedProcess, out var reason))
-            return new { server_id = id, stopped = false, state = "not_stopped", owned_by_runmind = false, reason };
-        try { verifiedProcess.Kill(true); }
-        catch (InvalidOperationException) { }
-        catch (System.ComponentModel.Win32Exception error) { ClearDevelopmentServerStopClaim(session); throw new InvalidOperationException("RunMind could not stop the verified owned server process: " + error.Message); }
-        try { await verifiedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); } catch (TimeoutException) { }
-        var stopped = SafeHasExited(verifiedProcess);
-        if (stopped) RemoveDevelopmentServerRecord(session.ContextId, session.Id); else ClearDevelopmentServerStopClaim(session);
-        return new { server_id = id, stopped, process_id = SafeProcessId(verifiedProcess), state = stopped ? "exited" : "terminating", owned_by_runmind = stopped, recovered = session.Recovered, note = "Termination was attempted only after the persisted RunMind process identity and workspace selection were revalidated." };
+        ReconcileDevelopmentServerSessions();
+        if (!DevelopmentServers.TryGetValue(id, out var session)) throw new KeyNotFoundException("Development server session was not found or could not be safely re-adopted. Only identity-verified RunMind-owned sessions can be stopped.");
+        if (SafeHasExited(session.Process)) { session.Exited = true; try { PersistDevelopmentServerMetadata(session); } catch { } return new { server_id = id, stopped = false, state = "already_exited", owned_by_runmind = true, recovered = session.Recovered, can_stop = false }; }
+        var stopLockPath = DevelopmentServerMetadataPath(session.Id) + ".stop.lock";
+        if (File.Exists(stopLockPath) && IsReparsePoint(stopLockPath)) throw new InvalidDataException("The development-server stop lock is not a normal file; termination was refused.");
+        FileStream? stopLock = null;
+        try { stopLock = new FileStream(stopLockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+        catch (IOException) { throw new InvalidOperationException("Another RunMind host is already reconciling or stopping this server session."); }
+        using (stopLock)
+        {
+            if (!VerifyDevelopmentServerIdentity(session)) throw new InvalidOperationException("The recorded process identity no longer matches the live PID, Node executable and process start time. RunMind refused to terminate it.");
+            try { session.Process.Kill(true); }
+            catch (InvalidOperationException) { }
+            catch (System.ComponentModel.Win32Exception error) { throw new InvalidOperationException("RunMind could not stop its owned server process: " + error.Message); }
+            try { await session.Process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); } catch (TimeoutException) { }
+            var stopped = SafeHasExited(session.Process);
+            if (stopped) { session.Exited = true; try { session.ExitCode = session.Process.ExitCode; } catch { } }
+            try { PersistDevelopmentServerMetadata(session); } catch { }
+            return new { server_id = id, stopped, process_id = SafeProcessId(session.Process), state = stopped ? "exited" : "terminating", owned_by_runmind = true, recovered = session.Recovered, note = "The process tree was targeted only after verifying the persisted PID, executable path and process start time." };
+        }
     }
 
 

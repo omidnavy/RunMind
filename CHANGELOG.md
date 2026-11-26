@@ -1,15 +1,15 @@
-## 2.7.0 — P0 Reliability & Unified Workspace Foundation (2026-11-22)
+## 2.7.0 — P0 Foundation & Reliability
 
-- Unify Agent file access and native project operations behind one native-host-owned workspace root per conversation. The WebView receives an opaque selection identity and a File System Access-compatible virtual directory/file handle, not an absolute Windows path.
-- Persist workspace root and selection identity under Local AppData with cross-host synchronization. Rebind stale cached handles after a workspace change and reject operations carrying an outdated selection identity.
-- Route file tools, project indexing, Skills, Git, PowerShell/native execution, development servers, API tests, Node debugging and Playwright through the same selected root. Relative subdirectories remain contained within that root; Git clone activates its destination as the same shared workspace.
-- Add bounded native workspace file RPC with path traversal/rooted-path/alternate-stream checks, reparse-point protection, chunked 256 KB transfers, 128 MB file limit, atomic writes and selection revalidation at commit.
-- Persist development-server ownership across host restarts. Recovery requires matching conversation, workspace selection identity, PID, process start time and executable path. Stop requires a registry claim, fresh approval and identity revalidation. Unknown port owners are never adopted or stopped.
-- Improve Agent tool selection guidance for targeted diagnostics and Playwright. Add explicit selector/value validation, exact action-index errors, repeated-call blocking and a deterministic completion audit so tool execution cannot end with an empty assistant response.
-- Classify Playwright CORS as a browser security-policy event. Preserve the raw event while separating expected/undeclared CORS blocks and preflight responses from JavaScript exceptions, ordinary HTTP errors and unexpected transport failures.
-- Fix native workspace picker argument propagation (`forceChange`) so initial selection and explicit workspace replacement pass the correct selection intent.
-- Restrict language-aware project analysis/diagnostics to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Node package-manager detection is limited to npm, pnpm, Yarn and Bun. Other programming-language integrations are intentionally out of scope.
-- Add P0 acceptance documentation and source-contract coverage for shared workspace identity, stale-handle rejection, server recovery, tool selection, final-response fallback and CORS classification.
+- Unified Agent file access and native project operations behind one native-host-owned workspace root per conversation. Added a bounded file RPC with relative path validation, reparse-point rejection, chunked reads/writes, atomic commit, stale workspace-ID rejection and pending-write cleanup. Persisted workspace identity is revalidated across RunMind host processes and protected by an exclusive metadata lock.
+- Removed the second native project-folder selection from the normal Windows-host workflow. Git, PowerShell/native execution, Node debugging, Playwright, API tests and development-server operations now resolve against the same canonical root. Browser-only contexts retain their browser picker fallback.
+- Added a bounded Agent tool execution ledger and deterministic final-report fallback for empty model replies or model failures after tool execution, repeated unchanged tool errors and tool-step limits. Improved Playwright action schema/validation guidance and retry fingerprinting.
+- Persisted development-server process ownership metadata and added conservative reconciliation across host restarts. Adoption/stopping requires verified PID, process start time and executable identity; metadata, start, reconcile and stop paths use cross-process file locks. Stale/unknown PIDs are reported and never terminated.
+- Server results distinguish process-running state from HTTP readiness. Without a configured readiness URL, the result reports `readiness_status: not_configured` and `ready: null`.
+- Added targeted TCP/UDP port-owner inspection to System Manager and routed Agent port-conflict investigation to this tool instead of broad system diagnostics.
+- Classified CORS, CSP and mixed-content policy blocks separately from ordinary browser console/network failures. Explicit expected policy blocks remain visible and only safely correlated transport failures are classified as expected.
+- Restricted language-aware project indexing, dependency inventory, toolchain discovery and build/test workflows to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Other source files remain available as generic text only; non-JavaScript language parsers and toolchains are not exposed.
+- Removed non-JavaScript language-aware project parsing, dependency inventory and toolchain discovery; other source files remain generic text only. Added a regression contract for this scope.
+- Added P0 source-contract tests and Windows acceptance instructions.
 
 ## 2.6.4 — Project Understanding & Diagnostics reliability
 

@@ -289,12 +289,7 @@
       folderAccessDeclinedForRun = false;
       // Do not rely on a small model to remember to ask for filesystem permission.
       // Only file-related requests trigger this generic preflight; web-only tasks do not.
-      const nativeWorkspaceHost = !!window.chrome?.webview && typeof window.chrome.webview.postMessage === 'function';
-      if (requestNeedsWorkspaceAccess(requestMessages) && (nativeWorkspaceHost || !agentDirectoryHandle)) {
-        // On desktop hosts, verify the canonical native selection even when this WebView
-        // already has a handle. Another RunMind host may have changed the folder since
-        // the last turn; requestFolderAccess rebinds by selection identity without asking
-        // the user to choose the same folder again.
+      if (!agentDirectoryHandle && requestNeedsWorkspaceAccess(requestMessages)) {
         const access = await requestFolderAccess(signal);
         if (!access.granted) folderAccessDeclinedForRun = true;
       }
@@ -320,11 +315,10 @@
         ...requestContextMessages.map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : String(m.content || '') }))
       ];
       conversation[0].content += '\n\nCoding execution policy: For code tasks, inspect project instructions, project index/overview and relevant source call paths before edits. Preserve the project\'s language, conventions, dependencies and existing user changes. Prefer root-cause fixes and minimal coherent diffs over symptom patches. Keep one source of truth; avoid unnecessary abstractions and dependencies. For multi-step authorized tasks, persist toward the requested outcome, track blockers and completed steps, and do not stop at a plan or partial implementation. Run relevant tests/build/static validation that actually exist, inspect the final diff, update docs where contracts change, and distinguish verified results from unrun checks. Never use destructive Git operations or push unless explicitly requested. Load coding, debugging, testing-and-quality, and code-review skills only when relevant; skills guide behavior but do not grant permissions.';
+      conversation[0].content += '\n\nRunMind P0 reliability and language policy: For developer project analysis and implementation, the supported source scope is JavaScript, TypeScript, JSX/TSX, HTML, and CSS only. Do not propose or invoke language-specific project tooling for Python, C#, Rust, Go, PHP, Ruby, Java, or other languages unless the user explicitly changes this scope. C# and PowerShell used internally by the Windows host/System Manager are implementation details, not project-language support. Prefer exact tool schemas over remembered examples. For Playwright, every action object must include string properties action, selector, and value; selector/value must be non-empty when that action requires them. Use inspect_page.interactiveElements[].selectorHint and inspect_page accessibility data for selectors. After a missing-field validation error, correct the specific action index and argument; do not repeat the unchanged call. For a specific local TCP/UDP port, use system_manager_find_port_owner when exposed (it is available through either Processes → List processes or Diagnostics → Network information). Use the targeted tool, never the broad system_manager_diagnostics tool for a specific port. If the targeted tool is not exposed but native PowerShell execution is authorized, use a narrow Get-NetTCPConnection/Get-NetUDPEndpoint query and Get-Process for the returned PID; do not dump drivers or a full system inventory. For process ancestry use the process listing/parent PID data or a dedicated process-tree tool when exposed. For development-server startup, include a project-evidenced port and loopback readiness_url whenever available; only claim HTTP readiness when ready=true and readiness_status=ready. If readiness_status=not_configured, report that the process is running but HTTP readiness was not checked. For development-server history/recovery, use development_server_manage action reconcile or list; these actions do not require a workspace. Before calling select_native_workspace, check process.workspace.status or rely on the existing native workspace adapter; if already selected, activate/reuse it and never open a second picker for the same chat. In native hosts the single canonical workspace is host-owned and all file, Git, PowerShell, server, API, debugger and Playwright operations use it. For browser security-policy events, distinguish CORS/CSP/mixed-content blocks from application exceptions and ordinary transport failures. If the user/test explicitly expects a policy block, pass a narrowly scoped expected_policy_blocks rule with a type and url_contains or message_contains; keep the observed event visible but do not count a confirmed expected policy block as an application console error or failed request. Never classify an unknown/unexpected policy block as expected.';
       conversation[0].content += '\n\nTool failure and retry policy: After a tool returns an error or failed result, inspect the exact failure before retrying. Never repeat an identical failed tool call. If the same tool returns the same failure again after a meaningfully different attempt, stop calling it; diagnose through another safe source or report the blocker. Do not burn the step budget on repeated retries. A tool failure is not evidence that the requested task is complete.';
-      conversation[0].content += '\n\nTool selection and argument discipline: Choose the narrowest tool that directly answers the current subtask; prefer focused diagnostics over broad inventory tools. Read each tool schema and supply every required field in the correct shape before calling it. For structured action arrays (especially Playwright), validate every action individually before sending the call: use the action-specific selector and value requirements, copy CSS selectors from inspect_page, and never confuse an ARIA role name with a CSS selector (use [role=\"status\"] or the inspected element ID). If a validator names an action index and missing property, correct that exact action and keep the remaining actions intact; do not resend an unchanged payload. Group browser steps that share page/form state into one playwright_run call because every call creates a new context. For a specific listener/port conflict use system_manager_find_port_owner with the exact port and tcp/udp protocol; never call system_manager_diagnostics for a port-specific question. For a process ancestry question use system_manager_process_tree with the target PID. Use system_manager_diagnostics only when the user asks for a broad system inventory. Treat CORS as a browser security-policy event, keep its raw message visible in browser-policy diagnostics, and distinguish it from application console errors, JavaScript exceptions, HTTP failures and unexpected transport failures. An undeclared CORS block is still a browser policy event, not automatically an application defect. When the user says the block is expected because the target intentionally does not allow the requesting origin, pass that exact target origin in expected_cors_origins. Report expected policy blocks separately and never call them application or transport failures. When the user says a CORS block is expected, pass its exact origin in expected_cors_origins; never label a correctly enforced expected CORS block as an application failure.';
       if (activeToolDefinitions.some(tool => tool.function?.name.startsWith('system_manager_'))) {
         conversation[0].content += '\n\nSystem Management capability policy: Treat adapter and capability metadata as the authoritative inventory of supported operations, parameters, permissions, confirmation requirements, and result fields. For non-trivial system-management tasks, call list_agent_skills and load the relevant built-in skill when one is available (system-management for general application/lifecycle work; container-management for container operations; runmind-management for RunMind operations; coding/debugging/testing-and-quality/code-review for software tasks; file-history for change/recovery investigations; skill-management/create-skill/install-skill for skill lifecycle tasks). Do not load unrelated skills. Skills provide guidance, never authorization. Native tools enforce permissions and confirmation; never bypass them using shell, PowerShell, or alternate tools. Distinguish read-only operations from state-changing operations. Resolve ambiguous targets before mutation. Verify outcomes using returned state or a follow-up read-only operation; report requested, accepted, completed, and verified as distinct states. Never invent adapter operations or assume an adapter exists.';
-        conversation[0].content += '\n\nTargeted Windows diagnostics selection: For a specific TCP/UDP port conflict or listener question, use system_manager_find_port_owner with the exact port and protocol. Do not call system_manager_diagnostics, powershell, or broad process inventory for a port-specific question when the targeted tool is available. For one process and its parent/child relationships, use system_manager_process_tree with the known PID. Use system_manager_list_processes only for broad process discovery when the PID is unknown. Treat a CORS console event as a browser-enforced policy block, preserve and report it separately, and do not call it an application failure or unexpected network transport failure unless the user explicitly expected that cross-origin request to succeed.';
       }
       if (activeToolDefinitions.some(tool => tool.function?.name === 'system_manager_launch_application')) {
         conversation[0].content += '\n\nWindows System Manager action policy: Treat every new user message as a NEW action request. Never use a prior assistant claim, prior tool result, remembered PID, or earlier launch as evidence that the current request has been executed. For every new request to launch/open/close an application, call system_manager_find_applications with the clean application name, inspect ranked candidates, ask the user if multiple candidates are plausible, then use applicationId from that current discovery result for the requested close or launch action. Omit the launch behavior argument unless the user explicitly overrides the saved per-application preference; native code applies the saved preference (default reuse-and-activate). If the saved preference is ask, or launch returns needsUserChoice, ask the user and do not launch until they choose. Honor explicit one-off requests for a new window or new process. Do not silently start a duplicate when an existing window cannot be activated; explain the result and ask whether to try a new process. A saved per-application behavior can be changed only when the user asks, using system_manager_set_application_behavior; if that request also asks to launch now, continue with the launch after the preference is saved. To restart an app, discover it, call system_manager_close_application, and launch it again only if the close result confirms closed=true. Closing always uses a native confirmation and never force-kills the process. For a named application and URL, pass the URL as an argument to that application\'s launch call. Interpret the native outcome field precisely: existing-window-activated means foreground activation was verified; new-process-started means process startup was verified but not window visibility; action-handed-off-unverified means the launcher exited and an existing instance may have received the request, but delivery is unverified; packaged-activation-requested means Windows accepted activation but visibility/focus is unverified; process-exited means no launch or handoff was verified. Never claim URL navigation is verified unless navigationVerified=true. A new-window request is not the same as a new process. Never say a new request was completed in a previous step.';
@@ -334,38 +328,6 @@
       const isMultiStepRequest = actionCount >= 2 && /\b(?:then|after that|afterwards|finally|followed by|and)\b/i.test(originalPrompt);
       let executedAnyTool = false;
       let completionAuditUsed = false;
-      const toolExecutionAudit = [];
-      const summarizeToolResult = (name, result) => {
-        const failure = toolFailureMessage(result);
-        if (result?.cancelled) return { tool: name, status: 'cancelled', detail: String(result.message || 'The operation was cancelled.').slice(0, 300) };
-        if (failure) return { tool: name, status: 'failed_or_blocked', detail: String(failure).slice(0, 400) };
-        if (result?.success === true || result?.ok === true || result?.ready === true || result?.selected === true || result?.verified === true || result?.completed === true)
-          return { tool: name, status: 'confirmed', detail: String(result.message || result.note || '').slice(0, 300) };
-        if (Array.isArray(result?.steps)) {
-          const completed = result.steps.filter(step => step?.ok === true).length;
-          const failed = result.steps.filter(step => step?.ok === false).length;
-          return { tool: name, status: failed ? 'partially_failed' : 'returned_results', detail: `${completed} completed step(s); ${failed} failed step(s).` };
-        }
-        return { tool: name, status: 'returned_results', detail: String(result?.message || result?.note || '').slice(0, 300) };
-      };
-      const renderToolExecutionAudit = reason => {
-        const rows = toolExecutionAudit.slice(-40);
-        if (!rows.length) return `RunMind could not produce a final answer${reason ? ` (${reason})` : ''}. No tool execution was recorded, so the requested work remains unverified. Try the request again or inspect the Agent/model response diagnostics.`;
-        const confirmed = rows.filter(item => item.status === 'confirmed').length;
-        const blocked = rows.filter(item => item.status === 'failed_or_blocked' || item.status === 'cancelled' || item.status === 'partially_failed').length;
-        const lines = rows.map((item, index) => `${index + 1}. **${item.tool}** — ${item.status.replaceAll('_', ' ')}${item.detail ? `: ${item.detail}` : ''}`);
-        return `### RunMind execution summary
-
-The model did not provide a final narrative${reason ? ` (${reason})` : ''}. This summary reflects tool results only; it does not claim unexecuted steps succeeded.
-
-- Tool calls recorded: ${rows.length}
-- Explicitly confirmed results: ${confirmed}
-- Failed, blocked, cancelled or partially failed results: ${blocked}
-
-${lines.join('\n')}
-
-Any requested actions not represented by confirmed tool results remain unverified.`;
-      };
       const failedToolCallFingerprints = new Map();
       const lastFailureByTool = new Map();
       const repeatedFailureCallIds = new Set();
@@ -395,10 +357,73 @@ Any requested actions not represented by confirmed tool results remain unverifie
         if (Number.isInteger(value.exitCode) && value.exitCode !== 0) return `Process exited with code ${value.exitCode}.`;
         return '';
       };
+      const toolExecutionLedger = [];
+      const summarizeToolResult = (name, result) => {
+        const failure = toolFailureMessage(result);
+        const cancelled = result?.cancelled === true;
+        const explicitFailure = result?.success === false || result?.startup_failure === true
+          || (Array.isArray(result?.steps) && result.steps.some(item => item?.ok === false))
+          || (Array.isArray(result?.results) && result.results.some(item => item?.ok === false));
+        const state = cancelled ? 'cancelled' : (failure || explicitFailure) ? 'failed' : 'completed';
+        const rawMessage = failure || result?.message || result?.note || (result?.success === true ? 'Tool reported success.' : 'Tool returned a result; inspect its details before claiming the requested outcome.');
+        return { name: String(name || 'unknown').slice(0, 100), state, message: String(rawMessage || '').replace(/[\r\n]+/g, ' ').slice(0, 360) };
+      };
+      const recordToolOutcome = (name, result) => {
+        const item = summarizeToolResult(name, result);
+        toolExecutionLedger.push(item);
+        if (toolExecutionLedger.length > 64) toolExecutionLedger.shift();
+        return item;
+      };
+      const buildDeterministicFinalReport = reason => {
+        const rows = toolExecutionLedger.slice(-24);
+        const completed = rows.filter(item => item.state === 'completed');
+        const failed = rows.filter(item => item.state === 'failed');
+        const cancelled = rows.filter(item => item.state === 'cancelled');
+        const lines = ['## Task report', ''];
+        lines.push(reason === 'tool-step-limit' ? 'RunMind reached its configured tool-step limit before a model-authored final summary was available.'
+          : reason === 'repeated-tool-failure' ? 'RunMind stopped after a repeated tool failure; it did not repeat the same failed call again.'
+            : 'The tools ran, but the model did not return a usable final response. This report is based only on recorded tool results.');
+        if (completed.length) { lines.push('', '### Tool operations completed'); for (const item of completed) lines.push(`- **${item.name}** — ${item.message}`); }
+        if (failed.length) { lines.push('', '### Failed or blocked operations'); for (const item of failed) lines.push(`- **${item.name}** — ${item.message || 'Failed; see the tool result above.'}`); }
+        if (cancelled.length) { lines.push('', '### Cancelled or declined operations'); for (const item of cancelled) lines.push(`- **${item.name}** — ${item.message || 'Cancelled or declined.'}`); }
+        if (!rows.length) lines.push('', 'No tool execution result was available to verify the requested work.');
+        lines.push('', '### Remaining work', '- Any requested action not explicitly confirmed by a successful tool result remains unverified.');
+        return lines.join('\n');
+      };
+      let finalReportAttempted = false;
+      const ensureFinalAgentReport = async reason => {
+        if (finalReportAttempted || signal.aborted) return;
+        finalReportAttempted = true;
+        setStatus('Agent preparing an evidence-based final report…');
+        let finalText = '';
+        try {
+          const reportConversation = [
+            ...conversation,
+            { role: 'user', content: `FINAL RESPONSE REQUIRED — DO NOT CALL TOOLS. Summarize the original request and the tool results already present in this conversation. Explicitly separate confirmed completions, failed/blocked/cancelled operations, and unverified remaining work. Never infer success from a request being attempted. Be concise but complete. The Agent stopped because: ${reason}. Recorded tool outcomes (authoritative execution ledger):\n${toolExecutionLedger.slice(-24).map(item => `- ${item.name}: ${item.state}${item.message ? ` — ${item.message}` : ''}`).join('\n') || '- No tool results were recorded.'}` }
+          ];
+          const reportContext = { ...taskContext, tools: [], onProgress: () => setStatus('Agent preparing final report…') };
+          const reportTurn = await requestAgentTurnTracked(selection, reportConversation, signal, reportContext, 'agent-final');
+          if (!reportTurn.calls.length && typeof reportTurn.text === 'string' && reportTurn.text.trim()) finalText = reportTurn.text.trim();
+        } catch (error) {
+          if (signal.aborted || error?.name === 'AbortError') return;
+          // A final-summary failure must never erase tool evidence or leave a blank answer.
+        }
+        if (!finalText) finalText = buildDeterministicFinalReport(reason);
+        assistantMessage.content += `${assistantMessage.content.trim() ? '\n\n' : ''}${finalText}`;
+        scheduleActiveMessageRender();
+      };
       const iterationLimit = maxSteps + (isMultiStepRequest ? 1 : 0);
       for (let step = 0; step < iterationLimit; step++) {
         setStatus(`Agent thinking · step ${Math.min(step + 1, maxSteps)}/${maxSteps}…`);
-        const turn = await requestAgentTurnTracked(selection, conversation, signal, taskContext, 'agent');
+        let turn;
+        try {
+          turn = await requestAgentTurnTracked(selection, conversation, signal, taskContext, 'agent');
+        } catch (error) {
+          if (signal.aborted || error?.name === 'AbortError') throw error;
+          if (!executedAnyTool) throw error;
+          await ensureFinalAgentReport(`model-generation-failed-after-tool-execution: ${String(error?.message || error).slice(0, 240)}`);
+          return;
+        }
         if (!turn.calls.length) {
           if (isMultiStepRequest && executedAnyTool && !completionAuditUsed && turn.text) {
             // Give the selected model one general completion-audit turn before it
@@ -408,40 +433,50 @@ Any requested actions not represented by confirmed tool results remain unverifie
             conversation.push({ role: 'user', content: 'Completion audit: review the original user request and every tool result in this conversation. Which requested actions are already completed and confirmed? If any action remains, continue now using the available tools. Do not ask the user to repeat the task. If an action is blocked, state the exact blocker and finish the remaining possible work.' });
             continue;
           }
-          const finalText = String(turn.text || '').trim();
-          if (finalText) assistantMessage.content += finalText;
-          else assistantMessage.content += `\n\n${renderToolExecutionAudit(executedAnyTool ? 'the model ended without a final answer' : 'no tool result was available')}`;
-          scheduleActiveMessageRender(); return;
+          if (turn.text && turn.text.trim()) {
+            assistantMessage.content += turn.text;
+            scheduleActiveMessageRender();
+            return;
+          }
+          await ensureFinalAgentReport(executedAnyTool ? 'empty-final-response-after-tool-execution' : 'empty-model-response');
+          return;
         }
         if (turn.text) assistantMessage.content += turn.text + '\n\n';
         conversation.push(selection.provider === 'ollama'
           ? { role: 'assistant', content: turn.text, tool_calls: turn.raw.message.tool_calls }
           : { role: 'assistant', content: turn.text, tool_calls: turn.raw.choices[0].message.tool_calls });
         const modelImagesForNextTurn = [];
-        const toolOutputs = await runToolBatch(turn.calls, {
+        let toolOutputs;
+        try {
+          toolOutputs = await runToolBatch(turn.calls, {
           signal, lane: 'agent',
           onStart: call => setStatus(`Agent tool · ${call.name}`),
           execute: async call => {
             if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-            // Count every attempted tool call, including unavailable tools and blocked retries,
-            // so an empty model final always receives an honest execution audit.
             executedAnyTool = true;
             if (!taskContext.tools.some(tool => tool.function.name === call.name)) {
               if (call.name === 'web_search' && !getConfiguredSearchEndpoint()) {
-                return { result: { error: 'Web search is not configured. Do not call web_search again. Continue using the user-provided URLs, relevant links found in retrieved pages, and fetch_webpage. If additional discovery is essential, explain that SearXNG is not configured.' } };
+                const unavailable = { error: 'Web search is not configured. Do not call web_search again. Continue using the user-provided URLs, relevant links found in retrieved pages, and fetch_webpage. If additional discovery is essential, explain that SearXNG is not configured.' };
+                recordToolOutcome(call.name, unavailable);
+                return { result: unavailable };
               }
-              return { result: { error: `Model requested unavailable tool '${call.name}'.` } };
+              const unavailable = { error: `Model requested unavailable tool '${call.name}'.` };
+              recordToolOutcome(call.name, unavailable);
+              return { result: unavailable };
             }
             const args = call.arguments && typeof call.arguments === 'object' && !Array.isArray(call.arguments) ? call.arguments : {};
             const fingerprint = toolCallFingerprint(call.name, args);
             const priorIdenticalFailure = failedToolCallFingerprints.get(fingerprint);
             if (priorIdenticalFailure) {
               repeatedFailureCallIds.add(call.id);
-              return { result: { error: `RunMind blocked this identical retry because the same ${call.name} call already failed: ${priorIdenticalFailure}. Do not resend unchanged arguments; diagnose the cause or report the blocker.` } };
+              const blocked = { error: `RunMind blocked this identical retry because the same ${call.name} call already failed: ${priorIdenticalFailure}. Do not resend unchanged arguments; diagnose the cause or report the blocker.` };
+              recordToolOutcome(call.name, blocked);
+              return { result: blocked };
             }
             let result;
             try { result = await executeAgentTool(call.name, args, signal, assistantMessage, taskContext); }
             catch (error) { if (error?.name === 'AbortError' || signal.aborted) throw error; result = { error: error?.message || String(error) }; }
+            recordToolOutcome(call.name, result);
             const failureMessage = toolFailureMessage(result);
             if (failureMessage) {
               failedToolCallFingerprints.set(fingerprint, failureMessage.slice(0, 500));
@@ -461,6 +496,7 @@ Any requested actions not represented by confirmed tool results remain unverifie
             if (call.name === 'request_folder_access' && result?.granted) {
               taskContext.tools = activeToolDefinitions.map(tool => JSON.parse(JSON.stringify(tool)));
             }
+            executedAnyTool = true;
             const modelImage = typeof result?.__runMindModelImage === 'string' ? result.__runMindModelImage : '';
             if (modelImage) {
               const { __runMindModelImage, ...visibleResult } = result;
@@ -469,13 +505,18 @@ Any requested actions not represented by confirmed tool results remain unverifie
             }
             return { result };
           }
-        });
+          });
+        } catch (error) {
+          if (signal.aborted || error?.name === 'AbortError') throw error;
+          toolExecutionLedger.push({ name: 'tool_batch', state: 'failed', message: String(error?.message || error).replace(/[\r\n]+/g, ' ').slice(0, 360) });
+          await ensureFinalAgentReport(`tool-batch-failed-after-tool-execution: ${String(error?.message || error).slice(0, 240)}`);
+          return;
+        }
         if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
         let repeatedToolFailure = false;
         for (const output of toolOutputs) {
           const call = output.call;
           let result = output.result || { error: output.error?.message || 'Tool returned no result.' };
-          toolExecutionAudit.push(summarizeToolResult(call.name, result));
           if (repeatedFailureCallIds.has(call.id)) repeatedToolFailure = true;
           if (output.modelImage) modelImagesForNextTurn.push({ dataUrl: output.modelImage, path: output.imagePath || call.name });
           const summary = JSON.stringify(result);
@@ -494,13 +535,10 @@ Any requested actions not represented by confirmed tool results remain unverifie
           }
         }
         if (repeatedToolFailure) {
-          assistantMessage.content += `\n\nRunMind stopped this task because the same tool failure was returned twice. No further identical retry was executed.\n\n${renderToolExecutionAudit('repeated identical tool failure')}`;
-          scheduleActiveMessageRender();
+          await ensureFinalAgentReport('repeated-tool-failure');
           return;
         }
       }
-      assistantMessage.content += `\n\nAgent stopped because it reached the configured tool-step limit.\n\n${renderToolExecutionAudit('configured tool-step limit reached')}`;
-      if (!String(assistantMessage.content || '').trim()) assistantMessage.content = renderToolExecutionAudit('the Agent completed without producing response text');
-      scheduleActiveMessageRender();
+      await ensureFinalAgentReport('tool-step-limit');
     }
 

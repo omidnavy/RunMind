@@ -41,9 +41,15 @@ Example theme header:
 
 For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
 
+## RunMind 2.7.0 — P0 foundation
+
+RunMind 2.7.0 completes the P0 source implementation for unified workspace selection, Agent tool reliability, development-server ownership recovery, and Playwright browser-policy diagnostics. The portable Node integration/contract suite has 156 passing tests under Node.js 22.16.0. The Windows validation script requires Node.js 24+ and the .NET 10 SDK and builds all three hosts; run it on Windows before treating the release as target-machine certified. See `docs/P0-IMPLEMENTATION-AUDIT.md` for the requirement-by-requirement source audit and `docs/P0-WINDOWS-ACCEPTANCE.md` for the remaining target-machine gate.
+
+Project-language analysis and project-specific developer workflows are intentionally scoped to **JavaScript, TypeScript, JSX/TSX, HTML and CSS**. Other source files may be read and searched as generic text, but this release does not perform language-aware parsing, dependency inventory, toolchain discovery, debugging or build/test workflows for other programming languages.
+
 ## Built-in capabilities and tool catalog
 
-RunMind exposes tools to Agent Mode and, where applicable, Deep Research. Tools that access local files require a user-selected workspace folder. Mutating operations—such as creating, editing, moving, or deleting files—require approval and follow the application's no-overwrite and backup safeguards. Some web-search tools appear only when the corresponding search service is configured; MCP tools depend on connected servers.
+RunMind exposes tools to Agent Mode and, where applicable, Deep Research. Tools that access local files require one user-selected conversation workspace. In the Windows hosts, the native host owns this canonical root and shares it with Agent file operations; users are not asked to select the same folder again for native tools. Mutating operations—such as creating, editing, moving, or deleting files—require approval and follow the application's no-overwrite and backup safeguards. Some web-search tools appear only when the corresponding search service is configured; MCP tools depend on connected servers.
 
 ### Planning, reasoning support, and diagnostics
 
@@ -102,8 +108,8 @@ RunMind exposes tools to Agent Mode and, where applicable, Deep Research. Tools 
 
 | Tool / capability | What it does |
 |---|---|
-| `git_clone` | Clones an HTTP/HTTPS Git repository into a new folder using Git for Windows and the native folder picker; the resulting destination becomes the conversation shared workspace. Supports self-hosted Gogs/Gitea endpoints. |
-| `git_select_repository` | Verifies that the already-selected shared workspace is a supported local Git working-tree root; it does not open another folder picker. |
+| `git_clone` | Clones an HTTP/HTTPS Git repository into a new folder using Git for Windows and the native folder picker. Supports self-hosted Gogs/Gitea endpoints. |
+| `git_select_repository` | Grants native Git access to one existing normal working tree for the active conversation. |
 | `git_status`, `git_diff`, `git_log`, `git_show`, `git_branches`, `git_remotes` | Read working-tree status, diffs, history, commit summaries, branches, and configured remotes. |
 | `git_stage`, `git_unstage`, `git_commit`, `git_create_branch`, `git_switch_branch`, `git_merge`, `git_revert`, `git_cherry_pick`, `git_stash` | Perform common local Git operations subject to the active conversation's approval policy. |
 | `git_fetch`, `git_pull`, `git_push` | Perform remote operations with an explicitly named remote and branch. |
@@ -114,9 +120,9 @@ RunMind exposes tools to Agent Mode and, where applicable, Deep Research. Tools 
 | Project Profiles | Save and reuse project instructions, provider/model connection, safe Agent settings, Skill names, MCP references, and conversation permission policy across both desktop hosts. |
 | Agent Skills Manager | Browse Global and Current Project Skills, inspect descriptions, install a local Skill folder, and remove a selected installation after confirmation. |
 
-Git requires Git for Windows on `PATH`. This release supports normal repositories with a local `.git` directory, not linked worktrees. Git reuses the same conversation-scoped native workspace identity as Agent file access; a Git repository must be the selected workspace root for direct repository operations. The canonical workspace root is owned by the native host and persisted per conversation, while JavaScript receives a path-free file handle adapter over the native bridge. Project Profiles are shared through `%LOCALAPPDATA%\RunMind\ProjectProfiles`; credential fields and filesystem handles are not copied into profiles or portable conversations. Do not place secrets in freeform project instructions.
+Git requires Git for Windows on `PATH`. This release supports normal repositories with a local `.git` directory, not linked worktrees. A native Git folder selection is separate from the browser workspace grant. Project Profiles are shared through `%LOCALAPPDATA%\RunMind\ProjectProfiles`; browser folder handles remain in IndexedDB in the current WebView profile and must be reconnected when switching hosts/devices. Credential fields and filesystem handles are not copied into profiles or portable conversations; do not place secrets in freeform project instructions.
 
-Global Skills are stored under `%LOCALAPPDATA%\RunMind\Skills`; project Skills live under `.agents\skills` inside the selected shared project workspace. Use **Agent Settings → Agent Skills** to manage either scope. Manual installation remains supported: copy a Skill folder containing `SKILL.md` to `%LOCALAPPDATA%\RunMind\Skills\<skill-name>\` for global use, or `.agents\skills\<skill-name>\` for project use. The required `SKILL.md` metadata fields are `name` and `description`. Skills load on demand and cannot grant themselves permissions; scripts are never executed automatically.
+Global Skills are stored under `%LOCALAPPDATA%\RunMind\Skills`; project Skills live under `.agents\skills` inside the selected browser workspace. Use **Agent Settings → Agent Skills** to manage either scope. Manual installation remains supported: copy a Skill folder containing `SKILL.md` to `%LOCALAPPDATA%\RunMind\Skills\<skill-name>\` for global use, or `.agents\skills\<skill-name>\` for project use. The required `SKILL.md` metadata fields are `name` and `description`. Skills load on demand and cannot grant themselves permissions; scripts are never executed automatically.
 
 The Skills Manager also accepts direct HTTPS `SKILL.md` URLs and GitHub/GitLab repository folder URLs. RunMind previews metadata and content and requires confirmation before installing. A chat message that explicitly asks to install a Skill from a URL is recognized, and valid `SKILL.md` content pasted into chat is detected automatically; both are offered for preview/installation; declining the offer sends the text as a normal chat message. URL and pasted-content imports support Global and Current Project scopes, but currently import `SKILL.md` only rather than recursively fetching linked resources. Skills remain untrusted instructions; scripts and commands are never executed by the installer.
 
@@ -124,7 +130,7 @@ The Skills Manager also accepts direct HTTPS `SKILL.md` URLs and GitHub/GitLab r
 
 RunMind includes reusable workflows for project builds and tests, static analysis/lint, Playwright test-runner checks, API smoke tests, dependency security audits, feature implementation, and issue diagnosis. They inspect the project before choosing commands and use the existing native PowerShell execution path with explicit approval. In addition, the Phase 2 browser integration provides structured Playwright automation through the project-installed package, the API/backend integration provides a dedicated approval-gated HTTP test runner using Node.js built-in fetch, and Development Server Management discovers and runs approved `package.json` scripts with bounded logs, readiness/health checks, port-conflict detection, and ownership-only stop. `project_validate` performs static manifest/test-file discovery only and does not claim to run builds or tests.
 
-The native process tools are `select_native_workspace`, `powershell_execute`, and `run_native_command`. They reuse the conversation's shared workspace selection; the native picker is shown only for the first selection, an explicit workspace change, or a legacy conversation without persisted native workspace state. Each process invocation still requires fresh approval. Processes run with the current Windows user's permissions and are not sandboxed.
+The native process tools are `powershell_execute` and `run_native_command`. They use the selected conversation workspace; `working_directory` is a relative subdirectory. Process invocations require fresh approval and run with the current Windows user's permissions; they are not sandboxed. The workspace is selected once through the Agent folder-access flow, not through a second native folder picker.
 
 ### Windows System Manager (optional)
 
@@ -136,9 +142,9 @@ Open System Manager from its own toolbar flyout, separate from Agent Settings. S
 - **System Diagnostics:** read OS/runtime details, PATH entries, Windows service status, network adapters, active TCP connections and listeners, depending on individually enabled capabilities. Diagnostics do not change system configuration.
 - **Permissions:** Restricted, Balanced and Custom profiles. Launch/open actions require native confirmation unless the user explicitly allows them in Balanced or Custom. Process termination and adapter installation always require confirmation.
 
-System Manager Agent tools (only exposed when the master switch and relevant capabilities are enabled) include `system_manager_find_applications`, `system_manager_launch_application`, `system_manager_open_target`, `system_manager_list_adapters`, `system_manager_install_adapter`, `system_manager_application_action`, `system_manager_list_processes`, `system_manager_terminate_process`, and `system_manager_diagnostics`. Native launch/open/process actions re-check settings and confirmation policy independently of the Agent tool definitions.
+System Manager Agent tools (only exposed when the master switch and relevant capabilities are enabled) include `system_manager_find_applications`, `system_manager_launch_application`, `system_manager_open_target`, `system_manager_list_adapters`, `system_manager_install_adapter`, `system_manager_application_action`, `system_manager_list_processes`, `system_manager_find_port_owner`, `system_manager_process_tree`, `system_manager_terminate_process`, service operations, container operations, and `system_manager_diagnostics`. A specific port conflict should use the targeted port-owner tool rather than requesting the full hardware/driver inventory. Native launch/open/process actions re-check settings and confirmation policy independently of the Agent tool definitions.
 
-System Manager does not provide administrator elevation, service control, registry editing, system configuration changes, or arbitrary GUI automation. It does not depend on PowerShell being enabled.
+System Manager does not provide administrator elevation or arbitrary GUI automation. It exposes bounded service inspection/control and reversible, explicitly confirmed startup-entry operations through native capabilities. It does not depend on the user enabling arbitrary PowerShell execution.
 
 Unsaved conversations and Deep Research checkpoints use per-window temporary sessions in IndexedDB, with the session identifier in `sessionStorage`. A new window never inherits another window's conversation or research checkpoint. Normal window close removes temporary conversation data; abandoned sessions are cleaned up on a later startup after a 24-hour grace period. Workspace folder handles remain in their separate IndexedDB store. Save a `.runmind` file explicitly to retain a conversation.
 
@@ -246,7 +252,7 @@ Create and switch between conversation branches, rename or delete branches, and 
 
 ## Workspace safety and limits
 
-- One native-host-owned workspace folder is selected by the user per conversation. Agent file operations, project indexing, Skills, Git (when the selected root is a repository), native commands, PowerShell, API testing, Playwright, development servers and Node debugging reuse that same persisted workspace identity.
+- A browser workspace folder is selected by the user before local file operations are offered. Native Git repository selection is a separate, conversation-scoped authorization.
 - File paths are workspace-relative; absolute paths and traversal outside the selected folder are rejected.
 - Creating, editing, deleting, copying, moving, renaming, extracting, and generating files uses explicit approval where applicable.
 - New-file operations do not overwrite existing files. Editing and deletion create recovery backups; restore operations are also approval-gated.
@@ -340,12 +346,6 @@ Agent introspection now includes `list_available_tools` for the exact tools expo
 RunMind bundles three on-demand skills: `system-management`, `container-management`, and `runmind-management`. They are discoverable through `list_agent_skills` and loadable through `load_agent_skill`. Skills provide operational guidance only; native tools remain responsible for validation, permissions, confirmations, execution, and result verification. Adapter inventory includes descriptive operation metadata.
 
 
-### Developer Intelligence (2.7.0)
+### Historical Developer Intelligence additions (2.6.3)
 
-RunMind includes a persistent, incremental JavaScript/TypeScript project index; Acorn AST analysis; bounded TypeScript compiler/checker references for TS/TSX/JSX; project symbol graphs; static module relationships; Node runtime module resolution; preview-first AST refactoring; and coordinated multi-file edits. HTML and CSS are indexed for project search and browser-facing workflows. Language-aware project functionality is intentionally limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Other files may be read or searched as generic text/configuration, but no Python, C#, Rust, Go or other language-specific parser/build/debugger support is included.
-
-Project Understanding maps architecture, modules, symbols, dependencies and execution paths. Project Diagnostics separately checks project manifests, Node package-manager/lockfile consistency (npm, pnpm, Yarn, Bun), scripts, build/test/lint configuration and approved environment readiness checks. Build/test commands are shown and require fresh approval; diagnostics do not install or repair dependencies.
-
-P0 adds a native-host-owned workspace shared by Agent file access, indexing, Skills, Git, PowerShell/native execution, development servers, API tests, Node debugging and Playwright. The WebView uses an opaque, path-contained native file adapter; it does not receive the absolute workspace path. A folder is selected once per conversation; an explicit change creates a new selection identity. Persisted development-server records support identity-verified recovery after host restart. Agent tool validation and completion auditing are stricter, and Playwright separates expected CORS policy blocks from application and transport failures.
-
-System Manager provides application adapters, process/service/startup management, hardware/network diagnostics, container operations, targeted port-owner and process-tree inspection. State-changing operations keep their native confirmation requirements. RunMind conversation storage remains WebView IndexedDB; native conversation-management operations beyond the existing prompt handoff are not exposed.
+RunMind includes coding, debugging, testing-and-quality, code-review, file-history, skill-management, create-skill, and install-skill skills alongside the existing system-management, container-management, and runmind-management skills. System Manager provides a dedicated Application Adapters tab with bounded scrolling, built-in adapter Edit/Reset overrides, Windows Notepad and File Explorer adapters, and Docker/Podman container operations (list, inspect, start, stop, restart, logs). Container lifecycle changes require native confirmation. RunMind conversation storage remains WebView IndexedDB; native conversation-management operations beyond the existing prompt handoff are not yet exposed.

@@ -568,45 +568,37 @@
     }
     async function restoreAgentFolderHandle({ allowLegacyMigration = false } = {}) {
       const contextId = workspaceContext.id;
-      const nativeHost = !!window.chrome?.webview && typeof window.chrome.webview.postMessage === 'function';
-      if (nativeHost && typeof callAgentHost === 'function' && typeof createNativeWorkspaceHandle === 'function') {
+      if (window.chrome?.webview && typeof createNativeWorkspaceDirectoryHandle === 'function') {
         try {
-          const status = await callAgentHost('process.workspace.status', { contextId }, undefined, 10000);
+          const nativeStatus = await callAgentHost('process.workspace.status', { contextId }, undefined, 10000);
           if (workspaceContext.id !== contextId) return;
-          if (status?.selected && status.selectionId) {
-            const handle = createNativeWorkspaceHandle(contextId, status.folder || 'workspace', status.selectionId);
-            await persistAgentFolderHandle(handle);
-            workspaceContext.folderName = String(status.folder || workspaceContext.folderName || 'workspace').slice(0, 256);
-            // Remove a legacy browser FileSystemDirectoryHandle. Native execution and
-            // project file access now have one authoritative, host-owned root.
-            try { await workspaceDbAction('readwrite', 'delete'); } catch (_) {}
+          if (nativeStatus?.selected) {
+            const nativeHandle = createNativeWorkspaceDirectoryHandle(contextId, nativeStatus);
+            persistedDirectoryHandle = null;
+            agentDirectoryHandle = nativeHandle;
+            workspaceContext.folderName = String(nativeStatus.folder || nativeHandle.name || '').slice(0, 256);
             updateAgentFolderButton();
             rebuildActiveToolDefinitions(deepResearchEnabled);
             if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('native workspace restored');
             return;
           }
-          // Old releases persisted a browser directory handle. Its absolute Windows path
-          // is not exposed, so it cannot safely authorize native operations. Preserve only
-          // the friendly folder name and require one deliberate native selection.
-          let legacyHandle = null;
-          try { legacyHandle = await workspaceDbAction('readonly', 'get', undefined, workspaceHandleStorageKey()); } catch (_) {}
-          if (!workspaceContext.folderName && legacyHandle?.name) workspaceContext.folderName = String(legacyHandle.name).slice(0, 256);
-          persistedDirectoryHandle = null;
-          agentDirectoryHandle = null;
-          updateAgentFolderButton();
-          if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('native workspace not selected');
-          return;
         } catch (error) {
           if (workspaceContext.id !== contextId) return;
-          persistedDirectoryHandle = null;
-          agentDirectoryHandle = null;
-          updateAgentFolderButton();
           showToast(`Native workspace could not be restored: ${error?.message || error}`);
-          if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('native workspace unavailable');
-          return;
         }
+        // In native hosts the native bridge is the sole workspace authority. An older
+        // IndexedDB browser handle is retained only as a folder-name migration hint;
+        // it is never used for file operations because it may not match the native root.
+        let legacyHandle = null;
+        try { legacyHandle = await workspaceDbAction('readonly', 'get', undefined, workspaceHandleStorageKey()); } catch (_) {}
+        if (workspaceContext.id !== contextId) return;
+        persistedDirectoryHandle = legacyHandle || null;
+        agentDirectoryHandle = null;
+        if (legacyHandle?.name && !workspaceContext.folderName) workspaceContext.folderName = String(legacyHandle.name).slice(0, 256);
+        updateAgentFolderButton();
+        if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('native workspace selection required');
+        return;
       }
-
       let restoredHandle = null;
       let activeHandle = null;
       try {
@@ -621,6 +613,8 @@
               await workspaceDbAction('readwrite', 'put', legacyHandle, key);
               restoredHandle = legacyHandle;
             }
+            // Mark complete only after the IndexedDB lookup/copy succeeded. A storage
+            // failure must leave the legacy handle eligible for a later retry.
             try { localStorage.setItem(WORKSPACE_MIGRATION_KEY, '1'); } catch (_) {}
           }
         }
@@ -633,6 +627,8 @@
         persistedDirectoryHandle = null; agentDirectoryHandle = null;
         showToast(`Workspace handle could not be restored: ${error?.message || error}`);
       }
+      // A conversation may have been switched while IndexedDB or permission checks
+      // were pending. Never apply an older context's handle to the newly active one.
       if (workspaceContext.id !== contextId) return;
       persistedDirectoryHandle = restoredHandle;
       agentDirectoryHandle = activeHandle;
@@ -645,6 +641,25 @@
       } else if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace access unavailable');
     }
     async function persistAgentFolderHandle(handle) {
+      if (handle?.__runMindNativeWorkspace === true) {
+        const previousHandle = agentDirectoryHandle || persistedDirectoryHandle;
+        const same = previousHandle?.__runMindNativeWorkspace === true
+          && previousHandle.workspaceId === handle.workspaceId;
+        if (!same && typeof projectIndexKey === 'function') {
+          try { await workspaceDbAction('readwrite', 'delete', undefined, projectIndexKey()); } catch (_) {}
+          try { projectIndexStatus?.(null); } catch (_) {}
+        }
+        // Native handles are virtual adapters, not structured-cloneable browser handles.
+        // Never put them in IndexedDB; the host persists the canonical path by context ID.
+        try { await workspaceDbAction('readwrite', 'delete'); } catch (_) {}
+        persistedDirectoryHandle = null;
+        agentDirectoryHandle = handle;
+        workspaceContext.folderName = String(handle.name || '').slice(0, 256);
+        updateAgentFolderButton();
+        rebuildActiveToolDefinitions(deepResearchEnabled);
+        if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('unified native workspace selected');
+        return;
+      }
       const previousHandle = persistedDirectoryHandle || agentDirectoryHandle;
       if (previousHandle) {
         let sameEntry = false;
@@ -656,19 +671,15 @@
       }
       persistedDirectoryHandle = handle;
       workspaceContext.folderName = String(handle?.name || '').slice(0, 256);
-      if (handle?.isNativeWorkspace === true) {
-        try { await workspaceDbAction('readwrite', 'delete'); } catch (_) {}
-      } else {
-        await workspaceDbAction('readwrite', 'put', handle);
-      }
+      await workspaceDbAction('readwrite', 'put', handle);
       agentDirectoryHandle = handle;
       updateAgentFolderButton();
       rebuildActiveToolDefinitions(deepResearchEnabled);
       if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace selected');
     }
     async function clearPersistedAgentFolderHandle() {
-      if (window.chrome?.webview && typeof window.chrome.webview.postMessage === 'function' && typeof callAgentHost === 'function') {
-        await callAgentHost('process.workspace.clear', { contextId: workspaceContext.id }, undefined, 15000);
+      if (agentDirectoryHandle?.__runMindNativeWorkspace === true && window.chrome?.webview) {
+        await callAgentHost('process.workspace.clear', { contextId: workspaceContext.id }, undefined, 10000);
       }
       await workspaceDbAction('readwrite', 'delete');
       try { if (typeof projectIndexKey === 'function') await workspaceDbAction('readwrite', 'delete', undefined, projectIndexKey()); } catch (_) {}

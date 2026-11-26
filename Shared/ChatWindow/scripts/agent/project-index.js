@@ -1,10 +1,10 @@
     'use strict';
 
-    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v7.';
+    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v6.';
     const PROJECT_INDEX_LIMITS = Object.freeze({ files: 10000, entries: 50000, depth: 10, fileBytes: 256 * 1024, totalBytes: 24 * 1024 * 1024 });
     const PROJECT_INDEX_SKIP_DIRS = new Set(['.git','.hg','.svn','.runmind-backups','.cache','node_modules','vendor','bin','obj','dist','build','out','target','.next','.nuxt','.venv','venv','__pycache__','coverage','.idea','.vs','.gradle','.terraform','.npm','.nuget','.cargo','.docker','.pypoetry','.conda','secret','secrets','credential','credentials','.ssh','.aws','.azure','.gnupg']);
     const PROJECT_INDEX_SKIP_FILES = /^(?:\.env(?:\..*)?|(?:.*\.(?:pem|key|p12|pfx|keystore|jks|kdbx|sqlite|db|wasm|dll|exe|so|dylib|bin|lockb)|.*(?:secret|credential).*)|id_(?:rsa|ed25519)|credentials?(?:\..*)?|secrets?(?:\..*)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|nuget\.config|pip\.conf|\.dockercfg|known_hosts)$/i;
-    const PROJECT_INDEX_TEXT_EXTENSIONS = new Set(['.md','.mdx','.txt','.rst','.adoc','.json','.jsonc','.json5','.yaml','.yml','.toml','.ini','.cfg','.conf','.xml','.html','.htm','.css','.js','.mjs','.cjs','.jsx','.ts','.tsx','.mts','.cts','.dockerfile','.makefile','.lock']);
+    const PROJECT_INDEX_TEXT_EXTENSIONS = new Set(['.md','.mdx','.txt','.rst','.adoc','.json','.jsonc','.json5','.yaml','.yml','.toml','.ini','.cfg','.conf','.xml','.html','.htm','.css','.scss','.less','.js','.mjs','.cjs','.jsx','.ts','.tsx','.mts','.cts','.vue','.svelte','.py','.pyi','.cs','.java','.kt','.kts','.go','.rs','.c','.h','.cc','.cpp','.hpp','.hh','.php','.rb','.swift','.sh','.bash','.zsh','.ps1','.bat','.cmd','.sql','.graphql','.gql','.proto','.dockerfile','.makefile','.gradle','.properties','.lock']);
 
     function projectIndexKey() { return `${PROJECT_INDEX_PREFIX}${workspaceContext.id}`; }
     let projectIndexCompilerLoadPromise = null;
@@ -23,51 +23,47 @@
     }
     function projectIndexLanguage(path) {
       const ext = String(path).toLowerCase().match(/\.[^.\/]+$/)?.[0] || '';
-      // Semantic language support is intentionally limited to the current RunMind scope.
-      // Other file extensions can still be searched as generic text, without language parsers.
-      const map = { '.js':'javascript','.mjs':'javascript','.cjs':'javascript','.jsx':'javascript','.ts':'typescript','.tsx':'typescript','.mts':'typescript','.cts':'typescript','.html':'html','.htm':'html','.css':'css','.json':'json','.yaml':'yaml','.yml':'yaml','.toml':'toml','.md':'markdown' };
+      const map = { '.js':'javascript','.mjs':'javascript','.cjs':'javascript','.jsx':'javascript','.ts':'typescript','.tsx':'typescript','.mts':'typescript','.cts':'typescript','.json':'json','.yaml':'yaml','.yml':'yaml','.toml':'toml','.md':'markdown','.html':'html','.htm':'html','.css':'css' };
+      // Other source extensions remain available through generic file reading/search, but are not treated as supported project languages.
       return map[ext] || (['Dockerfile','Makefile'].includes(path.split('/').pop()) ? 'build' : 'text');
     }
     function projectIndexDependencies(manifests) {
       const dependencies = new Set();
       for (const manifest of manifests) {
-        if (manifest.path.split('/').pop().toLowerCase() !== 'package.json') continue;
+        if (manifest.path.toLowerCase() !== 'package.json') continue;
         try {
           const data = JSON.parse(manifest.text);
-          for (const field of ['dependencies','devDependencies','peerDependencies','optionalDependencies']) {
-            for (const name of Object.keys(data[field] || {})) {
-              const clean = String(name || '').trim().slice(0, 180);
-              if (clean) dependencies.add(`npm:${clean}`);
-            }
-          }
-        } catch (_) { /* Project Diagnostics reports malformed manifests. */ }
+          for (const field of ['dependencies','devDependencies','peerDependencies','optionalDependencies'])
+            for (const name of Object.keys(data[field] || {})) dependencies.add(`npm:${name}`);
+        } catch (_) { /* Invalid manifests are reported by Project Diagnostics. */ }
       }
       return [...dependencies].sort().slice(0, 1000);
     }
     function projectIndexFrameworks(dependencies) {
       const names = dependencies.map(value => value.toLowerCase()), frameworks = [];
-      const rules = [['React',/^npm:react$/],['Next.js',/^npm:next$/],['Vue',/^npm:vue$/],['Angular',/^npm:@angular\//],['Express',/^npm:express$/],['Vite',/^npm:vite$/],['Svelte',/^npm:svelte$/]];
+      const rules = [['React',/^npm:react$/],['Next.js',/^npm:next$/],['Vite',/^npm:vite$/],['Express',/^npm:express$/],['Fastify',/^npm:fastify$/],['Astro',/^npm:astro$/],['Svelte',/^npm:svelte$/]];
       for (const [label, pattern] of rules) if (names.some(name => pattern.test(name))) frameworks.push(label);
       return frameworks;
     }
     function projectIndexToolchains(files, manifests, observedPaths = []) {
-      const names = new Set([...files.map(file => file.path), ...observedPaths].map(value => value.split('/').pop().toLowerCase()));
+      const names = new Set([...files.map(file => file.path), ...observedPaths].map(path => path.split('/').pop().toLowerCase()));
       const packageManifest = manifests.find(item => item.path.split('/').pop().toLowerCase() === 'package.json');
       let declaredPackageManager = '';
       if (packageManifest) {
-        try { declaredPackageManager = String(JSON.parse(packageManifest.text).packageManager || '').split('@')[0].toLowerCase(); } catch (_) {}
+        try {
+          const value = String(JSON.parse(packageManifest.text).packageManager || '').split('@')[0].toLowerCase();
+          if (['npm','pnpm','yarn','bun'].includes(value)) declaredPackageManager = value;
+        } catch (_) { /* Project Diagnostics reports malformed package.json. */ }
       }
       const lockfiles = [['npm','package-lock.json'],['pnpm','pnpm-lock.yaml'],['yarn','yarn.lock'],['bun','bun.lock'],['bun','bun.lockb']]
-        .filter(([, name]) => names.has(name)).map(([manager, file]) => ({ manager, file }));
+        .filter(([,name]) => names.has(name)).map(([manager,file]) => ({manager,file}));
       const lockManagers = [...new Set(lockfiles.map(item => item.manager))];
-      const supportedManagers = new Set(['npm','pnpm','yarn','bun']);
-      const selected = supportedManagers.has(declaredPackageManager) ? declaredPackageManager : (lockManagers.length === 1 ? lockManagers[0] : '');
-      const conflicts = !!selected && lockManagers.some(manager => manager !== selected);
+      const selected = declaredPackageManager || (lockManagers.length === 1 ? lockManagers[0] : '');
+      const conflicts = !!declaredPackageManager && lockManagers.some(manager => manager !== declaredPackageManager);
       return {
-        runtime: packageManifest ? 'node' : null,
-        packageManager: selected || (lockManagers.length === 1 ? lockManagers[0] : null),
-        packageManagerSource: declaredPackageManager ? 'package.json packageManager field' : lockManagers.length === 1 ? 'unique Node.js lockfile' : lockManagers.length > 1 ? 'ambiguous Node.js lockfiles' : 'not detected',
-        lockfiles, conflictingPackageManagerSignals: !!conflicts,
+        packageManager: selected || null,
+        packageManagerSource: declaredPackageManager ? 'package.json packageManager field' : lockManagers.length === 1 ? 'unique lockfile' : lockManagers.length > 1 ? 'ambiguous lockfiles' : 'not detected',
+        lockfiles, conflictingPackageManagerSignals: conflicts,
         ecosystems: packageManifest ? ['node'] : []
       };
     }
@@ -726,8 +722,7 @@
     async function loadProjectIndex() {
       if (!agentDirectoryHandle) throw new Error('Select and authorize a project workspace first.');
       const value = await workspaceDbAction('readonly','get',undefined,projectIndexKey());
-      const selectionId = agentDirectoryHandle?.isNativeWorkspace ? agentDirectoryHandle.selectionId : null;
-      return value && value.version===7 && value.contextId===workspaceContext.id && (value.workspaceSelectionId || null) === selectionId ? value : null;
+      return value && value.version===6 && value.contextId===workspaceContext.id ? value : null;
     }
     function projectIndexAnalyzeTypeScriptProgram(files, manifests = []) {
       const ts = globalThis.ts;
@@ -845,7 +840,7 @@
       const files = [], manifests = [], technologies = new Set(), visitedPaths = new Set();
       let entries=0, scanned=0, readBytes=0, reused=0, skipped=0, truncated=false, reason='';
       const stop = value => { truncated=true; if(!reason) reason=value; };
-      const manifestNames = new Set(['package.json','package-lock.json','pnpm-lock.yaml','yarn.lock','bun.lock','bun.lockb','dockerfile','makefile']);
+      const manifestNames = new Set(['package.json','dockerfile','makefile','package-lock.json','pnpm-lock.yaml','yarn.lock','bun.lock','bun.lockb']);
       async function visit(dir,prefix,depth) {
         if(signal?.aborted){stop('cancelled');return;}
         if(depth>PROJECT_INDEX_LIMITS.depth){stop('depth limit reached');return;}
@@ -861,7 +856,7 @@
           visitedPaths.add(path);
           if(PROJECT_INDEX_SKIP_FILES.test(name)) { skipped++; continue; }
           const lower=name.toLowerCase(), ext=lower.match(/\.[^.]+$/)?.[0]||'';
-          const isManifest=manifestNames.has(lower)||lower.startsWith('tsconfig.')&&lower.endsWith('.json');
+          const isManifest=manifestNames.has(lower)||(lower.startsWith('tsconfig.')&&lower.endsWith('.json'));
           if(!isManifest&&!PROJECT_INDEX_TEXT_EXTENSIONS.has(ext)) { skipped++; continue; }
           try {
             const file=await handle.getFile();
@@ -907,7 +902,7 @@
       const resolvedKeys=new Set((importGraph.resolvedBindings||[]).map(item=>[item.from,item.to,item.source,item.local,item.imported].join('|')));
       for(const binding of compilerAnalysis.resolvedBindings||[]){const key=[binding.from,binding.to,binding.source,binding.local,binding.imported].join('|');if(!resolvedKeys.has(key)){importGraph.resolvedBindings.push(binding);resolvedKeys.add(key);}}
       importGraph.compilerAnalysis={supported:compilerAnalysis.supported!==false,compilerVersion:compilerAnalysis.compilerVersion||null,filesAnalyzed:compilerAnalysis.filesAnalyzed||0,truncated:!!compilerAnalysis.truncated,crossFileReferences:compilerAnalysis.crossFileReferences?.length||0,note:compilerAnalysis.note||compilerAnalysis.reason||''};
-      const index={version:7,contextId:workspaceContext.id,workspaceSelectionId:agentDirectoryHandle?.isNativeWorkspace ? agentDirectoryHandle.selectionId : null,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
+      const index={version:6,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
       await workspaceDbAction('readwrite','put',index,projectIndexKey());
       projectIndexStatus?.(index);
       return {root:index.rootName,files:index.stats.files,scanned,entries,readBytes,reused,removed,skipped,truncated,reason,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies.slice(0,100),toolchains:index.toolchains,importGraphSummary:{localImportEdges:index.importGraph?.localImportEdges?.length||0,resolvedBindings:index.importGraph?.resolvedBindings?.length||0,unresolvedBindings:index.importGraph?.unresolvedBindings?.length||0,circularDependencies:index.importGraph?.circularDependencies?.length||0,externalImports:index.importGraph?.externalImports?.length||0,mostImportedFiles:index.importGraph?.filesWithIncomingImports||[],note:index.importGraph?.note},updatedAt:index.updatedAt};

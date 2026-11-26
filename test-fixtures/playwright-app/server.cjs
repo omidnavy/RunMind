@@ -21,6 +21,13 @@ const server = http.createServer((request, response) => {
     response.end(JSON.stringify({ status: 'ok', port }));
     return;
   }
+  if (pathname === '/cors-probe') {
+    // Intentionally omit Access-Control-Allow-Origin. A page on the other
+    // fixture origin must be blocked by the browser's same-origin policy.
+    response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+    response.end('CORS fixture response is intentionally not cross-origin readable.\n');
+    return;
+  }
 
   const entry = files.get(pathname);
   if (!entry) {
