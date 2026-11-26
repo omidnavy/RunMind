@@ -2,11 +2,11 @@ using System.Windows;
 
 namespace RunMind.Runner;
 
-internal partial class RunnerSettingsWindow : Window
+public partial class RunnerSettingsWindow : Window
 {
-    public RunnerSettings Settings { get; private set; }
+    internal RunnerSettings Settings { get; private set; }
 
-    public RunnerSettingsWindow(RunnerSettings currentSettings)
+    internal RunnerSettingsWindow(RunnerSettings currentSettings)
     {
         InitializeComponent();
         Settings = new RunnerSettings

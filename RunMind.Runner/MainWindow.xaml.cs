@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
+using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 
 namespace RunMind.Runner;
 
@@ -96,7 +97,7 @@ public partial class MainWindow : Window
         RefreshSearch();
     }
 
-    private void SearchBox_KeyDown(object sender, KeyEventArgs e)
+    private void SearchBox_KeyDown(object sender, WpfKeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
@@ -121,7 +122,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ResultsList_KeyDown(object sender, KeyEventArgs e)
+    private void ResultsList_KeyDown(object sender, WpfKeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {

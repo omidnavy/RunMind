@@ -376,7 +376,7 @@ public sealed partial class AgentHostBridge
                 || (metadata.Port.HasValue && metadata.Port.Value is < 1 or > 65535)
                 || (metadata.ReadinessUrl is not null && (!Uri.TryCreate(metadata.ReadinessUrl, UriKind.Absolute, out var readiness)
                     || readiness.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(readiness.UserInfo)
-                    || !(readiness.IsLoopback || readiness.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))))
+                    || !(readiness.IsLoopback || readiness.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)))))
                 return "Ownership record fields are invalid.";
             return null;
         }

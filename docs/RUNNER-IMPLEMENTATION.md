@@ -1,4 +1,4 @@
-# RunMind Runner — 3.4.0 Preview 1
+# RunMind Runner — 3.4.0 Preview 1.1
 
 ## Purpose
 
@@ -35,6 +35,10 @@ Quick Agent will be a distinct constrained Agent experience shared by PowerToys 
 3. Quick actions — only explicitly permitted low-risk actions may run automatically; sensitive actions remain confirmation-gated.
 
 This future layer will reuse one approval/security system and one Quick Agent Core across the three quick surfaces. Runner must remain responsive without loading that layer until it is enabled and needed.
+
+## Preview 1.1 build corrections
+
+The follow-up preview corrects the compile errors reported by the first Windows Release x64 build. See `WINDOWS-BUILD-FIXES-PREVIEW-1.1.md` for the exact source changes and remaining validation boundary.
 
 ## Build and install
 

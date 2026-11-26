@@ -62,3 +62,18 @@ test('release and install workflow treats Runner as an independent optional comp
   assert.match(uninstaller, /RunMind\.Runner/);
   assert.match(uninstaller, /RunMind Standalone, PowerToys Run and Command Palette were not changed/);
 });
+
+test('Runner and shared host sources include the Windows compile corrections', async () => {
+  const serverManager = await read('Shared/DevelopmentServerManager.cs');
+  const mainWindow = await read('RunMind.Runner/MainWindow.xaml.cs');
+  const settingsWindow = await read('RunMind.Runner/RunnerSettingsWindow.xaml.cs');
+
+  assert.match(serverManager, /readiness\.Host\.Equals\("localhost", StringComparison\.OrdinalIgnoreCase\)\)\)\)\)/);
+  assert.match(settingsWindow, /public partial class RunnerSettingsWindow : Window/);
+  assert.match(settingsWindow, /internal RunnerSettings Settings/);
+  assert.match(settingsWindow, /internal RunnerSettingsWindow\(RunnerSettings currentSettings\)/);
+  assert.match(mainWindow, /using WpfKeyEventArgs = System\.Windows\.Input\.KeyEventArgs;/);
+  assert.match(mainWindow, /SearchBox_KeyDown\(object sender, WpfKeyEventArgs e\)/);
+  assert.match(mainWindow, /ResultsList_KeyDown\(object sender, WpfKeyEventArgs e\)/);
+  assert.doesNotMatch(mainWindow, /\bKeyEventArgs e\)/);
+});
