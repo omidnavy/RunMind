@@ -1,3 +1,12 @@
+## Phase 2 — API & Backend Testing — 2026-11-21
+
+- Added `api_test_run` and a shared native HTTP runner backed by Node.js built-in `fetch`; no additional package dependency.
+- Supports bounded sequential API requests, JSON/text payloads, status/header/JSON-path/body assertions, response timing, and redacted response previews.
+- Environment placeholders (`{{env:NAME}}`) allow credentials to come from the current user's environment without embedding values in the Agent prompt or approval preview.
+- Fresh approval per suite; same-origin request and redirect restrictions; 20-request suite cap; 1 MB response cap; five-minute native execution cap; blocked in Deep Research and delegated sub-agents.
+- Complete portable suite: **97/97 passed**, including **13/13 API/backend integration tests** against an ephemeral local HTTP server. JavaScript syntax and all three host project XML checks passed.
+- Native C# compilation and live Windows host behavior have not been run here. Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` on Windows. Details: `docs/PHASE2-API-BACKEND-TESTING.md`.
+
 ## Phase 2 — Playwright Browser Integration — 2026-11-21
 
 - Added the shared `playwright_run` Agent tool and native bridge operation for all three hosts. The bundled CommonJS runner resolves the project-installed `playwright` dependency and runs structured workflows in ephemeral headless browser contexts.

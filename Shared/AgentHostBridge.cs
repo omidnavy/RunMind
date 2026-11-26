@@ -164,6 +164,7 @@ public sealed partial class AgentHostBridge : IDisposable
             "debugger.runtime.heapSnapshot" => NodeRuntimeHeapSnapshotAsync(args, cancellationToken),
             "debugger.runtime.memoryMonitor" => NodeRuntimeMemoryMonitorAsync(args, cancellationToken),
             "playwright.run" => PlaywrightRunAsync(args, cancellationToken),
+            "api.test.run" => ApiTestRunAsync(args, cancellationToken),
             "git.run" => RunGitAsync(args, cancellationToken),
             "git.clone" => CloneRepositoryAsync(args, cancellationToken, progress),
             "download.file" => DownloadFileAsync(args, cancellationToken, (bytes, total) => progress(bytes, total, null)),
@@ -941,6 +942,88 @@ public sealed partial class AgentHostBridge : IDisposable
             }
         }
         return await ExecuteBoundedProcessAsync(start, command, working, args, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<object> ApiTestRunAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        var working = GetProcessWorkingDirectory(args);
+        if (!args.TryGetProperty("requests", out var requests) || requests.ValueKind != JsonValueKind.Array || requests.GetArrayLength() is < 1 or > 20)
+            throw new InvalidDataException("API testing requires between 1 and 20 structured HTTP requests.");
+        var baseUrl = ReadString(args, "base_url", 2048);
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps)
+            || !string.IsNullOrEmpty(baseUri.UserInfo) || !string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment))
+            throw new InvalidDataException("base_url must be an absolute HTTP or HTTPS URL without credentials, a query, or a fragment.");
+        var node = FindExecutable("node.exe") ?? throw new FileNotFoundException("Node.js was not found on PATH. Install Node.js 24 or later and reopen RunMind.");
+        var runner = Path.Combine(AppContext.BaseDirectory, "ApiTestRunner.cjs");
+        if (!File.Exists(runner)) throw new FileNotFoundException("The bundled RunMind API test runner is missing from the host output directory.");
+
+        var start = new ProcessStartInfo(node)
+        {
+            WorkingDirectory = working,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardInputEncoding = Encoding.UTF8,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        start.ArgumentList.Add(runner);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var timeoutSeconds = 60;
+        if (args.TryGetProperty("timeout_seconds", out var timeoutValue) && timeoutValue.TryGetInt32(out var requested)) timeoutSeconds = Math.Clamp(requested, 5, 120);
+        timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(300, timeoutSeconds * Math.Max(1, requests.GetArrayLength()) + 15)));
+        using var process = new Process { StartInfo = start, EnableRaisingEvents = true };
+        var stopwatch = Stopwatch.StartNew();
+        if (!process.Start()) throw new InvalidOperationException("Could not start the API test runner.");
+        var stdoutTask = ReadBoundedProcessOutputAsync(process.StandardOutput, timeout.Token);
+        var stderrTask = ReadBoundedProcessOutputAsync(process.StandardError, timeout.Token);
+        try
+        {
+            await process.StandardInput.WriteAsync(args.GetRawText().AsMemory(), timeout.Token).ConfigureAwait(false);
+            process.StandardInput.Close();
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+            try { await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false); } catch { }
+            if (cancellationToken.IsCancellationRequested) throw;
+            throw new TimeoutException("API test run exceeded its bounded execution time; the runner process was terminated.");
+        }
+        catch
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+            try { await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false); } catch { }
+            throw;
+        }
+        var output = await stdoutTask.ConfigureAwait(false);
+        var error = await stderrTask.ConfigureAwait(false);
+        stopwatch.Stop();
+        if (output.truncated) throw new InvalidDataException("API test runner returned more than the 512 KB output limit.");
+        if (string.IsNullOrWhiteSpace(output.text)) throw new InvalidOperationException($"API test runner returned no result. {Limit(error.text, 1200)}");
+        try
+        {
+            using var result = JsonDocument.Parse(output.text);
+            var payload = result.RootElement.Clone();
+            if (payload.ValueKind != JsonValueKind.Object) throw new InvalidDataException("API test runner returned an invalid result shape.");
+            return new
+            {
+                result = payload,
+                exitCode = process.ExitCode,
+                durationMs = stopwatch.ElapsedMilliseconds,
+                stderr = Limit(error.text, 4000),
+                workingDirectory = working,
+                execution = "HTTP requests run through Node.js fetch as the current Windows user; API calls may change remote or local application state."
+            };
+        }
+        catch (JsonException errorJson)
+        {
+            throw new InvalidDataException($"API test runner returned invalid JSON: {Limit(output.text, 1200)} {Limit(error.text, 1200)}", errorJson);
+        }
     }
 
     private async Task<object> PlaywrightRunAsync(JsonElement args, CancellationToken cancellationToken)

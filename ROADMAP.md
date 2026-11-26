@@ -4,14 +4,14 @@
 
 ## Active milestone: Phase 2 — Debugging & Quality
 
-The 2.6.3 baseline includes the Phase 1 Developer Workbench and System Manager capabilities. The Node Debugger increment has been built successfully by the user on Windows across all three hosts. Runtime Diagnostics & Profiling has been confirmed working by the user across the three Windows hosts. Playwright Browser Integration is implemented in the current working bundle and awaits three-host Windows build/runtime validation.
+The 2.6.3 baseline includes the Phase 1 Developer Workbench and System Manager capabilities. The Node Debugger increment has been built successfully by the user on Windows across all three hosts. Runtime Diagnostics & Profiling has been confirmed working by the user across the three Windows hosts. Playwright Browser Integration is implemented in the current working bundle and awaits three-host Windows build/runtime validation. API & Backend Testing is implemented in the current working bundle and awaits three-host Windows build/runtime validation.
 
 ### Milestone scope and implementation direction
 
 - Extend the existing Node Inspector sessions with V8 heap diagnostics, CPU sampling profiles, streamed heap snapshots, and bounded timestamped memory sampling.
 - Keep profiling tools in the shared Agent Core across Standalone, PowerToys Run, and PowerToys Command Palette; do not introduce a second agent or duplicate session manager.
 - Require fresh approval for profiling starts and heap snapshots, bound all retained samples/artifacts, and keep runtime profiling unavailable to Deep Research and delegated sub-agent tasks.
-- Complete the remaining Phase 2 increments in sequence: dedicated API/backend testing, followed by development-server lifecycle management.
+- Complete the remaining Phase 2 increment: development-server lifecycle management, following API/backend testing.
 - Preserve the existing Phase 1 Developer Workbench, Git, Skills, Profiles, MCP, workflows, and System Manager capabilities without broad rewrites.
 
 ### Included in this source bundle
@@ -38,12 +38,12 @@ The 2.6.3 baseline includes the Phase 1 Developer Workbench and System Manager c
 - New-window support is limited to applications with known command-line flags. Other applications can use reuse or new-process behavior.
 - Graceful close applies to accessible desktop main windows. It does not force-close background-only or packaged applications.
 - Windows foreground activation is subject to Windows security restrictions; RunMind never uses focus-stealing workarounds.
-- The TypeScript compiler pass is bounded to 500 indexed source files/12 MB, uses no default library bundle, and does not run full semantic diagnostics. Actual Node resolution requires Node on PATH and the native workspace to match the selected project folder. Structured Playwright browser automation uses the project-installed package through the shared native runner; the existing CLI workflow remains available. API smoke testing remains workflow-guided through approved PowerShell.
+- The TypeScript compiler pass is bounded to 500 indexed source files/12 MB, uses no default library bundle, and does not run full semantic diagnostics. Actual Node resolution requires Node on PATH and the native workspace to match the selected project folder. Structured Playwright browser automation uses the project-installed package through the shared native runner; the existing CLI workflow remains available. Structured API/backend suites use the shared Node.js fetch runner with explicit approval and same-origin request/redirect bounds; workflow-guided PowerShell remains available for other project-specific tests.
 
 ### Next candidates
 
-- Complete Windows build/runtime validation for Playwright Browser Integration across all three hosts.
-- Phase 2 dedicated API/backend testing, followed by development-server lifecycle management.
+- Complete Windows build/runtime validation for Playwright Browser Integration and API & Backend Testing across all three hosts.
+- Phase 2 development-server lifecycle management.
 - Windows-targeted automated integration tests for discovery, launch, activation, close, and all three hosts.
 - Better app-specific adapters where a real user workflow justifies them.
 - Full Skill repository/archive import with referenced resources and update checks, if needed.
@@ -79,3 +79,10 @@ Implemented in this source snapshot: Windows Notepad adapter, File Explorer fold
 ## Phase 1 completion candidate — 2026-11-21
 
 Implemented in the source increment: JavaScript AST rename/import organization/conservative extract-function previews; cross-file reference edges for resolved static imports; reversible HKCU/HKLM Run startup toggles; hardware/driver and TCP/UDP listener diagnostics; normalized System Manager outcomes; real local Git workflow tests; and a Windows validation script for all three projects. The user subsequently confirmed the three-host Node Debugger build succeeds.
+
+
+## Phase 2 progress — API & Backend Testing
+
+- Added `api_test_run` to the shared Agent Core and all three native host deployments.
+- Added structured HTTP request suites, JSON/text bodies, response assertions, environment-variable secret placeholders, bounded previews, and same-origin redirect enforcement.
+- Added local HTTP integration coverage; Windows build/runtime validation remains pending.

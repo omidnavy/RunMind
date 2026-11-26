@@ -63,7 +63,7 @@
 | Runtime quality | Memory-over-time sampling | Implemented; Windows build/runtime verified by user | Timestamped V8 heap samples; 1–60 second interval; 5–600 second duration; 120-sample ring |
 | Runtime quality | Heap dominator/leak UI | Not included | Open exported V8 snapshots in Chrome/Edge DevTools; native analysis UI is a later candidate |
 | Browser quality | Structured Playwright automation | Implemented in working bundle; Windows build pending | Shared native runner; Chromium/Firefox/WebKit; 1–30 structured actions; fresh approval per run; ephemeral contexts; assertions, console/network diagnostics and screenshots; project-installed package required |
-| API quality | Dedicated HTTP/API test client | Not yet implemented | Planned after browser automation |
+| API quality | Structured HTTP/API test runner | Implemented in working bundle; Windows build pending | Shared native Node fetch runner; 1–20 sequential requests; status/header/JSON/body assertions; env-backed secrets; same-origin redirects; fresh approval per suite |
 | Development servers | Start/readiness/log/health/stop lifecycle | Not yet implemented | Planned after API testing |
 
 ## 2.6.1 changes

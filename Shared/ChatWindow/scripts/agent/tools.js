@@ -147,6 +147,28 @@
         if (!approved) return { cancelled: true, message: 'Playwright browser run was declined.' };
         return await callAgentHost('playwright.run', { browser, actions, working_directory: String(args.working_directory || ''), timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(30000, Math.min(315000, (Number(args.timeout_seconds) || 120) * 1000 + 15000)));
       }
+      if (name === 'api_test_run') {
+        if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('API/backend testing is disabled in Deep Research and delegated sub-agent tasks. Run it from the primary Agent session with explicit approval.');
+        const requests = Array.isArray(args.requests) ? args.requests.slice(0, 20) : [];
+        if (!requests.length || requests.length > 20) throw new Error('Provide between 1 and 20 API requests.');
+        let base;
+        try { base = new URL(String(args.base_url || '')); } catch { throw new Error('Provide an absolute HTTP or HTTPS base_url.'); }
+        if (!['http:','https:'].includes(base.protocol) || base.username || base.password || base.hash || base.search) throw new Error('API base_url must use HTTP/HTTPS without credentials, a query, or a fragment.');
+        const timeoutSeconds = Math.max(5, Math.min(120, Number(args.timeout_seconds) || 60));
+        const preview = requests.map((item, index) => {
+          const method = String(item.method || 'GET').toUpperCase();
+          const rawTarget = String(item.path || '/');
+          const targetPath = rawTarget.split('?')[0].slice(0, 160);
+          const queryNames = rawTarget.includes('?') ? [...new URLSearchParams(rawTarget.split('?').slice(1).join('?')).keys()].slice(0, 12) : [];
+          const target = `${targetPath}${queryNames.length ? `?${queryNames.map(key => `${key}=[value]`).join('&')}` : ''}`;
+          const headerNames = item.headers && typeof item.headers === 'object' ? Object.keys(item.headers).slice(0, 20).join(', ') : '';
+          const body = item.body_json !== undefined ? ' · JSON body supplied' : item.body_text !== undefined ? ' · text body supplied' : '';
+          return `${index + 1}. ${method} ${target}${body}${headerNames ? ` · headers: ${headerNames}` : ''}`;
+        }).join('\n');
+        const approved = await requireAgentApproval({ title: 'Run these API/backend tests?', subtitle: `${base.origin}${base.pathname} · ${requests.length} HTTP requests`, detail: `Selected project workspace: ${workspaceContext.folderName || '(native workspace selected separately)'}\nBase URL: ${base.origin}${base.pathname}\nPer-request timeout: ${timeoutSeconds} seconds\n\nRequests:\n${preview}\n\nThis executes real HTTP requests as your Windows user. POST/PUT/PATCH/DELETE and even GET endpoints may change application state. All requests and redirects are restricted to the base URL origin. Secrets may be supplied with {{env:VARIABLE_NAME}} placeholders; their values are not shown in this approval. Responses are bounded and common credential fields are redacted.`, risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true, message: 'API/backend test run was declined.' };
+        return await callAgentHost('api.test.run', { base_url: base.href, requests, timeout_seconds: timeoutSeconds, working_directory: String(args.working_directory || ''), contextId: workspaceContext.id }, signal, Math.min(300000, Math.max(30000, requests.length * timeoutSeconds * 1000 + 15000)));
+      }
       if ((debuggerTools.has(name) || runtimeTools.has(name)) && (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth))
         throw new Error('Node.js debugger and runtime profiling access is disabled in Deep Research and delegated sub-agent tasks. Use the primary Agent session with explicit approval.');
       if (name === 'node_runtime_diagnostics')

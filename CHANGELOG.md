@@ -1,3 +1,12 @@
+## Unreleased — Phase 2 API & Backend Testing
+
+- Add the shared `api_test_run` Agent tool and native `api.test.run` bridge operation, backed by Node.js built-in `fetch` with no new package dependency.
+- Support bounded sequential GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS requests, JSON/text bodies, headers, status/header/JSON-path/body assertions, timings, and bounded response previews.
+- Add `{{env:NAME}}` placeholders for credentials inherited from the current user process environment; do not expose placeholder values in approval previews or results, and redact common secret fields and response headers.
+- Restrict request paths and redirects to the approved HTTP(S) base URL origin; cap suites at 20 requests, each response at 1 MB, request bodies at 64 KB, output at 256 KB, and native execution at five minutes.
+- Require fresh approval for every suite and disable the tool in Deep Research and delegated sub-agent tasks.
+- Add local HTTP-server integration tests for request execution, assertions, secret handling, redirect restrictions, failure reporting, and three-host deployment wiring.
+
 ## Unreleased — Phase 2 Playwright Browser Integration
 
 - Add `playwright_run` to the existing shared Agent Core and native bridge across Standalone, PowerToys Run, and PowerToys Command Palette. The bundled runner resolves the project-installed `playwright` package; it does not add a NuGet dependency, bundle browsers, or install project packages.
