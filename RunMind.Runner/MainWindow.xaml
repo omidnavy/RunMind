@@ -53,7 +53,7 @@
         <Grid>
           <ListBox x:Name="ResultsList" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource RunnerText}"
                    ScrollViewer.VerticalScrollBarVisibility="Auto" MouseDoubleClick="ResultsList_MouseDoubleClick"
-                   KeyDown="ResultsList_KeyDown" SelectionChanged="ResultsList_SelectionChanged" Visibility="Collapsed">
+                   PreviewMouseLeftButtonUp="ResultsList_PreviewMouseLeftButtonUp" KeyDown="ResultsList_KeyDown" SelectionChanged="ResultsList_SelectionChanged" Visibility="Collapsed">
             <ListBox.Resources>
               <Style TargetType="ListBoxItem">
                 <Setter Property="Padding" Value="12,11" />

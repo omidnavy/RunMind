@@ -8,6 +8,23 @@
 - Runner is an independently installable optional WPF host. Standalone, PowerToys Run and Command Palette remain included and unchanged in product scope.
 - Quick Agentic system-management execution is not included yet. It remains the next shared milestone for all three quick hosts.
 
+## Latest Runner interaction update — full-surface selects, immediate themes and RunMind result handoff (2026-11-24)
+
+- **ComboBoxes:** the shared WPF template now uses a full-width/full-height transparent toggle surface. Clicking the displayed value or open area opens the dropdown, not only the arrow. The editable Model selector has a code-behind editor hook so its text area also opens the list while remaining editable.
+- **Themes:** changing Appearance Mode, Light theme or Dark theme immediately persists the preference and reapplies the palette to all open Runner windows. The main native caption synchronizer reloads the current preference. These appearance changes remain saved even when Settings is closed with Cancel; Save settings is still used for the other Runner settings.
+- **RunMind result:** a single click on a RunMind row opens the exact result prompt in the real Standalone Full Agent. Enter also activates it; the second half of a double-click is ignored to prevent duplicate conversations, while other plugin double-click behavior is unchanged. Completed answers, partial streaming output and errors are transferred as transcript context without re-running the prompt. A click during the debounce period still hands off the prompt even if no inline response exists yet.
+
+Latest portable validation on this source:
+
+- Full Node regression suite: **298/298 passed**.
+- Runner-focused contract, UX, handoff and interaction tests: **42/42 passed**.
+- JavaScript syntax: **60/60 passed**.
+- JSON: **4/4 parsed**.
+- XML/XAML/project/manifest: **11/11 parsed**.
+- Runner window XAML control-name and event-handler checks: passed.
+
+The current environment does not have .NET SDK/MSBuild or Windows Desktop runtime. The Release x64 build and interactive WPF acceptance remain pending on Windows. See `docs/RUNNER-INTERACTION-FIXES-2026-11-24.md` for the manual test sequence.
+
 ## Latest source update — real Standalone handoff (2026-11-24)
 
 - Removed all empty-state sample/suggestion cards. Empty Runner remains a clean launcher shell; results stay collapsed until a plugin returns real matches.

@@ -34,6 +34,13 @@ internal sealed class WindowThemeSynchronizer : IDisposable
         if (hwnd != IntPtr.Zero) Attach(hwnd);
     }
 
+    public void RefreshAppearance()
+    {
+        if (_disposed) return;
+        _appearance = AppearancePreferenceStore.Load() ?? new AppearancePreferences("system", "classic-light", "warm-graphite");
+        Apply();
+    }
+
     public bool TryHandleWebMessage(string source, string messageJson)
     {
         if (_disposed || !AppearancePreferenceStore.TryHandleMessage(source, messageJson, out var settings) || settings is null)

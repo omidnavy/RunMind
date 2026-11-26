@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using WpfComboBox = System.Windows.Controls.ComboBox;
+using WpfTextBox = System.Windows.Controls.TextBox;
 using RunMind.Shared;
 
 namespace RunMind.Runner;
@@ -12,6 +13,7 @@ public partial class RunnerSettingsWindow : Window
     private readonly RunnerInlineSettings _currentInlineSettings;
     private readonly RunnerInlineCredentials _currentCredentials;
     private readonly RunnerInlineModelClient _modelClient = new();
+    private bool _isInitializing = true;
 
     internal RunnerSettings Settings { get; private set; }
     internal RunnerInlineSettings InlineSettings { get; private set; }
@@ -30,6 +32,7 @@ public partial class RunnerSettingsWindow : Window
         InlineSettings = currentInlineSettings;
         Credentials = currentCredentials;
         RunnerThemeManager.Apply(this);
+        EnableEditableComboBoxClickToOpen(ModelBox);
 
         HotkeyBox.Text = currentSettings.Hotkey;
         StartWithWindowsCheckBox.IsChecked = currentSettings.StartWithWindows;
@@ -86,6 +89,44 @@ public partial class RunnerSettingsWindow : Window
         DarkThemeBox.SelectedValuePath = "Id";
         LightThemeBox.SelectedValue = appearance.LightTheme;
         DarkThemeBox.SelectedValue = appearance.DarkTheme;
+        _isInitializing = false;
+    }
+
+    private static void EnableEditableComboBoxClickToOpen(WpfComboBox comboBox)
+    {
+        void AttachEditorHandler(object? sender, RoutedEventArgs e)
+        {
+            comboBox.ApplyTemplate();
+            if (comboBox.Template.FindName("PART_EditableTextBox", comboBox) is not WpfTextBox editor)
+                return;
+
+            editor.PreviewMouseLeftButtonDown += (_, _) => comboBox.IsDropDownOpen = true;
+            comboBox.Loaded -= AttachEditorHandler;
+        }
+
+        // Wait until the tab content is actually loaded so its editable template part exists.
+        comboBox.Loaded += AttachEditorHandler;
+    }
+
+    private void Appearance_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isInitializing || AppearanceStatusText is null) return;
+
+        var mode = GetTag(AppearanceModeBox, "system");
+        var lightTheme = (LightThemeBox.SelectedItem as ThemeDefinition)?.Id;
+        var darkTheme = (DarkThemeBox.SelectedItem as ThemeDefinition)?.Id;
+        if (string.IsNullOrWhiteSpace(lightTheme) || string.IsNullOrWhiteSpace(darkTheme)) return;
+
+        if (!RunnerThemeManager.SaveAppearance(mode, lightTheme, darkTheme))
+        {
+            AppearanceStatusText.Text = "Could not save the appearance preference.";
+            AppearanceStatusText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerDanger");
+            return;
+        }
+
+        RunnerThemeManager.ApplyToAllOpenWindows();
+        AppearanceStatusText.Text = "Applied and saved immediately.";
+        AppearanceStatusText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerSuccess");
     }
 
     private void ProviderBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

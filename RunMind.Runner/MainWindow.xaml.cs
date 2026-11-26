@@ -54,6 +54,8 @@ public partial class MainWindow : Window
         _themeSynchronizer = new WindowThemeSynchronizer(this);
     }
 
+    internal void RefreshNativeTheme() => _themeSynchronizer.RefreshAppearance();
+
     public void HideAfterStartup()
     {
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Hide));
@@ -181,7 +183,27 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ResultsList_MouseDoubleClick(object sender, MouseButtonEventArgs e) => OpenSelectedResult();
+    private void ResultsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        // RunMind already activates on the first click; do not create a second
+        // Standalone conversation from the second half of a double-click.
+        if (ResultsList.SelectedItem is RunnerPluginResult { PluginId: "runmind" }) return;
+        OpenSelectedResult();
+    }
+
+    private async void ResultsList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject source) return;
+        if (ItemsControl.ContainerFromElement(ResultsList, source) is not ListBoxItem item
+            || item.DataContext is not RunnerPluginResult result
+            || !string.Equals(result.PluginId, "runmind", StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(result.Value)
+            || e.ClickCount > 1)
+            return;
+
+        e.Handled = true;
+        await OpenStandaloneChatAsync(result.Value);
+    }
 
     private void ResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -369,7 +391,7 @@ public partial class MainWindow : Window
         catch (Exception exception) { StatusText.Text = "Could not copy the answer: " + exception.Message; }
     }
 
-    private void OpenSelectedResult()
+    private async void OpenSelectedResult()
     {
         if (ResultsList.SelectedItem is not RunnerPluginResult result) return;
         try
@@ -386,9 +408,7 @@ public partial class MainWindow : Window
                     StatusText.Text = "Copied " + result.Value;
                     break;
                 case RunnerPluginAction.ShowInlineAnswer:
-                    InlineAnswerText.Focus();
-                    InlineAnswerScroll.ScrollToEnd();
-                    StatusText.Text = "RunMind answer is available in the unified result · Open chat to continue.";
+                    await OpenStandaloneChatAsync(string.IsNullOrWhiteSpace(result.Value) ? _lastInlineQuery : result.Value);
                     break;
             }
         }
@@ -497,7 +517,7 @@ public partial class MainWindow : Window
             _settings = candidate;
             _inlineSettings = RunnerInlineSettingsStore.Load();
             _inlineCredentials = RunnerInlineCredentialsStore.Load();
-            RunnerThemeManager.Apply(this);
+            RunnerThemeManager.ApplyToAllOpenWindows();
             PositionOnConfiguredMonitor();
             _hotkeyStatus = null;
             StatusText.Text = $"Esc to hide  ·  Enter to open  ·  {_settings.Hotkey} to summon";

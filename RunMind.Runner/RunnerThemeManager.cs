@@ -33,6 +33,16 @@ internal static class RunnerThemeManager
     public static string ThemeName(string mode, string id)
         => Themes.FirstOrDefault(theme => theme.Mode == mode && theme.Id == id)?.Name ?? id;
 
+    public static void ApplyToAllOpenWindows()
+    {
+        var windows = WpfApplication.Current.Windows.OfType<Window>().ToArray();
+        foreach (var window in windows)
+            Apply(window);
+
+        foreach (var mainWindow in windows.OfType<MainWindow>())
+            mainWindow.RefreshNativeTheme();
+    }
+
     public static void Apply(Window window)
     {
         ArgumentNullException.ThrowIfNull(window);
