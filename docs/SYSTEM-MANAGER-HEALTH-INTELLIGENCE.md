@@ -1,6 +1,6 @@
 # System Manager Health Intelligence
 
-RunMind 3.2.0 turns separate Windows System Manager queries into an on-demand diagnostic report. It is designed to summarize evidence and point to useful next investigations, not to act as an always-running monitoring agent.
+System Manager health intelligence turns separate Windows System Manager queries into an on-demand diagnostic report. It is designed to summarize evidence and point to useful next investigations, not to act as an always-running monitoring agent.
 
 ## Enable the required capabilities
 

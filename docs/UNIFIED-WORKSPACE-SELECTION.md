@@ -1,4 +1,4 @@
-# Unified Workspace Selection — RunMind 2.7.0 P0
+# Unified workspace selection
 
 ## User-facing contract
 
@@ -33,14 +33,14 @@ Git no longer maintains an independent folder authority: repository operations u
 
 ## Acceptance criteria
 
-Use `docs/P0-WINDOWS-ACCEPTANCE.md` to verify:
+Run `Validate-RunMind-Windows.ps1`, then verify the shared workspace behavior in Standalone, PowerToys Run and Command Palette:
 
 - selecting a workspace once makes file tools and native project tools work without a second prompt;
-- all three Windows hosts use the same behavior;
+- the three Full Agent Windows hosts use the same behavior;
 - nested `working_directory` values stay inside the selected root;
 - changing roots invalidates old handles;
 - a root change made in another host is observed;
 - traversal, absolute paths, reserved names and reparse points are refused;
 - file transfers and writes remain bounded and recoverable.
 
-The portable contract suite checks the architecture and safety boundaries. Actual Windows runtime behavior still requires the three-host acceptance run.
+The portable contract suite checks the architecture and safety boundaries. Actual Windows runtime behavior requires interactive acceptance in the three Full Agent hosts; Runner intentionally does not expose workspace tools.

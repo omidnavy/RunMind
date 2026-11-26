@@ -76,7 +76,7 @@ for %%P in (
     )
 )
 
-echo [1/8] Preparing pinned PDF.js, Tesseract.js, English and Persian OCR resources...
+echo [1/8] Preparing versioned PDF.js/Tesseract packages and English/Persian OCR language data...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Prepare-RunMind-OCR.ps1"
 if errorlevel 1 (
     echo.

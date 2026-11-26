@@ -1,6 +1,6 @@
 # Project Mission Control
 
-Project Mission Control is RunMind's read-only project control center. It aggregates the existing persistent project index and the P1 analysis services into one versioned report. It is available as the `project_mission_control` Agent tool, through the built-in Project Mission Control workflow, and in Agent Settings. All three hosts share the same `Shared/ChatWindow` implementation.
+Project Mission Control is RunMind's read-only project control center. It aggregates the existing persistent project index and the current project-index and analysis services into one versioned report. It is available as the `project_mission_control` Agent tool, through the built-in Project Mission Control workflow, and in Agent Settings. The three Full Agent hosts share the same `Shared/ChatWindow` implementation; Runner is a separate restricted Quick Host.
 
 ## Design goals
 

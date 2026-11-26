@@ -23,7 +23,7 @@ if not exist "%SOURCE%\Community.PowerToys.Run.Plugin.RunMind.dll" (
     echo [ERROR] The PowerToys Run Release x64 output was not found:
     echo         "%SOURCE%"
     echo.
-    echo Build all three hosts first with Build-Release-x64.bat.
+    echo Run Build-Release-x64.bat first to build all four hosts and release artifacts.
     set "EXITCODE=1"
     goto :finish
 )

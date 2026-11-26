@@ -60,8 +60,8 @@ try {
     foreach ($path in $existingPaths) {
         try {
             $probe = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
-            # A valid host settings.json is a candidate even before its custom
-            # alias map has been created. The script can initialize that map.
+            # A valid host settings.json is a candidate. Alias updates still require
+            # an existing alias entry so its serialized property schema can be reused.
             if ($probe -is [pscustomobject]) { $validPaths.Add($path) }
         }
         catch {
@@ -70,7 +70,7 @@ try {
     }
 
     if ($validPaths.Count -eq 0) {
-        Write-Notice 'A candidate settings file exists, but none contains the Command Palette Aliases collection. No settings were changed.'
+        Write-Notice 'No valid Command Palette settings object was found among the existing settings files. No settings were changed.'
         return
     }
     if ($validPaths.Count -gt 1) {
@@ -83,12 +83,10 @@ try {
     $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
     $aliasesProperty = Get-JsonProperty -Object $settings -Name 'Aliases'
     if ($null -eq $aliasesProperty -or $null -eq $aliasesProperty.Value) {
-        $aliases = New-Object PSObject
-        Set-JsonProperty -Object $settings -Name 'Aliases' -Value $aliases
+        Write-Notice 'The settings file has no populated Aliases collection. Create one Command Palette alias first so the entry schema can be inferred safely; no settings were changed.'
+        return
     }
-    else {
-        $aliases = $aliasesProperty.Value
-    }
+    $aliases = $aliasesProperty.Value
     $aliasProperties = @($aliases.PSObject.Properties)
 
     $existingAlias = $aliasProperties | Where-Object { $_.Name -ieq $aliasName } | Select-Object -First 1
@@ -109,6 +107,11 @@ try {
     }
     else {
         # Match the property casing used by the host's own serialized CommandAlias entries.
+        # An empty alias map does not reveal that schema, so fail closed without writing.
+        if ($aliasProperties.Count -eq 0) {
+            Write-Notice 'The Command Palette Aliases collection is empty, so its entry schema cannot be inferred safely. Open Command Palette and create one alias first; no settings were changed.'
+            return
+        }
         $sampleAlias = $aliasProperties[0].Value
         $sampleCommandId = Get-JsonProperty -Object $sampleAlias -Name 'CommandId'
         $sampleAliasName = Get-JsonProperty -Object $sampleAlias -Name 'Alias'

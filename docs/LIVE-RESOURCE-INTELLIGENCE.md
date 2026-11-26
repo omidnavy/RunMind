@@ -1,8 +1,8 @@
-﻿# Live Resource Intelligence
+# Live Resource Intelligence
 
 ## Purpose
 
-Live Resource Intelligence adds a user-started, read-only Windows telemetry session to the existing System Manager flyout. It complements (and does not replace) the existing finite `system_manager_resource_monitor` Agent report and the P5 on-demand health report.
+Live Resource Intelligence adds a user-started, read-only Windows telemetry session to the existing System Manager flyout. It complements (and does not replace) the existing finite `system_manager_resource_monitor` Agent report and the on-demand System Manager health report.
 
 ## User experience
 

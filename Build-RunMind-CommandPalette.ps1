@@ -255,7 +255,7 @@ try {
     }
 
     Write-Host ''
-    Write-Host '[SUCCESS] All three RunMind hosts were built and the Command Palette MSIX was packaged and signed.' -ForegroundColor Green
+    Write-Host '[SUCCESS] The RunMind Command Palette MSIX was packaged and signed.' -ForegroundColor Green
     Write-Host "MSIX: $packagePath" -ForegroundColor DarkGray
     Write-Host "Certificate: $certificatePath" -ForegroundColor DarkGray
     Write-Host 'The package was not installed. Run Install-RunMind-CommandPalette.bat separately.' -ForegroundColor Yellow

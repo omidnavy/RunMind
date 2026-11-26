@@ -4,7 +4,7 @@ Complete this checklist on Windows 10/11 with the .NET 10 SDK, using the same so
 
 ## Build and host coverage
 
-- [ ] Run the repository's complete Windows validation/build script and confirm all three full hosts compile.
+- [ ] Run the repository's complete Windows validation/build script and confirm the three Full Agent hosts and the restricted Runner project compile.
 - [ ] Open Live Monitor in Standalone and confirm the Process Intelligence card appears.
 - [ ] Repeat in PowerToys Run and Command Palette; confirm the shared UI and native bridge behave the same.
 - [ ] Confirm Runner does not expose System Manager or Process Intelligence.
@@ -14,7 +14,6 @@ Complete this checklist on Windows 10/11 with the .NET 10 SDK, using the same so
 - [ ] With System Manager disabled, process inspection and actions are rejected by the native bridge.
 - [ ] Enable System Manager and Process Management, but disable `inspectProcesses`; confirm process rows cannot be selected and native inspect is rejected.
 - [ ] Enable `inspectProcesses`; select a normal user process and confirm inspection works.
-- [ ] Confirm inspection opens in a separate modal that can be moved and resized, stays open when the System Manager flyout closes or tabs change, and dismisses only through its explicit Close button.
 - [ ] Keep `terminateProcesses` disabled; confirm close, terminate and restart remain disabled and native calls are rejected.
 - [ ] Enable `terminateProcesses`; confirm every action still shows a fresh native confirmation.
 

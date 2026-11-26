@@ -127,11 +127,11 @@ The Runner registry is currently first-party-only. It does not dynamically load 
 
 ## 6. Shared-host behavior
 
-The P1–P6 Agent, developer and System Manager features use shared source and native bridge deployments across Standalone, PowerToys Run and PowerToys Command Palette. The optional Runner is different by design: it is a restricted launcher that hands Full Agent conversations to the real Standalone application. It must not be described as exposing the Full Agent capability set itself.
+The Agent, developer and System Manager features use shared source and native bridge deployments across Standalone, PowerToys Run and PowerToys Command Palette. The optional Runner is different by design: it is a restricted launcher that hands Full Agent conversations to the real Standalone application. It must not be described as exposing the Full Agent capability set itself.
 
 ## 7. Validation status and certification
 
-The 3.4.0 source bundle records **298/298** passing portable Node regression tests, including focused P4 orchestration/change-impact/timeline checks, P5 System Manager health checks, and extension/adapter contract checks. The packaging environment used Node.js 22.16.0; Node.js 24+ remains the target runtime. Portable tests do not replace Release x64 compilation or live acceptance on Windows. The latest Windows validation should be recorded against `Build-Release-x64.bat` and the acceptance checklists in `docs/`.
+Portable regression results and target-Windows acceptance are recorded in the current [Build status](../BUILD-STATUS.md). Historical test counts in earlier release reports are snapshots and do not certify the current source tree. The Windows release pipeline is `Build-Release-x64.bat`; see the current acceptance checklists in `docs/`.
 
 ## 8. Explicit follow-up candidates—not shipped capabilities
 

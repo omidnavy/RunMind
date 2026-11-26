@@ -151,8 +151,8 @@ The analyzer lists recognizable dynamic sites and unresolved bindings, identifie
 
 Portable tests validate parser, analyzer, schema and source contracts. They do not compile the C# bridge or prove WebView2/native Git behavior. On Windows 11 with Node.js 24+ and .NET 10:
 
-1. Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64`.
-2. Complete the Change Impact Explorer v2 section in `docs/P4-WINDOWS-ACCEPTANCE.md` in Standalone, PowerToys Run and PowerToys Command Palette.
+1. Run `Validate-RunMind-Windows.ps1`.
+2. Exercise the analyzer in Standalone, PowerToys Run and Command Palette using a workspace with staged, unstaged, untracked, renamed and deleted files.
 3. Verify fresh Git-read approval, working-tree discovery, untracked files, rename/delete behavior, optional existing local `base_ref`, invalid-ref handling, and no Git mutation.
 4. Exercise a fixture with JS/TS modules, method and function edits, deleted/renamed modules, dynamic imports, HTML/CSS/SVG assets, image/font/media assets, tests and Istanbul/LCOV reports.
 5. Confirm unknowns, caps, confidence drivers and unmeasured coverage are visible.

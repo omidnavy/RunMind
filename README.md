@@ -1,4 +1,4 @@
-﻿<h1 align="center">RunMind</h1>
+<h1 align="center">RunMind</h1>
 
 <p align="center">
   <strong>Understand your projects. Take control of your systems.</strong><br>
@@ -105,7 +105,7 @@ From the repository root, run:
 Build-Release-x64.bat
 ```
 
-This builds the four x64 hosts, publishes Standalone and Runner, and packages/signs the Command Palette MSIX. It does **not** install them. On the first build, the script prepares the pinned PDF/OCR runtime assets; that preparation requires an internet connection.
+This builds the four x64 hosts, publishes Standalone and Runner, and packages/signs the Command Palette MSIX. It does **not** install them. On the first build, the script prepares the PDF/OCR runtime assets; the npm tarball URLs use fixed versions but are not verified against committed SHA-512 integrity values; English/Persian language data is downloaded from an upstream moving branch without content checksums. That preparation requires an internet connection.
 
 The Standalone executable is published to:
 
@@ -133,7 +133,9 @@ For other OpenAI-compatible services, configure the endpoint's CORS policy to al
 
 | Guide | What it covers |
 |---|---|
-| [Feature Matrix](FEATURE-MATRIX.md) | Detailed capability status, behavior, and implementation limits. |
+| [Feature Matrix](FEATURE-MATRIX.md) | Current capability map, host boundaries and implementation limits. |
+| [Documentation index](docs/README.md) | Maintained feature and operations guides. |
+| [Security and Privacy](docs/SECURITY-AND-PRIVACY.md) | Credential storage, execution boundaries, untrusted content and data flows. |
 | [Advanced Intelligence & Extensibility](docs/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md) | Change Impact Explorer, Development Session Timeline, System Intelligence, Agent orchestration, MCP, Skills, adapters, and Runner boundaries. |
 | [Project Understanding & Diagnostics](docs/PROJECT-UNDERSTANDING-AND-DIAGNOSTICS.md) | Project indexing, architecture understanding, diagnostics, and Mission Control. |
 | [Development Intelligence](docs/DEVELOPMENT-INTELLIGENCE.md) | Developer tools and evidence-driven workflows. |
@@ -143,7 +145,8 @@ For other OpenAI-compatible services, configure the endpoint's CORS policy to al
 | [System Manager health intelligence](docs/SYSTEM-MANAGER-HEALTH-INTELLIGENCE.md) | Windows health reports, event correlation, services, network, and storage. |
 | [Runner implementation](docs/RUNNER-IMPLEMENTATION.md) | Runner architecture, plugins, and the Quick Host boundary. |
 | [Build and setup](BUILD-AND-SETUP.md) | Build prerequisites, packaging, and host deployment. |
-| [Build status](BUILD-STATUS.md) | Current source checks and Windows validation status. |
+| [Build status](BUILD-STATUS.md) | Current source checks, open release gates and Windows validation status. |
+| [Windows validation script](Validate-RunMind-Windows.ps1) | Runs portable tests, the complete Release x64 build and output checks. |
 | [3.4.0 release notes](3.4.0-RELEASE-NOTES.md) · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md) | Release history and project direction — kept out of this front page. |
 
 ## Contributing and license

@@ -38,7 +38,7 @@ Run on Windows 11 with Node.js 24+ and .NET 10. Complete independently in RunMin
 - [ ] Compare host CPU chart with Windows Task Manager over a quiet interval and a deliberate CPU load.
 - [ ] Compare physical-memory total/used/load with Task Manager; note expected timing differences.
 - [ ] Start/stop a CPU workload and confirm top-process CPU sorting changes; check PID and start time prevent PID-reuse carry-over.
-- [ ] Toggle process ranking between CPU and Memory and verify rows reorder correctly.
+- [ ] Select CPU, working set, private memory, process name and PID in the process sort selector and verify rows reorder correctly. Verify the bounded list scrolls internally without extending the flyout.
 - [ ] Generate network traffic and confirm receive/send chart changes on active interfaces.
 - [ ] Test with VPN/virtual adapters and confirm the UI/disclaimer explains possible interface overlap.
 - [ ] Connect/disconnect or enable/disable an adapter during monitoring; confirm the changed-interface sample is reported unavailable and rates resume only after a stable follow-up baseline.
@@ -59,7 +59,7 @@ Run on Windows 11 with Node.js 24+ and .NET 10. Complete independently in RunMin
 - [ ] Confirm Stop retains current session history in memory and CSV export downloads only after the user clicks Export CSV.
 - [ ] Inspect exported CSV headers and values for timestamps, CPU, memory, GPU utilization/dedicated/shared memory, network, process I/O and process inventory status.
 - [ ] Confirm closing the panel/host does not leave a persisted telemetry file or background collector.
-- [ ] Verify responsive panel layout at 100%, 125%, 150% and 200% Windows display scaling.
+- [ ] Verify responsive panel layout at 100%, 125%, 150% and 200% Windows display scaling. Confirm the GPU memory chart occupies half width beside GPU utilization, and the process detail modal remains independent of the flyout while it is moved/resized.
 - [ ] Verify normal and high-contrast/reduced-motion behavior as applicable.
 
 ## Acceptance notes
@@ -67,4 +67,4 @@ Run on Windows 11 with Node.js 24+ and .NET 10. Complete independently in RunMin
 - Process inventory is capped at 1,000 accessible processes; short-lived/inaccessible processes may be absent.
 - Process I/O transfer counters include non-disk I/O and do not represent physical-disk-only throughput.
 - Network interface counters can overlap with VPN/bridge/virtual adapters.
-- The P5 health report remains an on-demand evidence report and does not become a continuous monitor.
+- The System Manager health report remains an on-demand evidence report and does not become a continuous monitor.

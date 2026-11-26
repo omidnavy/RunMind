@@ -63,7 +63,7 @@ echo   help         Show this help.
 echo.
 echo The installer also attempts to configure the default RunMind direct alias.
 echo.
-echo Build all three RunMind hosts first with Build-Release-x64.bat.
+echo Run Build-Release-x64.bat first to build all four hosts and release artifacts.
 if /I not "%ACTION%"=="help" set "EXITCODE=1"
 goto :finish
 

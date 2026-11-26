@@ -1,4 +1,4 @@
-# Project Understanding and Project Diagnostics
+# Project understanding and diagnostics
 
 These are separate developer capabilities built on the same persistent project index.
 
@@ -32,6 +32,6 @@ Project Diagnostics can identify which build/test commands are configured and wh
 
 All three consume Project Understanding rather than duplicating its index or symbol graph.
 
-## Workspace behavior in RunMind 2.8.1
+## Workspace behavior
 
 The selected conversation workspace is now native-host-owned and shared with Agent file operations through a path-contained file bridge. Project Understanding, Project Diagnostics, Project Mission Control, Test Impact Analysis and static Release Readiness use this same workspace. Live environment probes and build/test commands use relative paths inside it and require fresh approval. Browser-only contexts without a native host retain the browser directory-picker fallback.

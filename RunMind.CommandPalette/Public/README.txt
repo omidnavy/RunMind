@@ -1,6 +1,3 @@
 RunMind for Microsoft PowerToys Command Palette
 
-RunMind brings local AI models into Command Palette. It supports Ollama and LM Studio, inline conversations, and independent chat windows.
-
-Created by Omid Navy.
-Website: https://omid.navy
+RunMind brings its Full Agent workspace into PowerToys Command Palette. Connect Ollama, LM Studio or a configured OpenAI-compatible provider, ask questions inline, or open a full RunMind chat window. Project/workspace tools and System Manager capabilities follow the same permissions and approval boundaries as the Standalone host.

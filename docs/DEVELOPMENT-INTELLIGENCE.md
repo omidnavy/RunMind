@@ -1,4 +1,4 @@
-# Development Intelligence — RunMind 3.3.0
+# Development intelligence
 
 ## Git-aware review
 

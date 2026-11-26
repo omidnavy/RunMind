@@ -131,12 +131,16 @@ test('AST refactoring tool is exposed preview-first and applies through approved
   assert.match(providers, /apply=true uses the existing approved single\/multi-file edit path/);
 });
 
-test('Windows validation script builds the complete three-host solution after Node tests', () => {
-  const script = read('Validate-Phase1-Windows.ps1');
-  assert.match(script, /& \$node\.Source --test --test-concurrency=1/);
-  assert.match(script, /RunMind\.sln/);
-  assert.match(script, /dotnet build/);
-  assert.match(script, /Platform=\$Platform/);
+test('current Windows validation runs portable tests, the four-host release build and verifies outputs without installing', () => {
+  const script = read('Validate-RunMind-Windows.ps1');
+  assert.match(script, /node --test --test-concurrency=1/);
+  assert.match(script, /dotnet --list-sdks/);
+  assert.match(script, /Build-Release-x64\.bat/);
+  assert.match(script, /Release\\Standalone\\win-x64\\publish\\RunMind\.exe/);
+  assert.match(script, /Release\\Runner\\win-x64\\publish\\RunMind\.Runner\.exe/);
+  assert.match(script, /Release\\CommandPalette\\x64\\RunMind\.CommandPalette\.msix/);
+  assert.match(script, /Community\.PowerToys\.Run\.Plugin\.RunMind\\bin\\x64\\Release/);
+  assert.doesNotMatch(script, /Install-RunMind|Deploy-RunMind/);
 });
 
 

@@ -1,229 +1,35 @@
-﻿# RunMind Roadmap
+# RunMind roadmap
 
-## Current source baseline: 3.4.0 — P0–P7 retained; optional Runner included
+This roadmap describes current priorities. Completed milestones and implementation snapshots live in [the archive](docs/archive/README.md), not in this file.
 
-## Current milestone: Stabilization & Certification
+## Current release line: 3.4.0
 
-The 3.3.1 stabilization work remains carried forward in 3.4.0. The current source also includes Change Impact Explorer v2, the optional Runner and P7 Live Resource Intelligence. Portable test results and target-Windows acceptance gates are recorded in `BUILD-STATUS.md`; .NET 10 Release x64 builds, live Windows behavior, PowerToys compatibility, credential-at-rest protection and final release certification remain separate gates.
+RunMind has four access points: Standalone, PowerToys Run, Command Palette and Runner. The first three host the Full Agent. Runner is a separate restricted Quick Host. Current major capabilities include Project Intelligence, Change Impact Explorer v2, Deep Research, Agent orchestration/checkpoints, Developer Infrastructure, System Manager, Live Resource Intelligence, Process Intelligence, MCP/Skills and unified Runner search.
 
-The optional Runner and P7 feature work do not waive the P0–P7 Windows acceptance suite or the critical security items in the stabilization audit. Do not declare the product production-ready until those gates are resolved.
+## Priority 0 — release hardening
 
+1. **Windows certification:** compile and package the current source for all four hosts; install/update each optional host; verify WebView2, PowerToys, Command Palette activation, Runner handoff, System Manager, GPU counters and Process Intelligence actions against the current acceptance checklists.
+2. **Credential protection at rest:** move Full Chat provider/Jina/Reader/MCP credentials and shared PowerToys Run/Command Palette inline credentials behind a native DPAPI CurrentUser vault. Include transactional migration, rollback, multiple-host contention, backup/restore and failure-injection tests. Do not delete old credential values until retrieval from the new store has been verified.
+3. **Dependency assurance:** restore on Windows, inspect NuGet direct/transitive dependencies, run vulnerability and license checks, generate an SBOM, and retain the reports outside the source tree.
+4. **Reproducible OCR resources:** pin the exact English/Persian trained-data commits and checksums, and verify the fixed-version npm tarballs against committed SHA-512 integrity values.
 
-## Active feature milestone: 3.4 — Optional Runner, then shared Quick Agent
+## Priority 1 — shared Quick Agentic Mode
 
-The user chose to complete the optional standalone Runner first, then add Quick Agentic Mode to all three quick surfaces. The 3.3.1 Windows certification and Full Agent credential-protection gates remain open; isolated Runner work does not close or waive them.
+A bounded tool-using Quick Agent mode remains a separate future milestone for PowerToys Run, Command Palette and Runner. It is not the same as today's inline LLM answer. The three hosts should share one policy/tool implementation; host-specific shortcuts must not create three different agents.
 
-### 3.4.0 — Complete optional RunMind Runner
+## Priority 2 — deeper intelligence
 
-- Provide an internal first-party launcher plugin contract and registry with Applications, Files & Folders, URLs, safe Calculator and RunMind inline-answer plugins.
-- Match PowerToys Run's explicit `llm <prompt>` activation and support `llm > model > prompt` model override. Ordinary launcher searches do not contact an LLM.
-- Add Runner-only Ollama native and LM Studio inline provider profiles, model discovery, API keys/custom auth headers, reasoning and generation options, and bounded request/discovery timeouts.
-- Protect Runner inline credentials with DPAPI CurrentUser storage; keep them out of the JSON settings file and separate from full-chat provider settings.
-- Reuse the canonical ChatWindow, theme catalogue and appearance preferences; transfer inline results into chat without automatic duplicate generation.
-- Keep Runner native startup fast and WebView2/model initialization lazy; package independent current-user install/uninstall and optional startup.
-- Enforce the Quick Host boundary: no Full Agent, workspace/project context, attachments, MCP, Skills, developer tools, System Manager or arbitrary tool discovery.
-- Complete the Windows build, provider, WebView2, DPAPI, lifecycle, performance and installer acceptance before declaring the Runner certified.
+- Change Impact Explorer: broaden framework-specific/runtime dependency evidence and integrate verified test execution results while preserving explicit uncertainty.
+- System Intelligence: correlate resource, service and event evidence over opt-in sessions without introducing an always-on service by default.
+- Development Session Timeline: improve evidence navigation and recovery visibility without automatically replaying uncertain side effects.
+- Advanced orchestration: improve long-task observability, cancellation and resumability while retaining approval barriers.
 
-### Next: shared Quick Agentic Mode across all three quick hosts
+## Priority 3 — ecosystem
 
-- Create a dedicated Quick Agent capability registry and execution boundary.
-- Reuse one Quick Agent Core and approval/security policy across PowerToys Run, Command Palette and Runner.
-- Keep workspace/project intelligence, developer tools, MCP, Skills and arbitrary tool discovery inaccessible to Quick Agent at the native execution layer.
-- Add independent per-host modes: Chat only, Agentic (approval required), and Quick actions (explicitly allow-listed low-risk actions only).
-- Keep global policy authoritative over host-level preferences; sensitive process/service/power actions always require fresh confirmation.
-- Preserve the Full Agent and all developer workflows in Standalone as a separate experience.
+- Strengthen the extension contract and compatibility/versioning guidance.
+- Improve MCP server setup, diagnostics and security visibility.
+- Keep Skills and declarative adapters clearly separated from executable plugins; neither should be able to grant permissions.
 
-The Runner milestone does not include Quick Agentic system-management execution. This is deliberately postponed so all three quick hosts can share one implementation instead of creating three host-specific agents.
+## Scope discipline
 
-## Completed milestone: P6 — Development Intelligence
-
-P6 connects Git evidence, the project architecture index, build/test history, dependency/environment checks, Agent-owned file receipts and bounded cross-session project memory through the existing shared Agent Core. See `P6-RELEASE-NOTES.md`, `docs/DEVELOPMENT-INTELLIGENCE.md`, `docs/P6-IMPLEMENTATION-AUDIT.md` and `docs/P6-WINDOWS-ACCEPTANCE.md`. Windows/.NET certification remains a separate target-machine gate.
-
-- Git-aware review reports staged/unstaged/untracked/conflicted changes, diffs and static architecture/test/asset impact.
-- Build/Test Intelligence inspects scripts, tests, JS/TS tooling and common CI configuration; approved script runs record redacted outcomes for heuristic flaky/repeated-failure detection. CI outcomes are user-supplied only.
-- Dependency/environment checks cover package/lockfile mismatch, npm/pnpm/Yarn advisory/outdated audit with approval, and fixed Node/package-manager/Git version probes.
-- Agent-owned create/edit/delete/restore receipts include before/after hashes, backups and optional pre-write Git baseline; recovery remains separately approved.
-- Project memory retains bounded, redacted decisions, run summaries, and interrupted checkpoints, keyed to the native workspace fingerprint and local WebView profile.
-- No CI provider connector, package installation/update, automatic Git mutation or automatic rollback is introduced. Project-language scope remains JS/TS/JSX/TSX/HTML/CSS with SVG assets.
-
-## Completed milestone: P7 — Live Resource Intelligence (3.4.0 source enhancement)
-
-P7 adds a user-started live telemetry dashboard to the shared Windows System Manager UI. It reuses the existing native bridge and WebView without adding a service, database, package or background collector. Clicking Start is the explicit authorization for the UI session; the separate `resourceMonitoring` capability continues to gate the finite Agent resource-report tool. See `docs/LIVE-RESOURCE-INTELLIGENCE.md`, `docs/P7-IMPLEMENTATION-AUDIT.md` and `docs/P7-WINDOWS-ACCEPTANCE.md`.
-
-- Explicit Start/Stop sessions with native duration bounds of 30–900 seconds and 1/2/5 second polling intervals.
-- Live host CPU, physical memory, GPU engine utilization, dedicated/shared GPU memory usage, network interface rates, aggregated process I/O transfer rates, and process CPU/working-set/private-memory rankings.
-- CPU, memory, GPU, network and process-I/O SVG charts, CPU/memory process ranking toggle, 900-sample in-memory cap and explicit CSV export.
-- Session IDs required for sampling/stopping; only one session per bridge; switching tabs or closing the flyout does not stop the session; cleanup occurs on explicit Stop, pagehide, host disposal or duration expiry.
-- No persisted raw telemetry, background service, automatic remediation or Agent-controlled long-running session. The existing Agent resource report remains finite (maximum 60 seconds).
-
-### P7 validation boundary
-
-Portable tests validate source contracts and UI behavior. Live Windows counter behavior and .NET compilation remain target-machine gates. GPU values depend on driver-exposed Windows PDH counters; dedicated/shared memory is reported as used bytes without inferring unavailable memory capacity. GPU utilization is the busiest observed physical engine rather than a sum. Process I/O transfer counters are not physical-disk-only throughput; network counters may overlap on VPN/virtual interfaces; fixed CPU/memory thresholds are indicators, not anomaly diagnosis.
-
-
-## Completed milestone: P0 — Foundation & Reliability
-
-P0 source implementation is retained in this release. The P0 target-Windows certification gate remains separate: build all three hosts with `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` and complete `docs/P0-WINDOWS-ACCEPTANCE.md`. This environment cannot certify Windows/.NET runtime behavior.
-
-## Completed milestone: P1 — Project Intelligence
-
-P1 extends the P0 persistent index and unified workspace. It does not create a second index, a second workspace, or a parallel execution engine.
-
-### P1 scope implemented in source
-
-- **Project Understanding:** evidence-based architecture map of top-level modules/boundaries, package and HTML entry-point candidates, import direction, resolved/unresolved relationships, circular dependencies, high-coupling modules, parser coverage and index truncation. The Agent workflow instructs source verification before treating heuristic edges as proof.
-- **Project Diagnostics:** separate read-only operational health assessment for package manifests, package-manager/lockfile ambiguity and conflicts, npm lockfile root metadata consistency, declared scripts, tooling configuration, test discovery, parser errors, unresolved imports, cycles and incomplete indexing. Environment probes and build/test/audit commands remain separately approved actions.
-- **Project Mission Control:** structured evidence-backed control center available both as an Agent tool/workflow and in Agent Settings. It reports index freshness/completeness, architecture evidence, detailed diagnostics, static release-readiness, prioritized recommendations and optional explicit changed-path test impact without executing commands.
-- **Test Impact Analysis:** accepts explicit workspace-relative changed paths, follows reverse static import edges for JavaScript/TypeScript changes to identify direct and transitive JavaScript/TypeScript tests, labels filename-only suggestions as low confidence, and reports unknown paths. It does not infer a Git diff or execute tests.
-- **Release Readiness:** static checks for package version, changelog version reference, README, CI configuration, test discovery, package-manager/lockfile consistency, diagnostics, and declared build/test scripts. It explicitly reports Git status, live dependency audit, actual builds/tests, signing, SBOM, packaging and publication as unverified gates.
-
-### P1 validation boundaries
-
-- Static analysis uses the persistent index and is bounded by its existing file, byte, depth and parser limits.
-- Test selection depends on statically indexed imports. Dynamic imports, runtime-generated relationships and non-standard test harnesses can be missed; candidates must be reviewed.
-- Project-specific language-aware source analysis/tooling remains limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. SVG is indexed as a first-class vector asset with local-reference analysis, not as a programming language. Other source files remain generic text.
-- No build, test, package install, dependency audit, Git mutation, tag, signing or publication is triggered by these P1 tools.
-- The P0 Windows certification checklist remains open until run on the target Windows machine.
-
-## Completed milestone: P2 — System Manager Intelligence
-
-P2 extends the native System Manager across the same three hosts with individually opt-in, permission-aware capabilities. See `docs/SYSTEM-MANAGER-P2.md` for supported operations and safety limits. The Windows acceptance gate is documented separately; source implementation and portable contract tests do not certify live Windows behavior.
-
-- Windows Event Log investigation limited to Application/System/Setup with bounded time ranges and result counts.
-- Crash investigation correlates Application Error, Windows Error Reporting, .NET Runtime and Service Control Manager records; grouped signatures are evidence, not proven root causes.
-- Resource sampling returns bounded system CPU/process CPU/working-set samples for a finite request of at most 60 seconds.
-- Scheduled Task inventory is read-only; exact-identity enable/disable/start/stop are explicitly confirmed and post-action verified. Creation, deletion and definition/trigger editing are not supported.
-- Storage health reports physical-disk, reliability-counter and volume data when Windows/controller drivers expose them; unavailable counters are unknown, not healthy.
-- Security posture reads Defender, firewall profiles, system-volume BitLocker, Secure Boot, TPM and UAC indicators; it is not a compliance certification or malware scan.
-- Targeted network diagnostics resolve one hostname/IP, report Windows-selected route/interface/next-hop when available, and optionally attempt one TCP port with bounded phases and fresh confirmation; no scans/ranges.
-- SVG is a first-class vector asset in Project Understanding and Mission Control, including normalized local references from HTML, CSS and SVG `href`/`xlink:href`.
-
-
-## Completed milestone: P3 — Developer Infrastructure
-
-P3 extends the existing shared Agent Core/native bridge; it does not introduce a separate developer-infrastructure runtime.
-
-- **Podman/Docker Development Workbench:** fixed-command runtime/resource inventory, exact container inspect/logs/stats/start/stop/restart and Compose config/ps/up/down/build/logs. Each call is freshly approved; state-changing actions are not represented as independently health-verified. No shell passthrough, prune or volume/image deletion.
-- **SQLite workbench:** integrity, table/schema/foreign-key inspection, parameterized read-only query/EXPLAIN and one approved transactional DML/DDL statement on an existing workspace-contained SQLite file. SQLite only; MySQL/PostgreSQL later.
-- **OpenAPI contract tests:** bounded OpenAPI 3.0/3.1 JSON/YAML input, explicit base URL, local references, example-driven request generation, status-specific response schema validation, same-origin redirect restrictions and mutation opt-in.
-- **Runtime/log correlation:** ephemeral event timeline across selected owned development-server and Node Inspector sessions plus explicitly supplied Playwright/API event slices. IDs are correlation hints, not causal proof.
-- **Advanced browser debugging:** Playwright console/page-error/request diagnostics, source locations, resource timings, screenshots and optional trace ZIP. No arbitrary JS evaluation or browser-source breakpoints.
-- Five corresponding built-in developer workflows are available. See `docs/DEVELOPER-INFRASTRUCTURE-P3.md`.
-
-### P3 validation boundaries
-
-- Portable tests exercise Node runners, mocked browser behavior and source/native-host contracts. They do not establish that Podman/Docker is installed, that the Windows engine/WSL backend is healthy, or that all real Windows operations work.
-- C# compilation and all three Windows-host acceptance remain pending until run on the user's Windows machine with .NET 10 and Node.js 24+.
-- SQLite uses Node's built-in `node:sqlite`; no SQLite native package, DB file creator or migration system is introduced. MySQL/PostgreSQL integrations are not included.
-- OpenAPI YAML needs an existing `yaml` or `js-yaml` dependency. JSON is built in. The schema validator intentionally supports a bounded subset and does not execute remote `$ref` requests.
-- Browser traces may contain page text/screenshots and must be handled as sensitive local artifacts. No arbitrary browser JavaScript execution or live DevTools source stepping is exposed.
-- Runtime correlation is an in-memory/response-only view; no persistent log warehouse, clock synchronization or causal inference is implied.
-
-## Completed milestone: P4 — Agent Capabilities
-
-P4 completes the named Agent capability milestone on top of P0–P3. It strengthens MCP discovery, multi-tool execution, checkpoint recovery, tool-result context, Skills/project context, Change Impact Explorer, Development Session Timeline and Artifact Verification. See `docs/AGENT-CAPABILITIES-P4.md` and `docs/P4-IMPLEMENTATION-AUDIT.md`.
-
-- **MCP discovery:** paginated server/tool/resource/resource-template/prompt metadata, discovery completeness and search; exact template expansion; resource/prompt/tool access remains separately approved.
-- **Multi-tool orchestration:** 1–4 bounded workers for independent read-only operations; serial barriers for duplicate calls, writes, approval gates, MCP and delegated work; dependency-layer and execution-graph records.
-- **Task checkpoints/recovery:** bounded redacted per-chat task/plan/progress/operation records; interruption marks uncertain outcomes; explicit same-workspace Resume and inspect-before-retry policy; no automatic replay.
-- **Tool summarization:** bounded/depth-limited, credential-redacted structured summaries; body, HTML and binary/base64 payloads are omitted from Agent context and local previews.
-- **Skills/project context:** bounded project instructions, package metadata, project index and ranked Skill metadata; Skill content is explicitly loaded and untrusted; no instruction grants tools or permission.
-- **Change Impact Explorer v2 (3.4.0 source enhancement):** Git working-tree and optional local base-ref intake; automatic AST symbol inference; TypeScript checker consumers; direct/transitive import graph; deleted/renamed importer detection; expanded HTML/CSS/SVG/media/font asset graph; dynamic dependency signals; Istanbul/LCOV changed-line evidence; confidence-labelled test candidates; blast-radius, risk and completeness reporting. See `docs/CHANGE-IMPACT-EXPLORER-V2.md`.
-- **Development Session Timeline:** local chronological checkpoint/tool/dependency/sub-agent records in Workflow UI and a read-only Agent tool.
-- **Artifact Verification:** structural checks, exact-byte SHA-256, optional expected digest comparison and verification receipt; digest equality is not provenance/signature verification.
-
-### P4 validation boundaries
-
-- MCP pagination is bounded to 20 pages/2,000 entries per discovered catalogue; remote resource/prompt/tool calls remain approved operations.
-- Read-only concurrency is restricted to an explicit allow-list; approval-gated, mutating, duplicate, MCP and delegated calls are barriers.
-- Checkpoints are local to the chat's WebView profile, bounded to 20 entries and do not restore raw conversation transcripts or external state.
-- Change impact remains static/index-based. Recognizable dynamic dependency sites and index/compiler/asset truncation are reported, but reflection, runtime-computed dependencies, generated loaders and environment-dependent relationships cannot be proven. Scores are evidence heuristics, not probabilities.
-- Session timeline contains only RunMind-recorded events; it is not a log warehouse or causal tracing engine.
-- Artifact digest checks establish byte equality only, not trusted provenance.
-- Windows/.NET certification remains pending until the P0–P5 acceptance checklists pass on target Windows.
-
-## Completed milestone: P5 — System Manager Health Intelligence
-
-P5 connects existing native System Manager functions into service, reliability, network and resource intelligence across all three hosts. See `P5-RELEASE-NOTES.md`, `docs/SYSTEM-MANAGER-HEALTH-INTELLIGENCE.md` and `docs/P5-IMPLEMENTATION-AUDIT.md`.
-
-- **Windows Services intelligence:** structured startup mode, service account, binary path, declared dependencies, recovery actions, failure flags and trigger configuration; bounded cycle-safe dependency trees (5 levels / 50 nodes). Service start/stop/restart still require fresh native confirmation and final-state verification.
-- **Reliability & health report:** on-demand read-only health report joining individually enabled Windows service/network/hardware inventory, Application/System event evidence, crash investigation, finite resources and storage health.
-- **Recurring problem detection:** repeated service failures by service identity, application crashes by application/exception/module signature and network failures by provider/event signature.
-- **Evidence correlation:** five-minute Windows event windows plus a finite resource-sample window and leading CPU/memory process observations. Temporal proximity is not a root-cause or causal claim.
-- **Historical comparison:** optional local snapshots, off by default; 30 summaries / 512 KB; aggregate metrics, issue keys and service states only; no raw event messages, executable paths, connection endpoints or command lines.
-- **Network ownership:** bounded non-listening active TCP connections and UDP endpoints with process ownership; possible TCP listener conflicts include candidate wildcard overlaps and remain heuristic. Existing user-directed DNS/route/one-port TCP diagnostics remain bounded and confirmed.
-- **Resource intelligence:** CPU interval deltas, system physical/page-file memory, per-process working-set/private-memory and supported physical-disk I/O counters. Unavailable Windows providers/sensors remain unknown, not healthy.
-
-### P5 validation boundaries
-
-- The report is invoked on demand; no continuous monitor/background daemon, automatic remediation or persistent raw-event warehouse is introduced.
-- Each collection still requires its individual System Manager capability. History is an additional explicit opt-in setting.
-- Process attribution is observational; process start/exit/access limitations remain. This release does not attribute physical-disk queue pressure to individual processes.
-- DNS and route results do not prove application-layer reachability; the optional TCP probe tests only one explicit endpoint. No port scans or destination sweeps.
-- Possible listener overlap can be legitimate because of socket reuse or dual-stack behavior.
-- Portable tests and source checks do not certify Windows service, Event Log, CIM provider or performance-counter behavior. Run `docs/P5-WINDOWS-ACCEPTANCE.md` and P0–P4 checklists with Node.js 24+ / .NET 10 on Windows.
-
-## Future expansion candidates (not part of P5)
-
-- Optional MySQL/PostgreSQL adapters after SQLite proves its long-term interface and Windows runtime integration.
-- Signed artifact and provenance verification through trusted signing identities, certificate policy and reproducible build evidence.
-- Deeper browser source stepping through a separate Chromium/CDP debugging security model.
-- External OpenTelemetry/log integrations only where existing log ownership and user-controlled retention are respected.
-- Approval-gated release automation for build/test/package/sign/SBOM, backed by independently verifiable evidence.
-
-Keep the current codebase compact: reuse the shared Agent Core, native bridge, project index, approval system and existing runners. Avoid adding a new engine when an existing subsystem can be extended.
-
-### Compatibility and security principles
-
-- One shared Agent Core across Standalone, PowerToys Run and PowerToys Command Palette.
-- One native-owned workspace root per conversation; no absolute path guessing from directory names.
-- Native operations are bounded and freshly approved where they change application or system state.
-- Never terminate an unknown process because it occupies a port.
-- Never claim HTTP readiness without an actual configured probe.
-- Browser policy events are not silently discarded; expected and unexpected blocks remain distinguishable.
-- System Manager remains optional and disabled by default.
-- Native process execution runs as the current Windows user and is not a sandbox.
-- Project language-aware source support remains JS/TS/JSX/TSX/HTML/CSS; SVG is a first-class vector asset (not a language). Other language-specific tooling requires an explicit future scope decision.
-
-
-## 2.6.2 — System Management Skills & Capability Contracts
-
-- Bundled on-demand system-management, container-management, and runmind-management skills.
-- Shared Agent policy describes safe discovery, operation selection, permission boundaries, and verification.
-- Adapter inventory reports descriptive operation contracts; native enforcement remains authoritative.
-
-
-## 2.6.3 — Developer Intelligence & System Manager
-
-Implemented in this source snapshot: Windows Notepad adapter, File Explorer folder/file actions, Docker/Podman container lifecycle/read operations, built-in/global/project Skills, declarative custom application adapters, and the Application Adapters editor/override/reset/remove UI. Native conversation-session management remains follow-up work; RunMind conversations currently live in WebView IndexedDB and are not exposed as a native session store. See `docs/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md` for the complete shipped extension model and its deliberate security boundaries.
-
-
-## Phase 2 progress — 2026-11-21
-
-- Node Debugger: implemented and confirmed by the user to build successfully across all three Windows hosts.
-- Runtime Diagnostics & Profiling: added V8 heap diagnostics, CPU profile export, streamed heap snapshots, and bounded timestamped memory sampling. The user confirmed the increment works across all three Windows hosts.
-- Playwright Browser Integration: added the shared structured Playwright runner, approval-gated browser workflows, assertions, console/network diagnostics, and screenshot artifacts. Portable integration tests pass; Windows compilation/runtime validation is pending.
-
-## Phase 1 completion candidate — 2026-11-21
-
-Implemented in the source increment: JavaScript AST rename/import organization/conservative extract-function previews; cross-file reference edges for resolved static imports; reversible HKCU/HKLM Run startup toggles; hardware/driver and TCP/UDP listener diagnostics; normalized System Manager outcomes; real local Git workflow tests; and a Windows validation script for all three projects. The user subsequently confirmed the three-host Node Debugger build succeeds.
-
-
-## Phase 2 progress — API & Backend Testing
-
-- Added `api_test_run` to the shared Agent Core and all three native host deployments.
-- Added structured HTTP request suites, JSON/text bodies, response assertions, environment-variable secret placeholders, bounded previews, and same-origin redirect enforcement.
-- Added local HTTP integration coverage; Windows build/runtime validation remains pending.
-
-
-## Phase 2 progress — Development Server Management
-
-- Added the shared `development_server_manage` Agent tool and native process-bridge implementation for Node.js package-script discovery/start, multiple owned server sessions, bounded stdout/stderr logs, HTTP readiness/health checks, port-conflict detection, and explicit stop.
-- Startup and stop require fresh approval. Startup approval displays the actual `package.json` script command. Termination is restricted to process trees launched and tracked by the current RunMind host.
-- Portable lifecycle contract tests: 12/12 passed. Windows C# compilation and live process behavior remain pending.
-
-## Project intelligence workflows
-
-- Keep **Project Understanding** as the shared architecture/code intelligence layer built on the persistent AST/index and symbol graph.
-- Maintain **Project Diagnostics** as a distinct, read-only-by-default operational readiness workflow for manifests, lockfiles, toolchains, scripts, build/test configuration, and approved live checks.
-- Keep build/test execution and runtime debugging as separate actions that consume Project Understanding and the diagnostics results.
+The code-edit/refactor tooling scope is deliberately limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. SVG is a first-class vector asset, not a programming language handled by the code refactoring engine. Prefer strengthening an existing shared capability over adding another parallel subsystem. New background services, persistent telemetry stores, privileged brokers, runtime dependencies or plugin execution models require a concrete user need, a threat review and a measurable benefit before implementation.
