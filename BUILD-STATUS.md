@@ -1,3 +1,16 @@
+# P7 Live Resource Intelligence — implementation status (2026-11-25)
+
+- Shared native System Manager bridge implements explicit live resource sessions with 30–900 second limits, allowed 1/2/5 second intervals, exact session ID validation, volatile per-session baselines and host-disposal cleanup.
+- Shared Standalone/PowerToys Run/Command Palette UI exposes Start/Stop, CPU/memory/network/process-I/O charts, top processes ranked by CPU or memory, bounded in-memory sample history and explicit CSV export.
+- Process I/O transfer and interface aggregation limitations are disclosed in the UI and P7 documentation. The existing Agent resource report remains a separate finite maximum-60-second operation.
+- No new runtime dependency, background service, persistent raw telemetry store or automatic remediation was introduced.
+- Portable validation on the completed source tree (Node.js v22.16.0): **319/319** full regression tests passed; **12/12** P7-focused tests passed; **58/58** JavaScript/CJS syntax checks passed; **4/4** JSON files parsed; **12/12** XML/XAML/MSBuild/manifest files parsed; CSS parsed successfully with PostCSS (**845 rules**).
+- Network rates are withheld for a sample if the active interface identity set changes, avoiding false throughput spikes during adapter/VPN transitions.
+- Final source package: `RunMind-3.4.0-Live-Resource-Intelligence-2026-11-25.zip`; ZIP CRC/integrity passed. The exact archive was extracted into a clean directory and revalidated: **319/319** full regression tests and **12/12** P7-focused tests passed; **58/58** JavaScript/CJS syntax checks, **4/4** JSON parses, **12/12** XML/XAML/MSBuild/manifest parses and CSS/PostCSS parsing (**845 rules**) passed. SHA-256 is provided in the adjacent `.zip.sha256` sidecar.
+- Windows .NET 10 compilation, actual performance-counter behavior, sampling overhead and interactive acceptance remain unverified in this environment; complete `docs/P7-WINDOWS-ACCEPTANCE.md` on Windows.
+
+---
+
 # RunMind 3.4.0 — Complete Runner Build Status
 
 ## Source baseline

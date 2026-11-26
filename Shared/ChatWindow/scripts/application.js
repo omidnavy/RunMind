@@ -1,4 +1,4 @@
-    'use strict';
+﻿    'use strict';
 
     const standaloneCss = `
       :root{color-scheme:light dark;--bg:#101216;--surface:#171a21;--text:#e9edf5;--muted:#a0a8b7;--border:#323a49;--accent:#9aabff;--user:#232b42;--code:#11141a;--radius:12px;--font:Segoe UI,system-ui,sans-serif;--mono:Consolas,Cascadia Code,monospace}
@@ -710,11 +710,256 @@
     $('#applyProjectProfile').addEventListener('click', async () => { try { await applyProjectProfile(); await refreshProjectIndexStatus(); await refreshDeveloperWorkflowList(); } catch (error) { showToast(`Could not apply Project Profile: ${error?.message || error}`); } });
     $('#deleteProjectProfile').addEventListener('click', () => { void deleteProjectProfile(); });
     $('#refreshProjectProfiles').addEventListener('click', () => { void refreshProjectProfiles(); });
+    let liveResourceSession = null;
+    const liveResourceHistory = [];
+    const LIVE_RESOURCE_HISTORY_LIMIT = 900;
+    let liveResourceProcessSort = 'cpu';
+    let liveResourcePollTimer = 0;
+
+    function liveResourceFormatBytesPerSecond(value) {
+      if (!Number.isFinite(Number(value))) return 'Unavailable';
+      const bytes = Math.max(0, Number(value));
+      if (bytes < 1024) return `${bytes.toFixed(0)} B/s`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB/s`;
+      if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB/s`;
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB/s`;
+    }
+    function liveResourceFormatBytes(value) {
+      const bytes = Math.max(0, Number(value) || 0);
+      if (bytes < 1024) return `${bytes.toFixed(0)} B`;
+      if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`;
+      if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+      return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+    }
+    function liveResourceSetStatus(message, active = false, warning = false) {
+      const status = document.getElementById('liveResourceStatus');
+      const indicator = document.getElementById('liveResourceIndicator');
+      if (status) status.textContent = message;
+      if (indicator) indicator.classList.toggle('active', active);
+      if (status) status.classList.toggle('warning', warning);
+    }
+    function liveResourceChartPoints(id, values, maximum = 100) {
+      const line = document.getElementById(id);
+      if (!line) return;
+      if (!values.length) { line.setAttribute('d', ''); return; }
+      const width = 520, top = 12, bottom = 120, height = bottom - top;
+      const max = Math.max(0.001, maximum);
+      let path = '';
+      let connected = false;
+      values.forEach((value, index) => {
+        if (value == null || !Number.isFinite(Number(value))) { connected = false; return; }
+        const x = values.length < 2 ? width : index / (values.length - 1) * width;
+        const y = bottom - Math.max(0, Math.min(1, Number(value) / max)) * height;
+        path += `${connected ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)} `;
+        connected = true;
+      });
+      line.setAttribute('d', path.trim());
+    }
+    function renderLiveResourceMonitor() {
+      const samples = liveResourceHistory;
+      const latest = samples.at(-1);
+      if (!latest) return;
+      const cpuValues = samples.map(item => item.machineCpuPercent).filter(Number.isFinite);
+      const memoryValues = samples.map(item => item.memory?.memoryLoadPercent).filter(Number.isFinite);
+      const rxValues = samples.map(item => item.network?.receiveBytesPerSecond).filter(Number.isFinite);
+      const txValues = samples.map(item => item.network?.sendBytesPerSecond).filter(Number.isFinite);
+      const ioReadValues = samples.map(item => item.processIo?.readBytesPerSecond).filter(Number.isFinite);
+      const ioWriteValues = samples.map(item => item.processIo?.writeBytesPerSecond).filter(Number.isFinite);
+      const maxNetwork = Math.max(1024, ...rxValues, ...txValues) * 1.12;
+      const maxProcessIo = Math.max(1024, ...ioReadValues, ...ioWriteValues) * 1.12;
+      liveResourceChartPoints('liveResourceCpuLine', samples.map(item => item.machineCpuPercent), 100);
+      liveResourceChartPoints('liveResourceMemoryLine', samples.map(item => item.memory?.memoryLoadPercent), 100);
+      liveResourceChartPoints('liveResourceReceiveLine', samples.map(item => item.network?.receiveBytesPerSecond), maxNetwork);
+      liveResourceChartPoints('liveResourceSendLine', samples.map(item => item.network?.sendBytesPerSecond), maxNetwork);
+      liveResourceChartPoints('liveResourceIoReadLine', samples.map(item => item.processIo?.readBytesPerSecond), maxProcessIo);
+      liveResourceChartPoints('liveResourceIoWriteLine', samples.map(item => item.processIo?.writeBytesPerSecond), maxProcessIo);
+      const cpu = Number.isFinite(latest.machineCpuPercent) ? latest.machineCpuPercent : null;
+      const memory = Number.isFinite(latest.memory?.memoryLoadPercent) ? latest.memory.memoryLoadPercent : null;
+      const setText = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = value; };
+      setText('liveResourceCpu', cpu == null ? 'Unavailable' : `${cpu.toFixed(1)}%`);
+      setText('liveResourceCpuNote', cpu == null ? 'Windows CPU counter unavailable' : `Average capacity across ${latest.processorCount || '—'} logical processors`);
+      setText('liveResourceMemory', memory == null ? 'Unavailable' : `${memory.toFixed(1)}%`);
+      setText('liveResourceMemoryNote', latest.memory ? `${liveResourceFormatBytes(latest.memory.usedPhysicalBytes)} / ${liveResourceFormatBytes(latest.memory.totalPhysicalBytes)}` : 'Windows memory counter unavailable');
+      setText('liveResourceNetworkIn', latest.network?.available ? liveResourceFormatBytesPerSecond(latest.network.receiveBytesPerSecond) : 'Unavailable');
+      setText('liveResourceNetworkOut', latest.network?.available ? `Send ${liveResourceFormatBytesPerSecond(latest.network.sendBytesPerSecond)}` : 'Network counters unavailable');
+      setText('liveResourceProcessCount', String(latest.processes?.count ?? '—'));
+      setText('liveResourceProcessNote', latest.processes?.truncated ? 'Process inventory truncated at 1,000' : 'Accessible processes observed');
+      setText('liveResourceCpuPeak', cpuValues.length ? `Peak ${Math.max(...cpuValues).toFixed(1)}%` : 'Peak unavailable');
+      setText('liveResourceMemoryPeak', memoryValues.length ? `Peak ${Math.max(...memoryValues).toFixed(1)}%` : 'Peak unavailable');
+      setText('liveResourceNetworkPeak', rxValues.length || txValues.length ? `Peak ${liveResourceFormatBytesPerSecond(Math.max(0,...rxValues,...txValues))}` : 'Peak unavailable');
+      setText('liveResourceIoPeak', ioReadValues.length || ioWriteValues.length ? `Peak ${liveResourceFormatBytesPerSecond(Math.max(0,...ioReadValues,...ioWriteValues))}` : 'Peak unavailable');
+      if (liveResourceSession) {
+        const elapsed = Number(latest.elapsedSeconds) || 0;
+        const percent = Math.max(0, Math.min(100, elapsed / liveResourceSession.durationSeconds * 100));
+        const progress = document.getElementById('liveResourceProgress');
+        if (progress) progress.style.width = `${percent}%`;
+        liveResourceSetStatus(`Live · ${Math.floor(elapsed)}s elapsed · ${Math.max(0, latest.remainingSeconds ?? liveResourceSession.durationSeconds - elapsed)}s remaining · ${samples.length} samples`, true);
+      }
+      const body = document.getElementById('liveResourceProcesses');
+      if (body) {
+        const source = liveResourceProcessSort === 'memory' ? latest.processes?.topMemory : latest.processes?.topCpu;
+        const processes = Array.isArray(source) ? source : [];
+        body.replaceChildren();
+        if (!processes.length) {
+          const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 5; cell.textContent = 'No process CPU deltas are available yet; wait for another sample or check process permissions.'; row.append(cell); body.append(row);
+        } else {
+          for (const process of processes.slice(0,8)) {
+            const row = document.createElement('tr');
+            const values = [String(process.name || 'Unknown process'), String(process.processId ?? '—'), Number.isFinite(process.machineCpuSharePercent) ? `${process.machineCpuSharePercent.toFixed(2)}%` : '—', liveResourceFormatBytes(process.workingSetBytes), liveResourceFormatBytes(process.privateMemoryBytes)];
+            for (const value of values) { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); }
+            body.append(row);
+          }
+        }
+      }
+      const alerts = [];
+      if (latest.alerts?.highCpu) alerts.push('CPU is at or above the 85% display threshold.');
+      if (latest.alerts?.highMemory) alerts.push('Physical memory is at or above the 90% display threshold.');
+      setText('liveResourceAlert', alerts.length ? alerts.join(' ') + ' These are threshold indicators, not diagnoses.' : 'No CPU or memory display thresholds currently exceeded.');
+      document.getElementById('liveResourceAlert')?.classList.toggle('warning', alerts.length > 0);
+      const exportButton = document.getElementById('liveResourceExport');
+      if (exportButton) exportButton.disabled = samples.length === 0;
+    }
+    function resetLiveResourceMonitorView() {
+      for (const id of ['liveResourceCpuLine','liveResourceMemoryLine','liveResourceReceiveLine','liveResourceSendLine','liveResourceIoReadLine','liveResourceIoWriteLine']) {
+        const node = document.getElementById(id);
+        if (node) node.setAttribute('d', '');
+      }
+      for (const [id, value] of Object.entries({ liveResourceCpu:'—', liveResourceCpuNote:'Waiting for first sample', liveResourceMemory:'—', liveResourceMemoryNote:'Waiting for first sample', liveResourceNetworkIn:'—', liveResourceNetworkOut:'Send —', liveResourceProcessCount:'—', liveResourceProcessNote:'Waiting for first sample', liveResourceCpuPeak:'Peak —', liveResourceMemoryPeak:'Peak —', liveResourceNetworkPeak:'Peak —', liveResourceIoPeak:'Peak —', liveResourceAlert:'No live threshold alerts.' })) {
+        const node = document.getElementById(id);
+        if (node) { node.textContent = value; node.classList.remove('warning'); }
+      }
+      const progress = document.getElementById('liveResourceProgress');
+      if (progress) progress.style.width = '0';
+      const body = document.getElementById('liveResourceProcesses');
+      if (body) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 5;
+        cell.textContent = 'Collecting the first process sample…';
+        row.append(cell);
+        body.replaceChildren(row);
+      }
+    }
+
+    async function pollLiveResourceMonitor() {
+      if (!liveResourceSession) return;
+      try {
+        const state = liveResourceSession;
+        const sample = await callAgentHost('systemManager.liveResources.sample', { session_id: state.sessionId }, undefined, 15000);
+        if (liveResourceSession !== state) return;
+        if (sample?.expired || sample?.running === false) {
+          liveResourceSession = null;
+          document.getElementById('liveResourceStart').disabled = false;
+          document.getElementById('liveResourceStop').disabled = true;
+          liveResourceSetStatus('Monitoring session ended. Collected samples remain available until this panel closes.', false);
+          return;
+        }
+        if (sample?.accepted) {
+          liveResourceHistory.push(sample);
+          while (liveResourceHistory.length > LIVE_RESOURCE_HISTORY_LIMIT) liveResourceHistory.shift();
+          renderLiveResourceMonitor();
+        }
+        if (liveResourceSession === state) liveResourcePollTimer = window.setTimeout(pollLiveResourceMonitor, sample?.accepted ? state.intervalSeconds * 1000 : Math.max(250, sample?.retryAfterMilliseconds || 500));
+      } catch (error) {
+        if (!liveResourceSession) return;
+        const state = liveResourceSession;
+        liveResourceSession = null;
+        clearTimeout(liveResourcePollTimer);
+        document.getElementById('liveResourceStart').disabled = false;
+        document.getElementById('liveResourceStop').disabled = true;
+        try { await callAgentHost('systemManager.liveResources.stop', { session_id: state.sessionId }, undefined, 5000); } catch (_) {}
+        liveResourceSetStatus(`Monitoring stopped: ${error?.message || error}`, false, true);
+      }
+    }
+    async function stopLiveResourceMonitor(message = 'Monitoring stopped by user.') {
+      const state = liveResourceSession;
+      if (!state) return;
+      liveResourceSession = null;
+      clearTimeout(liveResourcePollTimer);
+      document.getElementById('liveResourceStart').disabled = false;
+      document.getElementById('liveResourceStop').disabled = true;
+      const progress = document.getElementById('liveResourceProgress');
+      if (progress) progress.style.width = '';
+      try { await callAgentHost('systemManager.liveResources.stop', { session_id: state.sessionId }, undefined, 5000); } catch (_) {}
+      liveResourceSetStatus(`${message} ${liveResourceHistory.length} samples retained in this window's memory.`, false);
+    }
+    async function startLiveResourceMonitor() {
+      if (liveResourceSession) return;
+      const settings = systemManagerSettingsCache;
+      if (!settings?.enabled || !settings?.groups?.diagnostics || !settings?.capabilities?.resourceMonitoring) {
+        liveResourceSetStatus('Enable System Manager, System Diagnostics, and Resource Monitoring in the Settings tab first.', false, true);
+        return;
+      }
+      const durationSeconds = Number(document.getElementById('liveResourceDuration')?.value) || 300;
+      const intervalSeconds = Number(document.getElementById('liveResourceInterval')?.value) || 1;
+      document.getElementById('liveResourceStart').disabled = true;
+      document.getElementById('liveResourceStop').disabled = false;
+      liveResourceHistory.length = 0;
+      resetLiveResourceMonitorView();
+      liveResourceSetStatus('Starting native Windows telemetry session…', false);
+      try {
+        const result = await callAgentHost('systemManager.liveResources.start', { duration_seconds: durationSeconds, interval_seconds: intervalSeconds }, undefined, 15000);
+        if (!result?.success || !result.sessionId) throw new Error('The native monitor did not return a valid session.');
+        liveResourceSession = { sessionId: result.sessionId, durationSeconds: result.durationSeconds, intervalSeconds: result.intervalSeconds, startedAtUtc: result.startedAtUtc };
+        liveResourceSetStatus(`Starting · ${durationSeconds / 60} minute limit · ${intervalSeconds}s samples`, true);
+        liveResourcePollTimer = window.setTimeout(pollLiveResourceMonitor, intervalSeconds * 1000);
+      } catch (error) {
+        document.getElementById('liveResourceStart').disabled = false;
+        document.getElementById('liveResourceStop').disabled = true;
+        liveResourceSetStatus(`Could not start live monitoring: ${error?.message || error}`, false, true);
+      }
+    }
+    function exportLiveResourceCsv() {
+      if (!liveResourceHistory.length) return;
+      const columns = ['sampledAtUtc','elapsedSeconds','machineCpuPercent','memoryLoadPercent','usedPhysicalBytes','totalPhysicalBytes','receiveBytesPerSecond','sendBytesPerSecond','processIoReadBytesPerSecond','processIoWriteBytesPerSecond','processCount','processListTruncated'];
+      const rows = [columns.join(',')];
+      for (const sample of liveResourceHistory) {
+        const values = [sample.sampledAtUtc,sample.elapsedSeconds,sample.machineCpuPercent,sample.memory?.memoryLoadPercent,sample.memory?.usedPhysicalBytes,sample.memory?.totalPhysicalBytes,sample.network?.receiveBytesPerSecond,sample.network?.sendBytesPerSecond,sample.processIo?.readBytesPerSecond,sample.processIo?.writeBytesPerSecond,sample.processes?.count,sample.processes?.truncated];
+        rows.push(values.map(value => value == null ? '' : String(value).replaceAll('"','""')).join(','));
+      }
+      const blob = new Blob([rows.join('\r\n')+'\r\n'], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `runmind-resource-session-${new Date().toISOString().replaceAll(':','-')}.csv`;
+      document.body.append(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+    }
+
     for (const id of ['systemManagerEnabled','systemManagerProfile','systemManagerLaunchPermission','systemManagerOpenPermission','systemManagerGroupApplications','systemManagerGroupProcesses','systemManagerGroupDiagnostics','systemManagerDiscoverApplications','systemManagerLaunchApplications','systemManagerOpenTargets','systemManagerListProcesses','systemManagerInspectProcesses','systemManagerTerminateProcesses','systemManagerSystemInformation','systemManagerEnvironmentInformation','systemManagerServiceInformation','systemManagerNetworkInformation','systemManagerEventLogInformation','systemManagerCrashInvestigation','systemManagerResourceMonitoring','systemManagerHealthHistory','systemManagerScheduledTaskInformation','systemManagerScheduledTaskManagement','systemManagerStorageHealth','systemManagerSecurityPosture','systemManagerTargetedNetworkDiagnostics','systemManagerCommandTimeout']) {
       document.getElementById(id)?.addEventListener('change', () => { void saveSystemManagerSettingsFromUi(); });
     }
     document.querySelectorAll('[data-system-manager-tab]').forEach(button => {
-      button.addEventListener('click', () => setSystemManagerTab(button.dataset.systemManagerTab || 'settings'));
+      button.addEventListener('click', () => {
+        const tab = button.dataset.systemManagerTab || 'settings';
+        setSystemManagerTab(tab);
+        if (tab !== 'monitor' && liveResourceSession) void stopLiveResourceMonitor('Monitoring stopped because the Live Monitor tab was left.');
+      });
+    });
+    $('#liveResourceStart')?.addEventListener('click', () => { void startLiveResourceMonitor(); });
+    $('#liveResourceStop')?.addEventListener('click', () => { void stopLiveResourceMonitor(); });
+    $('#liveResourceExport')?.addEventListener('click', exportLiveResourceCsv);
+    $('#liveResourceSortCpu')?.addEventListener('click', () => {
+      liveResourceProcessSort = 'cpu';
+      $('#liveResourceSortCpu')?.classList.add('active');
+      $('#liveResourceSortMemory')?.classList.remove('active');
+      $('#liveResourceSortCpu')?.setAttribute('aria-pressed', 'true');
+      $('#liveResourceSortMemory')?.setAttribute('aria-pressed', 'false');
+      renderLiveResourceMonitor();
+    });
+    $('#liveResourceSortMemory')?.addEventListener('click', () => {
+      liveResourceProcessSort = 'memory';
+      $('#liveResourceSortMemory')?.classList.add('active');
+      $('#liveResourceSortCpu')?.classList.remove('active');
+      $('#liveResourceSortMemory')?.setAttribute('aria-pressed', 'true');
+      $('#liveResourceSortCpu')?.setAttribute('aria-pressed', 'false');
+      renderLiveResourceMonitor();
+    });
+    $('#systemManagerMenu')?.addEventListener('toggle', event => {
+      if (event.target === $('#systemManagerMenu') && !event.target.open && liveResourceSession) void stopLiveResourceMonitor('Monitoring stopped because the System Manager panel was closed.');
+    });
+    window.addEventListener('pagehide', () => {
+      if (!liveResourceSession) return;
+      try { window.chrome?.webview?.postMessage({ type: 'runmind.agentHostRequest', requestId: `live-monitor-stop-${Date.now()}`, operation: 'systemManager.liveResources.stop', args: { session_id: liveResourceSession.sessionId } }); } catch (_) {}
+      clearTimeout(liveResourcePollTimer);
+      liveResourceSession = null;
     });
     setSystemManagerTab('settings');
     $('#refreshSystemManagerAdapters')?.addEventListener('click', () => { void loadSystemManagerAdapters(); });

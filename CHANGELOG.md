@@ -1,3 +1,14 @@
+﻿## 3.4.0 — P7 Live Resource Intelligence (2026-11-25)
+
+- Add an explicit Start/Stop Live Monitor tab to the shared System Manager UI in Standalone, PowerToys Run and Command Palette.
+- Sample real Windows host CPU (`GetSystemTimes`), physical memory (`GlobalMemoryStatusEx`), active network interface counters, process CPU-time deltas, working set/private memory and process I/O transfer counters.
+- Add live inline-SVG charts for CPU, memory, network and process I/O; top-process ranking by CPU or memory; and explicit CSV export.
+- Bound native sessions to 30–900 seconds and 1/2/5 second intervals; retain at most 900 browser samples; require exact session IDs; stop on tab/panel/page/host lifecycle end.
+- Keep raw telemetry in memory only. No background service, scheduled collector, permanent history, automatic remediation or new package dependency.
+- Keep the existing Agent resource-report tool finite at 60 seconds. The UI Live Monitor is user-started and is not an Agent-controlled background session.
+- Document process I/O as non-disk-specific and network-interface aggregation as potentially overlapping on VPN/virtual adapters. Fixed CPU/memory flags are indicators, not diagnoses.
+- Add P7 source-contract tests and Windows acceptance instructions. .NET 10 compilation and live Windows counter acceptance remain target-machine gates.
+
 ## 3.4.0 — Complete Optional RunMind Runner
 
 - Add an internal plugin-based launcher registry with Applications, Files & Folders, URLs, safe Calculator and the actual RunMind inline-answer plugin.

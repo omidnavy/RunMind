@@ -1,4 +1,4 @@
-    /* Preserve a correct first paint before the WebView host supplies saved preferences. */
+﻿    /* Preserve a correct first paint before the WebView host supplies saved preferences. */
     @media (prefers-color-scheme: light) {
       :root[data-theme="system"] {
         color-scheme: light;
@@ -903,3 +903,63 @@ body.quick-host-mode .topbar .brand p::after {
 body.quick-host-mode .app {
   min-height: 100vh;
 }
+
+
+/* Live Resource Intelligence — bounded native Windows telemetry dashboard. */
+#systemManagerMenu .toolbar-panel:has(.live-resource-page:not([hidden])) { width: min(760px, calc(100vw - 24px)); }
+.live-resource-page { min-width: 0; }
+.live-resource-intro .agent-settings-card-heading { align-items: center; }
+.live-resource-indicator { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--color-muted); box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-muted) 12%, transparent); }
+.live-resource-indicator.active { background: #42b982; box-shadow: 0 0 0 4px color-mix(in srgb, #42b982 15%, transparent), 0 0 14px color-mix(in srgb, #42b982 55%, transparent); animation: live-resource-pulse 1.8s ease-in-out infinite; }
+@keyframes live-resource-pulse { 50% { box-shadow: 0 0 0 7px transparent, 0 0 18px color-mix(in srgb, #42b982 60%, transparent); } }
+.live-resource-controls { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; align-items: end; margin-top: 12px; }
+.live-resource-controls .setting-field { margin: 0; min-width: 0; }
+.live-resource-controls select { width: 100%; min-width: 0; }
+.live-resource-progress { height: 3px; margin-top: 10px; overflow: hidden; border-radius: 99px; background: var(--color-border); }
+.live-resource-progress span { display: block; width: 0; height: 100%; background: var(--color-accent); transition: width .3s linear; }
+.live-resource-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.live-resource-metric,.live-resource-chart-card,.live-resource-process-card { min-width: 0; padding: 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.live-resource-metric { display: flex; flex-direction: column; gap: 5px; }
+.live-resource-metric>span,.live-resource-metric small { color: var(--color-muted); font-size: 10px; }
+.live-resource-metric strong { font-size: clamp(18px,3vw,25px); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.live-resource-metric small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-resource-charts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.live-resource-chart-card header,.live-resource-chart-card footer,.live-resource-process-card>header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.live-resource-chart-card header strong,.live-resource-process-card h3 { font-size: 12px; }
+.live-resource-chart-card header span,.live-resource-chart-card footer,.live-resource-process-card header p { color: var(--color-muted); font-size: 10px; }
+.live-resource-chart-card svg { display: block; width: 100%; height: auto; margin-top: 8px; overflow: visible; }
+.live-chart-grid { fill: none; stroke: var(--color-border); stroke-width: 1; stroke-dasharray: 3 5; opacity: .7; }
+.live-chart-line { fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.live-chart-line.cpu { stroke: var(--color-accent); }
+.live-chart-line.memory { stroke: #4bbd9b; }
+.live-chart-line.receive { stroke: var(--color-accent); }
+.live-chart-line.send { stroke: #65a6e8; }
+.live-resource-chart-card footer { margin-top: 4px; }
+.live-resource-chart-wide { grid-column: 1 / -1; }
+.live-chart-key { display: inline-block; width: 7px; height: 7px; margin: 0 4px 0 8px; border-radius: 50%; background: var(--color-accent); }
+.live-chart-key.send { background: #65a6e8; }
+.live-resource-process-card>header { align-items: flex-start; margin-bottom: 10px; }
+.live-resource-process-card h3 { margin: 0 0 4px; }
+.live-resource-process-card header p { margin: 0; max-width: 470px; }
+.live-resource-process-table-wrap { overflow-x: auto; }
+.live-resource-process-table { width: 100%; border-collapse: collapse; font-size: 10px; white-space: nowrap; }
+.live-resource-process-table th,.live-resource-process-table td { padding: 7px 6px; border-bottom: 1px solid var(--color-border); text-align: right; font-variant-numeric: tabular-nums; }
+.live-resource-process-table th:first-child,.live-resource-process-table td:first-child { text-align: left; }
+.live-resource-process-table th { color: var(--color-muted); font-weight: 600; }
+.live-resource-process-table tr:last-child td { border-bottom: 0; }
+.live-resource-alert { margin-top: 9px; }
+.live-resource-alert.warning { color: var(--color-warning, #d9973f); }
+.live-resource-disclaimer { margin: 0; color: var(--color-muted); font-size: 10px; line-height: 1.55; }
+@media (max-width: 640px) {
+  #systemManagerMenu .toolbar-panel:has(.live-resource-page:not([hidden])) { width: min(500px, calc(100vw - 16px)); }
+  .live-resource-controls { grid-template-columns: 1fr 1fr; }
+  .live-resource-controls button { width: 100%; }
+  .live-resource-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .live-resource-charts { grid-template-columns: 1fr; }
+  .live-resource-chart-wide { grid-column: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .live-resource-indicator.active { animation: none; } .live-resource-progress span { transition: none; } }
+
+.live-resource-sort { display:flex; gap:5px; margin-top:7px; }
+.live-resource-sort .setting-reset { padding:3px 9px; font-size:10px; }
+.live-resource-sort .setting-reset.active { color:var(--color-accent); border-color:var(--color-accent); background:color-mix(in srgb,var(--color-accent) 10%,transparent); }

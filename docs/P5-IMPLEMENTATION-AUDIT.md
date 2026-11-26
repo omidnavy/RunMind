@@ -1,4 +1,4 @@
-# RunMind 3.2.0 — P5 System Manager Intelligence implementation audit
+﻿# RunMind 3.2.0 — P5 System Manager Intelligence implementation audit
 
 ## Scope
 
@@ -62,3 +62,8 @@ P5 bundles Windows Services intelligence, Reliability & Health History, network 
 - P5 focused suite: 13/13 passed.
 - Repository JS syntax checks: 24/24 passed.
 - Windows-specific .NET 10 compilation, Event Log provider behavior, performance-counter availability, service control and all three host UI flows remain target-Windows acceptance items. This audit is a source-level implementation map, not a Windows certification.
+
+
+## Later source extension: P7 Live Resource Intelligence
+
+P5 remains an on-demand health/report milestone. P7 separately adds a user-started bounded Live Monitor UI session; it does not change the P5 report into a continuous collector. See `LIVE-RESOURCE-INTELLIGENCE.md` and `P7-IMPLEMENTATION-AUDIT.md`.

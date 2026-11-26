@@ -1,12 +1,12 @@
-# RunMind Roadmap
+﻿# RunMind Roadmap
 
-## Current source baseline: 3.3.1 — Stabilization (P0–P6 retained)
+## Current source baseline: 3.4.0 — P0–P7 retained; optional Runner included
 
 ## Current milestone: Stabilization & Certification
 
-The 3.3.1 patch hardens process-output bounds/timeouts, trusted WebView origins, Standalone navigation policy, chat-page CSP and WebView2 installer coordination. Portable regression coverage is 255/255 in the packaging environment. This is a source/portable-test milestone only: .NET 10 Release x64 builds, live Windows behavior, PowerToys compatibility, credential-at-rest protection and final release certification remain open. See `STABILIZATION-RELEASE-NOTES.md`, `docs/STABILIZATION-AUDIT.md` and `docs/STABILIZATION-WINDOWS-ACCEPTANCE.md`.
+The 3.3.1 stabilization work remains carried forward in 3.4.0. The current source also includes Change Impact Explorer v2, the optional Runner and P7 Live Resource Intelligence. Portable test results and target-Windows acceptance gates are recorded in `BUILD-STATUS.md`; .NET 10 Release x64 builds, live Windows behavior, PowerToys compatibility, credential-at-rest protection and final release certification remain separate gates.
 
-The optional Runner feature work is being developed in an isolated host and does not waive the P0–P6 Windows acceptance suite or the critical security items in the stabilization audit. Do not declare the product production-ready until those gates are resolved.
+The optional Runner and P7 feature work do not waive the P0–P7 Windows acceptance suite or the critical security items in the stabilization audit. Do not declare the product production-ready until those gates are resolved.
 
 
 ## Active feature milestone: 3.4 — Optional Runner, then shared Quick Agent
@@ -45,6 +45,20 @@ P6 connects Git evidence, the project architecture index, build/test history, de
 - Agent-owned create/edit/delete/restore receipts include before/after hashes, backups and optional pre-write Git baseline; recovery remains separately approved.
 - Project memory retains bounded, redacted decisions, run summaries, and interrupted checkpoints, keyed to the native workspace fingerprint and local WebView profile.
 - No CI provider connector, package installation/update, automatic Git mutation or automatic rollback is introduced. Project-language scope remains JS/TS/JSX/TSX/HTML/CSS with SVG assets.
+
+## Completed milestone: P7 — Live Resource Intelligence (3.4.0 source enhancement)
+
+P7 adds a user-started live telemetry dashboard to the shared Windows System Manager UI. It reuses the existing native bridge, resource settings capability and WebView without adding a service, database, package or background collector. See `docs/LIVE-RESOURCE-INTELLIGENCE.md`, `docs/P7-IMPLEMENTATION-AUDIT.md` and `docs/P7-WINDOWS-ACCEPTANCE.md`.
+
+- Explicit Start/Stop sessions with native duration bounds of 30–900 seconds and 1/2/5 second polling intervals.
+- Live host CPU, physical memory, network interface rates, aggregated process I/O transfer rates, and process CPU/working-set/private-memory rankings.
+- CPU and memory SVG charts, network and process-I/O charts, CPU/memory process ranking toggle, 900-sample in-memory cap and explicit CSV export.
+- Session IDs required for sampling/stopping; only one session per bridge; cleanup on tab departure, panel close, pagehide, host disposal or duration expiry.
+- No persisted raw telemetry, background service, automatic remediation or Agent-controlled long-running session. The existing Agent resource report remains finite (maximum 60 seconds).
+
+### P7 validation boundary
+
+Portable tests validate source contracts and UI behavior. Live Windows counter behavior and .NET compilation remain target-machine gates. Process I/O transfer counters are not physical-disk-only throughput; network counters may overlap on VPN/virtual interfaces; fixed CPU/memory thresholds are indicators, not anomaly diagnosis.
 
 
 ## Completed milestone: P0 — Foundation & Reliability

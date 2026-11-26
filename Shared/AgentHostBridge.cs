@@ -40,6 +40,8 @@ public sealed partial class AgentHostBridge : IDisposable
     private const string SharedStoreMutexName = @"Local\RunMind.ProjectProfileRegistry.v1";
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _requests = new(StringComparer.Ordinal);
     private readonly object _workspaceStateLock = new();
+    private readonly object _liveResourceSync = new();
+    private LiveResourceSession? _liveResourceSession;
     private string? _processWorkspaceRoot;
     private string? _processWorkspaceContextId;
     private string? _processWorkspaceId;
@@ -147,6 +149,9 @@ public sealed partial class AgentHostBridge : IDisposable
             "systemManager.eventLog" => Task.FromResult(SystemManagerReadEventLog(args)),
             "systemManager.crashes" => Task.FromResult(SystemManagerInvestigateCrashes(args)),
             "systemManager.resources" => SystemManagerSampleResourcesAsync(args, cancellationToken),
+            "systemManager.liveResources.start" => Task.Run(() => SystemManagerLiveResourcesStart(args), cancellationToken),
+            "systemManager.liveResources.sample" => Task.Run(() => SystemManagerLiveResourcesSample(args), cancellationToken),
+            "systemManager.liveResources.stop" => Task.Run(() => SystemManagerLiveResourcesStop(args), cancellationToken),
             "systemManager.healthReport" => SystemManagerHealthReportAsync(args, cancellationToken),
             "systemManager.scheduledTasks" => Task.FromResult(SystemManagerScheduledTasks(args)),
             "systemManager.storage" => Task.FromResult(SystemManagerStorageHealth()),
@@ -1976,6 +1981,7 @@ public sealed partial class AgentHostBridge : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         foreach (var request in _requests.Values) { try { request.Cancel(); } catch (ObjectDisposedException) { } }
         _requests.Clear();
+        StopLiveResourceSessionForDispose();
         StopNodeDebuggerSessions();
     }
 }

@@ -1,7 +1,7 @@
-# RunMind 3.4.0 — Feature Matrix (P0–P6 retained; optional Runner added)
+﻿# RunMind 3.4.0 — Feature Matrix (P0–P7 retained; optional Runner added)
 
 
-> **Current source release (3.4.0):** P0–P6 remain retained from 3.3.1. This release adds the complete optional RunMind Runner. Portable test and Windows build boundaries are recorded in `BUILD-STATUS.md`; target-Windows certification and existing Full Agent credential-at-rest gates remain open. See `3.4.0-RELEASE-NOTES.md` and `docs/STABILIZATION-AUDIT.md`.
+> **Current source release (3.4.0):** P0–P6 remain retained from 3.3.1; Change Impact Explorer v2 and P7 Live Resource Intelligence are included as source enhancements. This release also adds the complete optional RunMind Runner. Portable test and Windows build boundaries are recorded in `BUILD-STATUS.md`; target-Windows certification and existing Full Agent credential-at-rest gates remain open. See `3.4.0-RELEASE-NOTES.md` and `docs/STABILIZATION-AUDIT.md`.
 
 ## Advanced Intelligence & Extensibility — consolidated capability map
 
@@ -78,7 +78,8 @@ The capabilities below are already implemented across P1–P6 and are retained i
 | System Manager | Targeted port-owner lookup | Implemented in P0 | TCP/UDP local port inspection with process identity; available via process or network diagnostics capability; never terminates owners |
 | System Manager | Windows Event Log investigation | Implemented in P2; opt-in | Application/System/Setup only; 1–720 hour range; max 200 events; message truncation; no Security/custom log access |
 | System Manager | Application crash investigation | Implemented in P2; opt-in | Correlates Application Error 1000, WER 1001, .NET Runtime 1026 and SCM 7031/7034; bounded 1–30 day range; signatures are evidence, not root-cause proof |
-| System Manager | Resource sampling | Implemented in P2; opt-in | Finite 1–60 second sampling; system CPU, process CPU deltas and working set; max 1,000 sampled process records and 60 sample records; not persistent monitoring |
+| System Manager | Resource sampling | Implemented in P2; opt-in | Agent tool remains finite (1–60 seconds); host CPU, memory, process CPU/memory and supported physical-disk counters; not a persistent monitor |
+| System Manager | Live Resource Intelligence | Implemented in 3.4.0 source (P7); Windows acceptance pending | Explicit UI-started 1/5/15 minute sessions; 1/2/5 second intervals; CPU, memory, network, process I/O charts and process ranking; 900 in-memory samples; CSV export; no background service or raw telemetry persistence; see P7 docs |
 | System Manager | Scheduled Tasks | Implemented in P2; opt-in | Read-only inventory; exact task name/path enable/disable/start/stop with fresh native confirmation and state verification; no task creation/deletion/definition editing |
 | System Manager | Storage health | Implemented in P2; opt-in | Physical disks, reliability counters and volumes with CIM fallback; unavailable controller/SMART data remains unknown |
 | System Manager | Windows security posture | Implemented in P2; opt-in | Defender, firewall profiles, system-volume BitLocker, Secure Boot, TPM and UAC; snapshot only, not malware scan or compliance certification |
