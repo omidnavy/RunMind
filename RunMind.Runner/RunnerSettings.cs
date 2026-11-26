@@ -11,9 +11,24 @@ internal sealed class RunnerSettings
 
     public string Hotkey { get; set; } = "Ctrl+Alt+Space";
     public bool StartWithWindows { get; set; }
+    public bool OpenOnActiveMonitor { get; set; } = true;
+    public bool AutoResizeToResults { get; set; } = true;
     public bool RunMindGlobalMode { get; set; }
     public string RunMindActionKeyword { get; set; } = "llm";
     public List<string> EnabledPlugins { get; set; } = new() { "applications", "files", "urls", "calculator", "runmind" };
+    public Dictionary<string, int> PluginWeights { get; set; } = CreateDefaultPluginWeights();
+
+    public int GetPluginWeight(string pluginId)
+        => PluginWeights.TryGetValue(pluginId, out var value) ? Math.Clamp(value, 0, 100) : 50;
+
+    private static Dictionary<string, int> CreateDefaultPluginWeights() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["applications"] = 50,
+        ["files"] = 50,
+        ["urls"] = 50,
+        ["calculator"] = 50,
+        ["runmind"] = 50,
+    };
 
     public static string SettingsDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RunMind", "Runner");
@@ -67,9 +82,12 @@ internal sealed class RunnerSettings
         {
             Hotkey = hotkey,
             StartWithWindows = settings.StartWithWindows,
+            OpenOnActiveMonitor = settings.OpenOnActiveMonitor,
+            AutoResizeToResults = settings.AutoResizeToResults,
             RunMindGlobalMode = settings.RunMindGlobalMode,
             RunMindActionKeyword = NormalizeKeyword(settings.RunMindActionKeyword),
             EnabledPlugins = NormalizePluginIds(settings.EnabledPlugins),
+            PluginWeights = NormalizePluginWeights(settings.PluginWeights),
         };
     }
 
@@ -78,6 +96,15 @@ internal sealed class RunnerSettings
         var keyword = (value ?? "llm").Trim();
         if (keyword.Length is < 1 or > 32 || keyword.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_'))) return "llm";
         return keyword;
+    }
+
+    private static Dictionary<string, int> NormalizePluginWeights(Dictionary<string, int>? weights)
+    {
+        var defaults = CreateDefaultPluginWeights();
+        if (weights is null) return defaults;
+        foreach (var id in defaults.Keys.ToArray())
+            defaults[id] = weights.TryGetValue(id, out var value) ? Math.Clamp(value, 0, 100) : 50;
+        return defaults;
     }
 
     private static List<string> NormalizePluginIds(List<string>? ids)

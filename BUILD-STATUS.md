@@ -19,17 +19,16 @@
 - Native launcher startup remains independent of WebView2 startup and provider network calls. App indexing is asynchronous; ChatWindow loads only when requested.
 - Configurable global hotkey, tray/single-instance lifecycle, optional current-user startup and independent Runner installer/uninstaller.
 
-## Portable validation performed
+## Portable validation performed (latest Runner window UX update)
 
-Environment: Linux container, Node.js `v22.16.0`; Python XML/JSON parsing.
+Environment: Linux container, Node.js `v22.16.0`; Python XML parsing. The latest checks ran directly against this modified source tree.
 
-- Full regression suite: **272/272 passed** using `node --test --test-concurrency=1 tests/*.test.cjs`.
-- Runner-specific contract suite: **17/17 passed** using `node --test tests/runner-contract.test.cjs`.
-- JavaScript syntax: **56 files parsed** using `node --check`.
-- JSON: **4 files parsed**.
-- XML, XAML, MSBuild and manifest files: **11 files parsed**.
-- Runner XAML event-handler references: **19 checked**, all mapped to code-behind methods.
-- No failing tests or parse errors were observed in those checks.
+- Full regression suite: **280/280 passed** using `node --test`.
+- Runner-specific contract and window UX suite: **25/25 passed** using `node --test tests/runner-contract.test.cjs tests/runner-window-ux.test.cjs`.
+- XML, XAML, MSBuild project and manifest parsing: checked again after the latest edits.
+- Runner XAML named controls and code-behind bindings: checked for unique names and the new monitor, sizing, provider and ranking controls.
+- New contract tests cover WindowChrome, cursor-monitor selection, auto sizing, conditional provider settings, plugin ranking and themed control heights.
+- JavaScript syntax and JSON validation remain applicable to unchanged files and are repeated during package validation.
 
 These are portable source-level checks. They do not constitute a .NET compilation or Windows integration test.
 
@@ -96,3 +95,41 @@ The current portable test counts are recorded in the validation report accompany
 
 
 For the current Fix 2 source, validation reports **272/272** full-suite tests and **17/17** Runner-specific contract tests. See `docs/WINDOWS-BUILD-FIX-COMPLETE-RUNNER-2.md`.
+
+
+## Follow-up: Runner window, provider settings and global result weights
+
+The user reported that the Runner window could not be moved/resized, multi-monitor targeting was missing, controls were inconsistent, generation settings were separated from Inline model, provider-specific sections remained visible together, the launcher stayed oversized, and global mode lacked plugin ranking weights. This source now includes:
+
+- WPF `WindowChrome` with a real caption drag zone and 8-DIP resize border; Runner is no longer a transparent layered window.
+- Per-Monitor-V2 DPI awareness and cursor-monitor placement on hotkey invocation. General settings can disable cursor-monitor following and use the primary display instead.
+- Automatic height adjustment based on result count, bounded by the chosen monitor work area; a setting allows users to disable auto sizing and choose a manual height.
+- Common 38-DIP one-line text/password/ComboBox dimensions, a separate 48-DIP launcher search field, a larger intentional multiline system-prompt field, and a fully themed ComboBox popup/item/arrow template.
+- Settings reorganized into only General and Inline model tabs. Generation/request fields now live under Inline model. Ollama endpoint/credentials/keep-alive/CPU fields and LM Studio endpoint/credentials/Nemotron compatibility fields are conditionally displayed for the selected provider; common generation controls remain shared.
+- Per-plugin global-mode result weights (0–100; 50 neutral; higher values move results earlier). Weights are applied before the result cap and are not applied to action-keyword mode.
+
+The latest portable validation is 280/280 full-suite tests and 25/25 Runner-specific tests. XAML/XML parsing and control-name checks passed. This environment does not provide .NET SDK/MSBuild or Windows, so these latest C# and WPF changes have not been compiled or exercised on Windows. Run `Build-Release-x64.bat` and complete the new manual acceptance checks before treating them as verified.
+
+## Follow-up: Runner interaction and settings UX corrections
+
+The next user review identified seven required behaviors. The current source includes the following updates:
+
+1. **Movable and resizable window:** the main launcher uses non-layered WPF `WindowChrome`, a caption drag area, 8-DIP resize border, clickable caption actions and a usable minimum size.
+2. **Active-cursor monitor:** the hotkey targets the display under the current pointer by default. A General setting disables this behavior and targets the primary display. The Runner manifest opts into Per-Monitor-V2 DPI awareness.
+3. **Input and select styling:** standard single-line TextBox, PasswordBox and ComboBox controls use 38-DIP heights; launcher search is 48 DIPs; the multiline system prompt has a dedicated larger height. ComboBox selection and popup/item visuals use theme resources instead of native white popup defaults.
+4. **Generation settings location:** generation and request options are within the Inline model settings tab. Settings navigation contains General and Inline model only.
+5. **Provider-specific settings:** Ollama-only endpoint, credentials, keep-alive and CPU controls appear for Ollama. LM Studio-only endpoint, credentials and Nemotron compatibility controls appear for LM Studio. Shared options remain common. Switching providers clears previously discovered model results.
+6. **PowerToys Run-style window sizing:** automatic height grows/shrinks from current result count, caps at the selected monitor's working area and can be disabled so users can retain a manual window height.
+7. **Global result priorities:** each built-in plugin has a persisted 0–100 priority; 50 is neutral, higher values move that plugin earlier. Weights affect global mode only and are applied before the common result cap.
+
+Portable validation on the current source:
+
+- Full regression suite: **280/280 passed**.
+- Runner-specific contract and UX tests: **25/25 passed**.
+- JavaScript syntax checks: **57/57 passed**.
+- XAML, project and manifest XML parsing: **12/12 passed**.
+- JSON parsing (BOM-aware): **4/4 passed**.
+- MainWindow, RunnerSettingsWindow and RunnerChatWindow XAML event-handler references all resolve to code-behind methods; named controls are unique.
+- Tests and static checks were repeated from the final extracted source archive.
+
+These checks are source-level and portable. This environment has no .NET SDK, MSBuild, Windows Desktop runtime or Windows multi-monitor desktop. Accordingly, the latest WPF/C# modifications have **not** been compiled or interactively tested here. Run `Build-Release-x64.bat` on Windows and complete `docs/RUNNER-WINDOW-UX-AND-RANKING.md` before accepting this update.

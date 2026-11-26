@@ -67,7 +67,12 @@ internal sealed class RunnerPluginRegistry
     public IReadOnlyList<(string Id, string Name, string Description)> DescribePlugins()
         => _plugins.Select(plugin => (plugin.Id, plugin.Name, plugin.Description)).ToArray();
 
-    public IReadOnlyList<RunnerPluginResult> Search(string query, IReadOnlySet<string>? enabledPlugins = null, bool runMindGlobalMode = false, string? runMindKeyword = null)
+    public IReadOnlyList<RunnerPluginResult> Search(
+        string query,
+        IReadOnlySet<string>? enabledPlugins = null,
+        bool runMindGlobalMode = false,
+        string? runMindKeyword = null,
+        IReadOnlyDictionary<string, int>? pluginWeights = null)
     {
         var normalized = (query ?? string.Empty).Trim();
         if (normalized.Length == 0) return Array.Empty<RunnerPluginResult>();
@@ -86,17 +91,23 @@ internal sealed class RunnerPluginRegistry
             catch { /* A single plugin must never prevent the remaining launcher plugins from responding. */ }
         }
 
+        // In global mode, plugin weight adjusts the base relevance rank. 50 is neutral;
+        // higher values move a plugin upward, lower values move it downward.
         var ordered = results
+            .Select(result =>
+            {
+                if (!runMindGlobalMode) return result;
+                var weight = pluginWeights is not null && pluginWeights.TryGetValue(result.PluginId, out var configured)
+                    ? Math.Clamp(configured, 0, 100)
+                    : 50;
+                return result with { Rank = result.Rank + ((50 - weight) * 2) };
+            })
             .OrderBy(result => result.Rank)
             .ThenBy(result => result.Title, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        // Keep RunMind discoverable even when several providers return a large result set.
-        var runMind = ordered.FirstOrDefault(result => result.PluginId == "runmind");
-        var capped = ordered.Where(result => result.PluginId != "runmind").Take(runMind is null ? 14 : 13).ToList();
-        if (runMind is not null) capped.Add(runMind);
-        return capped.OrderBy(result => result.Rank)
-            .ThenBy(result => result.Title, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        // Apply one global cap after all providers have been scored so configured plugin
+        // weights determine which results survive as well as their order.
+        return ordered.Take(14).ToArray();
     }
 }
 

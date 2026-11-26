@@ -7,6 +7,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.Windows.Interop;
+using System.Runtime.InteropServices;
 using Forms = System.Windows.Forms;
 using RunMind.Shared;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
@@ -18,6 +20,9 @@ public partial class MainWindow : Window
 {
     private static readonly TimeSpan InlineDebounce = TimeSpan.FromMilliseconds(650);
     private const int MaximumInlineDisplayCharacters = 180_000;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
 
     private readonly ApplicationCatalog _applicationCatalog = new();
     private readonly RunnerPluginRegistry _pluginRegistry;
@@ -60,6 +65,11 @@ public partial class MainWindow : Window
         CreateTrayIcon();
         SearchBox.Focus();
         RefreshSearch();
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            UpdateWindowHeightForResults(SearchBox.Text.Length == 0);
+            PositionOnConfiguredMonitor();
+        }), DispatcherPriority.Loaded);
         StatusText.Text = _hotkeyStatus ?? $"Esc to hide  ·  Enter to open  ·  {_settings.Hotkey} to summon";
 
         // The launcher is usable immediately. Start-menu enumeration runs off the UI thread.
@@ -116,14 +126,6 @@ public partial class MainWindow : Window
         }
         _trayIconImage?.Dispose();
         _trayIconImage = null;
-    }
-
-    private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ButtonState == MouseButtonState.Pressed)
-        {
-            try { DragMove(); } catch (InvalidOperationException) { }
-        }
     }
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -197,7 +199,8 @@ public partial class MainWindow : Window
         var query = SearchBox.Text.Trim();
         var enabled = _settings.EnabledPlugins.ToHashSet(StringComparer.Ordinal);
         if (!_inlineSettings.Enabled) enabled.Remove("runmind");
-        foreach (var result in _pluginRegistry.Search(query, enabled, _settings.RunMindGlobalMode, _settings.RunMindActionKeyword)) _results.Add(result);
+        foreach (var result in _pluginRegistry.Search(query, enabled, _settings.RunMindGlobalMode,
+                     _settings.RunMindActionKeyword, _settings.PluginWeights)) _results.Add(result);
 
         if (_results.Count == 0)
         {
@@ -210,6 +213,7 @@ public partial class MainWindow : Window
             ResultCountText.Text = $"{_results.Count} found";
         }
         ResultsList.SelectedIndex = _results.Count > 0 ? 0 : -1;
+        UpdateWindowHeightForResults(query.Length == 0);
         if (query.Length == 0)
         {
             InlineStatusText.Text = "Inline assistant · Ollama / LM Studio";
@@ -471,6 +475,7 @@ public partial class MainWindow : Window
             _inlineSettings = RunnerInlineSettingsStore.Load();
             _inlineCredentials = RunnerInlineCredentialsStore.Load();
             RunnerThemeManager.Apply(this);
+            PositionOnConfiguredMonitor();
             _hotkeyStatus = null;
             StatusText.Text = $"Esc to hide  ·  Enter to open  ·  {_settings.Hotkey} to summon";
             RefreshSearch();
@@ -495,10 +500,96 @@ public partial class MainWindow : Window
         if (!IsVisible) Show();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Topmost = true;
+        UpdateWindowHeightForResults(SearchBox.Text.Length == 0);
+        PositionOnConfiguredMonitor();
         Activate();
         SearchBox.Focus();
         SearchBox.CaretIndex = SearchBox.Text.Length;
     }
+
+    private void PositionOnConfiguredMonitor()
+    {
+        if (!IsLoaded) return;
+        try
+        {
+            var cursorPoint = Forms.Cursor.Position;
+            var screen = _settings.OpenOnActiveMonitor
+                ? Forms.Screen.FromPoint(cursorPoint)
+                : Forms.Screen.PrimaryScreen ?? Forms.Screen.FromPoint(cursorPoint);
+            var workingArea = screen.WorkingArea;
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero) return;
+
+            var dpi = GetMonitorDpi(screen);
+            var scale = dpi / 96d;
+            var widthPixels = (int)Math.Ceiling((ActualWidth > 0 ? ActualWidth : Width) * scale);
+            var heightPixels = (int)Math.Ceiling((ActualHeight > 0 ? ActualHeight : Height) * scale);
+            var x = workingArea.Left + Math.Max(0, (workingArea.Width - widthPixels) / 2);
+            var y = workingArea.Top + Math.Max(0, (workingArea.Height - heightPixels) / 3);
+            SetWindowPos(handle, IntPtr.Zero, x, y, 0, 0, SwpNoSize | SwpNoZOrder | SwpNoActivate);
+        }
+        catch
+        {
+            // Monitor discovery is best-effort; never prevent the launcher from opening.
+        }
+    }
+
+    private void UpdateWindowHeightForResults(bool emptyQuery)
+    {
+        if (!_settings.AutoResizeToResults) return;
+        try
+        {
+            var visibleRows = emptyQuery ? 0 : Math.Clamp(_results.Count, 0, 8);
+            var resultAreaHeight = emptyQuery || visibleRows == 0 ? 88 : 48 + visibleRows * 54;
+            var targetHeight = 218 + resultAreaHeight;
+            var cursorPoint = Forms.Cursor.Position;
+            var screen = _settings.OpenOnActiveMonitor
+                ? Forms.Screen.FromPoint(cursorPoint)
+                : Forms.Screen.PrimaryScreen ?? Forms.Screen.FromPoint(cursorPoint);
+            var dpi = GetMonitorDpi(screen);
+            var scale = dpi / 96d;
+            var maximumHeight = Math.Max(190, screen.WorkingArea.Height / scale - 56);
+            MaxHeight = maximumHeight;
+            Height = Math.Min(targetHeight, maximumHeight);
+        }
+        catch
+        {
+            Height = Math.Clamp(Height, MinHeight, 700);
+        }
+    }
+
+    private static uint GetMonitorDpi(Forms.Screen screen)
+    {
+        try
+        {
+            var bounds = screen.Bounds;
+            var monitor = MonitorFromPoint(new NativePoint(bounds.Left + 1, bounds.Top + 1), 2);
+            if (monitor != IntPtr.Zero && GetDpiForMonitor(monitor, MonitorDpiType.Effective, out var dpiX, out _) == 0 && dpiX >= 96)
+                return dpiX;
+        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
+        return 96;
+    }
+
+    private enum MonitorDpiType { Effective = 0, Angular = 1, Raw = 2 }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct NativePoint
+    {
+        public readonly int X;
+        public readonly int Y;
+        public NativePoint(int x, int y) { X = x; Y = y; }
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(NativePoint point, uint flags);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr monitor, MonitorDpiType dpiType, out uint dpiX, out uint dpiY);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
 
     private void CreateTrayIcon()
     {

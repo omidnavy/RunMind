@@ -11,6 +11,7 @@
     <AssemblyTitle>RunMind Runner</AssemblyTitle>
     <Product>RunMind</Product>
     <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>RunMind.Runner</RootNamespace>
     <Version>3.4.0</Version>
     <Nullable>enable</Nullable>

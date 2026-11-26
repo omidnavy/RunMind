@@ -33,6 +33,8 @@ public partial class RunnerSettingsWindow : Window
 
         HotkeyBox.Text = currentSettings.Hotkey;
         StartWithWindowsCheckBox.IsChecked = currentSettings.StartWithWindows;
+        OpenOnActiveMonitorCheckBox.IsChecked = currentSettings.OpenOnActiveMonitor;
+        AutoResizeToResultsCheckBox.IsChecked = currentSettings.AutoResizeToResults;
         ApplicationsPluginCheck.IsChecked = currentSettings.EnabledPlugins.Contains("applications", StringComparer.Ordinal);
         FilesPluginCheck.IsChecked = currentSettings.EnabledPlugins.Contains("files", StringComparer.Ordinal);
         UrlsPluginCheck.IsChecked = currentSettings.EnabledPlugins.Contains("urls", StringComparer.Ordinal);
@@ -40,10 +42,17 @@ public partial class RunnerSettingsWindow : Window
         RunMindPluginCheck.IsChecked = currentSettings.EnabledPlugins.Contains("runmind", StringComparer.Ordinal);
         RunMindGlobalModeCheck.IsChecked = currentSettings.RunMindGlobalMode;
         RunMindKeywordBox.Text = currentSettings.RunMindActionKeyword;
+        ApplicationsWeightSlider.Value = currentSettings.GetPluginWeight("applications");
+        FilesWeightSlider.Value = currentSettings.GetPluginWeight("files");
+        UrlsWeightSlider.Value = currentSettings.GetPluginWeight("urls");
+        CalculatorWeightSlider.Value = currentSettings.GetPluginWeight("calculator");
+        RunMindWeightSlider.Value = currentSettings.GetPluginWeight("runmind");
+        UpdateWeightLabels();
 
         InlineEnabledCheck.IsChecked = currentInlineSettings.Enabled;
         SelectTag(ProviderBox, currentInlineSettings.Provider);
         UpdateTemperatureLabel();
+        UpdateProviderVisibility();
         OllamaEndpointBox.Text = currentInlineSettings.OllamaEndpoint;
         LMStudioBaseUrlBox.Text = currentInlineSettings.LMStudioBaseUrl;
         ModelBox.Text = currentInlineSettings.Model;
@@ -81,7 +90,41 @@ public partial class RunnerSettingsWindow : Window
 
     private void ProviderBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (TemperatureLabel is not null) UpdateTemperatureLabel();
+        if (TemperatureLabel is null) return;
+
+        UpdateTemperatureLabel();
+        UpdateProviderVisibility();
+
+        // Never leave a model list from the previous provider visible after switching APIs.
+        if (ModelBox is not null)
+        {
+            ModelBox.ItemsSource = null;
+            ModelDiscoveryStatus.Text = "Select Refresh models / test connection to discover models from this provider.";
+        }
+    }
+
+    private void UpdateProviderVisibility()
+    {
+        var isLmStudio = GetTag(ProviderBox, "ollama") == "lmstudio";
+        OllamaSettingsPanel.Visibility = isLmStudio ? Visibility.Collapsed : Visibility.Visible;
+        LMStudioSettingsPanel.Visibility = isLmStudio ? Visibility.Visible : Visibility.Collapsed;
+        OllamaGenerationPanel.Visibility = isLmStudio ? Visibility.Collapsed : Visibility.Visible;
+        LMStudioCompatibilityPanel.Visibility = isLmStudio ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateWeightLabels()
+    {
+        ApplicationsWeightValue.Text = ((int)ApplicationsWeightSlider.Value).ToString(CultureInfo.InvariantCulture);
+        FilesWeightValue.Text = ((int)FilesWeightSlider.Value).ToString(CultureInfo.InvariantCulture);
+        UrlsWeightValue.Text = ((int)UrlsWeightSlider.Value).ToString(CultureInfo.InvariantCulture);
+        CalculatorWeightValue.Text = ((int)CalculatorWeightSlider.Value).ToString(CultureInfo.InvariantCulture);
+        RunMindWeightValue.Text = ((int)RunMindWeightSlider.Value).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void PluginWeightSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (ApplicationsWeightValue is null) return;
+        UpdateWeightLabels();
     }
 
     private void UpdateTemperatureLabel()
@@ -140,6 +183,16 @@ public partial class RunnerSettingsWindow : Window
             {
                 Hotkey = hotkey,
                 StartWithWindows = StartWithWindowsCheckBox.IsChecked == true,
+                OpenOnActiveMonitor = OpenOnActiveMonitorCheckBox.IsChecked == true,
+                AutoResizeToResults = AutoResizeToResultsCheckBox.IsChecked == true,
+                PluginWeights = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["applications"] = (int)ApplicationsWeightSlider.Value,
+                    ["files"] = (int)FilesWeightSlider.Value,
+                    ["urls"] = (int)UrlsWeightSlider.Value,
+                    ["calculator"] = (int)CalculatorWeightSlider.Value,
+                    ["runmind"] = (int)RunMindWeightSlider.Value,
+                },
                 EnabledPlugins = enabledPlugins,
                 RunMindGlobalMode = RunMindGlobalModeCheck.IsChecked == true,
                 RunMindActionKeyword = RunMindKeywordBox.Text.Trim(),

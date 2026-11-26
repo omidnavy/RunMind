@@ -307,7 +307,7 @@ test('Runner mirrors PowerToys Run global mode and configurable action keyword',
   assert.match(settingsCode, /RunMindActionKeyword = RunMindKeywordBox\.Text\.Trim\(\)/);
   assert.match(plugins, /TryExtractPrompt\(string\? query, bool globalMode, string\? actionKeyword, out string prompt\)/);
   assert.match(plugins, /if \(globalMode\) \{ prompt = value; return true; \}/);
-  assert.match(main, /Search\(query, enabled, _settings\.RunMindGlobalMode, _settings\.RunMindActionKeyword\)/);
+  assert.match(main, /Search\(query, enabled, _settings\.RunMindGlobalMode,[\s\S]{0,100}_settings\.RunMindActionKeyword, _settings\.PluginWeights\)/);
 });
 
 test('Runner search input uses explicit themed foreground, caret and selection colors', async () => {

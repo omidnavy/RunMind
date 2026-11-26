@@ -19,6 +19,8 @@
             <TextBox x:Name="HotkeyBox" Width="260" HorizontalAlignment="Left" />
             <TextBlock Text="Example: Ctrl+Alt+Space. Use at least one modifier key." Foreground="{DynamicResource RunnerMuted}" FontSize="10" Margin="0,5,0,12" />
             <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start RunMind Runner when I sign in (minimized to tray)" />
+            <CheckBox x:Name="OpenOnActiveMonitorCheckBox" Content="Open on the monitor containing the mouse pointer when the hotkey is pressed" ToolTip="When disabled, Runner opens on the primary monitor." />
+            <CheckBox x:Name="AutoResizeToResultsCheckBox" Content="Automatically grow and shrink to fit search results (PowerToys Run style)" />
             <Separator Margin="0,14,0,14" Background="{DynamicResource RunnerBorder}" />
             <TextBlock Text="Launcher plugins" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
             <TextBlock Text="Enable the search providers shown in Runner. RunMind is the inline AI answer plugin." Foreground="{DynamicResource RunnerMuted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8" />
@@ -34,6 +36,17 @@
                 <TextBlock Text="When disabled, RunMind activates only when the keyword below is typed. This mirrors the PowerToys Run global/action-keyword choice." Foreground="{DynamicResource RunnerMuted}" FontSize="10" TextWrapping="Wrap" />
                 <TextBlock Text="Action keyword" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,4" />
                 <TextBox x:Name="RunMindKeywordBox" Width="180" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+            <Border Background="{DynamicResource RunnerSurfaceRaised}" CornerRadius="10" Padding="12" Margin="0,10,0,0">
+              <StackPanel>
+                <TextBlock Text="Global result ranking" FontWeight="SemiBold" Foreground="{DynamicResource RunnerText}" />
+                <TextBlock Text="Adjust the priority of each plugin when RunMind global mode is enabled. 50 is neutral; higher values rank that plugin earlier." Foreground="{DynamicResource RunnerMuted}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,10" />
+                <Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><TextBlock Text="Applications" VerticalAlignment="Center"/><Slider x:Name="ApplicationsWeightSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="PluginWeightSlider_ValueChanged"/><TextBlock x:Name="ApplicationsWeightValue" Grid.Column="2" Text="50" VerticalAlignment="Center" HorizontalAlignment="Right"/></Grid>
+                <Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><TextBlock Text="Files &amp; Folders" VerticalAlignment="Center"/><Slider x:Name="FilesWeightSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="PluginWeightSlider_ValueChanged"/><TextBlock x:Name="FilesWeightValue" Grid.Column="2" Text="50" VerticalAlignment="Center" HorizontalAlignment="Right"/></Grid>
+                <Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><TextBlock Text="URLs" VerticalAlignment="Center"/><Slider x:Name="UrlsWeightSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="PluginWeightSlider_ValueChanged"/><TextBlock x:Name="UrlsWeightValue" Grid.Column="2" Text="50" VerticalAlignment="Center" HorizontalAlignment="Right"/></Grid>
+                <Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><TextBlock Text="Calculator" VerticalAlignment="Center"/><Slider x:Name="CalculatorWeightSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="PluginWeightSlider_ValueChanged"/><TextBlock x:Name="CalculatorWeightValue" Grid.Column="2" Text="50" VerticalAlignment="Center" HorizontalAlignment="Right"/></Grid>
+                <Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><TextBlock Text="RunMind" VerticalAlignment="Center"/><Slider x:Name="RunMindWeightSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="PluginWeightSlider_ValueChanged"/><TextBlock x:Name="RunMindWeightValue" Grid.Column="2" Text="50" VerticalAlignment="Center" HorizontalAlignment="Right"/></Grid>
               </StackPanel>
             </Border>
             <Separator Margin="0,14,0,14" Background="{DynamicResource RunnerBorder}" />
@@ -61,6 +74,7 @@
             <TextBlock Text="Query behavior is configured under General → RunMind query behavior. Global mode sends each non-empty search to RunMind; keyword mode activates only when the configured keyword is used." Foreground="{DynamicResource RunnerMuted}" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,8" />
             <TextBlock Text="Provider" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
             <ComboBox x:Name="ProviderBox" Width="260" HorizontalAlignment="Left" SelectionChanged="ProviderBox_SelectionChanged"><ComboBoxItem Content="Ollama" Tag="ollama"/><ComboBoxItem Content="LM Studio" Tag="lmstudio"/></ComboBox>
+            <StackPanel x:Name="OllamaSettingsPanel">
             <TextBlock Text="Ollama full generate endpoint" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,12,0,5" />
             <TextBox x:Name="OllamaEndpointBox" />
             <TextBlock Text="Ollama API key (optional)" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
@@ -68,7 +82,9 @@
             <TextBlock Text="Ollama custom auth header (optional) · Header-Name: value" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
             <PasswordBox x:Name="OllamaAuthHeaderBox" />
             <CheckBox x:Name="ClearOllamaCredentialsCheck" Content="Clear saved Ollama credentials" />
+            </StackPanel>
             <Separator Margin="0,14,0,14" Background="{DynamicResource RunnerBorder}" />
+            <StackPanel x:Name="LMStudioSettingsPanel">
             <TextBlock Text="LM Studio base URL" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,0,0,5" />
             <TextBox x:Name="LMStudioBaseUrlBox" />
             <TextBlock Text="LM Studio API key (optional)" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
@@ -76,6 +92,7 @@
             <TextBlock Text="LM Studio custom auth header (optional) · Header-Name: value" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
             <PasswordBox x:Name="LMStudioAuthHeaderBox" />
             <CheckBox x:Name="ClearLMStudioCredentialsCheck" Content="Clear saved LM Studio credentials" />
+            </StackPanel>
             <Separator Margin="0,14,0,14" Background="{DynamicResource RunnerBorder}" />
             <TextBlock Text="Default model" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,0,0,5" />
             <Grid>
@@ -87,46 +104,38 @@
             <TextBlock Text="Thinking / reasoning" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,12,0,5" />
             <ComboBox x:Name="ThinkingBox" Width="260" HorizontalAlignment="Left"><ComboBoxItem Content="Auto" Tag="auto"/><ComboBoxItem Content="On" Tag="on"/><ComboBoxItem Content="Off" Tag="off"/><ComboBoxItem Content="Low" Tag="low"/><ComboBoxItem Content="Medium" Tag="medium"/><ComboBoxItem Content="High" Tag="high"/></ComboBox>
             <TextBlock Text="Inline system instructions · maximum 12,000 characters; empty disables the additional prompt" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,12,0,5" />
-            <TextBox x:Name="SystemPromptBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="155" />
+            <TextBox x:Name="SystemPromptBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="155" MinHeight="155" VerticalContentAlignment="Top" Padding="10,8" />
+            <Separator Margin="0,18,0,14" Background="{DynamicResource RunnerBorder}" />
+            <TextBlock Text="Generation &amp; request settings" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,10" />
+            <StackPanel x:Name="OllamaGenerationPanel">
+              <TextBlock Text="Keep model loaded · seconds (0–86400; Ollama only)" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,0,0,5" />
+              <TextBox x:Name="KeepAliveBox" Width="180" HorizontalAlignment="Left" />
+              <TextBlock Text="Maximum CPU threads · 0 automatic, 1–128 (Ollama only)" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
+              <TextBox x:Name="CpuThreadsBox" Width="180" HorizontalAlignment="Left" />
+            </StackPanel>
+            <TextBlock Text="Request timeout · seconds (30–3600)" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
+            <TextBox x:Name="RequestTimeoutBox" Width="180" HorizontalAlignment="Left" />
+            <TextBlock Text="Model discovery timeout · seconds (1–300)" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
+            <TextBox x:Name="DiscoveryTimeoutBox" Width="180" HorizontalAlignment="Left" />
+            <TextBlock x:Name="TemperatureLabel" Text="Temperature · optional" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
+            <TextBox x:Name="TemperatureBox" Width="180" HorizontalAlignment="Left" />
+            <TextBlock Text="Top P · optional (0–1)" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
+            <TextBox x:Name="TopPBox" Width="180" HorizontalAlignment="Left" />
+            <TextBlock Text="Maximum output tokens · optional (1–1,000,000)" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
+            <TextBox x:Name="MaxOutputTokensBox" Width="180" HorizontalAlignment="Left" />
+            <TextBlock Text="Seed · optional (0–2,147,483,647)" Foreground="{DynamicResource RunnerMuted}" FontSize="11" Margin="0,10,0,5" />
+            <TextBox x:Name="SeedBox" Width="180" HorizontalAlignment="Left" />
+            <StackPanel x:Name="LMStudioCompatibilityPanel">
+              <Separator Margin="0,18,0,14" Background="{DynamicResource RunnerBorder}" />
+              <TextBlock Text="Model-specific compatibility" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,7" />
+              <CheckBox x:Name="NemotronModeCheck" Content="Nemotron 3.5 Bolt E4B conversational mode (LM Studio only; OFF by default)" />
+              <TextBlock Text="Sends chat_template_kwargs.conversational_mode=true only for matching LM Studio model IDs on its OpenAI-compatible API. Ollama's native API does not expose this template parameter." FontSize="10" Foreground="{DynamicResource RunnerMuted}" TextWrapping="Wrap" Margin="0,5,0,0" />
+            </StackPanel>
           </StackPanel>
         </ScrollViewer>
       </TabItem>
 
-      <TabItem Header="Generation">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <StackPanel Margin="16">
-            <TextBlock Text="Request controls" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,10" />
-            <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition Width="245"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-              <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-              </Grid.RowDefinitions>
-              <TextBlock Grid.Row="0" Text="Keep model loaded · Ollama seconds (0–86400)" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" />
-              <TextBox x:Name="KeepAliveBox" Grid.Row="0" Grid.Column="1" Width="180" HorizontalAlignment="Left" />
-              <TextBlock Grid.Row="1" Text="Request timeout · seconds (30–3600)" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" Margin="0,9,0,0" />
-              <TextBox x:Name="RequestTimeoutBox" Grid.Row="1" Grid.Column="1" Width="180" HorizontalAlignment="Left" Margin="0,9,0,0" />
-              <TextBlock Grid.Row="2" Text="Model discovery timeout · seconds (1–300)" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" Margin="0,9,0,0" />
-              <TextBox x:Name="DiscoveryTimeoutBox" Grid.Row="2" Grid.Column="1" Width="180" HorizontalAlignment="Left" Margin="0,9,0,0" />
-              <TextBlock Grid.Row="3" Text="Ollama maximum CPU threads · 0 automatic, 1–128" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" Margin="0,9,0,0" />
-              <TextBox x:Name="CpuThreadsBox" Grid.Row="3" Grid.Column="1" Width="180" HorizontalAlignment="Left" Margin="0,9,0,0" />
-              <TextBlock x:Name="TemperatureLabel" Grid.Row="4" Text="Temperature · optional (0–2)" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" Margin="0,9,0,0" />
-              <TextBox x:Name="TemperatureBox" Grid.Row="4" Grid.Column="1" Width="180" HorizontalAlignment="Left" Margin="0,9,0,0" />
-              <TextBlock Grid.Row="5" Text="Top P · optional (0–1)" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" Margin="0,9,0,0" />
-              <TextBox x:Name="TopPBox" Grid.Row="5" Grid.Column="1" Width="180" HorizontalAlignment="Left" Margin="0,9,0,0" />
-              <TextBlock Grid.Row="6" Text="Maximum output tokens · optional (1–1,000,000)" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" Margin="0,9,0,0" />
-              <TextBox x:Name="MaxOutputTokensBox" Grid.Row="6" Grid.Column="1" Width="180" HorizontalAlignment="Left" Margin="0,9,0,0" />
-              <TextBlock Grid.Row="7" Text="Seed · optional (0–2,147,483,647)" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" Margin="0,9,0,0" />
-              <TextBox x:Name="SeedBox" Grid.Row="7" Grid.Column="1" Width="180" HorizontalAlignment="Left" Margin="0,9,0,0" />
-            </Grid>
-            <Separator Margin="0,18,0,14" Background="{DynamicResource RunnerBorder}" />
-            <TextBlock Text="Model-specific compatibility" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,7" />
-            <CheckBox x:Name="NemotronModeCheck" Content="Nemotron 3.5 Bolt E4B conversational mode (LM Studio only; OFF by default)" />
-            <TextBlock Text="Sends chat_template_kwargs.conversational_mode=true only for matching LM Studio model IDs on its OpenAI-compatible API. Ollama's native API does not expose this template parameter." FontSize="10" Foreground="{DynamicResource RunnerMuted}" TextWrapping="Wrap" Margin="0,5,0,0" />
-          </StackPanel>
-        </ScrollViewer>
-      </TabItem>
+
     </TabControl>
     <Grid Grid.Row="4">
       <TextBlock Text="Runner settings and inline credentials are per-user and separate from the PowerToys hosts." Foreground="{DynamicResource RunnerMuted}" FontSize="10" VerticalAlignment="Center" />
