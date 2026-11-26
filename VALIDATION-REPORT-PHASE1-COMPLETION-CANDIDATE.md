@@ -42,7 +42,7 @@ Status: **Implementation candidate; Windows build/runtime release gate still ope
 
 | Check | Result |
 |---|---:|
-| Complete Node test suite | **64/64 passed** |
+| Complete Node test suite | **66/66 passed** |
 | JavaScript syntax checks, including vendor bundles | **20/20 passed** |
 | JSON parsing | **2/2 passed** |
 | XML/project/XAML/manifest parsing | **6/6 passed** |

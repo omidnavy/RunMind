@@ -203,3 +203,18 @@ test('bundled TypeScript compiler initializes in a browser-like global without C
   const parsed = context.ts.createSourceFile('Widget.tsx', 'export const Widget = () => <section />;', context.ts.ScriptTarget.Latest, true, context.ts.ScriptKind.TSX);
   assert.equal(parsed.parseDiagnostics.length, 0);
 });
+
+
+test('application new-window behavior uses a declared executable allowlist', () => {
+  assert.match(native, /private static bool SupportsNewWindowBehavior\(SystemApplicationRecord application\)/);
+  assert.match(native, /TryResolveApplicationExecutable\(application\.path, out var executable\)/);
+  assert.match(native, /"chrome" or "msedge" or "firefox" or "brave" or "vivaldi" or "opera" or "code"/);
+  assert.match(native, /if \(!string\.IsNullOrWhiteSpace\(application\.appUserModelId\)\) return false/);
+});
+
+test('network adapter properties do not collide with IPGlobalProperties local', () => {
+  assert.match(native, /var adapterProperties = adapter\.GetIPProperties\(\)/);
+  assert.match(native, /var properties = IPGlobalProperties\.GetIPGlobalProperties\(\)/);
+  assert.match(native, /addresses = adapterProperties\.UnicastAddresses/);
+  assert.match(native, /hostName = properties\.HostName/);
+});

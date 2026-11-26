@@ -1,3 +1,9 @@
+
+## 2.6.3 Windows build correction
+
+- Restore the explicit, narrow executable allowlist used by per-application new-window behavior, resolving the missing `SupportsNewWindowBehavior` method referenced by the application behavior and launch paths.
+- Rename the per-adapter IP configuration local to `adapterProperties`, avoiding a C# local-name collision with the enclosing `IPGlobalProperties` variable.
+- Add regression checks for both compiler failures reported by the Windows Release x64 solution build.
 ## Unreleased — Phase 1 completion extension (2026-11-21)
 
 - Bundle the TypeScript 5.8.3 compiler API for offline JSX/TSX/TypeScript parsing, loaded lazily when project indexing begins and a bounded project-wide `ts.Program`/checker pass across indexed JavaScript, JSX, TypeScript, and TSX. The checker resolves cross-file imported symbols and TSX component references; root `tsconfig.json`/`tsconfig.*.json` compiler options and `paths` are honored. Analysis is bounded to 500 source files and 12 MB, with no default library loading and no full diagnostic/type-check pass. The bundle includes the Apache-2.0 license.

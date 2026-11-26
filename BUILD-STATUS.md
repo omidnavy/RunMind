@@ -1,3 +1,10 @@
+## Windows Release x64 compiler-error correction — 2026-11-21
+
+- Added the missing `SupportsNewWindowBehavior` helper with a narrow executable allowlist and validated executable resolution.
+- Renamed the adapter IP configuration local to `adapterProperties` to remove the `CS0136` local-name collision.
+- Added regression coverage for both reported source errors. The portable suite now passes 66/66 tests.
+- The corrected Windows solution has **not** been rebuilt in this environment; rerun `Validate-Phase1-Windows.ps1` on Windows. See `VALIDATION-REPORT-WINDOWS-BUILD-FIX.md`.
+
 # RunMind 2.6.3 — Developer Intelligence & System Manager
 
 ## Active integrated milestone — Phase 1 + System Manager

@@ -1385,6 +1385,17 @@ public sealed partial class AgentHostBridge
         return new { success = verified, accepted, completed = true, verified, action, target = service, requestedState = desiredState, actualState, output = string.Join("\n", commandOutput), error = string.Join("\n", commandErrors.Where(value => !string.IsNullOrWhiteSpace(value))), message = verified ? $"Service {service} is verified {desiredState.ToLowerInvariant()}." : $"Service command completed, but the requested state could not be verified. Actual state: {actualState ?? "unknown"}." };
     }
 
+    private static bool SupportsNewWindowBehavior(SystemApplicationRecord application)
+    {
+        if (!string.IsNullOrWhiteSpace(application.appUserModelId)) return false;
+        if (!TryResolveApplicationExecutable(application.path, out var executable)) return false;
+
+        // Keep this allowlist deliberately narrow: these applications have a known
+        // --new-window command-line switch. Unknown applications must use reuse/new-process.
+        return Path.GetFileNameWithoutExtension(executable).ToLowerInvariant() is
+            "chrome" or "msedge" or "firefox" or "brave" or "vivaldi" or "opera" or "code";
+    }
+
     private static object SystemManagerSetApplicationBehavior(JsonElement args)
     {
         RequireSystemCapability("applications", "launchApplications");
@@ -1797,14 +1808,14 @@ public sealed partial class AgentHostBridge
             {
                 try
                 {
-                    var properties = adapter.GetIPProperties();
+                    var adapterProperties = adapter.GetIPProperties();
                     adapters.Add(new
                     {
                         name = adapter.Name, description = adapter.Description, type = adapter.NetworkInterfaceType.ToString(),
                         status = adapter.OperationalStatus.ToString(), speedBitsPerSecond = adapter.Speed,
-                        addresses = properties.UnicastAddresses.Take(20).Select(item => item.Address.ToString()).ToArray(),
-                        gateways = properties.GatewayAddresses.Take(10).Select(item => item.Address.ToString()).ToArray(),
-                        dnsServers = properties.DnsAddresses.Take(10).Select(item => item.ToString()).ToArray()
+                        addresses = adapterProperties.UnicastAddresses.Take(20).Select(item => item.Address.ToString()).ToArray(),
+                        gateways = adapterProperties.GatewayAddresses.Take(10).Select(item => item.Address.ToString()).ToArray(),
+                        dnsServers = adapterProperties.DnsAddresses.Take(10).Select(item => item.ToString()).ToArray()
                     });
                 }
                 catch { }
