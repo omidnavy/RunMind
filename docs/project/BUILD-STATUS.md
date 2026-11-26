@@ -1,10 +1,10 @@
 # Build and validation status
 
-**Source snapshot:** RunMind 3.4.0.  
+**Source snapshot:** RunMind 3.4.1.  
 **Target platform:** Windows 11 x64, `net10.0-windows10.0.22621.0`.  
-**Status:** Portable JavaScript regression tests pass in the available environment. Native Windows release certification remains open.
+**Status:** Portable JavaScript regression tests and static version/link checks pass in the available environment. Native Windows release certification remains open.
 
-This page records checks performed for this source snapshot. It deliberately separates portable source tests from Windows/.NET build and runtime acceptance.
+This page records checks performed for the 3.4.1 metadata and repository-front-page update. It deliberately separates portable source checks from Windows/.NET build and runtime acceptance.
 
 ## Host layout
 
@@ -17,30 +17,26 @@ This page records checks performed for this source snapshot. It deliberately sep
 
 The release script builds all four projects and packages/signs the Command Palette extension. Building and installing are separate operations.
 
-## Checks performed for this documentation pass
+## Checks performed for this update
 
-- **Portable regression suite:** 326 tests passed, 0 failed (`node --test tests/*.test.cjs`).
-- **Test runtime:** Node.js `v22.16.0` on the packaging/test environment. The project guidance targets Node.js 24+; the suite has not been rerun under Node.js 24 in this environment.
-- **Documentation links:** 114 local Markdown/HTML link and image targets checked; 0 missing targets.
-- **Scope:** this pass changes documentation and documentation paths only. Application source, project files, tests, scripts, assets, and runtime content are preserved.
+- **Portable regression suite:** 326 tests passed, 0 failed (`node --test --test-concurrency=1`).
+- **Test runtime:** Node.js `v22.16.0`. Project guidance targets Node.js 24+; repeat the suite under Node.js 24+ on the target Windows toolchain before certification.
+- **Version metadata:** all four host project versions, the PowerToys Run plugin manifest, Command Palette MSIX project and manifest versions, MCP client identification, and Runner uninstall display version are statically aligned at `3.4.1` (MSIX four-part version `3.4.1.0`).
+- **README references:** 27 local Markdown/HTML link and image references in the repository front page resolve from the repository root, including all four bundled screenshots.
+- **Scope:** this update changes release/version metadata, the associated regression assertion, current release documentation, and `README.md`. It does not add application features or change feature behavior.
 
 ## Not verified here
 
-No .NET SDK/MSBuild, Windows runtime, or PowerShell executable was available in the environment used for this pass. Therefore:
+No Windows/.NET release build, MSIX packaging, PowerToys deployment or WebView2 runtime acceptance is claimed by this documentation update. The `.bat` and `.ps1` operational scripts were not executed as part of this source-only release pass.
 
-- No native Windows/.NET build or MSIX packaging was performed.
-- No WebView2, PowerToys Run, Command Palette activation, Runner installation, DPAPI, Windows performance-counter, process-handle, or process-action acceptance was performed.
-- The `.bat` and `.ps1` operational scripts were not executed or parsed by Windows PowerShell/PowerShell.
-
-Run [`Validate-RunMind-Windows.ps1`](../../Validate-RunMind-Windows.ps1) on Windows with Node.js 24+ and the .NET 10 SDK to run the portable suite, build Release x64, and verify host outputs. That validation script does not install the hosts. Then complete the [P7 Windows acceptance checklist](../P7-WINDOWS-ACCEPTANCE.md), the [Process Intelligence Windows checklist](../system/PROCESS-INTELLIGENCE-WINDOWS-ACCEPTANCE.md), and the applicable [Runner acceptance checks](../runner/RUNNER-IMPLEMENTATION.md).
+On Windows with Node.js 24+ and the .NET 10 SDK, run [`Validate-RunMind-Windows.ps1`](../../Validate-RunMind-Windows.ps1). It runs the portable suite, builds Release x64, and verifies host outputs; it does not install hosts. Then complete the [P7 Windows acceptance checklist](../P7-WINDOWS-ACCEPTANCE.md), the [Process Intelligence Windows checklist](../system/PROCESS-INTELLIGENCE-WINDOWS-ACCEPTANCE.md), and applicable [Runner acceptance checks](../runner/RUNNER-IMPLEMENTATION.md).
 
 ## Release gates still open
 
-1. **Version metadata consistency:** this source tree is labelled 3.4.0, but Standalone, PowerToys Run, and Command Palette project metadata remain at 3.3.1; the Command Palette MSIX identity is 3.3.1.0. Runner metadata is 3.4.0. Unify and regression-test package/version identities before publishing a uniformly versioned release.
-2. **Windows certification:** build all four hosts, package and install Command Palette, deploy PowerToys Run, install Runner, and complete current acceptance checklists on the target Windows installation.
-3. **Credential protection at rest:** Full Chat provider API keys/custom headers, Jina/Reader credentials, and MCP bearer tokens are stored in WebView2 `localStorage`; PowerToys Run and Command Palette inline credentials are stored in `%LOCALAPPDATA%\RunMind\Shared\inline-model-settings.json`. These stores are not DPAPI-encrypted. Runner inline provider credentials use a separate DPAPI CurrentUser store. A native DPAPI vault with transactional migration and rollback remains an important security task.
-4. **Dependency assurance:** perform NuGet restore and vulnerability/license review on Windows, inspect the transitive dependency graph, and produce an SBOM. No current vulnerability scan or SBOM result is claimed here.
-5. **OCR resource reproducibility:** the npm tarball URLs use fixed versions but are not checked against committed SHA-512 integrity values; English/Persian trained data follows the mutable `tessdata_fast/main` branch and is not checksum-pinned.
+1. **Windows certification:** build all four hosts, package and install Command Palette, deploy PowerToys Run, install Runner, verify generated `3.4.1` assembly/package versions, and complete current acceptance checklists on the target Windows installation.
+2. **Credential protection at rest:** Full Chat provider API keys/custom headers, Jina/Reader credentials, and MCP bearer tokens are stored in WebView2 `localStorage`; PowerToys Run and Command Palette inline credentials are stored in `%LOCALAPPDATA%\RunMind\Shared\inline-model-settings.json`. These stores are not DPAPI-encrypted. Runner inline provider credentials use a separate DPAPI CurrentUser store. A native DPAPI vault with transactional migration and rollback remains an important security task.
+3. **Dependency assurance:** perform NuGet restore and vulnerability/license review on Windows, inspect the transitive dependency graph, and produce an SBOM. No current vulnerability scan or SBOM result is claimed here.
+4. **OCR resource reproducibility:** the npm tarball URLs use fixed versions but are not checked against committed SHA-512 integrity values; English/Persian trained data follows the mutable `tessdata_fast/main` branch and is not checksum-pinned.
 
 ## Evidence and reporting rules
 

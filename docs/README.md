@@ -51,7 +51,8 @@ This index is the map for the maintained RunMind guides. Start with the [reposit
 
 - [Build and validation status](project/BUILD-STATUS.md) — current source-level checks, Windows certification status, and open release gates.
 - [Roadmap](../ROADMAP.md) — remaining priorities and future candidates.
-- [RunMind 3.4.0 release notes](releases/3.4.0-RELEASE-NOTES.md)
+- [RunMind 3.4.1 release notes](releases/3.4.1-RELEASE-NOTES.md)
+- [RunMind 3.4.0 release notes](releases/3.4.0-RELEASE-NOTES.md) — previous feature release.
 - [Changelog](../CHANGELOG.md) — product-level milestone history.
 
 ## Historical records

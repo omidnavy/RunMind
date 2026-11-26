@@ -1,6 +1,6 @@
-# Change Impact Explorer v2 — RunMind 3.4.0
+# Change Impact Explorer v2 — RunMind 3.4.1
 
-**Status:** Implemented in the shared 3.4.0 source tree; portable regression-tested. Windows/.NET 10 acceptance remains a target-machine gate.
+**Status:** Introduced in the 3.4.0 feature line and present in the shared 3.4.1 source tree; portable regression-tested. Windows/.NET 10 acceptance remains a target-machine gate.
 
 Change Impact Explorer v2 upgrades the existing shared project-index and Git-review pipeline. It does not introduce a second dependency engine, a separate Git implementation in JavaScript, or a test runner. Standalone, PowerToys Run, PowerToys Command Palette and the built-in developer workflow use the same Agent tool contract.
 

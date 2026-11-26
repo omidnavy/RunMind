@@ -1,6 +1,6 @@
 # Build and setup
 
-This guide describes the current RunMind 3.4.0 source tree. It is a **full source-project snapshot**, not a changed-files overlay.
+This guide describes the current RunMind 3.4.1 source tree. It is a **full source-project snapshot**, not a changed-files overlay.
 
 ## Supported environment
 
@@ -104,7 +104,7 @@ Portable tests do not replace manual WebView2, PowerToys, MSIX, process-manageme
 
 ## Version metadata
 
-The source/release line is labelled 3.4.0, but the Full Agent project metadata is not uniform: Standalone, PowerToys Run and Command Palette remain at 3.3.1 (Command Palette MSIX identity 3.3.1.0), while Runner is 3.4.0. Treat this as an open release metadata task; do not infer one common installed-file version from the source ZIP label.
+The current source version is **3.4.1**. All four host projects declare `3.4.1`; the PowerToys Run plugin manifest, MCP client identification and Runner uninstall display metadata also use `3.4.1`. Command Palette uses the required four-part MSIX project/package identity `3.4.1.0`. A portable regression test checks these declarations together. Generated assembly/package metadata and install/update behavior still require validation on Windows.
 
 ## Repository hygiene
 

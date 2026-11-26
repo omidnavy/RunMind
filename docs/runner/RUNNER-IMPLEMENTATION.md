@@ -18,7 +18,7 @@ The initial first-party plugin set is:
 - **Calculator** — a local, bounded recursive-descent arithmetic parser. It never uses `eval`, `Function`, shell parsing or model inference; the selected result copies the calculated value.
 - **RunMind** — the inline-answer plugin. It follows the PowerToys Run action-keyword convention and activates only for `llm <prompt>`. Ordinary searches such as `notepad` remain ordinary launcher searches. The result stays inside Runner and streams the answer in its dedicated pane. `> model > prompt` overrides the default model, matching the existing inline provider syntax.
 
-Future RunMind first-party launcher features can implement the same internal contract and register with the registry without changing the Runner shell. This 3.4.0 implementation does not load arbitrary third-party DLLs, scripts or remote plugin packages.
+Future RunMind first-party launcher features can implement the same internal contract and register with the registry without changing the Runner shell. The Runner implementation introduced in 3.4.0 and carried forward in 3.4.1 does not load arbitrary third-party DLLs, scripts or remote plugin packages.
 
 For an explicit `llm <prompt>` query, the registry returns the RunMind result rather than mixing in unrelated application/path matches. Model requests are debounced, cancellable, bounded by configured timeouts and response limits, and never start for unrelated launcher text. A new search cancels the previous request. Selecting the RunMind result focuses the inline response; it does not unexpectedly open a second window.
 

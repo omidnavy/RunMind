@@ -99,11 +99,14 @@ test('ChatWindow CSP no longer permits inline JavaScript execution', () => {
   assert.match(chatWindow, /<script src=/);
 });
 
-test('all three hosts publish the same stabilization version', () => {
-  assert.match(read('RunMind.Standalone/RunMind.Standalone.csproj'), /<Version>3\.3\.1<\/Version>/);
-  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/Community.PowerToys.Run.Plugin.RunMind.csproj'), /<Version>3\.3\.1<\/Version>/);
-  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"3\.3\.1"/);
-  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<Version>3\.3\.1<\/Version>/);
-  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>3\.3\.1\.0<\/AppxPackageVersion>/);
-  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="3\.3\.1\.0"/);
+test('all four hosts publish the same 3.4.1 product version and package identities', () => {
+  for (const project of [
+    'RunMind.Standalone/RunMind.Standalone.csproj',
+    'Community.PowerToys.Run.Plugin.RunMind/Community.PowerToys.Run.Plugin.RunMind.csproj',
+    'RunMind.CommandPalette/RunMind.CommandPalette.csproj',
+    'RunMind.Runner/RunMind.Runner.csproj'
+  ]) assert.match(read(project), /<Version>3\.4\.1<\/Version>/, project);
+  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"3\.4\.1"/);
+  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>3\.4\.1\.0<\/AppxPackageVersion>/);
+  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="3\.4\.1\.0"/);
 });

@@ -14,7 +14,7 @@
     <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>RunMind.Runner</RootNamespace>
-    <Version>3.4.0</Version>
+    <Version>3.4.1</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Exclude retired Runner chat artifacts left behind by in-place source extraction. -->

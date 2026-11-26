@@ -1,6 +1,6 @@
 # RunMind Runner — Window, Monitor, Sizing and Ranking
 
-This document records the Runner window and settings behavior added to the consolidated 3.4.0 Runner source.
+This document records Runner window and settings behavior introduced in the 3.4.0 Runner feature line and retained in the 3.4.1 source.
 
 ## Window interaction
 

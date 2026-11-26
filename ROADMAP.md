@@ -2,7 +2,7 @@
 
 This roadmap describes current priorities. Completed milestones and implementation snapshots live in [the archive](docs/archive/README.md), not in this file.
 
-## Current release line: 3.4.0
+## Current release line: 3.4.1
 
 RunMind has four access points: Standalone, PowerToys Run, Command Palette and Runner. The first three host the Full Agent. Runner is a separate restricted Quick Host. Current major capabilities include Project Intelligence, Change Impact Explorer v2, Deep Research, Agent orchestration/checkpoints, Developer Infrastructure, System Manager, Live Resource Intelligence, Process Intelligence, MCP/Skills and unified Runner search.
 

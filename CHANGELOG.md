@@ -2,6 +2,14 @@
 
 This file records product-level milestones, not every implementation patch. Detailed historical entries are retained in [the archived changelog](docs/archive/historical-changelog/CHANGELOG-DETAILED-HISTORY.md).
 
+## 3.4.1 — Release metadata alignment and repository front page
+
+- Unified the four host project versions at `3.4.1`, the PowerToys Run plugin and Runner installer metadata at `3.4.1`, and the Command Palette MSIX project/package identity at `3.4.1.0`.
+- Updated the MCP client identification version to `3.4.1` so remote MCP servers receive the current client version.
+- Expanded the host-version regression check to cover all four projects, plugin manifest, MSIX identity, MCP client identification and Runner uninstall display metadata.
+- Rebuilt the GitHub README as the repository front page, restoring all bundled screenshots with clear historical-capture labels and adding practical product, host, integration, security, build and documentation guidance.
+- No new application feature or behavioral change is intended in this release; native Windows build and acceptance remain required before binary-release certification.
+
 ## 3.4.0 — Runner and intelligence expansion
 
 - Added the optional Runner Quick Host with unified launcher search, inline model answers, configurable activation/ranking, dynamic sizing and Full Chat handoff.
