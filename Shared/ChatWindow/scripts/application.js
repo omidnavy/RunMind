@@ -481,6 +481,7 @@
     document.querySelectorAll('[data-system-manager-tab]').forEach(button => {
       button.addEventListener('click', () => setSystemManagerTab(button.dataset.systemManagerTab || 'settings'));
     });
+    setSystemManagerTab('settings');
     $('#refreshSystemManagerAdapters')?.addEventListener('click', () => { void loadSystemManagerAdapters(); });
     $('#installSystemManagerAdapter')?.addEventListener('click', () => { void installSystemManagerAdapterFromUi(); });
     $('#systemManagerAdapterList')?.addEventListener('click', event => {

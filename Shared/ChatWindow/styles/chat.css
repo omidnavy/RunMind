@@ -117,6 +117,7 @@
     .agent-settings-tab[aria-selected="true"] > span { background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)); color: var(--color-accent); }
     .agent-settings-page { display: flex; flex-direction: column; gap: 11px; min-width: 0; }
     .agent-settings-page[hidden] { display: none !important; }
+    .agent-settings-card[hidden] { display: none !important; }
     .agent-settings-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); }
     .agent-settings-card-heading h3, .agent-settings-card > h3 { margin: 0; color: var(--color-text); font-size: 12px; font-weight: 750; line-height: 1.3; }
     .agent-settings-card-heading p, .agent-settings-card > p { margin: 4px 0 0; color: var(--color-muted); font-size: 10px; line-height: 1.45; }
@@ -804,6 +805,6 @@
 #developerWorkflowContext { width: 100%; min-height: 76px; resize: vertical; }
 
     #systemManagerMenu .toolbar-panel { max-height: min(760px, calc(100vh - 24px)); }
-    #systemManagerSettingsPage { max-height: min(620px, calc(100vh - 190px)); overflow-y: auto; overscroll-behavior: contain; padding-right: 3px; }
+    #systemManagerSettingsPage { max-height: none; overflow: visible; padding-right: 0; }
     #systemManagerAdaptersCard .capability-list { max-height: min(330px, 42vh); overflow-y: auto; overscroll-behavior: contain; padding-right: 3px; }
     .system-manager-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
