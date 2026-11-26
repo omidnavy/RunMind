@@ -41,11 +41,15 @@ Example theme header:
 
 For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
 
-## RunMind 2.7.0 — P0 foundation
+## RunMind 2.8.1 — P1 Project Intelligence and Mission Control refinement
 
-RunMind 2.7.0 completes the P0 source implementation for unified workspace selection, Agent tool reliability, development-server ownership recovery, and Playwright browser-policy diagnostics. The portable Node integration/contract suite has 156 passing tests under Node.js 22.16.0. The Windows validation script requires Node.js 24+ and the .NET 10 SDK and builds all three hosts; run it on Windows before treating the release as target-machine certified. See `docs/P0-IMPLEMENTATION-AUDIT.md` for the requirement-by-requirement source audit and `docs/P0-WINDOWS-ACCEPTANCE.md` for the remaining target-machine gate.
+RunMind 2.8.1 builds on the P0 foundation and refines the P1 project-intelligence implementation: richer Project Understanding, operational Project Diagnostics, Project Mission Control, Test Impact Analysis, and static Release Readiness. The persistent index and one canonical workspace remain shared across Standalone, PowerToys Run and Command Palette.
 
-Project-language analysis and project-specific developer workflows are intentionally scoped to **JavaScript, TypeScript, JSX/TSX, HTML and CSS**. Other source files may be read and searched as generic text, but this release does not perform language-aware parsing, dependency inventory, toolchain discovery, debugging or build/test workflows for other programming languages.
+Project Mission Control is available in Agent Settings and through Agent Mode. It reports index freshness/completeness, architecture evidence, detailed diagnostics, release criteria and prioritized recommendations; a stale index is incrementally refreshed when possible. The Settings dashboard accepts explicit changed paths for Test Impact Analysis, which uses the static JS/TS import graph to select JS/TS tests; unsupported file types are reported as unanalysed, confidence is labeled, and tests are never run automatically. Release Readiness reports static evidence separately from Git status, actual builds/tests, live dependency audits, signing, packaging and publication. These tools are read-only and do not install packages or mutate release metadata.
+
+P1 does not expand the agreed project-language scope: language-aware project analysis and project-specific tooling remain limited to **JavaScript, TypeScript, JSX/TSX, HTML and CSS**. Other source files remain available for generic reading and search only.
+
+The Mission Control report contract and freshness/safety behavior are documented in `docs/PROJECT-MISSION-CONTROL.md`. The portable suite and source checks are recorded in `BUILD-STATUS.md`. P0 target-Windows certification remains a separate gate: run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete `docs/P0-WINDOWS-ACCEPTANCE.md`. Do not treat a portable test pass as Windows certification.
 
 ## Built-in capabilities and tool catalog
 

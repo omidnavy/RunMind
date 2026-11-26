@@ -1,3 +1,26 @@
+## 2.8.1 — Project Mission Control refinement
+
+- Reworked Project Mission Control into a structured, evidence-backed report shared by Agent Core and the Agent Settings dashboard.
+- Added index freshness/completeness reporting and automatic incremental refresh when the index is older than five minutes.
+- Added severity-prioritized and de-duplicated recommendations with supporting workspace-relative evidence.
+- Exposed module boundaries, entry-point candidates, coupling examples, circular dependency paths and analysis coverage.
+- Displayed detailed static diagnostics, release criteria, suggested-but-not-executed commands and unverified release gates.
+- Added optional workspace-relative changed paths to Settings for explicit JavaScript/TypeScript Test Impact Analysis.
+- Kept rendering text-only through safe DOM APIs and `textContent`; project evidence is never inserted as HTML.
+- Added behavior tests for stale-index refresh, status classification, recommendation priority, changed-path propagation and the static-only safety boundary.
+- Portable suite: **177/177 passed**; JavaScript/CJS/MJS syntax: **42/42 passed**; JSON: **4/4 parsed**; XML-family: **7/7 parsed**. Windows/.NET certification remains pending.
+
+## 2.8.0 — P1 Project Intelligence
+
+- Expanded Project Understanding with module boundaries, package/HTML entry-point candidates, dependency direction, high-coupling modules, circular/unresolved import evidence and explicit parser/index coverage.
+- Added separate static Project Diagnostics for malformed manifests, npm package-lock root metadata mismatch, package-manager/lockfile conflicts, scripts, tooling configuration, test discovery, source parse errors, unresolved imports, cycles and truncated indexes.
+- Added Project Mission Control as a consolidated dashboard in Agent Settings and as an Agent tool/workflow.
+- Added Test Impact Analysis for explicit changed paths, using reverse import dependencies to identify direct and transitive tests; filename-only matches are low-confidence and no tests are executed.
+- Added static Release Readiness checks for version/changelog/README/CI/test/lockfile/build/test-script hygiene, with explicit unverified gates for Git, live audits, builds/tests, signing, SBOM, packaging and publishing.
+- Preserved the P0 single-workspace, Agent reliability, server ownership and browser policy foundations.
+- Project-specific language-aware analysis remains limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS.
+- Portable suite: **167/167 passed**; JavaScript/CJS/MJS syntax: **41/41 passed**; JSON: **4/4 parsed**; XML-family: **6/6 parsed**. Windows/.NET certification remains pending.
+
 ## 2.7.0 — P0 Foundation & Reliability
 
 - Unified Agent file access and native project operations behind one native-host-owned workspace root per conversation. Added a bounded file RPC with relative path validation, reparse-point rejection, chunked reads/writes, atomic commit, stale workspace-ID rejection and pending-write cleanup. Persisted workspace identity is revalidated across RunMind host processes and protected by an exclusive metadata lock.

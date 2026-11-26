@@ -332,10 +332,16 @@
                 <div class="agent-settings-card-heading"><div><h3>Project intelligence</h3><p>RunMind automatically builds this local index when you select a workspace and checks for changes every 60 seconds while the chat is visible. Manual refresh remains available; credentials, secrets, binaries, and generated/dependency folders are excluded.</p></div></div>
                 <div class="agent-settings-actions agent-settings-actions-wrap">
                   <button type="button" class="button primary" id="buildProjectIndex">Build / refresh index</button>
+                  <button type="button" class="button" id="runProjectMissionControl">Run Mission Control</button>
                   <button type="button" class="button" id="cancelProjectIndex" disabled>Cancel indexing</button>
                   <button type="button" class="setting-reset" id="clearProjectIndex">Clear index</button>
                 </div>
+                <div class="setting-field project-mission-control-input">
+                  <label for="projectMissionControlChangedPaths">Changed files for Test Impact Analysis <span class="agent-settings-optional">(optional · one workspace-relative path per line)</span></label>
+                  <textarea id="projectMissionControlChangedPaths" rows="3" maxlength="12000" placeholder="src/services/auth.js&#10;src/components/login.tsx"></textarea>
+                </div>
                 <p class="agent-settings-status" id="projectIndexStatus" aria-live="polite">No project index loaded.</p>
+                <section class="project-mission-control" id="projectMissionControl" role="region" aria-label="Project Mission Control results" aria-live="polite" hidden></section>
               </section>
               <section class="agent-settings-card">
                 <div class="agent-settings-card-heading"><div><h3>Developer workflows</h3><p>Reusable project tasks run through the existing Agent runtime. Custom workflows are stored with this workspace context.</p></div></div>

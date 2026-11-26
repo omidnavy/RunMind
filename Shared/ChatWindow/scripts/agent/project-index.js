@@ -965,6 +965,323 @@
       return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,toolchains:index.toolchains||null,analysis:{acornFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('acorn')).length,typescriptCompilerFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('typescript-compiler-api')).length,typescriptProgramFiles:index.importGraph?.compilerAnalysis?.filesAnalyzed||0,typescriptCrossFileReferences:index.importGraph?.compilerAnalysis?.crossFileReferences||0,callSites:index.files.reduce((sum,item)=>sum+(item.calls?.length||0),0),parseErrors:index.files.filter(item=>item.parseError).length,regexFallbackFiles:index.files.filter(item=>item.analysisEngine==='regex-fallback').length},compilerAnalysis:index.importGraph?.compilerAnalysis||null,importGraph:index.importGraph?{localImportEdges:index.importGraph.localImportEdges.length,resolvedBindings:index.importGraph.resolvedBindings?.length||0,unresolvedBindings:index.importGraph.unresolvedBindings?.length||0,circularDependencies:index.importGraph.circularDependencies?.length||0,externalImports:index.importGraph.externalImports?.length||0,filesWithIncomingImports:index.importGraph.filesWithIncomingImports,note:index.importGraph.note}:null,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
     }
 
+    function projectIndexNormalizePath(value) {
+      return String(value || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/{2,}/g, '/').replace(/\/$/, '');
+    }
+    function projectIndexPackageData(index) {
+      const records = [];
+      for (const item of index?.manifests || []) {
+        if (item.path.split('/').pop().toLowerCase() !== 'package.json') continue;
+        try { records.push({ path: item.path, data: JSON.parse(item.text) }); } catch (_) { /* Diagnostics reports malformed package manifests. */ }
+      }
+      return records;
+    }
+    function projectIndexBuildUnderstanding(index) {
+      if (!index) return { available: false, message: 'Build the project index before requesting Project Understanding.' };
+      const files = Array.isArray(index.files) ? index.files : [];
+      const edges = index.importGraph?.localImportEdges || [];
+      const incoming = new Map(), outgoing = new Map();
+      for (const edge of edges) {
+        incoming.set(edge.to, (incoming.get(edge.to) || 0) + 1);
+        outgoing.set(edge.from, (outgoing.get(edge.from) || 0) + 1);
+      }
+      const topLevel = new Map();
+      for (const file of files) {
+        const segment = file.path.includes('/') ? file.path.split('/')[0] : '(root)';
+        const row = topLevel.get(segment) || { directory: segment, files: 0, javascript: 0, typescript: 0, html: 0, css: 0 };
+        row.files++;
+        if (Object.hasOwn(row, file.language)) row[file.language]++;
+        topLevel.set(segment, row);
+      }
+      const packageRecords = projectIndexPackageData(index);
+      const entryPoints = [];
+      for (const { path, data } of packageRecords) {
+        const dir = path.split('/').slice(0, -1).join('/');
+        for (const field of ['main', 'module', 'browser', 'types', 'typings']) if (typeof data[field] === 'string') entryPoints.push({ path: [dir, data[field]].filter(Boolean).join('/'), source: `${path}#${field}`, confidence: 'declared' });
+        if (typeof data.source === 'string') entryPoints.push({ path: [dir, data.source].filter(Boolean).join('/'), source: `${path}#source`, confidence: 'declared' });
+        const collectExportTargets = value => {
+          if (typeof value === 'string') return value.startsWith('./') ? [value] : [];
+          if (Array.isArray(value)) return value.flatMap(collectExportTargets);
+          if (value && typeof value === 'object') return Object.values(value).flatMap(collectExportTargets);
+          return [];
+        };
+        for (const target of collectExportTargets(data.exports).slice(0, 50)) entryPoints.push({ path: [dir, target].filter(Boolean).join('/'), source: `${path}#exports`, confidence: 'conditional-export-candidate' });
+        for (const [script, command] of Object.entries(data.scripts || {})) if (['start', 'dev', 'serve'].includes(script)) entryPoints.push({ path, source: `${path}#scripts.${script}`, command: String(command).slice(0, 180), confidence: 'script-declared' });
+      }
+      for (const file of files) {
+        if (/^(?:index|main|app)\.(?:html?)$/i.test(file.path.split('/').pop())) entryPoints.push({ path: file.path, source: 'HTML entry candidate', confidence: 'candidate' });
+        if (file.language === 'html' && typeof file.text === 'string') {
+          const scriptPattern = /<script\b[^>]*\bsrc\s*=\s*[\"']([^\"']+)[\"'][^>]*>/gi;
+          const stylePattern = /<link\b[^>]*\brel\s*=\s*[\"']stylesheet[\"'][^>]*\bhref\s*=\s*[\"']([^\"']+)[\"'][^>]*>/gi;
+          for (const [pattern, kind] of [[scriptPattern, 'HTML script reference'], [stylePattern, 'HTML stylesheet reference']]) {
+            let match; while ((match = pattern.exec(file.text)) && entryPoints.length < 200) if (!/^(?:https?:|data:|\/\/|#)/i.test(match[1])) entryPoints.push({ path: match[1], source: `${file.path} · ${kind}`, confidence: 'heuristic-candidate' });
+          }
+        }
+      }
+      const uniqueEntries = [...new Map(entryPoints.map(item => [`${item.path}|${item.source}`, item])).values()].slice(0, 100);
+      const modules = [...topLevel.values()].sort((a, b) => b.files - a.files || a.directory.localeCompare(b.directory)).slice(0, 100);
+      const hotspots = files.map(file => ({ path: file.path, incomingImports: incoming.get(file.path) || 0, outgoingImports: outgoing.get(file.path) || 0, symbols: (file.symbols || []).length, calls: (file.calls || []).length }))
+        .filter(item => item.incomingImports >= 2 || item.outgoingImports >= 8).sort((a, b) => (b.incomingImports + b.outgoingImports) - (a.incomingImports + a.outgoingImports)).slice(0, 40);
+      return {
+        available: true, root: index.rootName, indexedAt: index.updatedAt,
+        scope: 'Language-aware architecture analysis is limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Other source files are generic text only. HTML reference candidates come from normalized search text and must be checked in the original HTML before use.',
+        modules, entryPoints: uniqueEntries,
+        dependencyDirection: { localImportEdges: edges.length, resolvedBindings: index.importGraph?.resolvedBindings?.length || 0, unresolvedBindings: index.importGraph?.unresolvedBindings?.length || 0, circularDependencies: index.importGraph?.circularDependencies || [], note: index.importGraph?.note || '' },
+        highCouplingModules: hotspots,
+        boundaries: modules.map(item => item.directory),
+        analysisCoverage: { indexedFiles: files.length, javascriptFiles: files.filter(item => item.language === 'javascript').length, typescriptFiles: files.filter(item => item.language === 'typescript').length, htmlFiles: files.filter(item => item.language === 'html').length, cssFiles: files.filter(item => item.language === 'css').length, parseErrors: files.filter(item => item.parseError).map(item => ({ path: item.path, ...item.parseError })).slice(0, 100), indexTruncated: !!index.stats?.truncated }
+      };
+    }
+    function projectIndexBuildDiagnostics(index) {
+      if (!index) return { available: false, message: 'Build the project index before running Project Diagnostics.' };
+      const checks = [], scripts = {}, testFiles = (index.files || []).filter(file => ['javascript', 'typescript'].includes(file.language) && /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$/i.test(file.path)).map(file => file.path).slice(0, 200);
+      const add = (id, severity, message, evidence = []) => checks.push({ id, severity, message, evidence: evidence.slice(0, 20) });
+      const packageRecords = [];
+      for (const item of index.manifests || []) {
+        if (item.path.toLowerCase().endsWith('package.json')) {
+          try {
+            const data = JSON.parse(item.text);
+            if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('package.json must contain a JSON object.');
+            packageRecords.push({ path: item.path, data });
+            if (data.scripts !== undefined && (!data.scripts || typeof data.scripts !== 'object' || Array.isArray(data.scripts))) add('invalid-package-scripts', 'error', 'package.json scripts must be an object of string commands.', [item.path]);
+            if (data.scripts && typeof data.scripts === 'object' && !Array.isArray(data.scripts)) for (const [key, value] of Object.entries(data.scripts).slice(0, 60)) {
+              if (typeof value !== 'string') add('invalid-package-script', 'error', `package.json script '${key}' must be a string.`, [item.path]);
+              if (item.path === 'package.json') scripts[key] = String(value).slice(0, 300);
+            }
+            for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) if (data[field] !== undefined && (!data[field] || typeof data[field] !== 'object' || Array.isArray(data[field]))) add('invalid-package-dependencies', 'error', `package.json ${field} must be an object.`, [item.path]);
+            if (data.engines?.node && typeof data.engines.node === 'string') add('node-engine-declared', 'info', `Node.js requirement declared: ${data.engines.node}`, [item.path]);
+            if (data.packageManager && !/^(?:npm|pnpm|yarn|bun)@/i.test(data.packageManager)) add('unsupported-package-manager-declaration', 'warning', `Unrecognized packageManager declaration '${String(data.packageManager).slice(0, 100)}'.`, [item.path]);
+          } catch (error) { add('invalid-package-json', 'error', `Invalid package.json: ${String(error.message || error).slice(0, 240)}`, [item.path]); }
+        } else if (item.path.toLowerCase().endsWith('.json')) {
+          try { JSON.parse(item.text); } catch (error) { add('invalid-json-manifest', 'error', `Invalid JSON manifest: ${String(error.message || error).slice(0, 240)}`, [item.path]); }
+        }
+      }
+      const manager = index.toolchains?.packageManager || null;
+      const lockfiles = index.toolchains?.lockfiles || [];
+      const rootPackage = packageRecords.find(item => item.path === 'package.json')?.data || null;
+      const packageLock = (index.manifests || []).find(item => item.path.toLowerCase() === 'package-lock.json');
+      if (packageLock && rootPackage) {
+        try {
+          const lock = JSON.parse(packageLock.text);
+          const lockRoot = lock.packages?.[''] || lock;
+          if (lockRoot.name && rootPackage.name && lockRoot.name !== rootPackage.name) add('package-lock-name-mismatch', 'error', 'package-lock.json root package name does not match package.json.', ['package.json', 'package-lock.json']);
+          if (lockRoot.version && rootPackage.version && lockRoot.version !== rootPackage.version) add('package-lock-version-mismatch', 'error', 'package-lock.json root package version does not match package.json.', ['package.json', 'package-lock.json']);
+        } catch (_) { /* The invalid JSON manifest check above reports parse failures. */ }
+      }
+      const lockManagers = [...new Set(lockfiles.map(item => item.manager))];
+      if (lockManagers.length > 1) add('multiple-lockfile-managers', 'warning', 'Multiple package-manager lockfiles exist; deterministic installs may depend on which manager is used.', lockfiles.map(item => item.file));
+      if (index.toolchains?.conflictingPackageManagerSignals) add('package-manager-conflict', 'error', 'package.json packageManager declaration conflicts with one or more detected lockfiles.', lockfiles.map(item => item.file));
+      if (packageRecords.length && !manager) add('package-manager-ambiguous', lockManagers.length > 1 ? 'warning' : 'warning', 'A package.json exists, but no single package manager can be selected confidently.', packageRecords.map(item => item.path));
+      if (!lockfiles.length && packageRecords.length) add('lockfile-missing', 'warning', 'No npm, pnpm, Yarn or Bun lockfile was found; reproducible dependency installation is not established by the index.');
+      if (!Object.keys(scripts).length && packageRecords.length) add('package-scripts-missing', 'warning', 'The root package manifest declares no scripts.');
+      for (const required of ['build', 'test']) if (Object.hasOwn(scripts, required)) add(`script-${required}`, 'info', `A '${required}' script is declared.`, ['package.json']);
+      if (!testFiles.length) add('tests-not-discovered', 'warning', 'No conventional JavaScript/TypeScript test files were discovered. Tests may use a non-standard layout or be absent.');
+      if (testFiles.length) add('tests-discovered', 'info', `${testFiles.length} test files were discovered.`, testFiles.slice(0, 20));
+      const parseErrors = (index.files || []).filter(file => file.parseError).map(file => file.path);
+      if (parseErrors.length) add('source-parse-errors', 'warning', `${parseErrors.length} supported-language source files could not be parsed.`, parseErrors);
+      const unresolved = index.importGraph?.unresolvedBindings || [];
+      if (unresolved.length) add('unresolved-imports', 'warning', `${unresolved.length} local/package import bindings remain unresolved by static analysis.`, unresolved.slice(0, 20).map(item => `${item.from}: ${item.source}`));
+      const cycles = index.importGraph?.circularDependencies || [];
+      if (cycles.length) add('circular-dependencies', 'warning', `${cycles.length} circular dependency groups were detected.`, cycles.slice(0, 20).map(item => item.join(' → ')));
+      if (index.stats?.truncated) add('index-truncated', 'warning', `Project index is partial: ${index.stats.reason || 'scan limit reached'}.`);
+      const configs = (index.files || []).map(file => file.path).filter(path => /(?:^|\/)(?:tsconfig(?:\.[^/]+)?\.json|eslint\.config\.[^/]+|\.eslintrc(?:\.[^/]+)?|biome\.jsonc?|stylelint\.config\.[^/]+|playwright\.config\.[^/]+|vite\.config\.[^/]+|webpack\.config\.[^/]+)$/i.test(path));
+      if (configs.length) add('tooling-configurations', 'info', `${configs.length} JavaScript/TypeScript tooling configuration files were found.`, configs);
+      const hasTypeScript = (index.files || []).some(file => file.language === 'typescript');
+      if (hasTypeScript && !configs.some(path => /(?:^|\/)tsconfig(?:\.[^/]+)?\.json$/i.test(path))) add('typescript-config-missing', 'warning', 'TypeScript source files exist, but no tsconfig.json was discovered.');
+      const errorCount = checks.filter(item => item.severity === 'error').length;
+      const warningCount = checks.filter(item => item.severity === 'warning').length;
+      return { available: true, root: index.rootName, indexedAt: index.updatedAt, status: errorCount ? 'issues-found' : warningCount ? 'attention' : 'healthy', summary: { errors: errorCount, warnings: warningCount, information: checks.length - errorCount - warningCount }, checks, packageManager: manager, lockfiles, packageScripts: scripts, testFilesFound: testFiles.length, testFiles, toolingConfigurations: configs, execution: { performed: false, environmentProbes: false, build: false, tests: false, dependencyAudit: false }, limitations: ['Static checks use indexed manifests and source metadata only.', 'Installed Node.js/package-manager versions and actual build/test/audit results require a separate approved native execution.', 'Only JavaScript, TypeScript, JSX/TSX, HTML and CSS receive language-aware project analysis.'] };
+    }
+    function projectIndexAnalyzeTestImpact(index, changedPaths = []) {
+      if (!index) return { available: false, message: 'Build the project index before analyzing test impact.' };
+      const changed = [...new Set((Array.isArray(changedPaths) ? changedPaths : [changedPaths]).map(projectIndexNormalizePath).filter(Boolean))].slice(0, 100);
+      if (!changed.length) throw new Error('Provide one or more workspace-relative changed_paths. This analysis does not infer a Git diff.');
+      const filesByPath = new Map((index.files || []).map(file => [file.path, file]));
+      const existing = changed.filter(path => filesByPath.has(path));
+      const unknown = changed.filter(path => !filesByPath.has(path));
+      const analyzed = existing.filter(path => ['javascript', 'typescript'].includes(filesByPath.get(path)?.language));
+      const unanalysed = existing.filter(path => !['javascript', 'typescript'].includes(filesByPath.get(path)?.language));
+      const edges = index.importGraph?.localImportEdges || [];
+      const reverse = new Map();
+      for (const edge of edges) { const list = reverse.get(edge.to) || []; list.push(edge.from); reverse.set(edge.to, list); }
+      const impacted = new Set(analyzed), queue = [...analyzed];
+      while (queue.length && impacted.size < 2000) {
+        const target = queue.shift();
+        for (const importer of reverse.get(target) || []) if (!impacted.has(importer)) { impacted.add(importer); queue.push(importer); }
+      }
+      const testPattern = /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$/i;
+      const testFiles = (index.files || []).filter(file => ['javascript', 'typescript'].includes(file.language) && testPattern.test(file.path));
+      const directTests = [], transitiveTests = [], nameCandidates = [];
+      for (const test of testFiles) {
+        if (existing.includes(test.path)) { directTests.push({ path: test.path, reason: 'The changed file is itself a discovered test.', confidence: 'direct' }); continue; }
+        const directEdges = edges.filter(edge => edge.from === test.path && analyzed.includes(edge.to));
+        if (directEdges.length) { directTests.push({ path: test.path, reason: `Directly imports changed module(s): ${directEdges.map(edge => edge.to).join(', ')}`, confidence: 'high' }); continue; }
+        if (impacted.has(test.path)) { transitiveTests.push({ path: test.path, reason: 'Imports a module that transitively depends on a changed file.', confidence: 'medium' }); continue; }
+        const testBase = test.path.split('/').pop().replace(/\.(?:test|spec)\.[^.]+$/i, '').toLowerCase();
+        const changedBases = analyzed.map(path => path.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase());
+        if (changedBases.some(base => base && (testBase === base || testBase.includes(base) || base.includes(testBase)))) nameCandidates.push({ path: test.path, reason: 'Filename similarity only; inspect before running.', confidence: 'low' });
+      }
+      const selected = [...directTests, ...transitiveTests, ...nameCandidates].slice(0, 200);
+      return { available: true, changedPaths: changed, matchedChangedPaths: existing, analyzedChangedPaths: analyzed, unanalysedChangedPaths: unanalysed, unknownChangedPaths: unknown, impactedModules: [...impacted].slice(0, 500), impactedModuleCount: impacted.size, tests: selected, summary: { analyzedChanges: analyzed.length, unanalysedChanges: unanalysed.length, unknownChanges: unknown.length, highConfidence: directTests.length, mediumConfidence: transitiveTests.length, lowConfidence: nameCandidates.length, recommendedTests: selected.length }, executionPerformed: false, note: 'Impact is derived only for JavaScript/TypeScript changed files from the indexed static import graph. Other indexed file types are reported as unanalysed. Dynamic imports, runtime-generated dependencies, test discovery conventions outside the indexed patterns, and external test harness behavior may be missed. No tests were executed.' };
+    }
+    function projectIndexBuildReleaseReadiness(index, diagnostics = null) {
+      if (!index) return { available: false, message: 'Build the project index before assessing release readiness.' };
+      const diagnostic = diagnostics || projectIndexBuildDiagnostics(index);
+      const files = (index.files || []).map(file => file.path);
+      const packageRecords = projectIndexPackageData(index);
+      const rootPackage = packageRecords.find(item => item.path === 'package.json');
+      const version = typeof rootPackage?.data?.version === 'string' ? rootPackage.data.version : null;
+      const changelog = files.find(path => /^changelog(?:\.[^/]+)?$/i.test(path.split('/').pop())) || null;
+      const readme = files.find(path => /^readme(?:\.[^/]+)?$/i.test(path.split('/').pop())) || null;
+      const ciFiles = files.filter(path => /(?:^|\/)(?:\.github\/workflows\/|\.gitlab-ci\.yml$|azure-pipelines\.yml$|\.circleci\/config\.yml$)/i.test(path));
+      const testFiles = diagnostic.testFiles || [];
+      const checks = [];
+      const add = (id, status, message, evidence = []) => checks.push({ id, status, message, evidence });
+      const validVersion = !!version && /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version);
+      add('version', !version ? 'warning' : validVersion ? 'pass' : 'fail', !version ? 'No root package version was found in package.json.' : validVersion ? `Root package version is ${version}.` : `Root package version '${version}' is not valid SemVer.`, version ? ['package.json'] : []);
+      const changelogRecord = changelog ? (index.files || []).find(file => file.path === changelog) : null;
+      add('changelog', changelog ? (version && changelogRecord?.text?.includes(version.toLowerCase()) ? 'pass' : 'warning') : 'warning', changelog ? (version && changelogRecord?.text?.includes(version.toLowerCase()) ? 'Changelog references the current package version.' : 'A changelog exists, but the current package version was not found in its indexed text.') : 'No conventional changelog file was found.', changelog ? [changelog] : []);
+      add('readme', readme ? 'pass' : 'warning', readme ? 'A README file is present.' : 'No README file was found.', readme ? [readme] : []);
+      add('tests', testFiles.length ? 'pass' : 'warning', testFiles.length ? `${testFiles.length} test files were discovered.` : 'No conventional test files were discovered.', testFiles.slice(0, 20));
+      add('ci', ciFiles.length ? 'pass' : 'warning', ciFiles.length ? `${ciFiles.length} CI configuration files were found.` : 'No recognized CI configuration was found.', ciFiles.slice(0, 20));
+      add('lockfiles', diagnostic.packageManager && diagnostic.lockfiles.length ? 'pass' : 'warning', diagnostic.packageManager ? `Package manager selected: ${diagnostic.packageManager}.` : 'Package manager/lockfile is not unambiguous.', diagnostic.lockfiles.map(item => item.file));
+      add('static-diagnostics', diagnostic.summary.errors ? 'fail' : diagnostic.summary.warnings ? 'warning' : 'pass', `${diagnostic.summary.errors} errors and ${diagnostic.summary.warnings} warnings from Project Diagnostics.`);
+      add('build-script', diagnostic.packageScripts?.build ? 'pass' : 'warning', diagnostic.packageScripts?.build ? 'A build script is declared.' : 'No root build script was found.');
+      add('test-script', diagnostic.packageScripts?.test ? 'pass' : 'warning', diagnostic.packageScripts?.test ? 'A test script is declared.' : 'No root test script was found.');
+      const blockers = checks.filter(item => item.status === 'fail').length;
+      const warnings = checks.filter(item => item.status === 'warning').length;
+      const manager = diagnostic.packageManager;
+      const suggestedCommands = {};
+      for (const script of ['build', 'test']) if (diagnostic.packageScripts?.[script] && manager) suggestedCommands[script] = manager === 'npm' ? `npm run ${script}` : manager === 'yarn' ? `yarn ${script}` : `${manager} run ${script}`;
+      return { available: true, root: index.rootName, version, status: blockers ? 'blocked' : warnings ? 'not-yet-ready' : 'static-checks-passed', summary: { blockers, warnings, passed: checks.filter(item => item.status === 'pass').length }, checks, packageManager: manager || null, scriptDefinitions: { build: diagnostic.packageScripts?.build || null, test: diagnostic.packageScripts?.test || null }, suggestedCommands, executionPerformed: false, notVerified: ['Git working-tree cleanliness and uncommitted changes.', 'Actual .NET/Node/package-manager builds and test execution.', 'Dependency vulnerability audit against a live registry.', 'Artifact signing, provenance, SBOM, and publish/deploy permissions.', 'Target operating-system packaging and runtime acceptance.'], note: 'This is a static release-readiness assessment, not release approval. It does not create tags, commits, packages, signatures, or publications.' };
+    }
+    async function getProjectMissionControl({ changedPaths = [], refreshIfStale = true } = {}) {
+      if (typeof projectIndexAutoRefreshPromise !== 'undefined' && projectIndexAutoRefreshPromise) await projectIndexAutoRefreshPromise;
+      let index = await loadProjectIndex();
+      if (!index) return { available: false, message: 'Build the project index before opening Project Mission Control.' };
+
+      const staleAfterMs = 5 * 60 * 1000;
+      const getIndexAge = value => {
+        const timestamp = Date.parse(value || '');
+        return Number.isFinite(timestamp) ? Math.max(0, Date.now() - timestamp) : null;
+      };
+      let ageMs = getIndexAge(index.updatedAt);
+      const refresh = { attempted: false, succeeded: false, reason: null, error: null };
+      if (refreshIfStale && (ageMs === null || ageMs > staleAfterMs)) {
+        refresh.attempted = true;
+        refresh.reason = ageMs === null ? 'index timestamp unavailable' : 'index older than five minutes';
+        try {
+          await buildProjectIndex({ force: false });
+          const refreshed = await loadProjectIndex();
+          if (refreshed) { index = refreshed; refresh.succeeded = true; }
+        } catch (error) {
+          refresh.error = String(error?.message || error).slice(0, 400);
+        }
+        ageMs = getIndexAge(index.updatedAt);
+      }
+
+      const diagnostics = projectIndexBuildDiagnostics(index);
+      const readiness = projectIndexBuildReleaseReadiness(index, diagnostics);
+      const understanding = projectIndexBuildUnderstanding(index);
+      const normalizedChangedPaths = [...new Set((Array.isArray(changedPaths) ? changedPaths : [])
+        .map(value => String(value || '').trim()).filter(Boolean))].slice(0, 100);
+      const impact = normalizedChangedPaths.length ? projectIndexAnalyzeTestImpact(index, normalizedChangedPaths) : null;
+      const stats = index.stats || {};
+      const coverage = understanding.analysisCoverage || {};
+      const ageMinutes = ageMs === null ? null : Math.round(ageMs / 60000);
+      const freshness = ageMs === null ? 'unknown' : ageMs > staleAfterMs ? 'stale' : 'fresh';
+      const architecture = {
+        entryPoints: understanding.entryPoints.length,
+        entryPointExamples: understanding.entryPoints.slice(0, 30),
+        modules: understanding.modules.length,
+        moduleBreakdown: understanding.modules.slice(0, 20),
+        highCouplingModules: understanding.highCouplingModules.length,
+        highCouplingExamples: understanding.highCouplingModules.slice(0, 10),
+        circularDependencyGroups: understanding.dependencyDirection.circularDependencies.length,
+        circularDependencies: understanding.dependencyDirection.circularDependencies.slice(0, 10),
+        unresolvedImports: understanding.dependencyDirection.unresolvedBindings,
+        localImportEdges: understanding.dependencyDirection.localImportEdges,
+        resolvedBindings: understanding.dependencyDirection.resolvedBindings,
+        analysisCoverage: {
+          indexedFiles: coverage.indexedFiles || 0,
+          javascriptFiles: coverage.javascriptFiles || 0,
+          typescriptFiles: coverage.typescriptFiles || 0,
+          htmlFiles: coverage.htmlFiles || 0,
+          cssFiles: coverage.cssFiles || 0,
+          parseErrors: (coverage.parseErrors || []).slice(0, 20),
+          parseErrorCount: (coverage.parseErrors || []).length,
+          indexTruncated: !!coverage.indexTruncated
+        }
+      };
+      const indexCompleteness = {
+        files: stats.files || (index.files || []).length,
+        scanned: stats.scanned || 0,
+        readBytes: stats.readBytes || 0,
+        reused: stats.reused || 0,
+        removed: stats.removed || 0,
+        skipped: stats.skipped || 0,
+        truncated: !!stats.truncated,
+        truncationReason: stats.reason || null,
+        freshness,
+        ageMinutes,
+        staleAfterMinutes: 5,
+        refresh
+      };
+
+      const recommendations = [];
+      const addRecommendation = (id, priority, action, evidence = [], source = 'Project Diagnostics') => {
+        const key = String(action || '').trim().toLowerCase();
+        if (!key || recommendations.some(item => item.key === key)) return;
+        recommendations.push({ id, key, priority, action, evidence: (evidence || []).slice(0, 8), source });
+      };
+      for (const item of diagnostics.checks) {
+        if (item.severity === 'error' || item.severity === 'warning')
+          addRecommendation(item.id, item.severity === 'error' ? 'critical' : 'high', item.message, item.evidence, 'Project Diagnostics');
+      }
+      for (const item of readiness.checks) {
+        if (item.status === 'fail' || item.status === 'warning')
+          addRecommendation(item.id, item.status === 'fail' ? 'critical' : 'medium', item.message, item.evidence, 'Release Readiness');
+      }
+      if (freshness !== 'fresh') addRecommendation('index-freshness', freshness === 'stale' ? 'high' : 'medium', freshness === 'stale' ? 'Refresh the project index before relying on its findings.' : 'The project index timestamp is unavailable; refresh it to establish evidence freshness.', [], 'Project Understanding');
+      if (stats.truncated) addRecommendation('index-truncated', 'high', `The project index is partial${stats.reason ? `: ${stats.reason}` : ''}. Review scan limits before treating absence of findings as proof.`, [], 'Project Understanding');
+      if (architecture.circularDependencyGroups) addRecommendation('architecture-cycles', 'high', `${architecture.circularDependencyGroups} circular dependency group(s) were detected. Review their import direction and initialization behavior.`, architecture.circularDependencies.flat(), 'Project Understanding');
+      if (architecture.highCouplingModules) addRecommendation('architecture-coupling', 'medium', `${architecture.highCouplingModules} high-coupling module(s) were identified. Review the largest dependency hubs before broad refactoring.`, architecture.highCouplingExamples.map(item => item.path), 'Project Understanding');
+      const priorityRank = { critical: 0, high: 1, medium: 2, low: 3 };
+      recommendations.sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.action.localeCompare(b.action));
+      const nextActions = recommendations.slice(0, 15).map(({ key, ...item }) => item);
+
+      const diagnosticErrors = diagnostics.summary.errors || 0;
+      const releaseBlockers = readiness.summary.blockers || 0;
+      let status = 'static-checks-passed';
+      if (diagnosticErrors || releaseBlockers) status = 'blocked';
+      else if (freshness !== 'fresh' || stats.truncated) status = 'incomplete';
+      else if ((diagnostics.summary.warnings || 0) || (readiness.summary.warnings || 0) || architecture.circularDependencyGroups) status = 'attention';
+
+      return {
+        available: true,
+        schemaVersion: 2,
+        generatedAt: new Date().toISOString(),
+        root: index.rootName,
+        indexedAt: index.updatedAt,
+        status,
+        statusExplanation: status === 'blocked' ? 'Static blockers or diagnostic errors require review.' : status === 'incomplete' ? 'Evidence is stale or the project scan is partial; refresh/review coverage before relying on this assessment.' : status === 'attention' ? 'No hard static blocker was found, but warnings or architecture risks need review.' : 'No issues were found by the available static checks; this is not release approval.',
+        index: indexCompleteness,
+        projectUnderstanding: architecture,
+        diagnostics: { status: diagnostics.status, summary: diagnostics.summary, checks: diagnostics.checks.slice(0, 50), packageManager: diagnostics.packageManager, lockfiles: diagnostics.lockfiles, testFilesFound: diagnostics.testFilesFound, toolingConfigurations: diagnostics.toolingConfigurations, execution: diagnostics.execution },
+        releaseReadiness: { status: readiness.status, summary: readiness.summary, checks: readiness.checks, packageManager: readiness.packageManager, suggestedCommands: readiness.suggestedCommands, executionPerformed: false, notVerified: readiness.notVerified, note: readiness.note },
+        testImpact: impact ? { available: true, summary: impact.summary, changedPaths: impact.changedPaths, matchedChangedPaths: impact.matchedChangedPaths, analyzedChangedPaths: impact.analyzedChangedPaths, unanalysedChangedPaths: impact.unanalysedChangedPaths, unknownChangedPaths: impact.unknownChangedPaths, impactedModuleCount: impact.impactedModuleCount, tests: impact.tests.slice(0, 100), executionPerformed: false, note: impact.note } : { available: false, message: 'Supply workspace-relative changed_paths to calculate impacted tests. Git changes are not inferred.' },
+        nextActions,
+        scope: 'Language-aware project analysis is limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Other source files remain generic text and are reported as unanalysed for test impact.',
+        verification: { staticAnalysis: true, build: false, tests: false, liveDependencyAudit: false, gitStatus: false, signing: false, packaging: false, publication: false, commandsExecuted: false },
+        limitations: [
+          'Static import analysis cannot prove runtime behavior and may miss dynamic imports, generated dependencies, conditional runtime loading and external test harness behavior.',
+          'Release readiness does not verify Git cleanliness, actual builds/tests, live vulnerability results, signing, SBOM, packaging or publication.',
+          'High coupling and entry-point signals are evidence-based heuristics, not proof of architectural defects or runtime entry points.'
+        ],
+        executionPerformed: false
+      };
+    }
+
     let projectIndexAutoRefreshTimer = null;
     let projectIndexAutoRefreshController = null;
     let projectIndexAutoRefreshPromise = null;

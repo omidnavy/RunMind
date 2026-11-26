@@ -1,41 +1,38 @@
 # RunMind Roadmap
 
-## Current source baseline: 2.7.0 — P0 Foundation & Reliability
+## Current source baseline: 2.8.1 — P1 Mission Control refinement
 
-## Active milestone: P0 — Reliability and workspace architecture
+## Completed milestone: P0 — Foundation & Reliability
 
-P0 source implementation is included in this bundle. The portable Node test suite passes 156/156 tests with Node.js 22.16.0. The three-host Windows Release x64 build and live acceptance must still be run on the target machine using Node.js 24+ and .NET 10; this source snapshot is not described as Windows-certified until that succeeds.
+P0 source implementation is retained in this release. The P0 target-Windows certification gate remains separate: build all three hosts with `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` and complete `docs/P0-WINDOWS-ACCEPTANCE.md`. This environment cannot certify Windows/.NET runtime behavior.
 
-The full source-scope audit is recorded in `docs/P0-IMPLEMENTATION-AUDIT.md`; the live Windows gate is recorded in `docs/P0-WINDOWS-ACCEPTANCE.md`.
+## Active milestone: P1 — Project Intelligence
 
-### P0 scope implemented in source
+P1 extends the P0 persistent index and unified workspace. It does not create a second index, a second workspace, or a parallel execution engine.
 
-- **Unified Workspace Selection:** one native-host-owned, per-conversation canonical root is shared by Agent file operations, Git and native project tools. The WebView uses a bounded native file RPC; workspace IDs invalidate stale handles; persisted state is revalidated across host processes; a second folder picker is not part of the native-host workflow. Browser-only contexts retain a browser directory-picker fallback.
-- **Agent tool reliability:** tool outcomes are recorded in a bounded execution ledger; unchanged malformed tool calls are not repeated; Playwright action schemas describe required selector/value fields; validation identifies the exact action and correction hint; empty model output, generation failure, repeated tool failure, and tool-step limits after tool execution produce an evidence-based deterministic final report.
-- **Development-server ownership:** session records persist process ID, executable path, process start identity, script, working directory, port, readiness URL and state. Start, reconcile, metadata updates and stop use cross-process locks. Only an exact PID/start-time/executable identity match can be re-adopted or stopped. Stale/unknown records are reported, never killed. No configured HTTP readiness URL means readiness is `not_configured`, not `ready`.
-- **Targeted port investigation:** System Manager provides TCP/UDP port-owner lookup under the existing process or network-diagnostics capability. The Agent is instructed to use it for a specific port instead of broad system inventory.
-- **Playwright policy reporting:** CORS, CSP and mixed-content blocks are distinct policy events. Explicitly expected events remain visible but are not counted as unexpected application console/network failures when safely correlated. Unexpected and missing expected events remain failures.
-- **Project-language scope:** JavaScript, TypeScript, JSX/TSX, HTML and CSS only. No additional project-language parsers, semantic engines, debuggers or language-specific build/test workflows are planned in this milestone.
+### P1 scope implemented in source
 
-### P0 Windows acceptance still required
+- **Project Understanding:** evidence-based architecture map of top-level modules/boundaries, package and HTML entry-point candidates, import direction, resolved/unresolved relationships, circular dependencies, high-coupling modules, parser coverage and index truncation. The Agent workflow instructs source verification before treating heuristic edges as proof.
+- **Project Diagnostics:** separate read-only operational health assessment for package manifests, package-manager/lockfile ambiguity and conflicts, npm lockfile root metadata consistency, declared scripts, tooling configuration, test discovery, parser errors, unresolved imports, cycles and incomplete indexing. Environment probes and build/test/audit commands remain separately approved actions.
+- **Project Mission Control:** structured evidence-backed control center available both as an Agent tool/workflow and in Agent Settings. It reports index freshness/completeness, architecture evidence, detailed diagnostics, static release-readiness, prioritized recommendations and optional explicit changed-path test impact without executing commands.
+- **Test Impact Analysis:** accepts explicit workspace-relative changed paths, follows reverse static import edges for JavaScript/TypeScript changes to identify direct and transitive JavaScript/TypeScript tests, labels filename-only suggestions as low confidence, and reports unknown paths. It does not infer a Git diff or execute tests.
+- **Release Readiness:** static checks for package version, changelog version reference, README, CI configuration, test discovery, package-manager/lockfile consistency, diagnostics, and declared build/test scripts. It explicitly reports Git status, live dependency audit, actual builds/tests, signing, SBOM, packaging and publication as unverified gates.
 
-- Build all three hosts with `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64`.
-- Verify one folder selection is sufficient for Agent file access, Git, PowerShell/native execution, Node debugger, API runner, Playwright and development-server tools.
-- Verify workspace changes propagate across Standalone, PowerToys Run and Command Palette and invalidate stale handles.
-- Verify development-server reconciliation across host restart, exact identity re-adoption, stale PID handling, port conflict safety, and explicit stop.
-- Verify empty/repeated model tool failures still yield a non-empty final report.
-- Verify Task C in Playwright, including the fixture's submit/reset messages and expected CORS policy classification.
+### P1 validation boundaries
+
+- Static analysis uses the persistent index and is bounded by its existing file, byte, depth and parser limits.
+- Test selection depends on statically indexed imports. Dynamic imports, runtime-generated relationships and non-standard test harnesses can be missed; candidates must be reviewed.
+- Project-specific language-aware analysis and tooling remain limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Other source files remain generic text.
+- No build, test, package install, dependency audit, Git mutation, tag, signing or publication is triggered by these P1 tools.
+- The P0 Windows certification checklist remains open until run on the target Windows machine.
 
 ## Next milestone candidates
 
-1. **Project Mission Control:** orchestrate Project Understanding, Project Diagnostics, approved build/test checks, browser/API checks and an evidence-backed readiness report.
-2. **Test Impact Analysis:** use the existing JS/TS symbol graph and dependency edges to select likely affected tests and modules.
-3. **Development Session Timeline:** correlate server sessions, PIDs, browser requests, API tests, debugger events and captured logs without introducing duplicate event stores.
-4. **System Manager diagnostics:** Windows Event Log/crash investigation, bounded resource sampling, Scheduled Task inventory, storage health, security posture and targeted DNS/TCP probes.
-5. **Podman Development Workbench:** Compose/Containerfile inspection, build logs, container-health and service/port/volume/network relationships.
-6. **Database Development Workbench:** start with PostgreSQL and SQLite; schema inspection, read-only query execution, query plans and migration validation.
-7. **API contract testing:** OpenAPI/JSON Schema validation, reusable sequential suites and explicit auth profiles.
-8. **Agent/MCP reliability:** better task checkpoints, resource discovery and structured recovery.
+1. **Development Session Timeline:** correlate owned server sessions, Node debugger events, API tests, Playwright requests and logs without adding duplicate event stores.
+2. **System Manager diagnostics:** Windows Event Log/crash investigation, bounded resource sampling, Scheduled Task inventory, storage health, security posture and targeted DNS/TCP probes.
+3. **Podman Development Workbench:** Compose/Containerfile inspection, build logs, container-health and service/port/volume/network relationships.
+4. **Database Development Workbench:** start with PostgreSQL and SQLite; schema inspection, read-only query execution, query plans and migration validation.
+5. **Advanced Agent/MCP reliability:** stronger checkpoints, resource discovery and structured recovery.
 
 These are candidates, not claims of existing implementation. Keep the current codebase compact: reuse the shared Agent Core, native bridge, project index, approval system and existing runners. Avoid adding a new engine when an existing subsystem can be extended.
 

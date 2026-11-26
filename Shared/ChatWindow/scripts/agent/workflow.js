@@ -3,14 +3,14 @@
     const WORKFLOW_PARALLEL_SAFE_TOOLS = new Set([
       'current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf',
       'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file',
-      'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_search', 'project_index_overview', 'project_validate', 'validate_json',
+      'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_search', 'project_index_overview', 'project_validate', 'project_understanding', 'project_diagnostics', 'project_mission_control', 'project_test_impact', 'project_release_readiness', 'validate_json',
       'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders',
       'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap',
       'read_rss_feed', 'page_to_markdown', 'compare_webpages'
     ]);
     const WORKFLOW_READ_APPROVAL_TOOLS = new Set([
       'fetch_webpage','web_search','research_topic','list_files','read_file','search_files','file_info','checksum_file',
-      'compare_files','project_overview','project_search','project_index_overview','project_validate','validate_json','validate_json_schema','validate_dataset','verify_artifact','read_pdf','inspect_archive',
+      'compare_files','project_overview','project_search','project_index_overview','project_validate','project_understanding','project_diagnostics','project_mission_control','project_test_impact','project_release_readiness','validate_json','validate_json_schema','validate_dataset','verify_artifact','read_pdf','inspect_archive',
       'infer_dataset_schema','analyze_csv','compare_datasets','generate_statistics','compare_folders','read_image',
       'image_metadata','extract_links','extract_metadata','extract_tables','read_sitemap','read_rss_feed',
       'page_to_markdown','check_links','compare_webpages','crawl_website'

@@ -306,7 +306,211 @@
     });
     selectAgentSettingsTab(0);
     const projectIndexStatusElement = $('#projectIndexStatus');
+    const projectMissionControlElement = $('#projectMissionControl');
     let projectIndexController = null;
+    function missionControlNode(tag, className = '', text = null) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== null && text !== undefined) node.textContent = String(text);
+      return node;
+    }
+    function missionControlSection(title, description = '') {
+      const section = missionControlNode('section', 'mc-section');
+      const heading = missionControlNode('div', 'mc-section-heading');
+      heading.append(missionControlNode('h4', '', title));
+      if (description) heading.append(missionControlNode('p', '', description));
+      section.append(heading);
+      return section;
+    }
+    function missionControlMetric(label, value, detail = '', state = '') {
+      const card = missionControlNode('article', `mc-metric${state ? ` is-${state}` : ''}`);
+      card.append(missionControlNode('span', 'mc-metric-label', label));
+      card.append(missionControlNode('strong', 'mc-metric-value', value));
+      if (detail) card.append(missionControlNode('span', 'mc-metric-detail', detail));
+      return card;
+    }
+    function missionControlEvidence(container, evidence) {
+      const values = Array.isArray(evidence) ? evidence.filter(Boolean).slice(0, 8) : [];
+      if (!values.length) return;
+      const list = missionControlNode('ul', 'mc-evidence');
+      for (const value of values) list.append(missionControlNode('li', '', value));
+      container.append(list);
+    }
+    function missionControlCheckList(container, checks, mode = 'diagnostic') {
+      if (!Array.isArray(checks) || !checks.length) {
+        container.append(missionControlNode('p', 'mc-empty', 'No checks were reported.'));
+        return;
+      }
+      const list = missionControlNode('div', 'mc-check-list');
+      for (const check of checks.slice(0, 50)) {
+        const state = mode === 'readiness' ? (check.status || 'unknown') : (check.severity || 'info');
+        const details = missionControlNode('details', 'mc-check');
+        const summary = missionControlNode('summary', 'mc-check-summary');
+        summary.append(missionControlNode('span', `mc-state-dot is-${state}`, state.toUpperCase()));
+        summary.append(missionControlNode('span', 'mc-check-message', check.message || check.id || 'Check'));
+        details.append(summary);
+        if (check.id) details.append(missionControlNode('code', 'mc-check-id', check.id));
+        missionControlEvidence(details, check.evidence);
+        list.append(details);
+      }
+      container.append(list);
+    }
+    function renderProjectMissionControl(result) {
+      if (!projectMissionControlElement) return;
+      projectMissionControlElement.replaceChildren();
+      projectMissionControlElement.hidden = false;
+      if (!result?.available) {
+        projectMissionControlElement.append(missionControlNode('p', 'mc-unavailable', result?.message || 'Project Mission Control is unavailable.'));
+        return;
+      }
+
+      const status = String(result.status || 'unknown');
+      const stateLabels = { blocked: 'Blockers found', attention: 'Review recommended', incomplete: 'Evidence incomplete', 'static-checks-passed': 'Static checks passed' };
+      const header = missionControlNode('header', 'mc-header');
+      const heading = missionControlNode('div', 'mc-title-group');
+      heading.append(missionControlNode('h3', '', 'Project Mission Control'));
+      heading.append(missionControlNode('p', 'mc-subtitle', `${result.root || 'Workspace'} · project intelligence overview`));
+      header.append(heading);
+      header.append(missionControlNode('span', `mc-status-badge is-${status}`, stateLabels[status] || status));
+      projectMissionControlElement.append(header);
+      if (result.statusExplanation) projectMissionControlElement.append(missionControlNode('p', 'mc-status-explanation', result.statusExplanation));
+
+      const index = result.index || {};
+      const ageText = index.ageMinutes === null || index.ageMinutes === undefined ? 'age unknown' : index.ageMinutes < 1 ? 'updated less than a minute ago' : `updated ${index.ageMinutes} min ago`;
+      const freshnessText = index.freshness === 'fresh' ? 'Fresh snapshot' : index.freshness === 'stale' ? 'Snapshot is stale' : 'Freshness unknown';
+      const metadata = missionControlNode('div', 'mc-metadata');
+      metadata.append(missionControlNode('span', `mc-state-dot is-${index.freshness || 'unknown'}`, freshnessText));
+      metadata.append(missionControlNode('span', '', `Index timestamp: ${result.indexedAt || 'not available'} (${ageText})`));
+      const reportTimestamp = Date.parse(result.generatedAt || '');
+      metadata.append(missionControlNode('span', '', `Report generated: ${Number.isFinite(reportTimestamp) ? new Date(reportTimestamp).toLocaleString() : 'not available'}`));
+      projectMissionControlElement.append(metadata);
+      projectMissionControlElement.append(missionControlNode('p', 'mc-muted', `Index scan: ${index.scanned || 0} visited · ${index.files || 0} indexed · ${index.reused || 0} reused · ${index.removed || 0} removed · ${index.skipped || 0} skipped · ${Number(index.readBytes || 0).toLocaleString()} bytes read${index.truncated ? ` · Partial: ${index.truncationReason || 'scan limit reached'}` : ''}`));
+      if (index.refresh?.attempted) {
+        const refreshText = index.refresh.succeeded ? 'The stale index was refreshed before this report.' : `An automatic refresh was attempted but could not be confirmed${index.refresh.error ? `: ${index.refresh.error}` : '.'}`;
+        projectMissionControlElement.append(missionControlNode('p', `mc-refresh-note ${index.refresh.succeeded ? 'is-success' : 'is-warning'}`, refreshText));
+      }
+
+      const architecture = result.projectUnderstanding || {};
+      const diagnostics = result.diagnostics || {};
+      const diagnosticSummary = diagnostics.summary || {};
+      const readiness = result.releaseReadiness || {};
+      const releaseSummary = readiness.summary || {};
+      const impact = result.testImpact || {};
+      const impactSummary = impact.summary || {};
+      const metrics = missionControlNode('div', 'mc-metrics');
+      metrics.append(missionControlMetric('Indexed files', index.files ?? architecture.analysisCoverage?.indexedFiles ?? 0, index.truncated ? `Partial scan · ${index.truncationReason || 'limit reached'}` : `${Number(index.readBytes || 0).toLocaleString()} bytes read`, index.truncated ? 'warning' : ''));
+      metrics.append(missionControlMetric('Architecture', architecture.modules ?? 0, `${architecture.entryPoints ?? 0} entry points · ${architecture.localImportEdges ?? 0} local import edges`));
+      metrics.append(missionControlMetric('Diagnostics', diagnosticSummary.errors ?? 0, `${diagnosticSummary.warnings ?? 0} warnings · ${diagnosticSummary.information ?? 0} informational`, diagnosticSummary.errors ? 'danger' : diagnosticSummary.warnings ? 'warning' : 'success'));
+      metrics.append(missionControlMetric('Release checks', releaseSummary.blockers ?? 0, `${releaseSummary.warnings ?? 0} warnings · ${releaseSummary.passed ?? 0} static checks passed`, releaseSummary.blockers ? 'danger' : releaseSummary.warnings ? 'warning' : 'success'));
+      metrics.append(missionControlMetric('Test impact', impact.available ? (impactSummary.recommendedTests ?? impact.tests?.length ?? 0) : '—', impact.available ? `${impactSummary.highConfidence ?? 0} high · ${impactSummary.mediumConfidence ?? 0} medium · ${impactSummary.lowConfidence ?? 0} low confidence` : 'No changed paths supplied'));
+      projectMissionControlElement.append(metrics);
+
+      const actions = Array.isArray(result.nextActions) ? result.nextActions : [];
+      const actionSection = missionControlSection('Recommended next actions', actions.length ? 'Prioritized from static findings. Review the evidence before making changes.' : 'No follow-up actions were identified by the current static checks.');
+      if (actions.length) {
+        const list = missionControlNode('ol', 'mc-action-list');
+        for (const action of actions.slice(0, 15)) {
+          const item = missionControlNode('li', 'mc-action');
+          item.append(missionControlNode('span', `mc-priority is-${action.priority || 'medium'}`, String(action.priority || 'medium').toUpperCase()));
+          const body = missionControlNode('div', 'mc-action-body');
+          body.append(missionControlNode('p', 'mc-action-text', action.action || 'Review finding'));
+          body.append(missionControlNode('span', 'mc-action-source', action.source || action.id || 'Project analysis'));
+          missionControlEvidence(body, action.evidence);
+          item.append(body); list.append(item);
+        }
+        actionSection.append(list);
+      } else actionSection.append(missionControlNode('p', 'mc-empty', 'No static follow-up actions were identified.'));
+      projectMissionControlElement.append(actionSection);
+
+      const architectureSection = missionControlSection('Project Understanding', `${architecture.modules || 0} top-level module boundaries and ${architecture.entryPoints || 0} entry-point candidates were identified.`);
+      const architectureGrid = missionControlNode('div', 'mc-inline-stats');
+      for (const [label, value] of [['High-coupling modules', architecture.highCouplingModules || 0], ['Circular dependency groups', architecture.circularDependencyGroups || 0], ['Unresolved imports', architecture.unresolvedImports || 0], ['Resolved bindings', architecture.resolvedBindings || 0]])
+        architectureGrid.append(missionControlNode('span', '', `${label}: ${value}`));
+      architectureSection.append(architectureGrid);
+      const moduleBreakdown = architecture.moduleBreakdown || [];
+      if (moduleBreakdown.length) {
+        const details = missionControlNode('details', 'mc-expandable');
+        details.append(missionControlNode('summary', '', 'View top-level module boundaries'));
+        const list = missionControlNode('ul', 'mc-evidence');
+        for (const item of moduleBreakdown.slice(0, 20)) list.append(missionControlNode('li', '', `${item.directory} · ${item.files} files · ${item.javascript || 0} JS · ${item.typescript || 0} TS · ${item.html || 0} HTML · ${item.css || 0} CSS`));
+        details.append(list); architectureSection.append(details);
+      }
+      const entryPoints = architecture.entryPointExamples || [];
+      if (entryPoints.length) {
+        const details = missionControlNode('details', 'mc-expandable');
+        details.append(missionControlNode('summary', '', 'View entry-point candidates'));
+        const list = missionControlNode('ul', 'mc-evidence');
+        for (const item of entryPoints.slice(0, 30)) list.append(missionControlNode('li', '', `${item.path} · ${item.confidence || 'candidate'} · ${item.source || 'index evidence'}`));
+        details.append(list); architectureSection.append(details);
+      }
+      const hotspots = architecture.highCouplingExamples || [];
+      if (hotspots.length) {
+        const details = missionControlNode('details', 'mc-expandable');
+        details.append(missionControlNode('summary', '', 'View high-coupling modules'));
+        const list = missionControlNode('ul', 'mc-evidence');
+        for (const item of hotspots.slice(0, 10)) list.append(missionControlNode('li', '', `${item.path} · ${item.incomingImports} incoming · ${item.outgoingImports} outgoing imports`));
+        details.append(list); architectureSection.append(details);
+      }
+      if ((architecture.circularDependencies || []).length) {
+        const details = missionControlNode('details', 'mc-expandable');
+        details.append(missionControlNode('summary', '', 'View circular dependency paths'));
+        const list = missionControlNode('ul', 'mc-evidence');
+        for (const cycle of architecture.circularDependencies.slice(0, 10)) list.append(missionControlNode('li', '', Array.isArray(cycle) ? cycle.join(' → ') : cycle));
+        details.append(list); architectureSection.append(details);
+      }
+      const coverage = architecture.analysisCoverage || {};
+      architectureSection.append(missionControlNode('p', 'mc-muted', `Language-aware coverage: ${coverage.javascriptFiles || 0} JavaScript · ${coverage.typescriptFiles || 0} TypeScript · ${coverage.htmlFiles || 0} HTML · ${coverage.cssFiles || 0} CSS. ${coverage.parseErrorCount || 0} parser errors.`));
+      projectMissionControlElement.append(architectureSection);
+
+      const diagnosticSection = missionControlSection('Project Diagnostics', 'Manifest, package-manager, test-discovery and static import-graph checks. No environment probe or build/test command was run.');
+      diagnosticSection.append(missionControlNode('p', 'mc-muted', `Package manager: ${diagnostics.packageManager || 'not confidently detected'} · Test files discovered: ${diagnostics.testFilesFound || 0} · Tooling configurations: ${(diagnostics.toolingConfigurations || []).length}`));
+      missionControlCheckList(diagnosticSection, diagnostics.checks || [], 'diagnostic');
+      projectMissionControlElement.append(diagnosticSection);
+
+      const readinessSection = missionControlSection('Release Readiness', 'A static release-hygiene assessment, not an approval or verification that a release can ship.');
+      readinessSection.append(missionControlNode('p', 'mc-muted', `Result: ${readiness.status || 'unknown'} · Package manager: ${readiness.packageManager || 'not detected'}`));
+      missionControlCheckList(readinessSection, readiness.checks || [], 'readiness');
+      const notVerified = Array.isArray(readiness.notVerified) ? readiness.notVerified : [];
+      if (notVerified.length) {
+        const details = missionControlNode('details', 'mc-expandable');
+        details.append(missionControlNode('summary', '', 'What remains unverified'));
+        const list = missionControlNode('ul', 'mc-evidence');
+        for (const item of notVerified) list.append(missionControlNode('li', '', item));
+        details.append(list); readinessSection.append(details);
+      }
+      const suggested = readiness.suggestedCommands || {};
+      const commands = Object.entries(suggested);
+      if (commands.length) {
+        const details = missionControlNode('details', 'mc-expandable');
+        details.append(missionControlNode('summary', '', 'Suggested build/test commands (not executed)'));
+        const list = missionControlNode('ul', 'mc-evidence');
+        for (const [name, command] of commands) list.append(missionControlNode('li', '', `${name}: ${command}`));
+        details.append(list); readinessSection.append(details);
+      }
+      projectMissionControlElement.append(readinessSection);
+
+      const impactSection = missionControlSection('Test Impact Analysis', impact.available ? 'Static reverse-import analysis for the changed paths supplied.' : 'Optional: supply changed paths above to identify tests that may be affected. Git changes are not inferred automatically.');
+      if (impact.available) {
+        impactSection.append(missionControlNode('p', 'mc-muted', `Changed: ${(impact.changedPaths || []).length} · Analyzed: ${(impact.analyzedChangedPaths || []).length} · Unsupported/unanalysed: ${(impact.unanalysedChangedPaths || []).length} · Unknown: ${(impact.unknownChangedPaths || []).length} · Impacted modules: ${impact.impactedModuleCount || 0}`));
+        if ((impact.tests || []).length) {
+          const list = missionControlNode('ul', 'mc-evidence');
+          for (const item of impact.tests.slice(0, 100)) list.append(missionControlNode('li', '', `${String(item.confidence || 'unknown').toUpperCase()} · ${item.path} — ${item.reason}`));
+          impactSection.append(list);
+        } else impactSection.append(missionControlNode('p', 'mc-empty', 'No test candidates were found for these changed paths. This does not prove that no tests are affected.'));
+        if ((impact.unanalysedChangedPaths || []).length || (impact.unknownChangedPaths || []).length) {
+          const list = missionControlNode('ul', 'mc-evidence');
+          for (const path of [...impact.unanalysedChangedPaths || [], ...impact.unknownChangedPaths || []]) list.append(missionControlNode('li', '', `Not included in dependency analysis: ${path}`));
+          impactSection.append(list);
+        }
+      } else impactSection.append(missionControlNode('p', 'mc-empty', impact.message || 'No changed paths were supplied.'));
+      projectMissionControlElement.append(impactSection);
+
+      const limits = missionControlSection('Evidence, scope and safety', 'Mission Control never executes commands, writes files, installs packages or changes release metadata.');
+      limits.append(missionControlNode('p', 'mc-muted', result.scope || 'Language-aware analysis is limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Other files remain generic text.'));
+      for (const item of result.limitations || []) limits.append(missionControlNode('p', 'mc-muted', item));
+      limits.append(missionControlNode('p', 'mc-muted', 'Verification performed: static project analysis only. Builds, tests, live dependency audits, Git status, signing, packaging and publication remain separate checks.'));
+      projectMissionControlElement.append(limits);
+    }
     function projectIndexStatus(index) {
       if (!projectIndexStatusElement) return;
       if (!index) { projectIndexStatusElement.textContent = 'No project index loaded.'; return; }
@@ -314,6 +518,7 @@
       projectIndexStatusElement.textContent = `${stats.files || 0} indexed files · ${index.technologies?.length || 0} languages · ${(index.frameworks || []).join(', ') || 'frameworks not detected'} · ${stats.reused || 0} reused · updated ${new Date(index.updatedAt).toLocaleString()}${stats.truncated ? ` · Partial: ${stats.reason || 'scan limit reached'}` : ''}`;
     }
     async function refreshProjectIndexStatus() {
+      if (projectMissionControlElement) { projectMissionControlElement.hidden = true; projectMissionControlElement.textContent = ''; }
       if (!agentDirectoryHandle) { projectIndexStatusElement.textContent = 'Select a workspace folder to access its project index.'; return; }
       try { const index = await loadProjectIndex(); projectIndexStatus(index); }
       catch (error) { if (projectIndexStatusElement) projectIndexStatusElement.textContent = String(error?.message || error); }
@@ -341,15 +546,28 @@
       const cancelButton = $('#cancelProjectIndex'); cancelButton.disabled = false;
       projectIndexController = new AbortController();
       try {
-        const result = await buildProjectIndex({ force: false, signal: projectIndexController.signal, onProgress: progress => { projectIndexStatusElement.textContent = `Indexing ${progress.files} files · scanned ${progress.scanned}…`; } });
+        $('#runProjectMissionControl').disabled = true;
+      const result = await buildProjectIndex({ force: false, signal: projectIndexController.signal, onProgress: progress => { projectIndexStatusElement.textContent = `Indexing ${progress.files} files · scanned ${progress.scanned}…`; } });
+        projectMissionControlElement.hidden = true; projectMissionControlElement.textContent = '';
         projectIndexStatusElement.textContent = `${result.files} files indexed · ${result.technologies.length} languages · ${(result.frameworks || []).join(', ') || 'no framework hints'} · ${result.reused} reused · ${result.readBytes.toLocaleString()} bytes read${result.truncated ? ` · Partial: ${result.reason}` : ''}`;
         showToast(`Project index refreshed: ${result.files} files.`);
       } catch (error) { projectIndexStatusElement.textContent = error?.name === 'AbortError' ? 'Indexing cancelled; the previous index was retained.' : String(error?.message || error); if (error?.name !== 'AbortError') showToast('Project indexing failed.'); }
-      finally { projectIndexController = null; button.disabled = false; button.textContent = 'Build / refresh index'; cancelButton.disabled = true; }
+      finally { projectIndexController = null; button.disabled = false; button.textContent = 'Build / refresh index'; cancelButton.disabled = true; $('#runProjectMissionControl').disabled = false; }
     });
     $('#cancelProjectIndex').addEventListener('click', () => { projectIndexController?.abort(); });
+    $('#runProjectMissionControl').addEventListener('click', async () => {
+      if (!agentDirectoryHandle) { showToast('Select a workspace folder before opening Project Mission Control.'); return; }
+      if (projectIndexController) { showToast('Project indexing is already running. Open Mission Control after it finishes.'); return; }
+      const button = $('#runProjectMissionControl'); button.disabled = true; button.textContent = 'Analyzing…';
+      try {
+        const rawPaths = $('#projectMissionControlChangedPaths')?.value || '';
+        const changedPaths = [...new Set(rawPaths.split(/\r?\n/).map(value => value.trim()).filter(Boolean))].slice(0, 100);
+        renderProjectMissionControl(await getProjectMissionControl({ changedPaths }));
+      } catch (error) { renderProjectMissionControl({ available: false, message: String(error?.message || error) }); }
+      finally { button.disabled = false; button.textContent = 'Run Mission Control'; }
+    });
     $('#clearProjectIndex').addEventListener('click', async () => {
-      try { await workspaceDbAction('readwrite','delete',undefined,projectIndexKey()); projectIndexStatus(null); showToast('Project index cleared. Automatic refresh remains enabled for this workspace.'); }
+      try { await workspaceDbAction('readwrite','delete',undefined,projectIndexKey()); projectIndexStatus(null); projectMissionControlElement.hidden = true; projectMissionControlElement.textContent = ''; showToast('Project index cleared. Automatic refresh remains enabled for this workspace.'); }
       catch (error) { showToast(`Could not clear project index: ${error?.message || error}`); }
     });
     $('#runDeveloperWorkflow').addEventListener('click', () => {

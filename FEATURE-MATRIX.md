@@ -1,6 +1,6 @@
-# RunMind 2.7.0 — Feature Matrix (P0 foundation + Phase 1/2 capabilities)
+# RunMind 2.8.1 — Feature Matrix (P0 foundation + P1 Project Intelligence + Phase 1/2 capabilities)
 
-| Area | Capability | Status in current 2.7.0 source bundle | Notes |
+| Area | Capability | Status in current 2.8.1 source bundle | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
@@ -8,6 +8,11 @@
 | Developer | Project index and search | Implemented with limits | Persistent incremental index; Acorn JS analysis; TypeScript compiler API for JS/JSX/TS/TSX semantic references; HTML/CSS project understanding; root tsconfig paths; static module graph; `project_symbol_graph` | Strong semantic support is intentionally scoped to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Compiler checker bounded to 500 source files and 12 MB; no default libs/full diagnostic pass; external installed packages use native Node resolver tool.
 | Developer workflow | Project Understanding | Expanded | Uses the persistent index, symbol graph, AST/checker references and source tracing to map architecture and execution paths; does not execute commands or modify files |
 | Developer workflow | Project Diagnostics | Added | Separate operational readiness workflow for manifests, lockfiles, toolchains, scripts, build/test configuration and optional approval-gated live checks; read-only by default |
+| Developer | Project Understanding | Expanded in P1 | Module boundaries, entry-point candidates, dependency direction, high-coupling modules, cycles, unresolved imports and analysis coverage; source verification remains required |
+| Developer | Project Diagnostics | Expanded in P1 | Static manifest/lockfile consistency, package scripts, tooling config, test discovery, parser errors and graph health; live probes/commands remain separately approved |
+| Developer | Project Mission Control | Implemented in P1; refined in 2.8.1 | Versioned evidence report; stale-index refresh; prioritized recommendations; structured Agent Settings dashboard; architecture, diagnostics, release and optional explicit changed-path impact |
+| Developer | Test Impact Analysis | Implemented in P1 | Explicit changed paths, JS/TS reverse import graph and JS/TS test selection with confidence labels; other file types are unanalysed; no automatic test execution |
+| Developer | Release Readiness | Implemented in P1 | Static version/changelog/README/CI/test/lockfile/script checks; Git, actual builds/tests, live audit, signing and publishing remain unverified gates |
 | Workspace | Unified conversation workspace | Implemented in P0 | Native-host-owned canonical root shared by Agent file access, Git and native project tools; path-contained RPC, per-conversation workspace ID, cross-host revalidation, stale-handle invalidation; browser-only fallback retained outside native hosts |
 | Agent reliability | Evidence-based final response | Implemented in P0 | Bounded tool execution ledger and deterministic report fallback after empty model output, tool-step limit, repeated tool failure or generation failure after tool execution |
 | Agent reliability | Tool argument correction | Improved in P0 | Action-specific schema requirements, validation hints, retry fingerprints and no repeated identical malformed tool calls |
@@ -76,7 +81,7 @@
 
 ## 2.6.1 changes
 
-| Area | Capability | Status in current 2.7.0 source bundle | Notes |
+| Area | Capability | Status in current 2.8.1 source bundle | Notes |
 |---|---|---|---|
 | System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
 | System Manager | First-party RunMind adapter | Extended | Sends prompts, opens a validated `.runmind` session, or starts a fresh Standalone conversation |
@@ -175,4 +180,4 @@
 
 ## Developer language scope
 
-RunMind project understanding and project-specific developer workflows are intentionally focused on JavaScript, TypeScript, JSX/TSX, HTML and CSS. No additional language parsers, semantic engines, debuggers or language-specific build/test workflows are introduced in 2.7.0. Existing generic package-manifest/lockfile recognition may observe other ecosystem metadata but does not imply language support.
+RunMind project understanding and project-specific developer workflows are intentionally focused on JavaScript, TypeScript, JSX/TSX, HTML and CSS. No additional language parsers, semantic engines, debuggers or language-specific build/test workflows are introduced in 2.8.1. Existing generic package-manifest/lockfile recognition may observe other ecosystem metadata but does not imply language support.

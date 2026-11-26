@@ -80,7 +80,7 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'node_debugger_list_sessions', 'node_debugger_events', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_find_port_owner', 'system_manager_diagnostics']);
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'project_understanding', 'project_diagnostics', 'project_mission_control', 'project_test_impact', 'project_release_readiness', 'node_debugger_list_sessions', 'node_debugger_events', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_find_port_owner', 'system_manager_diagnostics']);
       if (name.startsWith('system_manager_')) {
         if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in the System Manager menu first.');
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
@@ -948,6 +948,36 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');
           return await getProjectIndexOverview();
         }
+        case 'project_understanding': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const index = await loadProjectIndex();
+          if (!index) throw new Error('Build or refresh the project index before requesting Project Understanding.');
+          return projectIndexBuildUnderstanding(index);
+        }
+        case 'project_diagnostics': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const index = await loadProjectIndex();
+          if (!index) throw new Error('Build or refresh the project index before running Project Diagnostics.');
+          return projectIndexBuildDiagnostics(index);
+        }
+        case 'project_mission_control': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const changedPaths = Array.isArray(args.changed_paths) ? args.changed_paths : [];
+          return await getProjectMissionControl({ changedPaths });
+        }
+        case 'project_test_impact': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const index = await loadProjectIndex();
+          if (!index) throw new Error('Build or refresh the project index before analyzing test impact.');
+          return projectIndexAnalyzeTestImpact(index, args.changed_paths || []);
+        }
+        case 'project_release_readiness': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const index = await loadProjectIndex();
+          if (!index) throw new Error('Build or refresh the project index before assessing release readiness.');
+          const diagnostics = projectIndexBuildDiagnostics(index);
+          return projectIndexBuildReleaseReadiness(index, diagnostics);
+        }
         case 'project_symbol_graph': {
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');
           return await getProjectSymbolGraph({ path: args.path || '', name: args.name || '', limit: args.limit || 200 });
@@ -1046,7 +1076,7 @@ RunMind will execute a fixed resolver script using Node's createRequire().resolv
               }
             } catch (error) { checks.push({ path: item.path, status: 'invalid', error: String(error?.message || error).slice(0, 400) }); }
           }
-          const testFiles = index.files.filter(file => /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$/i.test(file.path)).map(file => file.path).slice(0, 100);
+          const testFiles = index.files.filter(file => ['javascript', 'typescript'].includes(file.language) && /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$/i.test(file.path)).map(file => file.path).slice(0, 100);
           const toolchains = index.toolchains || { packageManager: null, packageManagerSource: 'not detected', lockfiles: [], ecosystems: [] };
           const manager = toolchains.packageManager;
           const scriptCommands = manager && ['npm','pnpm','yarn','bun'].includes(manager)

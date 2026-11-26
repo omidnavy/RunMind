@@ -162,13 +162,13 @@ test('development-server metadata writes are serialized and orphan reconciliatio
   assert.match(serverManager, /ready = null/);
 });
 
-test('all published host package and Command Palette manifest versions agree at 2.7.0', () => {
+test('all published host package and Command Palette manifest versions agree at 2.8.1', () => {
   for (const project of [
     'RunMind.Standalone/RunMind.Standalone.csproj',
     'Community.PowerToys.Run.Plugin.RunMind/Community.PowerToys.Run.Plugin.RunMind.csproj',
     'RunMind.CommandPalette/RunMind.CommandPalette.csproj'
-  ]) assert.match(read(project), /<Version>2\.7\.0<\/Version>/);
-  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>2\.7\.0\.0<\/AppxPackageVersion>/);
-  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="2\.7\.0\.0"/);
-  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"2\.7\.0"/);
+  ]) assert.match(read(project), /<Version>2\.8\.1<\/Version>/);
+  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>2\.8\.1\.0<\/AppxPackageVersion>/);
+  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="2\.8\.1\.0"/);
+  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"2\.8\.1"/);
 });
