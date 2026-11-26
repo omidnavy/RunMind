@@ -85,7 +85,9 @@ test('startup entries support confirmed reversible enable and disable for Run ke
   assert.match(providers, /system_manager_set_startup_application/);
   assert.match(native, /DisabledStartupEntries/);
   assert.match(native, /alwaysAsk:\s*true/);
-  assert.match(native, /RunOnce and Startup-folder entries remain inventory-only|RunOnce and Startup-folder entries are inventory-only/);
+  assert.match(native, /RunOnce/);
+  assert.match(native, /metadata\.json/);
+  assert.match(native, /FixedTimeEquals/);
   assert.match(native, /requestedState = "disabled"/);
   assert.match(native, /requestedState = "enabled"/);
 });
@@ -126,7 +128,7 @@ test('AST refactoring tool is exposed preview-first and applies through approved
   assert.match(tools, /projectIndexRefactorJavaScript/);
   assert.match(tools, /executeAgentToolInternal\('edit_file'/);
   assert.match(providers, /name: 'javascript_refactor'/);
-  assert.match(providers, /apply=true routes through the existing approved edit_file flow/);
+  assert.match(providers, /apply=true uses the existing approved single\/multi-file edit path/);
 });
 
 test('Windows validation script builds the complete three-host solution after Node tests', () => {
@@ -151,4 +153,53 @@ test('network diagnostics map TCP and UDP listeners to process identities', () =
   assert.match(native, /new\[\] \{ "-ano", "-p", "udp" \}/);
   assert.match(native, /udpListeners/);
   assert.match(native, /tcpListeners/);
+});
+
+
+test('startup management can disable and restore RunOnce and Startup-folder entries with recovery inventory', () => {
+  assert.match(native, /HKCU RunOnce \(Registry64\)/);
+  assert.match(native, /HKLM RunOnce \(Registry32\)/);
+  assert.match(native, /User Startup Folder/);
+  assert.match(native, /Common Startup Folder/);
+  assert.match(native, /entryPath/);
+  assert.match(native, /recoveryPath/);
+  assert.match(native, /File\.Copy\(exactPath, backupPath/);
+  assert.match(native, /File\.Copy\(backupPath, exactPath/);
+  assert.match(providers, /Common Startup Folder/);
+  assert.match(tools, /entryPath:String\(args\.entry_path\|\|''\)/);
+});
+
+test('Node runtime resolver is exposed as an approved fixed-script native operation', () => {
+  assert.match(tools, /case 'node_resolve_modules'/);
+  assert.match(tools, /createRequire\(importer\)/);
+  assert.match(tools, /import\.meta\.resolve/);
+  assert.match(tools, /alwaysAsk: true/);
+  assert.match(tools, /not import or execute the target modules/);
+  assert.match(providers, /name: 'node_resolve_modules'/);
+});
+
+test('TypeScript compiler API is bundled offline and loaded before project indexing', () => {
+  assert.ok(fs.existsSync(path.join(root, 'Shared/ChatWindow/vendor/typescript/typescript.js')));
+  assert.ok(fs.existsSync(path.join(root, 'Shared/ChatWindow/vendor/typescript/LICENSE.txt')));
+  assert.doesNotMatch(read('Shared/ChatWindow.html'), /vendor\/typescript\/typescript\.js/);
+  assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /script\.src = 'ChatWindow\/vendor\/typescript\/typescript\.js'/);
+  assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /typescript-compiler-api/);
+  assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /PROJECT_INDEX_PREFIX = 'runmind\.project-index\.v6\.'/);
+});
+
+test('public API rename is preview-first and applies through the approved multi-file editor', () => {
+  assert.match(tools, /projectIndexRefactorPublicApi/);
+  assert.match(tools, /executeAgentToolInternal\('edit_files'/);
+  assert.match(providers, /rename-public-api/);
+});
+
+test('bundled TypeScript compiler initializes in a browser-like global without CommonJS module support', () => {
+  const vm = require('node:vm');
+  const context = { console, AbortController, DOMException, setInterval, clearInterval };
+  context.globalThis = context;
+  const bundle = fs.readFileSync(path.join(root, 'Shared/ChatWindow/vendor/typescript/typescript.js'), 'utf8');
+  vm.runInNewContext(bundle, context, { timeout: 30000 });
+  assert.equal(context.ts.version, '5.8.3');
+  const parsed = context.ts.createSourceFile('Widget.tsx', 'export const Widget = () => <section />;', context.ts.ScriptTarget.Latest, true, context.ts.ScriptKind.TSX);
+  assert.equal(parsed.parseDiagnostics.length, 0);
 });

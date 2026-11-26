@@ -4,12 +4,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const acorn = require('../Shared/ChatWindow/vendor/acorn/acorn.js');
+const ts = require('../Shared/ChatWindow/vendor/typescript/typescript.js');
 
 const projectIndexPath = path.join(__dirname, '..', 'Shared', 'ChatWindow', 'scripts', 'agent', 'project-index.js');
 const source = fs.readFileSync(projectIndexPath, 'utf8');
-const context = { acorn, console, AbortController, DOMException, setInterval, clearInterval };
+const context = { acorn, ts, console, AbortController, DOMException, setInterval, clearInterval };
 context.globalThis = context;
-vm.runInNewContext(`${source}\nglobalThis.__extract = projectIndexExtractJavaScript; globalThis.__extractFile = projectIndexExtract; globalThis.__graph = projectIndexLocalImportGraph; globalThis.__refactor = projectIndexRefactorJavaScript; globalThis.__crossRefs = projectIndexCrossFileReferences;`, context);
+vm.runInNewContext(`${source}\nglobalThis.__extract = projectIndexExtractJavaScript; globalThis.__extractFile = projectIndexExtract; globalThis.__graph = projectIndexLocalImportGraph; globalThis.__refactor = projectIndexRefactorJavaScript; globalThis.__crossRefs = projectIndexCrossFileReferences; globalThis.__extractTS = projectIndexExtractTypeScript; globalThis.__refactorAPI = projectIndexRefactorPublicApi; globalThis.__program = projectIndexAnalyzeTypeScriptProgram;`, context);
 
  test('Acorn extracts declarations, imports, and identifier occurrence counts', () => {
   const code = `import thing, { value as alias } from './thing.js';
@@ -39,10 +40,34 @@ test('CommonJS top-level return remains parseable through script fallback', () =
   assert.ok(result.imports.includes('./dep'));
 });
 
-test('TypeScript remains explicitly on the heuristic fallback', () => {
-  const result = context.__extractFile('export const Thing = 1;', 'typescript', 'Thing.ts');
-  assert.equal(result.engine, undefined);
+test('TypeScript files use the bundled compiler API and expose typed declarations', () => {
+  const result = context.__extractFile('export interface Thing { value: number }\nexport const createThing = (value: number): Thing => ({ value });', 'typescript', 'Thing.ts');
+  assert.equal(result.engine, 'typescript-compiler-api');
+  assert.equal(result.parserVersion, ts.version);
   assert.ok(result.symbols.includes('Thing'));
+  assert.ok(result.symbols.includes('createThing'));
+  assert.ok(result.exports.some(item => item.exported === 'Thing'));
+  assert.ok(result.exports.some(item => item.exported === 'createThing'));
+});
+
+test('JSX and TSX use compiler parser modes and extract JSX component references', () => {
+  const jsx = context.__extractFile(`import { Panel } from './Panel'; const App = () => <Panel title="Hello" />;`, 'javascript', 'App.jsx');
+  const tsx = context.__extractFile(`type Props = { title: string }; export const Panel = ({title}: Props) => <section>{title}</section>;`, 'typescript', 'Panel.tsx');
+  assert.equal(jsx.engine, 'typescript-compiler-api');
+  assert.equal(jsx.parseError, null);
+  assert.ok(jsx.calls.some(item => item.kind === 'jsx' && item.callee === 'Panel'));
+  assert.equal(tsx.engine, 'typescript-compiler-api');
+  assert.equal(tsx.parseError, null);
+  assert.ok(tsx.exports.some(item => item.exported === 'Panel'));
+  assert.ok(tsx.symbols.includes('Props'));
+});
+
+test('TypeScript compiler parser reports malformed TSX with source coordinates', () => {
+  const result = context.__extractFile('export const View = <div>;', 'typescript', 'View.tsx');
+  assert.equal(result.engine, 'typescript-compiler-api');
+  assert.ok(result.parseError);
+  assert.equal(result.parseError.line, 1);
+  assert.equal(typeof result.parseError.column, 'number');
 });
 
 
@@ -74,7 +99,7 @@ test('project graph resolves relative named imports to indexed exports', () => {
     { path: 'src/dep.js', language: 'javascript', imports: [], exports: [{ exported: 'value', local: 'value', kind: 'declaration' }] }
   ]);
   assert.equal(graph.localImportEdges.length, 1);
-  assert.deepEqual(JSON.parse(JSON.stringify(graph.resolvedBindings)), [{ from: 'src/main.js', to: 'src/dep.js', local: 'renamed', imported: 'value', exported: 'value' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(graph.resolvedBindings)), [{ from: 'src/main.js', to: 'src/dep.js', source: './dep.js', local: 'renamed', imported: 'value', exported: 'value' }]);
   assert.equal(graph.unresolvedBindings.length, 0);
 });
 
@@ -118,7 +143,7 @@ test('parsed project files feed the real relative-import graph and resolve expor
   assert.equal(graph.localImportEdges.length, 1);
   assert.equal(graph.resolvedBindings.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(graph.resolvedBindings[0])), {
-    from: 'src/main.js', to: 'src/math.js', local: 'run', imported: 'calculate', exported: 'calculate'
+    from: 'src/main.js', to: 'src/math.js', source: './math.js', local: 'run', imported: 'calculate', exported: 'calculate'
   });
 });
 
@@ -191,9 +216,9 @@ test('AST records re-export bindings for cross-module symbol resolution', () => 
   assert.deepEqual(Array.from(result.importBindings, item => [item.source,item.imported,item.local,item.kind]), [['./dep.js','value','publicValue','re-export']]);
 });
 
-test('project index schema v4 preserves original manifest text across incremental reuse', () => {
-  assert.match(source, /PROJECT_INDEX_PREFIX = 'runmind\.project-index\.v4\.'/);
-  assert.match(source, /value\.version===4/);
+test('project index schema v6 preserves original manifest text across incremental reuse', () => {
+  assert.match(source, /PROJECT_INDEX_PREFIX = 'runmind\.project-index\.v6\.'/);
+  assert.match(source, /value\.version===6/);
   assert.match(source, /manifestText:isManifest\?text\.slice\(0,64000\):null/);
   assert.match(source, /prior\.manifestText\|\|prior\.text\.slice/);
 });
@@ -324,4 +349,82 @@ test('cross-file symbol graph maps imported local references back to the exporti
   assert.equal(result.results[0].from, 'src/main.js');
   assert.equal(result.results[0].to, 'src/lib.js');
   assert.equal(result.results[0].referenceCount, 2);
+});
+
+
+test('public API rename updates declaration, resolved importers, and re-exports while preserving local names', () => {
+  const target = `export function oldName(value: number) { return value + 1; }`;
+  const result = context.__refactorAPI('src/api.ts', target, [
+    { path: 'src/app.ts', text: `import { oldName } from './api'; const value = oldName(2);`, sources: ['./api'] },
+    { path: 'src/reexport.ts', text: `export { oldName } from './api';`, sources: ['./api'] }
+  ], 'oldName', 'newName');
+  assert.equal(result.changes.length, 3);
+  assert.match(result.changes.find(item => item.path === 'src/api.ts').content, /export function newName/);
+  assert.match(result.changes.find(item => item.path === 'src/app.ts').content, /import \{ newName as oldName \}/);
+  assert.match(result.changes.find(item => item.path === 'src/app.ts').content, /oldName\(2\)/);
+  assert.match(result.changes.find(item => item.path === 'src/reexport.ts').content, /export \{ newName as oldName \}/);
+});
+
+test('public API rename supports explicit export aliases without renaming the local implementation', () => {
+  const result = context.__refactorAPI('src/api.ts', `const internal = () => 1; export { internal as oldName };`, [], 'oldName', 'newName');
+  assert.match(result.changes[0].content, /const internal = \(\) => 1; export \{ internal as newName \}/);
+});
+
+test('public API rename rejects default exports and invalid output identifiers', () => {
+  assert.throws(() => context.__refactorAPI('src/api.ts', `export default function oldName() {}`, [], 'oldName', 'newName'), /No direct named export/);
+  assert.throws(() => context.__refactorAPI('src/api.ts', `export const oldName = 1;`, [], 'oldName', 'not-valid'), /valid old and new exported identifiers/);
+});
+
+
+test('TypeScript compiler Program resolves imported symbols and cross-file references across workspace files', () => {
+  const result = context.__program([
+    { path: 'src/api.ts', language: 'typescript', analysisSource: `export function calculate(value: number) { return value * 2; }` },
+    { path: 'src/main.ts', language: 'typescript', analysisSource: `import { calculate as run } from './api'; export const result = run(2);` }
+  ], []);
+  assert.equal(result.compilerVersion, ts.version);
+  assert.equal(result.filesAnalyzed, 2);
+  assert.ok(result.resolvedBindings.some(item => item.from === 'src/main.ts' && item.to === 'src/api.ts' && item.imported === 'calculate' && item.local === 'run'));
+  assert.ok(result.crossFileReferences.some(item => item.path === 'src/main.ts' && item.targetPath === 'src/api.ts' && item.targetName === 'calculate'));
+});
+
+test('TypeScript compiler Program resolves JSX component usage across TSX modules', () => {
+  const result = context.__program([
+    { path: 'src/Panel.tsx', language: 'typescript', analysisSource: `export const Panel = () => <section />;` },
+    { path: 'src/App.tsx', language: 'typescript', analysisSource: `import { Panel } from './Panel'; export const App = () => <Panel />;` }
+  ], []);
+  assert.ok(result.crossFileReferences.some(item => item.path === 'src/App.tsx' && item.targetPath === 'src/Panel.tsx' && item.targetName === 'Panel'));
+});
+
+
+test('TypeScript compiler Program honors tsconfig paths for workspace module resolution', () => {
+  const result = context.__program([
+    { path: 'src/api.ts', language: 'typescript', analysisSource: `export const api = 1;` },
+    { path: 'src/main.ts', language: 'typescript', analysisSource: `import { api } from '@/api'; console.log(api);` }
+  ], [{ path: 'tsconfig.json', text: JSON.stringify({ compilerOptions: { baseUrl: '.', paths: { '@/*': ['src/*'] } } }) }]);
+  assert.ok(result.resolvedBindings.some(item => item.from === 'src/main.ts' && item.to === 'src/api.ts' && item.source === '@/api'));
+});
+
+test('static project graph maps JavaScript extension imports to indexed TypeScript source candidates', () => {
+  const graph = context.__graph([
+    { path: 'src/main.js', language: 'javascript', imports: ['./service.js'], importBindings: [{ source: './service.js', imported: 'run', local: 'run' }] },
+    { path: 'src/service.ts', language: 'typescript', exports: [{ exported: 'run', local: 'run' }] }
+  ]);
+  assert.ok(graph.localImportEdges.some(item => item.from === 'src/main.js' && item.to === 'src/service.ts'));
+  assert.ok(graph.resolvedBindings.some(item => item.imported === 'run' && item.to === 'src/service.ts'));
+});
+
+
+test('public API rename preserves comments inside import and re-export specifiers', () => {
+  const result = context.__refactorAPI('src/api.ts', `export function oldName() {}`, [
+    { path: 'src/app.ts', text: `import { /* keep this */ oldName } from './api';`, sources: ['./api'] },
+    { path: 'src/reexport.ts', text: `export { /* keep export note */ oldName } from './api';`, sources: ['./api'] }
+  ], 'oldName', 'newName');
+  assert.match(result.changes.find(item => item.path === 'src/app.ts').content, /\/\* keep this \*\/ newName as oldName/);
+  assert.match(result.changes.find(item => item.path === 'src/reexport.ts').content, /\/\* keep export note \*\/ newName as oldName/);
+});
+
+
+test('public API rename preserves the local name when an unaliased local export is renamed', () => {
+  const result = context.__refactorAPI('src/api.ts', `const oldName = () => 1; export { oldName };`, [], 'oldName', 'newName');
+  assert.match(result.changes[0].content, /const oldName = \(\) => 1; export \{ oldName as newName \}/);
 });

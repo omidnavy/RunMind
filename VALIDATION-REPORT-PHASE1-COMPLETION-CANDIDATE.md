@@ -1,51 +1,68 @@
-# Phase 1 completion candidate — validation report
+# Phase 1 completion extension — validation report
 
 Date: 2026-11-21  
 Source baseline: RunMind 2.6.3  
-Status: **Implementation candidate; Windows release gate still open**
+Project-index schema: v6  
+Status: **Implementation candidate; Windows build/runtime release gate still open**
 
-## Implemented in this source bundle
+## Implemented in this extension
 
-### JavaScript project intelligence
-- Bundled Acorn parser for `.js`, `.mjs`, and `.cjs`, with lexical scopes, shadowing, `var` placement, read/write references, declaration positions, calls, exports/imports, and parse-error locations.
-- Static module graph for relative imports, selected workspace package `exports`, package `imports` aliases, re-exports, common Node built-ins, external dependency reporting, and bounded circular dependency detection.
-- Cross-file use-site mapping for statically resolved import bindings.
-- Preview-first AST refactoring: scope-aware single-file rename, conservative extract-function, and import organization. Applying a preview routes through approved `edit_file` with backup and concurrent-change checks.
+### JavaScript, JSX, TSX and TypeScript intelligence
 
-### System Manager
-- Existing process/service/container operations retained, including identity checks, native confirmation, service restart verification, Podman/Docker inventory and state verification.
-- Reversible enable/disable for exact HKCU/HKLM `Run` registry values. The original command is preserved in a RunMind recovery registry key. `RunOnce` and Startup-folder entries remain inventory-only.
-- Hardware inventory via a fixed PowerShell CIM query, bounded `driverquery` inventory, and TCP/UDP listener-to-PID/process-name mapping via fixed `netstat` calls.
-- Shared result normalization: `success`, `accepted`, `completed`, `verified`, `action`, `target`, and `message`.
+- Keep Acorn 8.15.0 for detailed JavaScript AST analysis of `.js`, `.mjs`, and `.cjs` files.
+- Bundle TypeScript compiler API 5.8.3 offline under `Shared/ChatWindow/vendor/typescript/`, including its Apache-2.0 license. It is loaded lazily when project indexing begins, not at application startup.
+- Use the TypeScript compiler parser for `.jsx`, `.ts`, `.tsx`, `.mts`, and `.cts` files, including JSX/TSX syntax and parser diagnostics with source coordinates.
+- Run a bounded virtual-workspace `ts.Program` and checker over indexed JS/JSX/TS/TSX source. It resolves workspace cross-file symbols, import bindings, TSX component references, and root `tsconfig` compiler options/`paths`.
+- Bound checker analysis to 500 source files and 12 MB. It does not load default library declarations or run a full semantic diagnostic/type-check pass. Extended tsconfig chains/project references are not fully evaluated.
+- Preserve redacted JS/TS analysis source in the local project index for incremental reuse. Reuse prior checker results when no indexed files have changed. Project-index schema/key is v6.
 
-### Developer workflow and recovery
-- Real local Git temporary-repository integration test covering init/status/stage/commit/log/show/branch/diff/stash/pop.
-- Current RunMind JavaScript modules parsed through the semantic engine in a repository-level test.
-- Multi-file editing remains snapshot-based and recoverable; automated contract checks verify snapshot checks, backup-before-write ordering, rollback attempts, and backup retention.
-- Added `Validate-Phase1-Windows.ps1` to run Node tests and build the complete three-project solution on Windows.
+### Node.js module resolution
+
+- Extend static workspace resolution with `.js` to `.ts/.tsx/.d.ts` source substitutions and tsconfig path aliases.
+- Add `node_resolve_modules`, which uses the installed Node runtime's `createRequire().resolve()` and `import.meta.resolve()` to report actual CommonJS and ESM targets, including installed `node_modules` packages and conditional exports.
+- The resolver is a fixed script, requires fresh approval, requires the native execution workspace to match the project browser workspace, and does not import or execute target modules.
+- The static index still does not scan `node_modules`; custom loaders, runtime-generated specifiers, and code-dependent hooks are not executed.
+
+### Cross-file public API refactoring
+
+- Add preview-first `rename-public-api` for direct named exports.
+- Update resolved named importers and re-export sites across up to 20 files, preserving consumer-local names with aliases where needed.
+- Applying uses the existing approved single/multi-file edit path, per-file recovery backups, concurrent-change checks, and best-effort rollback.
+- Default exports, export-star chains, dynamic/unresolved importers, and changes spanning more than 20 files are rejected rather than guessed.
+
+### Startup management
+
+- Support reversible enable/disable for exact HKCU/HKLM `Run` and `RunOnce` registry values in both registry views.
+- Preserve the exact command and original `REG_SZ`/`REG_EXPAND_SZ` type in the RunMind recovery registry key.
+- Support inventoried `.lnk` and `.exe` entries in the user/common Startup folders. Disable copies the item to a RunMind recovery folder, verifies SHA-256, then removes the original. Restore refuses to overwrite an existing item and verifies the restored hash.
+- Disabled entries remain visible in startup inventory with their recovery information.
+- Every mutation requires fresh native confirmation. Other Startup-folder formats remain inventory-only.
 
 ## Validation performed in this environment
 
 | Check | Result |
 |---|---:|
-| Node test suite | **47/47 passed** |
-| JavaScript syntax checks | **18/18 passed** |
+| Complete Node test suite | **64/64 passed** |
+| JavaScript syntax checks, including vendor bundles | **20/20 passed** |
 | JSON parsing | **2/2 passed** |
-| XML/XAML/project/manifest parsing | **7/7 passed** |
+| XML/project/XAML/manifest parsing | **6/6 passed** |
 | C# delimiter sanity | **2 source files balanced** |
-| Git workflow integration | **Passed** |
-| ZIP integrity | To be recorded in the delivered package checksum step |
+| Git repository integration workflow | **Passed** |
+| Node runtime conditional-export test | **Passed** (Node v22.16.0; ESM and CommonJS targets resolved without importing them) |
+| TypeScript compiler parser/checker fixtures | **Passed** (TS, TSX, JSX, cross-file symbols, tsconfig paths) |
 
 C# delimiter sanity is only a lexical balance check. It is not C# compilation.
 
-## Explicit remaining release gates
+## Explicit release gates not performed
 
-This environment has no .NET SDK, MSBuild, PowerShell, or Windows runtime. Therefore:
-- The Standalone, PowerToys Run, and PowerToys Command Palette projects have **not** been compiled in this turn.
-- Registry startup operations, PowerShell CIM, `driverquery`, `netstat`, Windows services/processes, and Podman/Docker operations have **not** been executed on Windows.
-- Browser/WebView multi-file failure injection and model-driven end-to-end workflows have not been exercised through all three hosts.
+This environment has no .NET SDK/MSBuild, PowerShell, or Windows runtime. Therefore:
 
-Run this from the source root on Windows with Node.js, the .NET 10 SDK, and restored dependencies:
+- Standalone, PowerToys Run, and PowerToys Command Palette have **not** been compiled in this environment.
+- Windows registry Run/RunOnce operations, Startup-folder file moves/copies, CIM hardware queries, `driverquery`, `netstat`, Windows services/processes, and Podman/Docker operations have **not** been executed on Windows.
+- The TypeScript compiler bundle has been tested under Node/VM fixtures, but its lazy WebView loading and memory/performance behavior still need Windows WebView runtime validation.
+- Cross-host model-driven workflows and multi-file rollback under actual WebView file permissions have not been exercised across all three hosts.
+
+Run from the extracted source root on Windows with Node.js, the .NET 10 SDK, and restored dependencies:
 
 ```powershell
 .\Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64
@@ -53,14 +70,12 @@ Run this from the source root on Windows with Node.js, the .NET 10 SDK, and rest
 
 Then follow `docs/PHASE1-INTEGRATED-VALIDATION.md` in Standalone, PowerToys Run, and Command Palette. Phase 1 should only be marked complete after those builds and runtime scenarios pass.
 
-## Known functional limits
+## Remaining bounded limitations
 
-- JSX/TSX and TypeScript remain heuristic; compiler-backed TypeScript analysis is not a Phase 1 blocker.
-- Node module resolution is static and bounded; it does not model all conditional exports, custom loaders, runtime aliases, or package-manager installation layouts.
-- Cross-file references cover statically resolved imports; dynamic/unresolved references and complete cross-file call graphs are not included.
-- Rename is single-file and does not automatically rename public APIs and all importers.
-- Extract-function is intentionally conservative and rejects variable/function/class declarations, return/break/continue, await/yield, `this`, `arguments`, direct eval, and other control-flow-sensitive selections.
-- Startup changes cover HKCU/HKLM `Run` keys only; RunOnce and Startup-folder entries are inventory-only.
-- Multi-file writes are sequential, not filesystem-atomic. Recovery backups are retained, but rollback can still fail and is reported.
+- TypeScript analysis is compiler-backed but bounded: 500 files/12 MB, no default libs, no full diagnostics/type checking, and no complete project-reference/extended-tsconfig evaluation.
+- The static project index excludes `node_modules`. Actual installed package resolution is available through the approved Node runtime tool; custom loaders and runtime-generated specifiers are not executed.
+- Public API rename is limited to direct named exports and statically resolved import/re-export sites, with a 20-file cap.
+- Startup-folder management supports `.lnk` and `.exe` entries; other file types are inventory-only.
+- Extract-function remains conservative and rejects control-flow-sensitive selections. Multi-file writes are sequential, not filesystem-atomic; recovery backups are retained, but rollback can still fail and is reported.
 
-The implementation work is bundled as a Phase 1 completion candidate, not a Windows-certified release.
+This is the most complete Phase 1 source candidate, not a Windows-certified release. Version remains 2.6.3 pending the three-host validation gate.

@@ -1,15 +1,29 @@
     'use strict';
 
-    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v4.';
+    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v6.';
     const PROJECT_INDEX_LIMITS = Object.freeze({ files: 10000, entries: 50000, depth: 10, fileBytes: 256 * 1024, totalBytes: 24 * 1024 * 1024 });
     const PROJECT_INDEX_SKIP_DIRS = new Set(['.git','.hg','.svn','.runmind-backups','.cache','node_modules','vendor','bin','obj','dist','build','out','target','.next','.nuxt','.venv','venv','__pycache__','coverage','.idea','.vs','.gradle','.terraform','.npm','.nuget','.cargo','.docker','.pypoetry','.conda','secret','secrets','credential','credentials','.ssh','.aws','.azure','.gnupg']);
     const PROJECT_INDEX_SKIP_FILES = /^(?:\.env(?:\..*)?|(?:.*\.(?:pem|key|p12|pfx|keystore|jks|kdbx|sqlite|db|wasm|dll|exe|so|dylib|bin|lockb)|.*(?:secret|credential).*)|id_(?:rsa|ed25519)|credentials?(?:\..*)?|secrets?(?:\..*)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|nuget\.config|pip\.conf|\.dockercfg|known_hosts)$/i;
-    const PROJECT_INDEX_TEXT_EXTENSIONS = new Set(['.md','.mdx','.txt','.rst','.adoc','.json','.jsonc','.json5','.yaml','.yml','.toml','.ini','.cfg','.conf','.xml','.html','.htm','.css','.scss','.less','.js','.mjs','.cjs','.jsx','.ts','.tsx','.vue','.svelte','.py','.pyi','.cs','.java','.kt','.kts','.go','.rs','.c','.h','.cc','.cpp','.hpp','.hh','.php','.rb','.swift','.sh','.bash','.zsh','.ps1','.bat','.cmd','.sql','.graphql','.gql','.proto','.dockerfile','.makefile','.gradle','.properties','.lock']);
+    const PROJECT_INDEX_TEXT_EXTENSIONS = new Set(['.md','.mdx','.txt','.rst','.adoc','.json','.jsonc','.json5','.yaml','.yml','.toml','.ini','.cfg','.conf','.xml','.html','.htm','.css','.scss','.less','.js','.mjs','.cjs','.jsx','.ts','.tsx','.mts','.cts','.vue','.svelte','.py','.pyi','.cs','.java','.kt','.kts','.go','.rs','.c','.h','.cc','.cpp','.hpp','.hh','.php','.rb','.swift','.sh','.bash','.zsh','.ps1','.bat','.cmd','.sql','.graphql','.gql','.proto','.dockerfile','.makefile','.gradle','.properties','.lock']);
 
     function projectIndexKey() { return `${PROJECT_INDEX_PREFIX}${workspaceContext.id}`; }
+    let projectIndexCompilerLoadPromise = null;
+    async function projectIndexEnsureTypeScriptCompiler() {
+      if (globalThis.ts?.createProgram) return globalThis.ts;
+      if (projectIndexCompilerLoadPromise) return projectIndexCompilerLoadPromise;
+      projectIndexCompilerLoadPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'ChatWindow/vendor/typescript/typescript.js';
+        script.async = true;
+        script.onload = () => globalThis.ts?.createProgram ? resolve(globalThis.ts) : reject(new Error('The TypeScript compiler bundle loaded without exposing its API.'));
+        script.onerror = () => { script.remove(); reject(new Error('The bundled TypeScript compiler could not be loaded from the application files.')); };
+        document.head.appendChild(script);
+      }).catch(error => { projectIndexCompilerLoadPromise = null; throw error; });
+      return projectIndexCompilerLoadPromise;
+    }
     function projectIndexLanguage(path) {
       const ext = String(path).toLowerCase().match(/\.[^.\/]+$/)?.[0] || '';
-      const map = { '.js':'javascript','.mjs':'javascript','.cjs':'javascript','.jsx':'javascript','.ts':'typescript','.tsx':'typescript','.py':'python','.cs':'csharp','.java':'java','.kt':'kotlin','.go':'go','.rs':'rust','.c':'c','.h':'c','.cc':'cpp','.cpp':'cpp','.hpp':'cpp','.php':'php','.rb':'ruby','.swift':'swift','.sh':'shell','.ps1':'powershell','.sql':'sql','.json':'json','.yaml':'yaml','.yml':'yaml','.toml':'toml','.md':'markdown','.html':'html','.css':'css' };
+      const map = { '.js':'javascript','.mjs':'javascript','.cjs':'javascript','.jsx':'javascript','.ts':'typescript','.tsx':'typescript','.mts':'typescript','.cts':'typescript','.py':'python','.cs':'csharp','.java':'java','.kt':'kotlin','.go':'go','.rs':'rust','.c':'c','.h':'c','.cc':'cpp','.cpp':'cpp','.hpp':'cpp','.php':'php','.rb':'ruby','.swift':'swift','.sh':'shell','.ps1':'powershell','.sql':'sql','.json':'json','.yaml':'yaml','.yml':'yaml','.toml':'toml','.md':'markdown','.html':'html','.css':'css' };
       return map[ext] || (['Dockerfile','Makefile'].includes(path.split('/').pop()) ? 'build' : 'text');
     }
     function projectIndexDependencies(manifests) {
@@ -95,14 +109,15 @@
       for(const record of manifestRecords)if(typeof record.data.name==='string')packages.set(record.data.name,{...record, name:record.data.name});
       const resolveFile = baseValue => {
         const base=normalizePath(baseValue);
-        const candidates=[base,...['.js','.mjs','.cjs','.jsx','.ts','.tsx','.json','.py'].map(ext=>base+ext),...['index.js','index.mjs','index.cjs','index.jsx','index.ts','index.tsx','index.json','__init__.py'].map(name=>`${base.replace(/\/$/,'')}/${name}`)];
+        const extensionSubstitutions=base.endsWith('.mjs')?[base.slice(0,-4)+'.mts']:base.endsWith('.cjs')?[base.slice(0,-4)+'.cts']:base.endsWith('.jsx')?[base.slice(0,-4)+'.tsx']:base.endsWith('.js')?[base.slice(0,-3)+'.ts',base.slice(0,-3)+'.tsx',base.slice(0,-3)+'.d.ts']:[];
+        const candidates=[base,...extensionSubstitutions,...['.js','.mjs','.cjs','.jsx','.ts','.tsx','.mts','.cts','.d.ts','.json','.node','.py'].map(ext=>base+ext),...['index.js','index.mjs','index.cjs','index.jsx','index.ts','index.tsx','index.mts','index.cts','index.d.ts','index.json','__init__.py'].map(name=>`${base.replace(/\/$/,'')}/${name}`)];
         return candidates.find(candidate=>known.has(candidate))||null;
       };
       const collectTargets = (value, wildcard='') => {
         if(typeof value==='string')return [value.replace(/\*/g,wildcard)];
         if(Array.isArray(value))return value.flatMap(item=>collectTargets(item,wildcard));
         if(value&&typeof value==='object') {
-          const keys=Object.keys(value), preferred=['import','require','node','browser','default'];
+          const keys=Object.keys(value), preferred=['node-addons','node','import','require','types','browser','development','production','default'];
           const ordered=[...preferred.filter(key=>keys.includes(key)),...keys.filter(key=>!preferred.includes(key)&&!key.startsWith('.'))];
           return ordered.flatMap(key=>collectTargets(value[key],wildcard));
         }
@@ -114,10 +129,9 @@
         const keys=Object.keys(mapping), hasSubpathKeys=keys.some(key=>key.startsWith('.')||key.startsWith('#'));
         if(Object.prototype.hasOwnProperty.call(mapping,subpath))return collectTargets(mapping[subpath],wildcard);
         if(!hasSubpathKeys)return subpath==='.'?collectTargets(mapping,wildcard):[];
-        for(const key of keys) {
-          if(!key.startsWith('.')&&!key.startsWith('#'))continue;
-          const star=key.indexOf('*'); if(star<0)continue;
-          const prefix=key.slice(0,star), suffix=key.slice(star+1);
+        const patterns=keys.filter(key=>key.startsWith('.')||key.startsWith('#')).filter(key=>key.includes('*')).sort((a,b)=>{const aa=a.split('*'),bb=b.split('*');return (bb[0].length+bb[1].length)-(aa[0].length+aa[1].length);});
+        for(const key of patterns) {
+          const star=key.indexOf('*'),prefix=key.slice(0,star),suffix=key.slice(star+1);
           if(subpath.startsWith(prefix)&&subpath.endsWith(suffix)&&subpath.length>=prefix.length+suffix.length) {
             const value=subpath.slice(prefix.length,subpath.length-suffix.length||undefined);
             return collectTargets(mapping[key],value);
@@ -129,7 +143,7 @@
         const data=record.data;
         if(data.exports!==undefined) return mapSubpath(data.exports,subpath);
         if(subpath!=='.')return [`./${subpath.slice(2)}`];
-        return [data.module,data.main,data.browser,'./index.js'].filter(value=>typeof value==='string').map(value=>value.startsWith('./')?value:`./${value.replace(/^\.\//,'')}`);
+        return [data.main,data.module,data.types,data.typings,'./index.js'].filter(value=>typeof value==='string').map(value=>value.startsWith('./')?value:`./${value.replace(/^\.\//,'')}`);
       };
       const nearestPackage = filePath => manifestRecords.filter(item=>!item.dir||filePath.startsWith(item.dir+'/')||filePath===item.path).sort((a,b)=>b.dir.length-a.dir.length)[0]||null;
       const resolveSpecifier = (file, specifier) => {
@@ -196,10 +210,10 @@
           continue;
         }
         const exported=(target.exports||[]).find(item=>item.exported===binding.imported || (item.exported==='*'&&binding.imported==='*'));
-        if(exported) resolvedBindings.push({from:file.path,to:target.path,local:binding.local,imported:binding.imported,exported:exported.exported});
+        if(exported) resolvedBindings.push({from:file.path,to:target.path,source:binding.source,local:binding.local,imported:binding.imported,exported:exported.exported});
         else unresolvedBindings.push({from:file.path,to:target.path,source:binding.source,local:binding.local,imported:binding.imported,reason:'export-not-found-or-not-statically-known'});
       }
-      return { localImportEdges: edges.slice(0,5000), resolvedBindings:resolvedBindings.slice(0,5000), unresolvedBindings:unresolvedBindings.slice(0,5000), externalImports:externalImports.slice(0,2000), circularDependencies, filesWithIncomingImports: [...incoming].map(([path,count])=>({path,count})).sort((a,b)=>b.count-a.count||a.path.localeCompare(b.path)).slice(0,100), note:'Relative imports, workspace package imports via package.json exports, package imports (# aliases), and common Node built-ins are recognized. Conditional target selection is conservative; runtime resolution, installed dependency layout, custom loaders, and TypeScript path mappings are not evaluated.' };
+      return { localImportEdges: edges.slice(0,5000), resolvedBindings:resolvedBindings.slice(0,5000), unresolvedBindings:unresolvedBindings.slice(0,5000), externalImports:externalImports.slice(0,2000), circularDependencies, filesWithIncomingImports: [...incoming].map(([path,count])=>({path,count})).sort((a,b)=>b.count-a.count||a.path.localeCompare(b.path)).slice(0,100), note:'Static Node-compatible resolution covers indexed relative paths, workspace package exports/imports, conditional export targets, package main/module fallbacks, and Node built-ins. It cannot resolve unindexed node_modules contents, custom loaders, runtime-generated specifiers, or runtime-dependent conditions; use node_resolve_modules for actual installed-package resolution through Node ESM and CommonJS resolvers.' };
     }
     function redactProjectIndexSecrets(source) {
       let text=String(source||'');
@@ -331,6 +345,228 @@
       const identifierOccurrences=new Map(); for(const ref of references)identifierOccurrences.set(ref.name,(identifierOccurrences.get(ref.name)||0)+1);
       return {supported:true,engine:'acorn-semantic-local',calls:calls.slice(0,5000),imports:[...imports].slice(0,120),symbols:[...new Set(symbolDetails.map(item=>item.name))].slice(0,120),symbolDetails:symbolDetails.slice(0,500),identifierOccurrences:[...identifierOccurrences].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)).slice(0,500),references:references.slice(0,5000),exports:exports.slice(0,500),importBindings:importBindings.slice(0,500),parseError:null};
     }
+    function projectIndexExtractTypeScript(source, path = '') {
+      const ts = globalThis.ts;
+      if (!ts?.createSourceFile) return { supported: false, error: 'The bundled TypeScript compiler API is unavailable.' };
+      const text = String(source ?? '');
+      const extension = String(path).toLowerCase().split('.').pop();
+      const scriptKind = extension === 'tsx' ? ts.ScriptKind.TSX : extension === 'jsx' ? ts.ScriptKind.JSX : ts.ScriptKind.TS;
+      const sourceFile = ts.createSourceFile(path || 'workspace.ts', text, ts.ScriptTarget.Latest, true, scriptKind);
+      const diagnostics = sourceFile.parseDiagnostics || [];
+      const diagnostic = diagnostics[0];
+      if (diagnostic) {
+        const position = diagnostic.start ?? 0;
+        const location = sourceFile.getLineAndCharacterOfPosition(position);
+        return { supported: true, engine: 'typescript-compiler-api', parserVersion: ts.version, parseError: { message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n').slice(0, 400), line: location.line + 1, column: location.character }, imports: [], symbols: [], symbolDetails: [], identifierOccurrences: [], references: [], calls: [], exports: [], importBindings: [], diagnostics: diagnostics.length };
+      }
+      const scopes = [];
+      const nodeScopes = new WeakMap();
+      const declarationNodes = new WeakSet();
+      const references = [], calls = [], imports = new Set(), exports = [], importBindings = [];
+      const root = { parent: null, type: 'module', node: sourceFile, bindings: new Map() };
+      scopes.push(root);
+      const makeScope = (parent, type, node) => { const scope = { parent, type, node, bindings: new Map() }; scopes.push(scope); return scope; };
+      const bindingIdentifiers = (node, output = []) => {
+        if (!node) return output;
+        if (ts.isIdentifier(node)) output.push(node);
+        else if (ts.isObjectBindingPattern(node) || ts.isArrayBindingPattern(node)) for (const element of node.elements) if (element && !ts.isOmittedExpression(element)) bindingIdentifiers(ts.isBindingElement(element) ? element.name : element, output);
+        return output;
+      };
+      const declare = (scope, node, kind) => {
+        for (const identifier of bindingIdentifiers(node)) {
+          declarationNodes.add(identifier);
+          const name = identifier.text;
+          const list = scope.bindings.get(name) || [];
+          list.push({ name, kind, start: identifier.getStart(sourceFile), end: identifier.end });
+          scope.bindings.set(name, list);
+        }
+      };
+      const modifiers = node => ts.canHaveModifiers(node) ? (ts.getModifiers(node) || []) : [];
+      const hasModifier = (node, kind) => modifiers(node).some(item => item.kind === kind);
+      const nameText = node => node && (ts.isIdentifier(node) || ts.isStringLiteralLike(node) || ts.isNumericLiteral(node)) ? node.text : '';
+      const addExport = (exported, local, kind, node) => { if (exported) exports.push({ exported, local: local || exported, kind, start: node?.getStart(sourceFile) ?? 0 }); };
+      const functionAt = node => { let current = node; while (current && current !== sourceFile) { if (ts.isFunctionLike(current)) { if (current.name && ts.isIdentifier(current.name)) return current.name.text; const owner=current.parent; if (owner && ts.isVariableDeclaration(owner) && ts.isIdentifier(owner.name)) return owner.name.text; if (owner && ts.isPropertyAssignment(owner) && ts.isIdentifier(owner.name)) return owner.name.text; } current = current.parent; } return null; };
+      const walk = (node, parentScope, parent = null) => {
+        let scope = parentScope;
+        if (node !== sourceFile && (ts.isBlock(node) || ts.isModuleBlock(node))) scope = makeScope(parentScope, 'Block', node);
+        if (ts.isFunctionLike(node)) scope = makeScope(parentScope, 'function', node);
+        if (ts.isClassLike(node)) scope = makeScope(parentScope, 'class', node);
+        nodeScopes.set(node, scope);
+
+        if (ts.isFunctionDeclaration(node) && node.name) declare(parentScope, node.name, 'function');
+        else if (ts.isClassDeclaration(node) && node.name) declare(parentScope, node.name, 'class');
+        else if (ts.isFunctionExpression(node) && node.name) declare(scope, node.name, 'function-name');
+        else if (ts.isClassExpression(node) && node.name) declare(scope, node.name, 'class-name');
+        else if (ts.isInterfaceDeclaration(node)) declare(parentScope, node.name, 'interface');
+        else if (ts.isTypeAliasDeclaration(node)) declare(parentScope, node.name, 'type');
+        else if (ts.isEnumDeclaration(node)) declare(parentScope, node.name, 'enum');
+        else if (ts.isModuleDeclaration(node) && ts.isIdentifier(node.name)) declare(parentScope, node.name, 'namespace');
+        else if (ts.isTypeParameterDeclaration(node)) declare(scope, node.name, 'type-parameter');
+        else if (ts.isMethodDeclaration(node) || ts.isMethodSignature(node)) { if (ts.isIdentifier(node.name)) { declarationNodes.add(node.name); const list=parentScope.bindings.get(node.name.text)||[]; list.push({name:node.name.text,kind:'method',start:node.name.getStart(sourceFile),end:node.name.end}); parentScope.bindings.set(node.name.text,list); } }
+        else if (ts.isPropertyDeclaration(node) || ts.isPropertySignature(node)) { if (ts.isIdentifier(node.name)) { declarationNodes.add(node.name); const list=scope.bindings.get(node.name.text)||[]; list.push({name:node.name.text,kind:'property',start:node.name.getStart(sourceFile),end:node.name.end}); scope.bindings.set(node.name.text,list); } }
+        else if (ts.isVariableDeclaration(node)) {
+          const list = parent && ts.isVariableDeclarationList(parent) ? parent : null;
+          const isVar = !!list && (list.flags & ts.NodeFlags.BlockScoped) === 0;
+          let target = scope;
+          if (isVar) while (target.parent && target.type !== 'function' && target.type !== 'module') target = target.parent;
+          declare(target, node.name, isVar ? 'var' : 'variable');
+        }
+        if (ts.isParameter(node)) declare(scope, node.name, 'parameter');
+        if (ts.isCatchClause(node) && node.variableDeclaration) declare(scope, node.variableDeclaration.name, 'catch');
+
+        if (ts.isImportDeclaration(node) && ts.isStringLiteralLike(node.moduleSpecifier)) {
+          const specifier = node.moduleSpecifier.text; imports.add(specifier);
+          const clause = node.importClause;
+          if (clause?.name) { declare(root, clause.name, 'import'); importBindings.push({ source: specifier, imported: 'default', local: clause.name.text, kind: 'import' }); }
+          if (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+            declare(root, clause.namedBindings.name, 'import'); importBindings.push({ source: specifier, imported: '*', local: clause.namedBindings.name.text, kind: 'import' });
+          } else if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+            for (const element of clause.namedBindings.elements) {
+              if (element.propertyName) declarationNodes.add(element.propertyName);
+              declare(root, element.name, 'import');
+              importBindings.push({ source: specifier, imported: nameText(element.propertyName || element.name), local: element.name.text, kind: 'import' });
+            }
+          }
+        }
+        if (ts.isImportTypeNode(node) && node.argument && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteralLike(node.argument.literal)) imports.add(node.argument.literal.text);
+        if (ts.isImportEqualsDeclaration(node)) {
+          declare(root, node.name, 'import');
+          if (ts.isExternalModuleReference(node.moduleReference) && node.moduleReference.expression && ts.isStringLiteralLike(node.moduleReference.expression)) {
+            const specifier = node.moduleReference.expression.text; imports.add(specifier); importBindings.push({ source: specifier, imported: 'export=', local: node.name.text, kind: 'import-equals' });
+          }
+        }
+        if (ts.isExportDeclaration(node)) {
+          const specifier = node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier) ? node.moduleSpecifier.text : '';
+          if (specifier) imports.add(specifier);
+          if (node.exportClause && ts.isNamedExports(node.exportClause)) for (const element of node.exportClause.elements) {
+            const imported = nameText(element.propertyName || element.name), exported = element.name.text;
+            declarationNodes.add(element.name); if (element.propertyName) declarationNodes.add(element.propertyName);
+            if (specifier) importBindings.push({ source: specifier, imported, local: exported, kind: 're-export' });
+            else addExport(exported, imported, 'specifier', element);
+          }
+          if (node.exportClause && ts.isNamespaceExport(node.exportClause)) addExport(node.exportClause.name.text, '*', 'namespace', node.exportClause);
+        }
+        if (ts.isExportAssignment(node)) addExport(node.isExportEquals ? 'export=' : 'default', node.expression && ts.isIdentifier(node.expression) ? node.expression.text : (node.isExportEquals ? 'export=' : 'default'), node.isExportEquals ? 'export-equals' : 'default', node);
+        if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && ts.isIdentifier(node.tagName)) calls.push({ kind:'jsx', callee:node.tagName.text, receiver:null, start:node.getStart(sourceFile), end:node.end, caller:functionAt(node), resolution:'unresolved', declaration:null });
+
+        if (ts.isVariableStatement(node) && hasModifier(node, ts.SyntaxKind.ExportKeyword)) for (const declaration of node.declarationList.declarations) for (const identifier of bindingIdentifiers(declaration.name)) addExport(identifier.text, identifier.text, 'declaration', identifier);
+        if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node)) && node.name && hasModifier(node, ts.SyntaxKind.ExportKeyword) && !hasModifier(node, ts.SyntaxKind.DefaultKeyword)) addExport(node.name.text, node.name.text, 'declaration', node.name);
+        if (ts.isFunctionDeclaration(node) && hasModifier(node, ts.SyntaxKind.DefaultKeyword)) addExport('default', node.name?.text || 'default', 'default', node);
+
+        if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+          const expression = node.expression;
+          if (ts.isCallExpression(node) && (expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(expression) && expression.text === 'require')) && node.arguments?.[0] && ts.isStringLiteralLike(node.arguments[0])) imports.add(node.arguments[0].text);
+          let callee = '', receiver = '';
+          if (ts.isIdentifier(expression)) callee = expression.text;
+          else if (ts.isPropertyAccessExpression(expression)) { callee = expression.name.text; receiver = expression.expression.getText(sourceFile); }
+          else callee = expression.getText(sourceFile).slice(0, 180);
+          calls.push({ kind: ts.isNewExpression(node) ? 'construct' : 'call', callee, receiver: receiver || null, start: node.getStart(sourceFile), end: node.end, caller: functionAt(node), resolution: 'unresolved', declaration: null });
+        }
+        ts.forEachChild(node, child => walk(child, scope, node));
+      };
+      walk(sourceFile, root, null);
+
+      const isPropertyName = (node, parent) => (ts.isPropertyAccessExpression(parent) && parent.name === node) || ((ts.isPropertyAssignment(parent) || ts.isMethodDeclaration(parent) || ts.isPropertyDeclaration(parent) || ts.isMethodSignature(parent) || ts.isPropertySignature(parent)) && parent.name === node && !ts.isComputedPropertyName(parent.name));
+      const accessFor = (node, parent) => {
+        if (parent && (ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent)) && parent.operand === node && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)) return 'read-write';
+        if (parent && ts.isBinaryExpression(parent) && parent.left === node && ts.isAssignmentOperator(parent.operatorToken.kind)) return parent.operatorToken.kind === ts.SyntaxKind.EqualsToken ? 'write' : 'read-write';
+        return 'read';
+      };
+      const resolve = (scope, name, position) => {
+        for (let current = scope; current; current = current.parent) {
+          const list = current.bindings.get(name);
+          if (list) { const found = list.filter(item => item.start <= position || ['function','class','interface','type','enum','namespace','import','parameter','var'].includes(item.kind)).sort((a,b) => b.start-a.start)[0]; if (found) return found; }
+        }
+        return null;
+      };
+      const collectReferences = (node, parent = null) => {
+        if (ts.isIdentifier(node) && !declarationNodes.has(node) && !isPropertyName(node, parent) && !(parent && ts.isShorthandPropertyAssignment(parent) && parent.name !== node)) {
+          const start = node.getStart(sourceFile), access = accessFor(node, parent), binding = resolve(nodeScopes.get(node) || root, node.text, start);
+          references.push({ name: node.text, start, end: node.end, access, read: access !== 'write', write: access !== 'read', resolution: binding ? 'local' : 'unresolved', declaration: binding?.start ?? null });
+        }
+        ts.forEachChild(node, child => collectReferences(child, node));
+      };
+      collectReferences(sourceFile);
+      const symbols = [];
+      for (const scope of scopes) for (const [name, bindings] of scope.bindings) for (const binding of bindings) {
+        const refs = references.filter(item => item.declaration === binding.start);
+        symbols.push({ ...binding, scope: scope.type, referenceCount: refs.length, readCount: refs.filter(item => item.read).length, writeCount: refs.filter(item => item.write).length });
+      }
+      const occurrenceMap = new Map(); for (const ref of references) occurrenceMap.set(ref.name, (occurrenceMap.get(ref.name) || 0) + 1);
+      return { supported: true, engine: 'typescript-compiler-api', parserVersion: ts.version, parseError: null, imports: [...imports].slice(0, 200), symbols: [...new Set(symbols.map(item => item.name))].slice(0, 200), symbolDetails: symbols.slice(0, 1000), identifierOccurrences: [...occurrenceMap].map(([name,count]) => ({ name,count })).sort((a,b) => b.count-a.count || a.name.localeCompare(b.name)).slice(0,1000), references: references.slice(0,10000), calls: calls.slice(0,5000), exports: exports.slice(0,1000), importBindings: importBindings.slice(0,1000), diagnostics: 0 };
+    }
+
+    function projectIndexRefactorPublicApi(targetPath, targetSource, consumers, oldName, newName) {
+      const ts = globalThis.ts;
+      if (!ts?.createSourceFile) throw new Error('The TypeScript compiler API is unavailable.');
+      if (!/^[A-Za-z_$][\w$]*$/.test(String(newName || '')) || !/^[A-Za-z_$][\w$]*$/.test(String(oldName || ''))) throw new Error('Provide valid old and new exported identifiers.');
+      if (oldName === newName) return { changed: false, changes: [], message: 'The exported symbol already has that name.' };
+      const parse = (path, text) => {
+        const ext = String(path).toLowerCase().split('.').pop();
+        const kind = ext === 'tsx' ? ts.ScriptKind.TSX : ext === 'jsx' ? ts.ScriptKind.JSX : ts.ScriptKind.TS;
+        const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, kind);
+        if (file.parseDiagnostics?.length) throw new Error(`Cannot refactor '${path}': ${ts.flattenDiagnosticMessageText(file.parseDiagnostics[0].messageText, '\n')}`);
+        return file;
+      };
+      const applyEdits = (text, edits, parsePath = 'preview.ts') => {
+        const sorted = edits.sort((a,b) => b.start-a.start);
+        for (let i=1;i<sorted.length;i++) if (sorted[i-1].start < sorted[i].end) throw new Error('Overlapping syntax edits were detected; public API rename was blocked.');
+        let content=text;
+        for (const edit of sorted) content=content.slice(0,edit.start)+edit.value+content.slice(edit.end);
+        const outputFile = parse(parsePath, content);
+        return { content, edits: edits.length, diagnostics: outputFile.parseDiagnostics?.length || 0 };
+      };
+      const targetText=String(targetSource ?? ''), targetFile=parse(targetPath,targetText), targetEdits=[];
+      const modifiers=node=>ts.canHaveModifiers(node)?(ts.getModifiers(node)||[]):[];
+      const exported=(node)=>modifiers(node).some(item=>item.kind===ts.SyntaxKind.ExportKeyword);
+      let match=null;
+      for(const statement of targetFile.statements) {
+        if(ts.isVariableStatement(statement)&&exported(statement)) for(const declaration of statement.declarationList.declarations) if(ts.isIdentifier(declaration.name)&&declaration.name.text===oldName) match={kind:'direct',node:declaration.name,local:oldName};
+        if((ts.isFunctionDeclaration(statement)||ts.isClassDeclaration(statement)||ts.isInterfaceDeclaration(statement)||ts.isTypeAliasDeclaration(statement)||ts.isEnumDeclaration(statement))&&exported(statement)&&!modifiers(statement).some(item=>item.kind===ts.SyntaxKind.DefaultKeyword)&&statement.name?.text===oldName) match={kind:'direct',node:statement.name,local:oldName};
+        if(ts.isExportDeclaration(statement)&&!statement.moduleSpecifier&&statement.exportClause&&ts.isNamedExports(statement.exportClause)) for(const element of statement.exportClause.elements) if(element.name.text===oldName) match={kind:'specifier',node:element,local:(element.propertyName||element.name).text,aliased:!!element.propertyName};
+      }
+      if(!match) throw new Error(`No direct named export '${oldName}' was found in '${targetPath}'. Default exports and indirect export-star chains are not renamed by this operation.`);
+      if(match.kind==='direct') {
+        const bindingStart=match.node.getStart(targetFile);
+        targetEdits.push({start:bindingStart,end:match.node.end,value:newName});
+        const analysis=projectIndexExtractTypeScript(targetText,targetPath);
+        for(const reference of analysis.references||[]) if(reference.declaration===bindingStart) targetEdits.push({start:reference.start,end:reference.end,value:newName});
+      } else if(match.aliased) {
+        targetEdits.push({start:match.node.name.getStart(targetFile),end:match.node.name.end,value:newName});
+      } else {
+        targetEdits.push({start:match.node.name.getStart(targetFile),end:match.node.name.end,value:`${oldName} as ${newName}`});
+      }
+      const targetResult=applyEdits(targetText,targetEdits,targetPath);
+      const changes=[{path:targetPath,content:targetResult.content,edits:targetResult.edits}];
+      const seen=new Set([targetPath]);
+      for(const consumer of consumers||[]) {
+        if(seen.has(consumer.path)) continue;
+        const source=String(consumer.text??''), file=parse(consumer.path,source), edits=[];
+        const matchingSources=new Set(consumer.sources||[]);
+        const visit=node=>{
+          if(ts.isImportDeclaration(node)&&node.importClause&&ts.isStringLiteralLike(node.moduleSpecifier)&&matchingSources.has(node.moduleSpecifier.text)&&node.importClause.namedBindings&&ts.isNamedImports(node.importClause.namedBindings)) {
+            for(const element of node.importClause.namedBindings.elements) {
+              const imported=(element.propertyName||element.name).text;
+              if(imported!==oldName) continue;
+              if(element.propertyName) edits.push({start:element.propertyName.getStart(file),end:element.propertyName.end,value:newName});
+              else edits.push({start:element.name.getStart(file),end:element.name.end,value:`${newName} as ${element.name.text}`});
+            }
+          }
+          if(ts.isExportDeclaration(node)&&node.moduleSpecifier&&ts.isStringLiteralLike(node.moduleSpecifier)&&matchingSources.has(node.moduleSpecifier.text)&&node.exportClause&&ts.isNamedExports(node.exportClause)) {
+            for(const element of node.exportClause.elements) if((element.propertyName||element.name).text===oldName) {
+              if(element.propertyName) edits.push({start:element.propertyName.getStart(file),end:element.propertyName.end,value:newName});
+              else edits.push({start:element.name.getStart(file),end:element.name.end,value:`${newName} as ${element.name.text}`});
+            }
+          }
+          ts.forEachChild(node,visit);
+        };
+        visit(file);
+        if(edits.length) { const result=applyEdits(source,edits,consumer.path); changes.push({path:consumer.path,content:result.content,edits:result.edits}); seen.add(consumer.path); }
+      }
+      if (changes.length > 20) throw new Error(`The public API rename affects ${changes.length} files; the atomic multi-file editor supports at most 20 files. Narrow the refactor or split the API migration into reviewed steps.`);
+      return { action:'rename-public-api', changed:true, symbol:{oldName,newName,exportedFrom:targetPath,localName:match.local}, changes, totalEdits:changes.reduce((sum,item)=>sum+item.edits,0), message:`Prepared a public API rename across ${changes.length} file(s). Importer local names are preserved with aliases where necessary. Review every file preview before applying.` };
+    }
+
     function projectIndexRefactorJavaScript(source, { action = 'rename-symbol', oldName = '', newName = '', declarationStart = null, selectionEnd = null } = {}) {
       const parser = globalThis.acorn;
       if (!parser || typeof parser.parse !== 'function') throw new Error('Acorn parser is unavailable.');
@@ -495,6 +731,10 @@
           const parsed = projectIndexExtractJavaScript(text, path);
           if (parsed.supported) return { ...parsed, imports: parsed.imports || [], symbols: parsed.symbols || [] };
         }
+        if ((language === 'javascript' && ext === 'jsx') || (language === 'typescript' && ['ts','tsx','mts','cts'].includes(ext))) {
+          const parsed = projectIndexExtractTypeScript(text, path);
+          if (parsed.supported) return { ...parsed, imports: parsed.imports || [], symbols: parsed.symbols || [] };
+        }
         addMatches(/(?:^|\n)\s*(?:import\s+(?:[^'"\n]*?\s+from\s+)?|export\s+[^'"\n]*?\s+from\s+|import\s*\()(['"])([^'"\n]+)\1/g, imports);
         addMatches(/\brequire\s*\(\s*(['"])([^'"]+)\1\s*\)/g, imports);
         addMatches(/(?:^|\n)\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|var)\s+([A-Za-z_$][\w$]*)/g, symbols);
@@ -519,8 +759,117 @@
     async function loadProjectIndex() {
       if (!agentDirectoryHandle) throw new Error('Select and authorize a project workspace first.');
       const value = await workspaceDbAction('readonly','get',undefined,projectIndexKey());
-      return value && value.version===4 && value.contextId===workspaceContext.id ? value : null;
+      return value && value.version===6 && value.contextId===workspaceContext.id ? value : null;
     }
+    function projectIndexAnalyzeTypeScriptProgram(files, manifests = []) {
+      const ts = globalThis.ts;
+      if (!ts?.createProgram) return { supported: false, reason: 'TypeScript compiler API unavailable.', filesAnalyzed: 0, resolvedBindings: [], crossFileReferences: [] };
+      const eligible = (files || []).filter(file => ['javascript','typescript'].includes(file.language) && typeof file.analysisSource === 'string');
+      const selected = eligible.slice().sort((a,b) => a.path.localeCompare(b.path)).slice(0, 500);
+      const totalBytes = selected.reduce((sum,file) => sum + file.analysisSource.length, 0);
+      if (totalBytes > 12 * 1024 * 1024) {
+        let bytes = 0;
+        const bounded = [];
+        for (const file of selected) { if (bytes + file.analysisSource.length > 12 * 1024 * 1024) break; bounded.push(file); bytes += file.analysisSource.length; }
+        selected.splice(0, selected.length, ...bounded);
+      }
+      const canonical = value => String(value || '').replace(/\\/g,'/').replace(/^\/+/, '').replace(/^runmind\//i,'').replace(/\/{2,}/g,'/').toLowerCase();
+      const sources = new Map(selected.map(file => [canonical(file.path), file.analysisSource]));
+      const paths = new Map(selected.map(file => [canonical(file.path), file.path]));
+      const manifestText = new Map((manifests || []).map(item => [canonical(item.path), item.text]));
+      const virtual = value => `/runmind/${canonical(value)}`;
+      const options = {
+        allowJs: true, checkJs: false, noEmit: true, noLib: true, skipLibCheck: true,
+        target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        jsx: ts.JsxEmit.Preserve, resolveJsonModule: true, allowImportingTsExtensions: true,
+        strict: false, types: [], preserveSymlinks: true
+      };
+      const tsconfig = (manifests || []).filter(item => /(?:^|\/)tsconfig(?:\.[^/]+)?\.json$/i.test(item.path)).sort((a,b)=>a.path.split('/').length-b.path.split('/').length)[0];
+      if (tsconfig) {
+        try {
+          const parsed = ts.parseConfigFileTextToJson(tsconfig.path, tsconfig.text);
+          if (parsed.config?.compilerOptions) {
+            const baseDirectory = tsconfig.path.split('/').slice(0,-1).join('/');
+            const converted = ts.convertCompilerOptionsFromJson(parsed.config.compilerOptions, `/runmind/${baseDirectory}`);
+            Object.assign(options, converted.options || {});
+          }
+        } catch (_) {}
+      }
+      Object.assign(options, { allowJs: true, noEmit: true, noLib: true, skipLibCheck: true, types: [], preserveSymlinks: true });
+      const host = {
+        getCurrentDirectory: () => '/runmind',
+        getCanonicalFileName: value => canonical(value),
+        useCaseSensitiveFileNames: () => false,
+        getNewLine: () => '\n',
+        getDefaultLibFileName: () => '/runmind/__no_default_lib__.d.ts',
+        fileExists: value => sources.has(canonical(value)) || manifestText.has(canonical(value)),
+        readFile: value => sources.get(canonical(value)) ?? manifestText.get(canonical(value)),
+        directoryExists: value => {
+          const prefix = canonical(value).replace(/\/$/,'');
+          return [...sources.keys(),...manifestText.keys()].some(key => key.startsWith(prefix ? `${prefix}/` : ''));
+        },
+        realpath: value => value,
+        getSourceFile: (fileName, languageVersion, onError) => {
+          const content = sources.get(canonical(fileName));
+          if (content === undefined) return undefined;
+          const extension = canonical(fileName).split('.').pop();
+          const kind = extension === 'tsx' ? ts.ScriptKind.TSX : extension === 'jsx' ? ts.ScriptKind.JSX : ['js','mjs','cjs'].includes(extension) ? ts.ScriptKind.JS : ts.ScriptKind.TS;
+          return ts.createSourceFile(fileName, content, languageVersion, true, kind);
+        },
+        writeFile: () => {},
+        readDirectory: () => [],
+        getDirectories: (value) => {
+          const prefix = canonical(value).replace(/\/$/,''); const result = new Set();
+          for (const key of [...sources.keys(),...manifestText.keys()]) { const relative=prefix?key.slice(prefix.length+1):key; const index=relative.indexOf('/'); if(index>0)result.add(relative.slice(0,index)); }
+          return [...result];
+        }
+      };
+      const rootNames = selected.map(file => virtual(file.path));
+      let program;
+      try { program = ts.createProgram({ rootNames, options, host }); }
+      catch (error) { return { supported: true, reason: String(error?.message || error).slice(0,300), filesAnalyzed: 0, resolvedBindings: [], crossFileReferences: [] }; }
+      const checker = program.getTypeChecker();
+      const resolvedBindings = [], crossFileReferences = [];
+      const getTarget = node => {
+        let symbol;
+        try { symbol = checker.getSymbolAtLocation(node); if (symbol && (symbol.flags & ts.SymbolFlags.Alias)) symbol = checker.getAliasedSymbol(symbol); } catch (_) { return null; }
+        const declaration = symbol?.declarations?.find(item => item.getSourceFile && paths.has(canonical(item.getSourceFile().fileName)));
+        if (!declaration) return null;
+        const targetPath = paths.get(canonical(declaration.getSourceFile().fileName));
+        const nameNode = declaration.name && ts.isIdentifier(declaration.name) ? declaration.name : null;
+        return { targetPath, declarationStart: nameNode ? nameNode.getStart(declaration.getSourceFile()) : declaration.getStart(declaration.getSourceFile()), targetName: nameNode?.text || symbol.name || '' };
+      };
+      const isNamePosition = (node,parent) => parent?.name===node || (ts.isPropertyAccessExpression(parent) && parent.name===node) || (ts.isPropertyAssignment(parent) && parent.name===node && !ts.isComputedPropertyName(parent.name));
+      for (const file of selected) {
+        const sourceFile = program.getSourceFile(virtual(file.path));
+        if (!sourceFile) continue;
+        const currentPath = file.path;
+        const visit = (node,parent=null) => {
+          if (ts.isImportSpecifier(node) || ts.isExportSpecifier(node)) {
+            const parentDeclaration = ts.isImportSpecifier(node) ? node.parent?.parent?.parent : node.parent?.parent;
+            const moduleSpecifier = parentDeclaration?.moduleSpecifier && ts.isStringLiteralLike(parentDeclaration.moduleSpecifier) ? parentDeclaration.moduleSpecifier.text : '';
+            const target = getTarget(node.name);
+            if (moduleSpecifier && target && target.targetPath !== currentPath) {
+              const imported = (node.propertyName || node.name).text;
+              resolvedBindings.push({ from: currentPath, to: target.targetPath, source: moduleSpecifier, local: node.name.text, imported, exported: target.targetName || imported, compiler: true, kind: ts.isImportSpecifier(node) ? 'import' : 're-export' });
+            }
+          }
+          if (ts.isIdentifier(node) && !isNamePosition(node,parent)) {
+            const target = getTarget(node);
+            if (target && target.targetPath !== currentPath) {
+              const access = parent && ts.isBinaryExpression(parent) && parent.left===node && ts.isAssignmentOperator(parent.operatorToken.kind) ? (parent.operatorToken.kind===ts.SyntaxKind.EqualsToken?'write':'read-write') : 'read';
+              crossFileReferences.push({ path: currentPath, name: node.text, start: node.getStart(sourceFile), end: node.end, targetPath: target.targetPath, targetName: target.targetName, declarationStart: target.declarationStart, access, engine: 'typescript-checker' });
+            }
+          }
+          ts.forEachChild(node, child => visit(child,node));
+        };
+        visit(sourceFile);
+      }
+      const uniqueBindings = new Map();
+      for (const binding of resolvedBindings) uniqueBindings.set([binding.from,binding.to,binding.source,binding.local,binding.imported,binding.kind].join('|'),binding);
+      return { supported: true, compilerVersion: ts.version, filesAnalyzed: selected.length, truncated: selected.length < eligible.length, resolvedBindings: [...uniqueBindings.values()].slice(0,10000), crossFileReferences: crossFileReferences.slice(0,20000), note: 'TypeScript compiler Program and checker resolve symbols across indexed JavaScript/JSX/TypeScript/TSX files. Analysis is bounded to 500 source files and 12 MB; external node_modules packages are resolved only when their source is represented in the indexed virtual workspace.' };
+    }
+
     async function buildProjectIndex({ force=false, signal=null, onProgress=null }={}) {
       if (!agentDirectoryHandle) throw new Error('Select and authorize a project workspace first.');
       const previous = force ? null : await loadProjectIndex();
@@ -544,13 +893,13 @@
           visitedPaths.add(path);
           if(PROJECT_INDEX_SKIP_FILES.test(name)) { skipped++; continue; }
           const lower=name.toLowerCase(), ext=lower.match(/\.[^.]+$/)?.[0]||'';
-          const isManifest=manifestNames.has(lower)||lower.startsWith('requirements')&&lower.endsWith('.txt')||lower.endsWith('.csproj')||lower.endsWith('.sln');
+          const isManifest=manifestNames.has(lower)||lower.startsWith('tsconfig.')&&lower.endsWith('.json')||lower.startsWith('requirements')&&lower.endsWith('.txt')||lower.endsWith('.csproj')||lower.endsWith('.sln');
           if(!isManifest&&!PROJECT_INDEX_TEXT_EXTENSIONS.has(ext)) { skipped++; continue; }
           try {
             const file=await handle.getFile();
             if(file.size>PROJECT_INDEX_LIMITS.fileBytes){skipped++;continue;}
             const prior=oldFiles.get(path);
-            if(prior && prior.size===file.size && prior.lastModified===file.lastModified && typeof prior.text==='string' && (prior.language!=='javascript' || String(prior.analysisEngine||'').startsWith('acorn'))) {
+            if(prior && prior.size===file.size && prior.lastModified===file.lastModified && typeof prior.text==='string' && ( !['javascript','typescript'].includes(prior.language) || typeof prior.analysisSource==='string') && (prior.language!=='javascript' || /^(?:acorn|typescript-compiler-api)/.test(String(prior.analysisEngine||'')))) {
               files.push(prior); reused++;
               if(isManifest) manifests.push({path,text:prior.manifestText||prior.text.slice(0,64000)});
               if(prior.language && prior.language!=='text') technologies.add(prior.language);
@@ -559,8 +908,10 @@
             if(readBytes+file.size>PROJECT_INDEX_LIMITS.totalBytes){stop('aggregate text budget reached');return;}
             const source=await file.text(); readBytes+=file.size;
             const text=redactProjectIndexSecrets(source);
-            const language=projectIndexLanguage(path), extracted=projectIndexExtract(text,language,path);
-            const record={path,size:file.size,lastModified:file.lastModified,language,analysisEngine:extracted.engine||'regex-fallback',parseError:extracted.parseError||null,imports:extracted.imports,symbols:extracted.symbols,symbolDetails:extracted.symbolDetails||[],identifierOccurrences:extracted.identifierOccurrences||[],references:extracted.references||[],calls:extracted.calls||[],exports:extracted.exports||[],importBindings:extracted.importBindings||[],manifestText:isManifest?text.slice(0,64000):null,text:text.slice(0,Math.min(text.length,160000)).toLowerCase()};
+            const language=projectIndexLanguage(path);
+            if ((language==='typescript' || ext==='.jsx') && !globalThis.ts?.createSourceFile) { try { await projectIndexEnsureTypeScriptCompiler(); } catch (_) { /* Heuristic fallback remains available if the offline compiler bundle cannot load. */ } }
+            const extracted=projectIndexExtract(text,language,path);
+            const record={path,size:file.size,lastModified:file.lastModified,language,analysisEngine:extracted.engine||'regex-fallback',parseError:extracted.parseError||null,imports:extracted.imports,symbols:extracted.symbols,symbolDetails:extracted.symbolDetails||[],identifierOccurrences:extracted.identifierOccurrences||[],references:extracted.references||[],calls:extracted.calls||[],exports:extracted.exports||[],importBindings:extracted.importBindings||[],manifestText:isManifest?text.slice(0,64000):null,analysisSource:['javascript','typescript'].includes(language)?text.slice(0,256*1024):null,text:text.slice(0,Math.min(text.length,160000)).toLowerCase()};
             files.push(record);
             if(isManifest) manifests.push({path,text:text.slice(0,64000)});
             if(language!=='text') technologies.add(language);
@@ -570,13 +921,25 @@
       }
       await visit(agentDirectoryHandle,'',0);
       if(signal?.aborted) throw new DOMException('Project indexing cancelled.','AbortError');
+      if(files.some(file=>['javascript','typescript'].includes(file.language)) && !globalThis.ts?.createProgram) { try { await projectIndexEnsureTypeScriptCompiler(); } catch (_) { /* Acorn remains available; compiler-backed cross-file analysis is omitted. */ } }
       if(truncated && previous) for(const [path,record] of oldFiles) { if(files.length>=PROJECT_INDEX_LIMITS.files) break; if(!visitedPaths.has(path)) files.push(record); }
       const removed = truncated ? 0 : [...oldFiles.keys()].filter(path => !visitedPaths.has(path)).length;
       const dependencies=projectIndexDependencies(manifests);
       const frameworks=projectIndexFrameworks(dependencies);
       const toolchains=projectIndexToolchains(files,manifests,[...visitedPaths]);
       const importGraph=projectIndexLocalImportGraph(files,manifests);
-      const index={version:4,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
+      const hasCompilerSources=files.some(file=>['javascript','typescript'].includes(file.language));
+      const canReuseCompilerAnalysis=!force&&previous?.importGraph?.compilerAnalysis&&reused===files.length&&removed===0&&(previous.importGraph.compilerAnalysis.compilerVersion||!hasCompilerSources);
+      const compilerAnalysis=canReuseCompilerAnalysis
+        ? { supported:true, compilerVersion:previous.importGraph.compilerAnalysis.compilerVersion, filesAnalyzed:previous.importGraph.compilerAnalysis.filesAnalyzed||0, truncated:!!previous.importGraph.compilerAnalysis.truncated, resolvedBindings:(previous.importGraph.resolvedBindings||[]).filter(item=>item.compiler===true), crossFileReferences:files.flatMap(file=>file.compilerReferences||[]), note:previous.importGraph.compilerAnalysis.note||'' }
+        : projectIndexAnalyzeTypeScriptProgram(files,manifests);
+      const compilerReferencesByPath=new Map();
+      for(const reference of compilerAnalysis.crossFileReferences||[]){const list=compilerReferencesByPath.get(reference.path)||[];list.push(reference);compilerReferencesByPath.set(reference.path,list);}
+      for(const file of files)file.compilerReferences=compilerReferencesByPath.get(file.path)||[];
+      const resolvedKeys=new Set((importGraph.resolvedBindings||[]).map(item=>[item.from,item.to,item.source,item.local,item.imported].join('|')));
+      for(const binding of compilerAnalysis.resolvedBindings||[]){const key=[binding.from,binding.to,binding.source,binding.local,binding.imported].join('|');if(!resolvedKeys.has(key)){importGraph.resolvedBindings.push(binding);resolvedKeys.add(key);}}
+      importGraph.compilerAnalysis={supported:compilerAnalysis.supported!==false,compilerVersion:compilerAnalysis.compilerVersion||null,filesAnalyzed:compilerAnalysis.filesAnalyzed||0,truncated:!!compilerAnalysis.truncated,crossFileReferences:compilerAnalysis.crossFileReferences?.length||0,note:compilerAnalysis.note||compilerAnalysis.reason||''};
+      const index={version:6,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
       await workspaceDbAction('readwrite','put',index,projectIndexKey());
       projectIndexStatus?.(index);
       return {root:index.rootName,files:index.stats.files,scanned,entries,readBytes,reused,removed,skipped,truncated,reason,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies.slice(0,100),toolchains:index.toolchains,importGraphSummary:{localImportEdges:index.importGraph?.localImportEdges?.length||0,resolvedBindings:index.importGraph?.resolvedBindings?.length||0,unresolvedBindings:index.importGraph?.unresolvedBindings?.length||0,circularDependencies:index.importGraph?.circularDependencies?.length||0,externalImports:index.importGraph?.externalImports?.length||0,mostImportedFiles:index.importGraph?.filesWithIncomingImports||[],note:index.importGraph?.note},updatedAt:index.updatedAt};
@@ -621,6 +984,7 @@
       const files=index.files.filter(file=>!path||file.path===path);
       const declarations=files.flatMap(file=>(file.symbolDetails||[]).filter(item=>!name||item.name===name).map(item=>({path:file.path,...item})));
       const references=files.flatMap(file=>(file.references||[]).filter(item=>!name||item.name===name).map(item=>({path:file.path,...item})));
+      const compilerReferences=files.flatMap(file=>(file.compilerReferences||[]).filter(item=>!name||item.name===name||item.targetName===name).map(item=>({path:file.path,...item})));
       const calls=files.flatMap(file=>(file.calls||[]).filter(item=>!name||item.callee===name||item.caller===name).map(item=>({path:file.path,...item})));
       const graph=index.importGraph||{};
       const edges=(graph.localImportEdges||[]).filter(item=>!path||item.from===path||item.to===path);
@@ -630,12 +994,12 @@
       const unresolved=(graph.unresolvedBindings||[]).filter(item=>(!path||item.from===path||item.to===path)&&(!name||item.local===name||item.imported===name));
       const crossFileReferences=projectIndexCrossFileReferences(index.files,graph,{path,name,limit});
       const maximum=Math.max(1,Math.min(1000,Number(limit)||200));
-      return {indexUpdatedAt:index.updatedAt,filters:{path:path||null,name:name||null},declarations:declarations.slice(0,maximum),references:references.slice(0,maximum),calls:calls.slice(0,maximum),moduleEdges:edges.slice(0,maximum),circularDependencies:circularDependencies.slice(0,100),externalImports:externalImports.slice(0,maximum),resolvedImports:resolved.slice(0,maximum),unresolvedImports:unresolved.slice(0,maximum),crossFileReferences:crossFileReferences.results,crossFileReferencesTruncated:crossFileReferences.truncated,truncated:crossFileReferences.truncated||declarations.length>maximum||references.length>maximum||calls.length>maximum||edges.length>maximum||circularDependencies.length>100||externalImports.length>maximum||resolved.length>maximum||unresolved.length>maximum,scope:'JavaScript lexical bindings, syntactic call sites, statically-resolved module exports, and cross-file references through resolved static imports; dynamic/runtime references, unresolved imports, and full compiler semantics are not included.'};
+      return {indexUpdatedAt:index.updatedAt,filters:{path:path||null,name:name||null},compilerAnalysis:graph.compilerAnalysis||null,compilerReferences:compilerReferences.slice(0,maximum),declarations:declarations.slice(0,maximum),references:references.slice(0,maximum),calls:calls.slice(0,maximum),moduleEdges:edges.slice(0,maximum),circularDependencies:circularDependencies.slice(0,100),externalImports:externalImports.slice(0,maximum),resolvedImports:resolved.slice(0,maximum),unresolvedImports:unresolved.slice(0,maximum),crossFileReferences:crossFileReferences.results,crossFileReferencesTruncated:crossFileReferences.truncated,truncated:crossFileReferences.truncated||compilerReferences.length>maximum||declarations.length>maximum||references.length>maximum||calls.length>maximum||edges.length>maximum||circularDependencies.length>100||externalImports.length>maximum||resolved.length>maximum||unresolved.length>maximum,scope:'Acorn JavaScript lexical bindings plus TypeScript compiler-API syntax trees and a bounded project-wide TypeScript checker for JavaScript/JSX/TypeScript/TSX symbol references. Node module runtime resolution is separately available through node_resolve_modules.'};
     }
     async function getProjectIndexOverview() {
       const index=await loadProjectIndex();
       if(!index) return {indexed:false,message:'No project index has been built.'};
-      return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,toolchains:index.toolchains||null,analysis:{acornFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('acorn')).length,callSites:index.files.reduce((sum,item)=>sum+(item.calls?.length||0),0),parseErrors:index.files.filter(item=>item.parseError).length,regexFallbackFiles:index.files.filter(item=>item.analysisEngine==='regex-fallback').length},importGraph:index.importGraph?{localImportEdges:index.importGraph.localImportEdges.length,resolvedBindings:index.importGraph.resolvedBindings?.length||0,unresolvedBindings:index.importGraph.unresolvedBindings?.length||0,circularDependencies:index.importGraph.circularDependencies?.length||0,externalImports:index.importGraph.externalImports?.length||0,filesWithIncomingImports:index.importGraph.filesWithIncomingImports,note:index.importGraph.note}:null,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
+      return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,toolchains:index.toolchains||null,analysis:{acornFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('acorn')).length,typescriptCompilerFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('typescript-compiler-api')).length,typescriptProgramFiles:index.importGraph?.compilerAnalysis?.filesAnalyzed||0,typescriptCrossFileReferences:index.importGraph?.compilerAnalysis?.crossFileReferences||0,callSites:index.files.reduce((sum,item)=>sum+(item.calls?.length||0),0),parseErrors:index.files.filter(item=>item.parseError).length,regexFallbackFiles:index.files.filter(item=>item.analysisEngine==='regex-fallback').length},compilerAnalysis:index.importGraph?.compilerAnalysis||null,importGraph:index.importGraph?{localImportEdges:index.importGraph.localImportEdges.length,resolvedBindings:index.importGraph.resolvedBindings?.length||0,unresolvedBindings:index.importGraph.unresolvedBindings?.length||0,circularDependencies:index.importGraph.circularDependencies?.length||0,externalImports:index.importGraph.externalImports?.length||0,filesWithIncomingImports:index.importGraph.filesWithIncomingImports,note:index.importGraph.note}:null,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
     }
 
     let projectIndexAutoRefreshTimer = null;

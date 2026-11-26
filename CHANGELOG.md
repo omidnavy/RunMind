@@ -1,10 +1,13 @@
-## Unreleased — Phase 1 completion work
+## Unreleased — Phase 1 completion extension (2026-11-21)
 
-- Added cross-file references for statically resolved import bindings, plus preview-first Acorn AST refactoring for scope-aware single-file JavaScript symbol renames, conservative statement extraction, and safe import sorting. Shorthand object properties retain their public property keys; ambiguous declarations and name collisions are rejected. Applying a preview uses the existing approved edit-and-backup workflow.
-- Added reversible enable/disable operations for exact HKCU/HKLM Run startup entries. Disabled commands are preserved in a RunMind recovery registry key; every change requires native confirmation. RunOnce and Startup-folder entries remain inventory-only.
-- Expanded Windows diagnostics with bounded driver inventory, hardware inventory through a fixed PowerShell CIM query, and TCP listeners mapped to process IDs where accessible.
-- Normalized System Manager tool results with success, accepted, completed, verified, action, target and message fields while preserving native operation details.
-- Added real temporary Git repository integration coverage and source-level multi-file backup/rollback contract tests.
+- Bundle the TypeScript 5.8.3 compiler API for offline JSX/TSX/TypeScript parsing, loaded lazily when project indexing begins and a bounded project-wide `ts.Program`/checker pass across indexed JavaScript, JSX, TypeScript, and TSX. The checker resolves cross-file imported symbols and TSX component references; root `tsconfig.json`/`tsconfig.*.json` compiler options and `paths` are honored. Analysis is bounded to 500 source files and 12 MB, with no default library loading and no full diagnostic/type-check pass. The bundle includes the Apache-2.0 license.
+- Upgrade project-index storage to schema/key v6. Preserve redacted analysis source for JS/TS files, reuse compiler results when the project is unchanged, and expose checker-backed cross-file references through `project_symbol_graph`.
+- Add `node_resolve_modules`, a fresh-approval, fixed-script native tool that calls Node's `createRequire().resolve()` and `import.meta.resolve()` for the selected importer. It reports actual installed-package and conditional ESM/CommonJS resolution without importing or executing target modules. The browser-selected project and native execution workspace must be the same folder.
+- Extend preview-first AST refactoring with `rename-public-api`: rename a direct named export and update statically resolved importers/re-exports across up to 20 files, preserving consumer-local names through aliases. Apply uses the approved multi-file editor, per-file recovery backups, concurrency checks, and best-effort rollback. Default exports, export-star chains, dynamic/unresolved importers, and more than 20 affected files are rejected rather than guessed.
+- Extend static workspace resolution with `.js` to `.ts/.tsx/.d.ts` substitutions and `tsconfig` path aliases. The indexed graph remains bounded and does not scan `node_modules`; use the native Node resolver for actual installed dependency resolution.
+- Extend reversible startup management to HKCU/HKLM `Run` and `RunOnce` registry entries and inventoried `.lnk`/`.exe` items in user/common Startup folders. Registry command/type and file contents are preserved; file recovery copies are SHA-256 verified. Disabled entries remain visible in startup inventory for restoration. Every mutation requires fresh native confirmation and never overwrites an existing target.
+- Add integration coverage for TypeScript checker bindings, TSX component references, `tsconfig` paths, actual Node ESM/CommonJS conditional exports, cross-file public API rename previews, and startup recovery contracts.
+
 
 ## Phase 1 semantic JavaScript and System Manager increments
 
@@ -15,7 +18,7 @@
 - Expand Windows service inspection to configuration/dependents and restart with mandatory confirmation and final-state polling.
 - Expand Podman/Docker inventory to stats, images, volumes, networks, and health inspection; mutating actions are not read-only and are followed by state verification.
 - Add uptime, disk capacity, network gateway, and DNS information to read-only diagnostics.
-- TypeScript/TSX/JSX parsing, complete Node module resolution, and compiler-grade semantics remain outstanding.
+- At the time of this increment, TypeScript/TSX/JSX and native Node resolution were outstanding; the 2026-11-21 Phase 1 completion extension below adds compiler-API parsing/checker references and an approved Node ESM/CommonJS resolver.
 
 # RunMind Changelog
 

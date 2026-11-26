@@ -86,7 +86,7 @@
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
         if (name === 'system_manager_find_applications') { const query = String(args.query || '').trim(); if (!query) throw new Error('A non-empty application name is required.'); return await callAgentHost('systemManager.apps.list',{query},signal); }
         if (name === 'system_manager_list_startup_applications') return await callAgentHost('systemManager.startup.list',{query:String(args.query||'')},signal);
-        if (name === 'system_manager_set_startup_application') return await callAgentHost('systemManager.startup.set',{action:String(args.action||''),name:String(args.name||''),source:String(args.source||'')},signal);
+        if (name === 'system_manager_set_startup_application') return await callAgentHost('systemManager.startup.set',{action:String(args.action||''),name:String(args.name||''),source:String(args.source||''),entryPath:String(args.entry_path||'')},signal);
         if (name === 'system_manager_list_adapters') return await callAgentHost('systemManager.adapters.list',{},signal);
         if (name === 'system_manager_container_action') {
           const action = String(args.action || '').toLowerCase();
@@ -774,14 +774,65 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
         case 'javascript_refactor': {
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');
           const path = String(args.path || '');
-          if (!/\.(?:js|mjs|cjs)$/i.test(path)) throw new Error('AST refactoring currently supports .js, .mjs and .cjs files only.');
+          const action = String(args.action || 'rename-symbol');
+          if (action === 'rename-public-api') {
+            if (!/\.(?:js|mjs|cjs|jsx|ts|tsx|mts|cts)$/i.test(path)) throw new Error('Public API refactoring supports JavaScript, JSX, TypeScript and TSX source files.');
+            const index = await loadProjectIndex();
+            if (!index) throw new Error('Build or refresh the project index before renaming a public API.');
+            const targetRecord = index.files.find(item => item.path === path);
+            if (!targetRecord) throw new Error(`'${path}' is not present in the current project index.`);
+            const current = await readWorkspaceText(path, 2 * 1024 * 1024);
+            if (current.source !== 'workspace' || !current.handle) throw new Error('Refactoring is restricted to existing workspace files.');
+            const oldName = String(args.old_name || ''), newName = String(args.new_name || '');
+            const bindings = (index.importGraph?.resolvedBindings || []).filter(item => item.to === path && item.imported === oldName);
+            const byImporter = new Map();
+            for (const binding of bindings) {
+              const record = index.files.find(item => item.path === binding.from);
+              const source = (record?.importBindings || []).find(item => item.local === binding.local && item.imported === oldName)?.source;
+              if (!source) continue;
+              const sources = byImporter.get(binding.from) || new Set(); sources.add(source); byImporter.set(binding.from, sources);
+            }
+            const consumers = [];
+            for (const [consumerPath, sources] of byImporter) {
+              const file = await readWorkspaceText(consumerPath, 2 * 1024 * 1024);
+              if (file.source !== 'workspace' || !file.handle) throw new Error(`'${consumerPath}' is not an editable workspace file.`);
+              consumers.push({ path: consumerPath, text: file.text, sources: [...sources] });
+            }
+            const result = projectIndexRefactorPublicApi(path, current.text, consumers, oldName, newName);
+            if (args.apply !== true) return { ...result, applied: false, nextStep: 'Review every returned file preview. Apply only after explicit user approval.' };
+            const files = result.changes.map(item => ({ path: item.path, content: item.content }));
+            const applied = files.length === 1
+              ? await executeAgentToolInternal('edit_file', files[0], signal, assistantMessage, taskContext)
+              : await executeAgentToolInternal('edit_files', { files }, signal, assistantMessage, taskContext);
+            return { ...result, applied: !applied?.cancelled, editResult: applied };
+          }
+          if (!/\.(?:js|mjs|cjs)$/i.test(path)) throw new Error('Single-file Acorn refactoring supports .js, .mjs and .cjs. Use rename-public-api for statically resolved exported symbols.');
           const current = await readWorkspaceText(path, 2 * 1024 * 1024);
           if (current.source !== 'workspace' || !current.handle) throw new Error('Refactoring is restricted to an existing file in the selected workspace.');
-          const result = projectIndexRefactorJavaScript(current.text, { action: String(args.action || 'rename-symbol'), oldName: String(args.old_name || ''), newName: String(args.new_name || args.function_name || ''), declarationStart: args.declaration_start ?? args.selection_start, selectionEnd: args.selection_end });
+          const result = projectIndexRefactorJavaScript(current.text, { action, oldName: String(args.old_name || ''), newName: String(args.new_name || args.function_name || ''), declarationStart: args.declaration_start ?? args.selection_start, selectionEnd: args.selection_end });
           if (!result.changed) return { ...result, path };
           if (args.apply !== true) return { ...result, path, applied: false, nextStep: 'Review the returned content and diff. Call javascript_refactor again with apply=true only after the user approves the change.' };
           const applied = await executeAgentToolInternal('edit_file', { path, content: result.content }, signal, assistantMessage, taskContext);
           return { ...result, path, applied: !applied?.cancelled, editResult: applied };
+        }
+        case 'node_resolve_modules': {
+          if (!agentDirectoryHandle) throw new Error('Select a project workspace first.');
+          const path = String(args.path || '').replace(/\\/g, '/');
+          const specifiers = Array.isArray(args.specifiers) ? args.specifiers.map(value => String(value)).filter(Boolean).slice(0, 100) : [];
+          if (!path || path.startsWith('/') || path.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Provide a safe workspace-relative importer path.');
+          if (!specifiers.length) throw new Error('Provide one or more module specifiers to resolve.');
+          const script = `import { createRequire } from 'node:module'; import { pathToFileURL } from 'node:url'; import path from 'node:path'; import fs from 'node:fs'; const importer=path.resolve(process.cwd(),process.argv[1]); const root=process.cwd(); if(!importer.startsWith(root+path.sep)||!fs.statSync(importer).isFile()) throw new Error('Importer must be an existing file inside the selected workspace.'); const specs=JSON.parse(process.argv[2]); const requireFrom=createRequire(importer); const results=specs.map(specifier=>{let requireResult=null,requireError=null,importResult=null,importError=null;try{requireResult=requireFrom.resolve(specifier)}catch(error){requireError=String(error.message||error).slice(0,240)}try{importResult=import.meta.resolve(specifier,pathToFileURL(importer).href)}catch(error){importError=String(error.message||error).slice(0,240)}return {specifier,require:{resolved:requireResult,error:requireError},import:{resolved:importResult,error:importError}}}); console.log(JSON.stringify({node:process.version,importer,results}));`;
+          const approved = await requireAgentApproval({ title: 'Resolve modules with the installed Node.js runtime?', subtitle: 'Native Node.js · read-only resolution', detail: `Importer: ${path}
+Specifiers:
+${specifiers.join('\n')}
+
+RunMind will execute a fixed resolver script using Node's createRequire().resolve() and import.meta.resolve(). It will not import or execute the target modules.`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, message: 'Node.js module resolution was declined.' };
+          const result = await callAgentHost('process.run', { executable: 'node.exe', arguments: ['--input-type=module', '-e', script, path, JSON.stringify(specifiers)], working_directory: '', timeout_seconds: 30, contextId: workspaceContext.id }, signal, 45000);
+          if (result?.exitCode !== 0) throw new Error(`Node.js resolver failed: ${result?.stderr || result?.stdout || 'unknown error'}`);
+          if (result?.outputTruncated) throw new Error('Node.js resolver output was truncated; reduce the number of specifiers and retry.');
+          try { return { ...JSON.parse(result.stdout), verifiedBy: 'Node.js runtime', executionNote: result.note || 'Executed as the current Windows user; approval is not a sandbox.', note: 'Resolution was performed by the installed Node.js runtime. Target modules were not imported or executed.' }; }
+          catch (_) { return { ...result, verifiedBy: 'Node.js runtime', parseWarning: 'Node returned output that was not valid JSON.' }; }
         }
         case 'project_validate': {
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');

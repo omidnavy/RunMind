@@ -443,7 +443,7 @@ public sealed partial class AgentHostBridge
         RequireSystemCapability("applications", "discoverApplications");
         var results = new List<object>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        void Add(string name, string source, string command, string? shortcutPath = null)
+        void Add(string name, string source, string command, string? shortcutPath = null, string? entryPath = null, string state = "enabled", string? recoveryPath = null)
         {
             if (results.Count >= 250 || string.IsNullOrWhiteSpace(name)) return;
             if (!string.IsNullOrWhiteSpace(query) && !name.Contains(query, StringComparison.OrdinalIgnoreCase)) return;
@@ -452,9 +452,9 @@ public sealed partial class AgentHostBridge
             {
                 try { executable = ResolveShortcutTarget(shortcutPath); } catch { }
             }
-            var key = $"{source}|{name}|{executable}";
+            var key = $"{source}|{name}|{entryPath}|{state}|{executable}";
             if (!seen.Add(key)) return;
-            results.Add(new { name = name[..Math.Min(name.Length, 180)], source, executablePath = executable, shortcutPath });
+            results.Add(new { name = name[..Math.Min(name.Length, 180)], source, executablePath = executable, shortcutPath, entryPath, state, recoveryPath });
         }
 
         var runLocations = new[]
@@ -504,14 +504,73 @@ public sealed partial class AgentHostBridge
                         var extension = Path.GetExtension(file);
                         if (!extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase) && !extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)) continue;
                         var target = extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase) ? ResolveShortcutTarget(file) : file;
-                        Add(Path.GetFileNameWithoutExtension(file), source, target, extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase) ? file : null);
+                        Add(Path.GetFileNameWithoutExtension(file), source, target, extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase) ? file : null, file);
                     }
                     catch { }
                 }
             }
             catch { }
         }
-        return new { success = true, action = "list-startup-applications", completed = true, verified = true, startupApplications = results, count = results.Count, truncated = results.Count >= 250, message = $"Retrieved {results.Count} startup entries." };
+        var recoveryRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RunMind", "DisabledStartupEntries");
+        if (Directory.Exists(recoveryRoot) && !IsReparsePoint(recoveryRoot))
+        {
+            try
+            {
+                foreach (var directory in Directory.EnumerateDirectories(recoveryRoot).Take(100))
+                {
+                    try
+                    {
+                        if (IsReparsePoint(directory)) continue;
+                        var metadataPath = Path.Combine(directory, "metadata.json");
+                        if (!File.Exists(metadataPath) || IsReparsePoint(metadataPath) || new FileInfo(metadataPath).Length > 16 * 1024) continue;
+                        using var metadata = JsonDocument.Parse(File.ReadAllText(metadataPath));
+                        var root = metadata.RootElement;
+                        var itemName = root.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                        var itemSource = root.TryGetProperty("source", out var so) ? so.GetString() ?? "" : "";
+                        var originalPath = root.TryGetProperty("entryPath", out var ep) ? ep.GetString() : null;
+                        var target = root.TryGetProperty("target", out var t) ? t.GetString() ?? "" : "";
+                        var backupItem = Directory.EnumerateFiles(directory).FirstOrDefault(file => !string.Equals(Path.GetFileName(file), "metadata.json", StringComparison.OrdinalIgnoreCase));
+                        if (string.IsNullOrWhiteSpace(backupItem) || IsReparsePoint(backupItem)) continue;
+                        Add(itemName, itemSource, target, Path.GetExtension(backupItem).Equals(".lnk", StringComparison.OrdinalIgnoreCase) ? backupItem : null, originalPath, "disabled", backupItem);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+        try
+        {
+            using var recoveryKey = Registry.CurrentUser.OpenSubKey(@"Software\RunMind\DisabledStartupEntries", writable: false);
+            if (recoveryKey is not null)
+            {
+                foreach (var metadataName in recoveryKey.GetValueNames().Where(value => value.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)).Take(100))
+                {
+                    try
+                    {
+                        var metadataText = recoveryKey.GetValue(metadataName) as string;
+                        if (string.IsNullOrWhiteSpace(metadataText) || metadataText.Length > 16 * 1024) continue;
+                        using var metadata = JsonDocument.Parse(metadataText);
+                        var root = metadata.RootElement;
+                        var itemName = root.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                        var itemSource = root.TryGetProperty("source", out var so) ? so.GetString() ?? "" : "";
+                        var originalPath = root.TryGetProperty("entryPath", out var ep) ? ep.GetString() : null;
+                        var backupName = metadataName[..^5];
+                        var command = recoveryKey.GetValue(backupName, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string ?? "";
+                        if (command.Length > 0) Add(itemName, itemSource, command, null, originalPath, "disabled", backupName);
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+        return new { success = true, action = "list-startup-applications", completed = true, verified = true, startupApplications = results, count = results.Count, truncated = results.Count >= 250, message = $"Retrieved {results.Count} startup entries, including RunMind-disabled items available for restoration." };
+    }
+
+    private static byte[] HashStartupItem(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (stream.Length > 16 * 1024 * 1024) throw new InvalidOperationException("Startup item exceeds the 16 MB recovery limit.");
+        return SHA256.HashData(stream);
     }
 
     private static object SystemManagerSetStartupApplication(JsonElement args)
@@ -519,47 +578,133 @@ public sealed partial class AgentHostBridge
         RequireSystemCapability("applications", "launchApplications");
         var action = ReadString(args, "action", 16).ToLowerInvariant();
         var name = ReadString(args, "name", 180);
-        var source = ReadString(args, "source", 64);
+        var source = ReadString(args, "source", 80);
+        var entryPath = ReadString(args, "entryPath", 1024);
         if (action is not ("enable" or "disable")) throw new InvalidDataException("Startup action must be enable or disable.");
         if (name.Length == 0 || name.Any(char.IsControl)) throw new InvalidDataException("A valid exact startup entry name is required.");
+        var backupRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RunMind", "DisabledStartupEntries");
+        var backupName = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source + "\n" + name + "\n" + entryPath)));
+
+        if (source is "User Startup Folder" or "Common Startup Folder")
+        {
+            var folder = source == "User Startup Folder"
+                ? Environment.GetFolderPath(Environment.SpecialFolder.Startup)
+                : Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup);
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder) || IsReparsePoint(folder)) throw new InvalidOperationException("The selected Startup folder is unavailable or is a reparse point.");
+            if (string.IsNullOrWhiteSpace(entryPath) || Path.IsPathRooted(entryPath) is false) throw new InvalidDataException("The exact absolute entryPath from the current startup inventory is required.");
+            var exactPath = Path.GetFullPath(entryPath);
+            var folderRoot = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (!exactPath.StartsWith(folderRoot, StringComparison.OrdinalIgnoreCase) || !string.Equals(Path.GetFileNameWithoutExtension(exactPath), name, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The startup entry path must be the exact inventoried item inside the selected Startup folder.");
+            if (!File.Exists(exactPath) || IsReparsePoint(exactPath)) throw new InvalidOperationException("The selected startup item no longer exists or is a reparse point. Refresh the inventory.");
+            var extension = Path.GetExtension(exactPath);
+            if (!extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase) && !extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Only inventoried .lnk and .exe Startup-folder entries can be changed.");
+            var backupFolder = Path.Combine(backupRoot, backupName);
+            var backupPath = Path.Combine(backupFolder, Path.GetFileName(exactPath));
+            if (action == "disable")
+            {
+                if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Disable Startup-folder item", $"Entry: {name}\nSource: {source}\nPath: {exactPath}\n\nRunMind will copy the exact item to its recovery folder, verify its SHA-256, then remove the original. This does not uninstall the application.", alwaysAsk: true))
+                    return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, action = "disable-startup", target = name, requestedState = "disabled", actualState = "enabled", message = "The user declined the Startup-folder change." };
+                EnsureNoReparseAncestors(backupRoot);
+                Directory.CreateDirectory(backupFolder);
+                if (IsReparsePoint(backupFolder)) throw new InvalidOperationException("The RunMind recovery folder cannot be a reparse point.");
+                var metadataPath = Path.Combine(backupFolder, "metadata.json");
+                if (Directory.EnumerateFileSystemEntries(backupFolder).Any() || File.Exists(backupPath) || File.Exists(metadataPath)) throw new InvalidOperationException("A recovery item already exists. Restore or inspect it before retrying.");
+                var originalHash = HashStartupItem(exactPath);
+                byte[] copiedHash;
+                try
+                {
+                    File.Copy(exactPath, backupPath, overwrite: false);
+                    copiedHash = HashStartupItem(backupPath);
+                }
+                catch { try { if (File.Exists(backupPath)) File.Delete(backupPath); } catch { } throw; }
+                if (!CryptographicOperations.FixedTimeEquals(originalHash, copiedHash)) { File.Delete(backupPath); throw new IOException("The recovery copy did not match the original; the startup item was not changed."); }
+                var target = exactPath;
+                if (extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase)) { try { target = ResolveShortcutTarget(exactPath); } catch { target = string.Empty; } }
+                try { File.WriteAllText(metadataPath, JsonSerializer.Serialize(new { name, source, entryPath = exactPath, target = NormalizeExecutableCandidate(target) })); }
+                catch { try { File.Delete(backupPath); } catch { } throw; }
+                try { File.Delete(exactPath); }
+                catch { try { File.Delete(backupPath); File.Delete(metadataPath); } catch { } throw; }
+                var verified = !File.Exists(exactPath) && File.Exists(backupPath) && CryptographicOperations.FixedTimeEquals(originalHash, HashStartupItem(backupPath));
+                return new { success = verified, accepted = true, completed = true, verified, action = "disable-startup", target = name, requestedState = "disabled", actualState = !File.Exists(exactPath) ? "disabled" : "enabled", source, recoveryPath = backupPath, message = verified ? "Startup-folder item disabled and its original file preserved for re-enabling." : "The change was attempted but could not be fully verified; inspect the recovery path." };
+            }
+            else
+            {
+                if (!File.Exists(backupPath) || IsReparsePoint(backupPath)) throw new InvalidOperationException("No safe RunMind recovery copy exists for this Startup-folder item.");
+                if (File.Exists(exactPath)) throw new InvalidOperationException("A Startup-folder item already exists at the original path. RunMind will not overwrite it.");
+                if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Restore Startup-folder item", $"Entry: {name}\nSource: {source}\nRestore path: {exactPath}\nRecovery copy: {backupPath}", alwaysAsk: true))
+                    return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, action = "enable-startup", target = name, requestedState = "enabled", actualState = "disabled", message = "The user declined the Startup-folder restore." };
+                Directory.CreateDirectory(folder);
+                var savedHash = HashStartupItem(backupPath);
+                File.Copy(backupPath, exactPath, overwrite: false);
+                var restoredHash = HashStartupItem(exactPath);
+                if (!CryptographicOperations.FixedTimeEquals(savedHash, restoredHash)) { File.Delete(exactPath); throw new IOException("The restored Startup item failed SHA-256 verification; the recovery copy was retained."); }
+                File.Delete(backupPath);
+                var metadataPath = Path.Combine(backupFolder, "metadata.json");
+                if (File.Exists(metadataPath) && !IsReparsePoint(metadataPath)) File.Delete(metadataPath);
+                try { Directory.Delete(backupFolder, recursive: false); } catch { }
+                var verified = File.Exists(exactPath) && !File.Exists(backupPath) && CryptographicOperations.FixedTimeEquals(savedHash, HashStartupItem(exactPath));
+                return new { success = verified, accepted = true, completed = true, verified, action = "enable-startup", target = name, requestedState = "enabled", actualState = verified ? "enabled" : "disabled", source, message = verified ? "Startup-folder item restored and verified." : "The restore was attempted but could not be fully verified." };
+            }
+        }
+
         var location = source switch
         {
-            "HKCU Run (Registry64)" => (RegistryHive.CurrentUser, RegistryView.Registry64),
-            "HKCU Run (Registry32)" => (RegistryHive.CurrentUser, RegistryView.Registry32),
-            "HKLM Run (Registry64)" => (RegistryHive.LocalMachine, RegistryView.Registry64),
-            "HKLM Run (Registry32)" => (RegistryHive.LocalMachine, RegistryView.Registry32),
-            _ => throw new InvalidDataException("Only exact HKCU/HKLM Run registry entries can be enabled or disabled. RunOnce and Startup-folder entries are inventory-only.")
+            "HKCU Run (Registry64)" => (RegistryHive.CurrentUser, RegistryView.Registry64, false),
+            "HKCU Run (Registry32)" => (RegistryHive.CurrentUser, RegistryView.Registry32, false),
+            "HKLM Run (Registry64)" => (RegistryHive.LocalMachine, RegistryView.Registry64, false),
+            "HKLM Run (Registry32)" => (RegistryHive.LocalMachine, RegistryView.Registry32, false),
+            "HKCU RunOnce (Registry64)" => (RegistryHive.CurrentUser, RegistryView.Registry64, true),
+            "HKCU RunOnce (Registry32)" => (RegistryHive.CurrentUser, RegistryView.Registry32, true),
+            "HKLM RunOnce (Registry64)" => (RegistryHive.LocalMachine, RegistryView.Registry64, true),
+            "HKLM RunOnce (Registry32)" => (RegistryHive.LocalMachine, RegistryView.Registry32, true),
+            _ => throw new InvalidDataException("Select an exact Run/RunOnce registry entry or a Startup-folder item from the current inventory.")
         };
-        var keyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        var backupPath = @"Software\RunMind\DisabledStartupEntries";
-        var backupName = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source + "\n" + name)));
+        var keyPath = location.Item3 ? @"Software\Microsoft\Windows\CurrentVersion\RunOnce" : @"Software\Microsoft\Windows\CurrentVersion\Run";
         using var baseKey = RegistryKey.OpenBaseKey(location.Item1, location.Item2);
-        using var runKey = baseKey.OpenSubKey(keyPath, writable: true) ?? throw new InvalidOperationException("The selected startup registry key does not exist or is not writable.");
-        using var backupKey = Registry.CurrentUser.CreateSubKey(backupPath, writable: true) ?? throw new InvalidOperationException("RunMind could not create its startup recovery registry key.");
+        using var startupKey = baseKey.OpenSubKey(keyPath, writable: true) ?? throw new InvalidOperationException("The selected startup registry key does not exist or is not writable.");
+        using var backupKey = Registry.CurrentUser.CreateSubKey(@"Software\RunMind\DisabledStartupEntries", writable: true) ?? throw new InvalidOperationException("RunMind could not create its startup recovery registry key.");
+        var kindName = backupName + ".kind";
+        var metadataName = backupName + ".meta";
         if (action == "disable")
         {
-            var command = runKey.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+            var command = startupKey.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
             if (string.IsNullOrWhiteSpace(command)) throw new InvalidOperationException("The startup entry no longer exists or is not a string value. Refresh the startup inventory.");
             if (backupKey.GetValue(backupName) is not null) throw new InvalidOperationException("A RunMind disabled-entry backup already exists. Enable the saved entry before retrying.");
-            if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Disable startup application", $"Entry: {name}\nSource: {source}\nCommand: {command}\n\nRunMind will remove this Run registry value and preserve its exact command in a recovery entry. This does not uninstall the application.", alwaysAsk: true))
+            var valueKind = startupKey.GetValueKind(name);
+            if (valueKind is not (RegistryValueKind.String or RegistryValueKind.ExpandString)) throw new InvalidOperationException("Only REG_SZ and REG_EXPAND_SZ startup values can be changed safely.");
+            if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Disable startup registry entry", $"Entry: {name}\nSource: {source}\nCommand: {command}\n\nRunMind will remove this exact registry value and preserve its command and value type for recovery.", alwaysAsk: true))
                 return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, action = "disable-startup", target = name, requestedState = "disabled", actualState = "enabled", message = "The user declined the startup change." };
-            backupKey.SetValue(backupName, command, RegistryValueKind.String);
-            try { runKey.DeleteValue(name, throwOnMissingValue: false); }
-            catch { backupKey.DeleteValue(backupName, throwOnMissingValue: false); throw; }
-            var verified = runKey.GetValue(name) is null && string.Equals(backupKey.GetValue(backupName) as string, command, StringComparison.Ordinal);
-            return new { success = verified, accepted = true, completed = true, verified, action = "disable-startup", target = name, requestedState = "disabled", actualState = runKey.GetValue(name) is null ? "disabled" : "enabled", source, recoveryStored = backupKey.GetValue(backupName) is string, message = verified ? "Startup entry disabled; its original command is preserved for re-enabling." : "The registry change was attempted but could not be fully verified." };
+            try
+            {
+                backupKey.SetValue(backupName, command, RegistryValueKind.String);
+                backupKey.SetValue(kindName, valueKind.ToString(), RegistryValueKind.String);
+                backupKey.SetValue(metadataName, JsonSerializer.Serialize(new { name, source, entryPath = "" }), RegistryValueKind.String);
+                startupKey.DeleteValue(name, throwOnMissingValue: false);
+            }
+            catch
+            {
+                backupKey.DeleteValue(backupName, throwOnMissingValue: false);
+                backupKey.DeleteValue(kindName, throwOnMissingValue: false);
+                backupKey.DeleteValue(metadataName, throwOnMissingValue: false);
+                throw;
+            }
+            var verified = startupKey.GetValue(name) is null && string.Equals(backupKey.GetValue(backupName) as string, command, StringComparison.Ordinal);
+            return new { success = verified, accepted = true, completed = true, verified, action = "disable-startup", target = name, requestedState = "disabled", actualState = startupKey.GetValue(name) is null ? "disabled" : "enabled", source, recoveryStored = backupKey.GetValue(backupName) is string, message = verified ? "Startup registry entry disabled; its original command and registry value type are preserved." : "The registry change was attempted but could not be fully verified." };
         }
         else
         {
             var command = backupKey.GetValue(backupName) as string;
             if (string.IsNullOrWhiteSpace(command)) throw new InvalidOperationException("No RunMind recovery entry exists for this startup item. Refresh the inventory and do not reconstruct its command manually.");
-            if (runKey.GetValue(name) is not null) throw new InvalidOperationException("A startup entry with this name already exists. RunMind will not overwrite it.");
-            if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Enable startup application", $"Entry: {name}\nSource: {source}\nCommand: {command}\n\nRunMind will restore the previously saved Run registry value.", alwaysAsk: true))
+            if (startupKey.GetValue(name) is not null) throw new InvalidOperationException("A startup entry with this name already exists. RunMind will not overwrite it.");
+            var hasSavedKind = Enum.TryParse<RegistryValueKind>(backupKey.GetValue(kindName) as string, out var parsedKind);
+            var kind = hasSavedKind && (parsedKind == RegistryValueKind.String || parsedKind == RegistryValueKind.ExpandString) ? parsedKind : RegistryValueKind.String;
+            if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Enable startup registry entry", $"Entry: {name}\nSource: {source}\nCommand: {command}\nRegistry type: {kind}\n\nRunMind will restore the previously saved startup registry value.", alwaysAsk: true))
                 return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, action = "enable-startup", target = name, requestedState = "enabled", actualState = "disabled", message = "The user declined the startup change." };
-            runKey.SetValue(name, command, RegistryValueKind.String);
-            var verified = string.Equals(runKey.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string, command, StringComparison.Ordinal);
-            if (verified) backupKey.DeleteValue(backupName, throwOnMissingValue: false);
-            return new { success = verified, accepted = true, completed = true, verified, action = "enable-startup", target = name, requestedState = "enabled", actualState = verified ? "enabled" : "disabled", source, recoveryStored = !verified, message = verified ? "Startup entry restored and verified." : "The registry write was attempted but the restored value could not be verified; recovery data was retained." };
+            startupKey.SetValue(name, command, kind);
+            var verified = string.Equals(startupKey.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string, command, StringComparison.Ordinal) && startupKey.GetValueKind(name) == kind;
+            if (verified) { backupKey.DeleteValue(backupName, throwOnMissingValue: false); backupKey.DeleteValue(kindName, throwOnMissingValue: false); backupKey.DeleteValue(metadataName, throwOnMissingValue: false); }
+            return new { success = verified, accepted = true, completed = true, verified, action = "enable-startup", target = name, requestedState = "enabled", actualState = verified ? "enabled" : "disabled", source, recoveryStored = !verified, message = verified ? "Startup registry entry restored and verified." : "The registry write was attempted but the restored value could not be verified; recovery data was retained." };
         }
     }
 

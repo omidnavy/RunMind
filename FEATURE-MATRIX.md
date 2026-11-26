@@ -1,12 +1,13 @@
-# RunMind 2.6.3 — Feature Matrix (Phase 1 + System Manager hardening work in progress)
+# RunMind 2.6.3 — Feature Matrix (Phase 1 completion candidate; Windows validation pending)
 
 | Area | Capability | Status in current 2.6.3 working bundle | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
 | Hosts | PowerToys Command Palette | Preserved | Shared Agent Core |
-| Developer | Project index and search | Implemented with limits | Persistent bounded local index; Acorn AST parsing, lexical reference resolution, read/write classification, syntactic call sites, relative and workspace package export/import-alias resolution, re-export matching, external dependency identification, bounded circular dependency detection; `project_symbol_graph` tool; TypeScript/TSX/JSX and other languages retain heuristic fallback | Call sites include local declaration links where statically available; this is not compiler-grade analysis or complete Node module resolution.
+| Developer | Project index and search | Implemented with limits | Persistent incremental index; Acorn JS analysis; lazily loaded TypeScript 5.8.3 compiler API for JSX/TSX/TS syntax and bounded project-wide checker references; root tsconfig paths; static module graph; `project_symbol_graph` | Compiler checker bounded to 500 JS/JSX/TS/TSX files and 12 MB; no default libs/full diagnostic pass; external installed packages use native Node resolver tool.
 | Developer | Coordinated multi-file editing | Added in integration pass | 2–20 files, one approval, snapshot checks, per-file backups, best-effort rollback; sequential writes are not atomic |
+| Developer | Node runtime module resolution | Implemented with limits | Fresh-approved fixed script invokes Node ESM `import.meta.resolve` and CommonJS `createRequire().resolve`; no target modules are executed; native workspace must match project workspace |
 | Developer | Static project validation | Implemented with limits | JSON/XML and selected manifest checks; test discovery; package manager/lockfile detection; no build/test execution |
 | Developer | Approved PowerShell/native execution | Implemented | Existing 2.4.0 bridge |
 | Developer | Build/test workflows | Implemented with limits | Workflow-guided approved PowerShell/native execution; commands are selected from project evidence and require fresh approval |
@@ -23,7 +24,7 @@
 | System Manager | Optional master switch | Implemented | Disabled by default; shared native settings |
 | System Manager | Group and individual capability switches | Implemented | Applications, processes, diagnostics |
 | System Manager | Permission profiles | Implemented | Restricted/Balanced/Custom; per-action launch/open permission |
-| System Manager | Startup application inventory | Added | Read-only per-user/machine Run/RunOnce registry and Startup-folder inventory; no enable/disable operation yet |
+| System Manager | Startup application inventory | Implemented | Per-user/machine Run/RunOnce and user/common Startup-folder inventory; disabled entries remain visible with recovery metadata |
 | System Manager | Application discovery | Implemented | Ranked name/alias/executable matching across App Paths, uninstall registry, Start Menu, bounded common install locations, PATH and Windows Apps folder; bounded refresh on stale cache/search miss |
 | System Manager | Application launch | Implemented | Uses stable application IDs; revalidates executable; reuses/activates existing windows by default; distinguishes startup, activation and unverified handoff |
 | System Manager | Open files/folders/HTTPS URLs | Implemented | Windows default-handler request accepted; target application/window/focus/navigation are not verified |
@@ -110,7 +111,7 @@
 |---|---|---|---|
 | Developer | Package-manager and lockfile detection | Implemented in project index | Detects npm, pnpm, Yarn, Bun, uv, Poetry, Pipenv, Cargo, Go, Composer and Bundler lockfiles; Node packageManager field takes precedence when present |
 | Developer | Declared script command suggestions | Implemented in static validation | Suggestions are derived only from detected Node package manager and scripts declared in package.json; never executed by validation |
-| Developer | Local import relationships | Static/partial | JavaScript AST metadata resolves relative imports, selected workspace package exports/import aliases, re-exports, cycles, and cross-file references for statically resolved imports; TypeScript/JSX/Python remain heuristic; runtime conditional resolution is incomplete |
+| Developer | Local import relationships | Implemented with limits | Acorn static graph plus bounded TypeScript checker; tsconfig paths; relative/package exports/import aliases/re-exports/cycles; Node runtime resolver tool covers installed dependencies under actual Node ESM/CommonJS rules |
 | System Manager | Container command output and timeout | Hardened | Asynchronous process wait, user-configurable timeout (0 = no automatic timeout), cancellation, process-tree termination, bounded stdout/stderr |
 | System Manager | Native confirmation and permissions | Preserved | System Manager remains disabled by default; destructive process/container operations still require native confirmation |
 
@@ -121,7 +122,7 @@
 
 ### Explicit Phase 1 gaps
 
-- Acorn provides syntax-tree parsing for JavaScript (.js/.mjs/.cjs), including declaration and identifier-occurrence extraction. TypeScript, JSX, and other languages still use heuristic extraction. Cross-file use sites are mapped for statically resolved import bindings; complete compiler-grade binding/reference resolution and dynamic runtime resolution are not included.
+- JavaScript (.js/.mjs/.cjs) uses Acorn; JSX/TSX/TypeScript use the bundled TypeScript compiler API. A bounded project Program/checker resolves workspace symbols, but it does not load default libraries or perform a complete diagnostic/type-check pass. Other languages retain heuristic extraction.
 - Runtime build, test, lint, Playwright and dependency-audit commands are not executed by static validation. They require an explicitly selected native workspace and fresh approval.
 - Native process execution runs as the current Windows user and is not a security sandbox.
 - Multi-host Windows compilation and end-to-end execution must be validated on Windows; this environment cannot establish those results.
@@ -132,9 +133,9 @@
 
 | Capability | Status | Scope / limitation |
 |---|---|---|
-| JavaScript AST refactoring | Implemented | Preview-first rename/import organization and conservative statement extraction; one file at a time; applies through approved edit with backup; cross-file API rename is not automatic |
+| JavaScript AST refactoring | Implemented with limits | Preview-first local rename/import organization/extract-function plus cross-file named public API rename for statically resolved importers (up to 20 files); approved edit/backup/rollback path; default exports and dynamic unresolved importers rejected |
 | JavaScript import organization | Implemented | Sorts independent contiguous top-level import groups; preserves comment-pinned groups |
-| Startup entry management | Implemented | Enable/disable exact HKCU/HKLM Run values with recovery; RunOnce and Startup-folder entries are inventory-only |
+| Startup entry management | Implemented with limits | Enable/disable exact HKCU/HKLM Run/RunOnce values and inventoried user/common Startup `.lnk`/`.exe` items; command/type or SHA-256-verified file recovery; all changes freshly confirmed |
 | Hardware and driver diagnostics | Implemented | Fixed PowerShell CIM query and bounded `driverquery` inventory; requires Windows runtime validation |
 | TCP listener ownership | Implemented | `netstat -ano` listener mapping to PID/process name where accessible |
 | System Manager result contract | Implemented | Tool-layer normalized success/accepted/completed/verified fields |
