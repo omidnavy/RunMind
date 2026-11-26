@@ -1,3 +1,14 @@
+# RunMind Changelog
+
+## 2.6.3 — Developer Intelligence & System Manager
+
+- Replaced the Notepad++ adapter with Windows Notepad.
+- Added a File Explorer adapter for opening folders and selecting files.
+- Added a native Docker/Podman container action bridge for list, inspect, start, stop, restart, and logs. Runtime selection supports auto, Docker, and Podman; state-changing operations always require native confirmation.
+- Added coding, debugging, testing-and-quality, and code-review Agent Skills.
+- Added shared coding execution guidance emphasizing project inspection, root-cause fixes, preserving user changes, proportionate validation, and honest verification reporting.
+- Retained the existing system-management, container-management, and runmind-management skills.
+
 # Changelog
 
 ## 2.6.2 — System Management Skills & Capability Contracts

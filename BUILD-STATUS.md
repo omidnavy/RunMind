@@ -52,3 +52,12 @@ See `VALIDATION-REPORT.md` for exact checks and limitations. Windows/.NET compil
 ## 2.6.2 validation status
 
 Source updates include three bundled Agent Skills, native skill discovery/loading, shared System Management prompt guidance, adapter operation metadata, and content packaging for all three hosts. Static validation is performed in the accompanying report. Windows/.NET compilation and runtime behavior require Windows testing.
+
+
+## 2.6.3 implementation status
+
+- Added Notepad and File Explorer built-in adapter definitions.
+- Added native Docker/Podman CLI operation with strict action/runtime/container validation and mandatory confirmation for start/stop/restart.
+- Added four coding skills and shared coding execution policy.
+- Existing adapter manager remains embedded in the System Manager settings page; dedicated tab, built-in override editor/reset, and full RunMind conversation management are not implemented in this snapshot.
+- Windows/.NET compilation and runtime validation are still required.

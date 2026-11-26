@@ -22,6 +22,7 @@ public sealed partial class AgentHostBridge
     private static string SystemManagerSettingsPath => Path.Combine(SystemManagerRoot, "settings.json");
     private static string SystemManagerCatalogPath => Path.Combine(SystemManagerRoot, "applications.json");
     private static string SystemManagerAdaptersRoot => Path.Combine(SystemManagerRoot, "Adapters");
+    private static string SystemManagerAdapterOverridesRoot => Path.Combine(SystemManagerAdaptersRoot, "Overrides");
     private sealed record SystemApplicationRecord(string id, string name, string path, string source, string version, string[]? aliases = null, string? appUserModelId = null);
 
     [DllImport("user32.dll")]
@@ -640,12 +641,39 @@ public sealed partial class AgentHostBridge
             new("vscode", "Visual Studio Code", "code", new Dictionary<string,string[]> { ["open-file"] = new[] { "--goto", "{target}:{line}" }, ["open-folder"] = new[] { "--new-window", "{target}" } }, true),
             new("windows-terminal", "Windows Terminal", "wt", new Dictionary<string,string[]> { ["open-folder"] = new[] { "-d", "{target}" } }, true),
             new("firefox", "Firefox", "firefox", new Dictionary<string,string[]> { ["open-url"] = new[] { "-new-tab", "{target}" } }, true),
-            new("notepad-plus-plus", "Notepad++", "notepad++", new Dictionary<string,string[]> { ["open-file"] = new[] { "-n{line}", "{target}" } }, true),
+            new("notepad", "Windows Notepad", "notepad", new Dictionary<string,string[]> { ["open-file"] = new[] { "{target}" } }, true),
+            new("file-explorer", "File Explorer", "explorer", new Dictionary<string,string[]> { ["open-folder"] = new[] { "{target}" }, ["select-file"] = new[] { "/select,{target}" } }, true),
             new("blender", "Blender", "blender", new Dictionary<string,string[]> { ["open-file"] = new[] { "{target}" } }, true),
             new("runmind", "RunMind", "RunMind", new Dictionary<string,string[]> { ["send-prompt"] = new[] { "--prompt", "{target}" } }, true),
         };
         Directory.CreateDirectory(SystemManagerAdaptersRoot);
         EnsureNoReparseAncestors(SystemManagerAdaptersRoot);
+        if (Directory.Exists(SystemManagerAdapterOverridesRoot) && !IsReparsePoint(SystemManagerAdapterOverridesRoot))
+        {
+            foreach (var file in Directory.EnumerateFiles(SystemManagerAdapterOverridesRoot, "*.json").Take(50))
+            {
+                try
+                {
+                    if (IsReparsePoint(file) || new FileInfo(file).Length > 32 * 1024) continue;
+                    using var document = JsonDocument.Parse(File.ReadAllText(file, Encoding.UTF8));
+                    var root = document.RootElement;
+                    var id = Path.GetFileNameWithoutExtension(file);
+                    var index = rows.FindIndex(item => item.id.Equals(id, StringComparison.OrdinalIgnoreCase));
+                    if (index < 0 || !root.TryGetProperty("operations", out var ops) || ops.ValueKind != JsonValueKind.Object) continue;
+                    var operations = new Dictionary<string,string[]>(StringComparer.Ordinal);
+                    foreach (var op in ops.EnumerateObject().Take(8))
+                    {
+                        if (op.Name is not ("open-file" or "open-folder" or "open-url" or "select-file" or "send-prompt")) continue;
+                        if (op.Value.ValueKind != JsonValueKind.Array || op.Value.GetArrayLength() is < 1 or > 20) continue;
+                        var values = op.Value.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String).Select(v => v.GetString() ?? "").ToArray();
+                        if (values.Any(v => v.Length > 1024 || System.Text.RegularExpressions.Regex.IsMatch(v, "\\{(?!target\\}|line\\})"))) continue;
+                        operations[op.Name] = values;
+                    }
+                    if (operations.Count > 0) rows[index] = rows[index] with { operations };
+                }
+                catch { }
+            }
+        }
         foreach (var file in Directory.EnumerateFiles(SystemManagerAdaptersRoot, "*.json").Take(100))
         {
             try
@@ -683,11 +711,12 @@ public sealed partial class AgentHostBridge
         var match = input.TryGetProperty("match", out var matchValue) ? matchValue.GetString() ?? "" : "";
         if (!System.Text.RegularExpressions.Regex.IsMatch(id, "^[a-z0-9]+(?:-[a-z0-9]+)*$") || id.Length > 64) throw new InvalidDataException("Adapter ID must use lowercase letters, numbers and hyphens.");
         if (name.Length is < 1 or > 80 || match.Length is < 1 or > 120) throw new InvalidDataException("Adapter displayName or application match is invalid.");
+        var builtIn = ReadSystemApplicationAdapters().FirstOrDefault(item => item.id.Equals(id, StringComparison.OrdinalIgnoreCase) && item.builtIn);
         if (!input.TryGetProperty("operations", out var operationsInput) || operationsInput.ValueKind != JsonValueKind.Object) throw new InvalidDataException("Adapter operations must be an object.");
         var operations = new JsonObject();
         foreach (var operation in operationsInput.EnumerateObject().Take(8))
         {
-            if (operation.Name is not ("open-file" or "open-folder" or "open-url")) throw new InvalidDataException($"Unsupported adapter operation '{operation.Name}'.");
+            if (operation.Name is not ("open-file" or "open-folder" or "open-url") && !(builtIn is not null && operation.Name is "select-file" or "send-prompt")) throw new InvalidDataException($"Unsupported adapter operation '{operation.Name}'.");
             if (operation.Value.ValueKind != JsonValueKind.Array || operation.Value.GetArrayLength() is < 1 or > 20) throw new InvalidDataException("Each adapter operation must contain 1–20 argument templates.");
             var values = new JsonArray();
             foreach (var argument in operation.Value.EnumerateArray())
@@ -701,20 +730,38 @@ public sealed partial class AgentHostBridge
         }
         if (operations.Count == 0) throw new InvalidDataException("At least one supported adapter operation is required.");
         var root = SystemManagerAdaptersRoot; Directory.CreateDirectory(root); EnsureNoReparseAncestors(root);
-        if (Directory.EnumerateFiles(root, "*.json").Take(101).Count() >= 100) throw new InvalidOperationException("The custom application adapter limit (100) has been reached.");
-        var destination = Path.Combine(root, id + ".json");
-        if (File.Exists(destination) || Directory.Exists(destination)) throw new IOException($"Adapter '{id}' already exists. Custom adapter updates are not supported by this operation.");
-        if (ReadSystemApplicationAdapters().Any(item => item.id.Equals(id, StringComparison.OrdinalIgnoreCase))) throw new IOException($"Adapter ID '{id}' is already registered.");
+        var isOverride = builtIn is not null;
+        if (!isOverride && ReadSystemApplicationAdapters().Any(item => item.id.Equals(id, StringComparison.OrdinalIgnoreCase))) throw new IOException($"Adapter ID '{id}' is already registered.");
+        if (!isOverride && Directory.EnumerateFiles(root, "*.json").Take(101).Count() >= 100) throw new InvalidOperationException("The custom application adapter limit (100) has been reached.");
+        if (isOverride && (!name.Equals(builtIn!.displayName, StringComparison.Ordinal) || !match.Equals(builtIn.match, StringComparison.Ordinal))) throw new InvalidDataException("Built-in adapter identity and application matching are fixed; only supported operation templates can be edited.");
         var manifest = new JsonObject { ["id"] = id, ["displayName"] = name, ["match"] = match, ["operations"] = operations };
-        if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Install application adapter", $"Adapter: {name} ({id})\nApplication match: {match}\nOperations: {string.Join(", ", operations.Select(pair => pair.Key))}\n\nOnly argument templates are installed. No scripts or shell commands are supported.", alwaysAsk: true)) return new { installed = false, cancelled = true, id };
+        var destinationRoot = isOverride ? SystemManagerAdapterOverridesRoot : root;
+        Directory.CreateDirectory(destinationRoot); EnsureNoReparseAncestors(destinationRoot);
+        var destination = Path.Combine(destinationRoot, id + ".json");
+        if (!isOverride && (File.Exists(destination) || Directory.Exists(destination))) throw new IOException($"Adapter '{id}' already exists.");
+        if (!ConfirmSystemManagerAction("launchApplications", isOverride ? "RunMind · Edit built-in adapter" : "RunMind · Install application adapter", $"Adapter: {name} ({id})\nApplication match: {match}\nOperations: {string.Join(", ", operations.Select(pair => pair.Key))}\n\nOnly argument templates are stored. No scripts or shell commands are supported.", alwaysAsk: true)) return new { installed = false, cancelled = true, id };
         var temp = Path.Combine(root, ".install-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
             File.WriteAllText(temp, manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
-            File.Move(temp, destination, false);
+            if (isOverride && File.Exists(destination)) File.Replace(temp, destination, null); else File.Move(temp, destination, false);
         }
         catch { try { if (File.Exists(temp)) File.Delete(temp); } catch { } throw; }
         return new { installed = true, id, displayName = name, operations = operations.Select(pair => pair.Key).ToArray(), path = destination, note = "Declarative adapter installed. It contains argument templates only and cannot execute scripts or shell commands." };
+    }
+
+    private static object SystemManagerResetAdapter(JsonElement args)
+    {
+        RequireSystemCapability("applications", "launchApplications");
+        var id = ReadString(args, "adapterId", 80);
+        var builtIn = ReadSystemApplicationAdapters().FirstOrDefault(item => item.id.Equals(id, StringComparison.OrdinalIgnoreCase) && item.builtIn);
+        if (builtIn is null) throw new InvalidDataException("Only a built-in adapter override can be reset.");
+        var path = Path.Combine(SystemManagerAdapterOverridesRoot, id + ".json");
+        if (!File.Exists(path)) return new { reset = false, reason = "no-override", adapterId = id };
+        if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Reset built-in adapter", $"Adapter: {builtIn.displayName}\nThis removes the user override and restores shipped defaults.", alwaysAsk: true)) return new { reset = false, cancelled = true, adapterId = id };
+        if (IsReparsePoint(path)) throw new InvalidDataException("The adapter override file is unsafe.");
+        File.Delete(path);
+        return new { reset = true, adapterId = id };
     }
 
     private static object SystemManagerRemoveAdapter(JsonElement args)
@@ -738,13 +785,14 @@ public sealed partial class AgentHostBridge
         RequireSystemCapability("applications", "launchApplications");
         var adapters = ReadSystemApplicationAdapters().Select(item => new
         {
-            item.id, item.displayName, item.match, item.builtIn,
+            item.id, item.displayName, item.match, item.builtIn, hasOverride = item.builtIn && File.Exists(Path.Combine(SystemManagerAdapterOverridesRoot, item.id + ".json")),
             operations = item.operations.Keys.Select(operation => new
             {
                 name = operation,
                 required = new[] { "target" },
                 optional = operation == "open-file" ? new[] { "line" } : Array.Empty<string>(),
-                access = "application-action",
+                access = operation == "open-url" ? "external-navigation" : "local-file-system",
+                stateChanging = true,
                 confirmation = "native System Manager permission policy",
                 resultFields = new[] { "accepted", "launched", "verified", "outcome", "message" }
             }).ToArray()
@@ -788,6 +836,38 @@ public sealed partial class AgentHostBridge
         var launchArguments = templates.Select(value => value.Replace("{target}", target, StringComparison.Ordinal).Replace("{line}", line.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)).ToArray();
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { applicationId = matches[0].id, arguments = launchArguments }));
         return SystemManagerLaunchApplication(document.RootElement);
+    }
+
+    private static object SystemManagerContainerAction(JsonElement args)
+    {
+        RequireSystemCapability("applications", "launchApplications");
+        var action = ReadString(args, "action", 20).ToLowerInvariant();
+        var container = ReadString(args, "container", 128);
+        var runtime = ReadString(args, "runtime", 16).ToLowerInvariant();
+        if (action is not ("list" or "inspect" or "start" or "stop" or "restart" or "logs")) throw new InvalidDataException("Supported container actions are list, inspect, start, stop, restart, and logs.");
+        if (runtime is not ("auto" or "docker" or "podman")) throw new InvalidDataException("Runtime must be auto, docker, or podman.");
+        if (action != "list" && !System.Text.RegularExpressions.Regex.IsMatch(container, "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")) throw new InvalidDataException("A container name or ID using letters, numbers, dot, underscore, or hyphen is required.");
+        var engines = runtime == "auto" ? new[] { "podman", "docker" } : new[] { runtime };
+        var executable = engines.Select(name => FindExecutable(name + ".exe") ?? FindExecutable(name)).FirstOrDefault(path => !string.IsNullOrWhiteSpace(path));
+        if (executable is null) return new { available = false, runtime, action, message = "Neither Docker nor Podman was found on PATH. Install or expose a supported runtime, then retry." };
+        var commandArguments = action switch
+        {
+            "list" => new[] { "ps", "-a", "--format", "{{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Image}}" },
+            "inspect" => new[] { "inspect", container },
+            "start" => new[] { "start", container },
+            "stop" => new[] { "stop", "--time", "10", container },
+            "restart" => new[] { "restart", "--time", "10", container },
+            _ => new[] { "logs", "--tail", "200", container }
+        };
+        var stateChanging = action is "start" or "stop" or "restart";
+        if (stateChanging && !ConfirmSystemManagerAction("launchApplications", $"RunMind · {runtime} container {action}", $"Runtime: {Path.GetFileNameWithoutExtension(executable)}\nContainer: {container}\nAction: {action}", alwaysAsk: true)) return new { accepted = false, cancelled = true, runtime, action, container };
+        var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
+        foreach (var value in commandArguments) start.ArgumentList.Add(value);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start {Path.GetFileName(executable)}.");
+        var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(30000)) { try { process.Kill(entireProcessTree: true); } catch { } throw new TimeoutException($"Container action '{action}' exceeded 30 seconds."); }
+        var output = stdout.GetAwaiter().GetResult(); var error = stderr.GetAwaiter().GetResult();
+        return new { available = true, accepted = process.ExitCode == 0, completed = process.ExitCode == 0, verified = process.ExitCode == 0 && (action is "list" or "inspect"), runtime = Path.GetFileNameWithoutExtension(executable), action, container, exitCode = process.ExitCode, output = output.Length > 30000 ? output[..30000] : output, error = error.Length > 8000 ? error[..8000] : error, message = process.ExitCode == 0 ? "Runtime command completed. For start/stop/restart, use inspect or list to verify the resulting state." : "Container runtime returned a non-zero exit code." };
     }
 
     private static bool SupportsNewWindowBehavior(SystemApplicationRecord application)

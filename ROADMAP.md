@@ -51,3 +51,8 @@ RunMind 2.6.1 completes the adapter management surface and improves cross-model 
 - Bundled on-demand system-management, container-management, and runmind-management skills.
 - Shared Agent policy describes safe discovery, operation selection, permission boundaries, and verification.
 - Adapter inventory reports descriptive operation contracts; native enforcement remains authoritative.
+
+
+## 2.6.3 — Developer Intelligence & System Manager
+
+Implemented in this source snapshot: Windows Notepad adapter, File Explorer folder/file actions, Docker/Podman container lifecycle/read operations, and four coding skills. The adapter editor/override UI and native conversation-session management remain follow-up work; RunMind conversations currently live in WebView IndexedDB and are not exposed as a native session store.

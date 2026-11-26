@@ -338,3 +338,8 @@ Agent introspection now includes `list_available_tools` for the exact tools expo
 ### Agent System Management Skills (2.6.2)
 
 RunMind bundles three on-demand skills: `system-management`, `container-management`, and `runmind-management`. They are discoverable through `list_agent_skills` and loadable through `load_agent_skill`. Skills provide operational guidance only; native tools remain responsible for validation, permissions, confirmations, execution, and result verification. Adapter inventory includes descriptive operation metadata.
+
+
+### Developer Intelligence (2.6.3)
+
+RunMind includes coding, debugging, testing-and-quality, and code-review skills. System Manager adds Windows Notepad and File Explorer adapter definitions plus Docker/Podman container operations (list, inspect, start, stop, restart, logs). Container lifecycle changes require native confirmation. RunMind conversation storage remains WebView IndexedDB; native conversation-management operations are not yet exposed.

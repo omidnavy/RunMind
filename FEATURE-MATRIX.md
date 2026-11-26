@@ -82,3 +82,16 @@
 | Bundled on-demand System Management skills | Yes |
 | Adapter operation metadata (arguments, state-change, confirmation, result fields) | Yes |
 | Native permission enforcement independent of skill instructions | Yes |
+
+
+## 2.6.3 additions
+
+| Capability | 2.6.3 |
+|---|---|
+| Windows Notepad adapter | Implemented |
+| File Explorer open-folder/select-file adapter | Implemented |
+| Docker/Podman list, inspect, start, stop, restart, logs | Implemented (native CLI; Windows runtime test required) |
+| Coding/debugging/testing-and-quality/code-review skills | Implemented |
+| Dedicated adapters tab and bounded inner scrolling | Not implemented |
+| Built-in adapter edit overrides/reset | Not implemented |
+| RunMind open/create/export existing conversation native adapter | Not implemented; conversations remain in WebView IndexedDB |

@@ -828,6 +828,10 @@
           const title = document.createElement('strong'); title.textContent = adapter.displayName || adapter.id;
           const detail = document.createElement('span'); detail.textContent = `${adapter.builtIn ? 'Built-in' : 'Custom'} · matches ${adapter.match} · ${(adapter.operations || []).map(operation => typeof operation === 'string' ? operation : operation?.name).filter(Boolean).join(', ')}`;
           copy.append(title, detail); row.append(copy);
+          if (adapter.builtIn) {
+            const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'setting-reset'; edit.textContent = 'Edit'; edit.dataset.adapterEdit = adapter.id; edit.dataset.adapterName = adapter.displayName || adapter.id; edit.dataset.adapterMatch = adapter.match || ''; edit.dataset.adapterOperations = JSON.stringify(Object.fromEntries((adapter.operations || []).map(op => [op.name, []]))); row.append(edit);
+            if (adapter.hasOverride) { const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'setting-reset'; reset.textContent = 'Reset'; reset.dataset.adapterReset = adapter.id; row.append(reset); }
+          }
           if (!adapter.builtIn) {
             const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'setting-reset'; remove.textContent = 'Remove'; remove.dataset.adapterRemove = adapter.id; row.append(remove);
           }
@@ -848,7 +852,7 @@
       if (!adapter || typeof adapter !== 'object' || Array.isArray(adapter)) { if (status) status.textContent = 'The manifest must be a JSON object.'; return; }
       try {
         const result = await callAgentHost('systemManager.adapters.save', { adapter });
-        if (result?.installed) { input.value = ''; if (status) status.textContent = `Installed ${result.displayName}.`; await loadSystemManagerAdapters(); }
+        if (result?.installed) { input.value = ''; if (status) status.textContent = `${result.overridden ? 'Saved override for' : 'Installed'} ${result.displayName}.`; await loadSystemManagerAdapters(); }
         else if (result?.cancelled) { if (status) status.textContent = 'Installation cancelled.'; }
         else if (status) status.textContent = 'The adapter was not installed.';
       } catch (error) { if (status) status.textContent = `Could not install adapter: ${error?.message || error}`; }
@@ -861,6 +865,16 @@
         else if (result?.cancelled) { if (status) status.textContent = 'Removal cancelled.'; }
         else if (status) status.textContent = `Adapter '${adapterId}' was not found.`;
       } catch (error) { if (status) status.textContent = `Could not remove adapter: ${error?.message || error}`; }
+    }
+    async function resetSystemManagerAdapter(adapterId) {
+      const status = document.getElementById('systemManagerAdapterStatus');
+      try { const result = await callAgentHost('systemManager.adapters.reset', { adapterId }); if (result?.reset) { if (status) status.textContent = `Restored shipped defaults for ${adapterId}.`; await loadSystemManagerAdapters(); } else if (result?.cancelled) { if (status) status.textContent = 'Reset cancelled.'; } else if (status) status.textContent = 'No user override exists.'; }
+      catch (error) { if (status) status.textContent = `Could not reset adapter: ${error?.message || error}`; }
+    }
+    function setSystemManagerTab(tab) {
+      document.querySelectorAll('[data-system-manager-tab]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.systemManagerTab === tab)));
+      document.querySelectorAll('[data-system-manager-view]').forEach(view => { view.hidden = view.dataset.systemManagerView !== tab; });
+      if (tab === 'adapters') void loadSystemManagerAdapters();
     }
     async function loadSharedPermissionPolicy() {
       try {

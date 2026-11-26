@@ -802,3 +802,8 @@
 /* Project intelligence and reusable developer workflows */
 #projectIndexStatus, #developerWorkflowStatus { overflow-wrap: anywhere; }
 #developerWorkflowContext { width: 100%; min-height: 76px; resize: vertical; }
+
+    #systemManagerMenu .toolbar-panel { max-height: min(760px, calc(100vh - 24px)); }
+    #systemManagerSettingsPage { max-height: min(620px, calc(100vh - 190px)); overflow-y: auto; overscroll-behavior: contain; padding-right: 3px; }
+    #systemManagerAdaptersCard .capability-list { max-height: min(330px, 42vh); overflow-y: auto; overscroll-behavior: contain; padding-right: 3px; }
+    .system-manager-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
