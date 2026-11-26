@@ -1,6 +1,22 @@
-# RunMind 3.2.0 — Feature Matrix (P0–P5)
+# RunMind 3.3.0 — Feature Matrix (P0–P6)
 
-| Area | Capability | Status in current 3.2.0 source bundle | Notes |
+## P6 Development Intelligence — RunMind 3.3.0
+
+| Area | Capability | Status in 3.3.0 source bundle | Notes |
+|---|---|---|---|
+| Git | Structured review snapshot | Implemented in source | Branch, staged/unstaged diffs, untracked paths, conflicts, whitespace check, bounded output |
+| Developer | Architecture-aware Git review | Implemented in source | Connects changed paths to JS/TS imports, dependent modules, tests and HTML/CSS/SVG asset consumers |
+| Developer | Build/Test Intelligence | Implemented in source | package scripts, test discovery, common CI files, declared tool references |
+| Developer | Flaky/repeated test signals | Implemented in source | Based on RunMind-recorded approved runs; same normalized command and failure signatures |
+| CI | Local/CI result comparison | Implemented with limits | CI files statically discovered; actual CI result must be supplied by the user |
+| Dependencies | Lockfile consistency & advisory/outdated audit | Implemented with limits | Static root npm package-lock v2/v3 checks; approved npm/pnpm/Yarn audit/outdated commands |
+| Environment | JS runtime/package-manager versions | Implemented in source | Approved read-only Node/npm/pnpm/Yarn/Bun/Git probes; compares project declarations |
+| Agent | Before/after change ownership receipts | Implemented in source | SHA-256, backup path, Git baseline; no automatic restore |
+| Agent | Cross-session project continuity | Implemented with limits | Bounded redacted per-host WebView memory; same native workspace fingerprint; explicit resume only |
+
+
+
+| Area | Capability | Status in 3.2.0 P5 baseline | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
@@ -103,7 +119,7 @@
 
 ## 2.6.1 changes
 
-| Area | Capability | Status in current 3.2.0 source bundle | Notes |
+| Area | Capability | Status in 3.2.0 P5 baseline | Notes |
 |---|---|---|---|
 | System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
 | System Manager | First-party RunMind adapter | Extended | Sends prompts, opens a validated `.runmind` session, or starts a fresh Standalone conversation |

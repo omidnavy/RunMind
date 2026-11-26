@@ -247,7 +247,7 @@
       }
       if (name.startsWith('mcp_')) return await executeMcpTool(name, args, signal);
       const gitRoutes = {
-        git_status: ['status','gitRead'], git_diff: ['diff','gitRead'], git_log: ['log','gitRead'], git_show: ['show','gitRead'], git_branches: ['branches','gitRead'], git_remotes: ['remotes','gitRead'],
+        git_status: ['status','gitRead'], git_review_snapshot: ['review_snapshot','gitRead'], git_diff: ['diff','gitRead'], git_log: ['log','gitRead'], git_show: ['show','gitRead'], git_branches: ['branches','gitRead'], git_remotes: ['remotes','gitRead'],
         git_stage: ['stage','gitWrite'], git_unstage: ['unstage','gitWrite'], git_commit: ['commit','gitWrite'], git_create_branch: ['create_branch','gitWrite'], git_switch_branch: ['switch_branch','gitWrite'], git_merge: ['merge','gitWrite'], git_revert: ['revert','gitWrite'], git_cherry_pick: ['cherry_pick','gitWrite'], git_stash: ['stash','gitWrite'],
         git_fetch: ['fetch','gitRemote'], git_pull: ['pull','gitRemote'], git_push: ['push','gitRemote'], git_reset_hard: ['reset_hard','gitDestructive'], git_clean: ['clean','gitDestructive'], git_restore: ['restore','gitDestructive'], git_delete_branch: ['delete_branch','gitDestructive']
       };
@@ -871,8 +871,11 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
           const content = String(args.content || '');
           const approved = await requireAgentApproval({ title: 'Create a file?', subtitle: 'File write · existing files will not be overwritten', detail: `${args.path}\n\n${content.slice(0, 3000)}`, risky: true }, signal);
           if (!approved) return { cancelled: true, message: 'User declined file creation.' };
+          const ownershipBaseline = await projectDevelopmentPrepareMutation(signal);
           const written = await writeWorkspaceFile(args.path, new Blob([content]), false);
-          return { created: written.path, bytes: written.bytes };
+          const createdFile = (await getFileAtPath(agentDirectoryHandle, written.path || args.path)).handle;
+          await projectDevelopmentTrackMutation({ path: written.path || args.path, operation: 'create', currentFile: await createdFile.getFile(), baseline: ownershipBaseline });
+          return { created: written.path, bytes: written.bytes, ownershipTracked: !!projectDevelopmentIdentity?.key };
         }
         case 'search_files': {
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');
@@ -893,12 +896,16 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
             if (!approved) return { cancelled: true };
             const currentFile = await prior.handle.getFile();
             if (!(await workspaceFilesMatchSnapshot(prior.file, currentFile))) throw new Error(`'${args.path}' changed while approval was pending. Nothing was modified; review the current file and retry.`);
+            const ownershipBaseline = await projectDevelopmentPrepareMutation(signal);
+            const previousText = await currentFile.text();
             const backup = await createWorkspaceBackup(args.path, currentFile, 'edit');
             const immediatelyBeforeWrite = await prior.handle.getFile();
             if (!(await workspaceFilesMatchSnapshot(currentFile, immediatelyBeforeWrite))) throw new Error(`'${args.path}' changed while its backup was being created. The original was not overwritten; the recovery backup was preserved.`);
             const writable = await prior.handle.createWritable({ keepExistingData: false, overwrite: true });
             try { await writable.write(content); await writable.close(); } catch (error) { try { await writable.abort(); } catch (_) {} throw error; }
-            return { edited: args.path, previousBytes: currentFile.size, bytes: new Blob([content]).size, backup };
+            const updatedFile = await prior.handle.getFile();
+            await projectDevelopmentTrackMutation({ path: args.path, operation: 'edit', backupPath: backup.backupPath, previousText, previousFile: currentFile, currentFile: updatedFile, currentText: await updatedFile.text(), baseline: ownershipBaseline });
+            return { edited: args.path, previousBytes: currentFile.size, bytes: new Blob([content]).size, backup, ownershipTracked: !!projectDevelopmentIdentity?.key };
           });
         }
         case 'edit_files': {
@@ -927,7 +934,9 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
             for (const item of snapshots) {
               const current = await item.prior.handle.getFile();
               if (!(await workspaceFilesMatchSnapshot(item.prior.file, current))) throw new Error(`'${item.path}' changed while approval was pending. No files were modified.`);
+              item.previousText = await current.text();
             }
+            const ownershipBaseline = await projectDevelopmentPrepareMutation(signal);
             for (const item of snapshots) item.backup = await createWorkspaceBackup(item.path, item.prior.file, 'multi-edit');
             for (const item of snapshots) {
               const current = await item.prior.handle.getFile();
@@ -953,7 +962,12 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
               }
               throw new Error(`Multi-file write failed: ${error?.message || error}. ${rollback.length ? `Rollback was incomplete for: ${rollback.map(item => item.path).join(', ')}.` : 'Previously written files were restored from their in-memory snapshots.'} Recovery backups were preserved.`);
             }
-            return { edited: changed, count: changed.length, bytes: totalBytes, backups: snapshots.map(item => ({ path: item.path, ...item.backup })), rollback: 'not-needed' };
+            for (const item of snapshots) {
+              if (!changed.includes(item.path)) continue;
+              const updatedFile = await item.prior.handle.getFile();
+              await projectDevelopmentTrackMutation({ path: item.path, operation: 'edit', backupPath: item.backup?.backupPath, previousText: item.previousText, previousFile: item.prior.file, currentFile: updatedFile, currentText: await updatedFile.text(), baseline: ownershipBaseline });
+            }
+            return { edited: changed, count: changed.length, bytes: totalBytes, backups: snapshots.map(item => ({ path: item.path, ...item.backup })), rollback: 'not-needed', ownershipTracked: !!projectDevelopmentIdentity?.key };
           });
         }
         case 'restore_file_backup': {
@@ -988,8 +1002,13 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
           if (currentDestination ? !immediatelyBeforeRestore || !(await workspaceFilesMatchSnapshot(currentDestination, immediatelyBeforeRestore)) : !!immediatelyBeforeRestore) {
             throw new Error(`'${destination}' changed while the recovery backup was being created. The restore was cancelled and the current destination was preserved.`);
           }
+          const ownershipBaseline = await projectDevelopmentPrepareMutation(signal);
+          const previousText = currentDestination ? await currentDestination.text() : '';
+          const restoredText = await backupFile.text();
           const written = await writeWorkspaceFileCore(destination, backupFile, !!currentDestination);
-          return { restored: destination, from: backupPath, bytes: written.bytes, recoveryPoint };
+          const restoredFile = (await getFileAtPath(agentDirectoryHandle, destination)).handle;
+          await projectDevelopmentTrackMutation({ path: destination, operation: 'restore', backupPath: recoveryPoint?.backupPath || '', previousText, previousFile: currentDestination, currentFile: await restoredFile.getFile(), currentText: restoredText, baseline: ownershipBaseline });
+          return { restored: destination, from: backupPath, bytes: written.bytes, recoveryPoint, ownershipTracked: !!projectDevelopmentIdentity?.key };
           });
         }
         case 'delete_file': {
@@ -1000,10 +1019,14 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
             if (!approved) return { cancelled: true };
             const currentFile = await handle.getFile();
             if (!(await workspaceFilesMatchSnapshot(file, currentFile))) throw new Error(`'${args.path}' changed while approval was pending. Nothing was deleted; review the current file and retry.`);
+            const ownershipBaseline = await projectDevelopmentPrepareMutation(signal);
+            const previousText = await currentFile.text();
             const backup = await createWorkspaceBackup(args.path, currentFile, 'delete');
             const immediatelyBeforeRemove = await handle.getFile();
             if (!(await workspaceFilesMatchSnapshot(currentFile, immediatelyBeforeRemove))) throw new Error(`'${args.path}' changed while its backup was being created. The source was not deleted; the recovery backup was preserved.`);
-            await dir.removeEntry(name); return { deleted: args.path, bytes: currentFile.size, backup };
+            await dir.removeEntry(name);
+            await projectDevelopmentTrackMutation({ path: args.path, operation: 'delete', backupPath: backup.backupPath, previousText, previousFile: currentFile, baseline: ownershipBaseline });
+            return { deleted: args.path, bytes: currentFile.size, backup, ownershipTracked: !!projectDevelopmentIdentity?.key };
           });
         }
         case 'create_folder': {
@@ -1130,6 +1153,193 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
           if (!index) throw new Error('Build or refresh the project index before assessing release readiness.');
           const diagnostics = projectIndexBuildDiagnostics(index);
           return projectIndexBuildReleaseReadiness(index, diagnostics);
+        }
+        case 'project_development_review': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const approved = await requireAgentApproval({ title: 'Inspect Git changes for a project review?', subtitle: 'Git read-only · architecture and test impact', detail: 'Reads the selected repository branch, staged/unstaged diffs, untracked path names and merge-conflict index. It does not stage, commit, restore or modify Git data.', risky: false, permissionCategory: 'gitRead' }, signal);
+          if (!approved) return { cancelled: true, message: 'Git change review was declined.' };
+          const snapshot = await callAgentHost('git.run', { action: 'review_snapshot', contextId: workspaceContext.id }, signal, 60000);
+          if (!snapshot?.success) throw new Error(snapshot?.error || 'Git review snapshot could not be collected. Select this canonical workspace with git_select_repository first.');
+          const index = await loadProjectIndex() || await buildProjectIndex({ force: false, signal });
+          if (!index) throw new Error('Project index could not be loaded or built for architecture impact analysis.');
+          const result = projectDevelopmentAnalyzeGitSnapshot(index, snapshot);
+          const maximum = Math.max(1000, Math.min(100000, Number(args.max_diff_chars) || 50000));
+          result.diffs.staged = result.diffs.staged.slice(0, maximum);
+          result.diffs.unstaged = result.diffs.unstaged.slice(0, Math.max(0, maximum - result.diffs.staged.length));
+          result.snapshot = { folder: snapshot.folder, branch: snapshot.branch, changedFileCount: snapshot.changedFileCount, truncated: snapshot.truncated === true };
+          result.generatedAt = new Date().toISOString();
+          return result;
+        }
+        case 'project_build_test_intelligence': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          await projectDevelopmentEnsureIdentity(signal);
+          const index = await loadProjectIndex() || await buildProjectIndex({ force: false, signal });
+          if (!index) throw new Error('Project index could not be loaded or built.');
+          const report = projectDevelopmentBuildTestAnalysis(index, projectDevelopmentLoadMemory(), Array.isArray(args.ci_results) ? args.ci_results : []);
+          let currentChanges = null;
+          try {
+            const gitReadApproved = await requireAgentApproval({ title: 'Read Git status for build/test correlation?', subtitle: 'Git read-only · optional failure investigation context', detail: 'Reads the current branch, staged/unstaged diff and changed paths only. It does not modify Git data.', risky: false, permissionCategory: 'gitRead' }, signal);
+            if (gitReadApproved) {
+              const snapshot = await callAgentHost('git.run', { action: 'review_snapshot', contextId: workspaceContext.id }, signal, 45000);
+              if (snapshot?.success) {
+                const review = projectDevelopmentAnalyzeGitSnapshot(index, snapshot);
+                currentChanges = { branch: review.branch, changedPaths: review.changedPaths, affectedTests: review.testImpact?.tests || [],
+                  note: 'These are current working-tree changes alongside recorded run failures. They indicate possible investigation relationships, not proof that a change caused a failure.' };
+              }
+            }
+          } catch (_) { /* Build/test analysis remains useful without a Git repository or Git-read approval. */ }
+          const failedRuns = report.history.commands.filter(item => item.failureCount > 0).map(item => ({ command: item.command, failures: item.failureCount, flaky: item.flaky, environmentOutcomeDiffers: item.environmentOutcomeDiffers, environmentSignal: item.environmentSignal, currentAffectedTests: currentChanges?.affectedTests || [] })).slice(0, 30);
+          return { ...report, currentChanges, failureChangeCorrelation: failedRuns, failureCorrelationNote: 'Current changes are not temporally tied to each historical run; correlation is a lead for investigation, not causation.' };
+        }
+        case 'project_dependency_health': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const index = await loadProjectIndex() || await buildProjectIndex({ force: false, signal });
+          if (!index) throw new Error('Project index could not be loaded or built.');
+          const report = projectDevelopmentDependencyAnalysis(index);
+          if (String(args.action || 'inspect') !== 'audit') return report;
+          const rootPackage = projectDevelopmentPackageRecords(index).find(item => item.path === 'package.json' && item.data)?.data;
+          const manager = String(rootPackage?.packageManager || index.toolchains?.packageManager || (report.summary.lockfiles.includes('package-lock.json') ? 'npm' : '')).split('@')[0].toLowerCase();
+          const commands = {
+            npm: { audit: "& 'npm.cmd' audit --json", outdated: "& 'npm.cmd' outdated --json" },
+            pnpm: { audit: "& 'pnpm.cmd' audit --json", outdated: "& 'pnpm.cmd' outdated --format json" },
+            yarn: { audit: "& 'yarn.cmd' npm audit --json", outdated: "& 'yarn.cmd' outdated --json" }
+          };
+          if (!commands[manager]) throw new Error('A supported, unambiguous npm, pnpm or modern Yarn package manager is required for an approved audit. Bun and nonstandard lockfiles are currently inventory-only.');
+          const script = `$ErrorActionPreference = 'Continue'
+$ProgressPreference = 'SilentlyContinue'
+$auditOutput = (${commands[manager].audit} 2>&1 | Out-String)
+$auditExitCode = $LASTEXITCODE
+$outdatedOutput = (${commands[manager].outdated} 2>&1 | Out-String)
+$outdatedExitCode = $LASTEXITCODE
+[pscustomobject]@{ packageManager = '${manager}'; auditExitCode = $auditExitCode; auditOutput = $auditOutput.Substring(0, [Math]::Min(100000, $auditOutput.Length)); outdatedExitCode = $outdatedExitCode; outdatedOutput = $outdatedOutput.Substring(0, [Math]::Min(50000, $outdatedOutput.Length)) } | ConvertTo-Json -Compress -Depth 8`;
+          const timeout = Math.max(15, Math.min(180, Number(args.timeout_seconds) || 120));
+          const approved = await requireAgentApproval({ title: 'Run the JavaScript dependency security audit?', subtitle: `${manager} · read-only package audit · network access`, detail: `Working directory: selected project workspace
+Command: ${manager === 'npm' ? 'npm audit --json; npm outdated --json' : manager === 'pnpm' ? 'pnpm audit --json; pnpm outdated --format json' : 'yarn npm audit --json; yarn outdated --json'}
+Timeout: ${timeout} seconds
+
+This contacts configured package registries/advisory sources. It does not install, update, rewrite lockfiles or modify project files.`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { ...report, audit: { ...report.audit, status: 'cancelled', executed: false } };
+          const native = await callAgentHost('process.powershell', { script, working_directory: '', timeout_seconds: timeout, contextId: workspaceContext.id }, signal, timeout * 1000 + 15000);
+          let auditPayload = null; try { auditPayload = JSON.parse(String(native?.stdout || '').trim()); } catch (_) {}
+          const raw = String(auditPayload?.auditOutput || native?.stdout || native?.stderr || '').slice(0, 100000);
+          const outdatedRaw = String(auditPayload?.outdatedOutput || '').slice(0, 50000);
+          let parsed = null, outdatedParsed = null;
+          try { parsed = JSON.parse(raw); } catch (_) {}
+          try { outdatedParsed = JSON.parse(outdatedRaw); } catch (_) {}
+          const vulnerabilities = parsed?.metadata?.vulnerabilities || {};
+          const advisories = Object.entries(parsed?.vulnerabilities || {}).slice(0, 200).map(([name, item]) => ({ name, severity: String(item?.severity || 'unknown'), direct: item?.isDirect === true, range: String(item?.range || '').slice(0, 120), fixAvailable: item?.fixAvailable ?? null, via: (Array.isArray(item?.via) ? item.via : []).slice(0, 5).map(value => typeof value === 'string' ? value : String(value?.title || value?.name || 'advisory').slice(0, 160)) }));
+          const outdatedPackages = Array.isArray(outdatedParsed) ? outdatedParsed : outdatedParsed && typeof outdatedParsed === 'object' ? Object.entries(outdatedParsed).map(([name, item]) => ({ name, ...(item || {}) })) : [];
+          report.audit = { status: parsed ? 'completed' : 'unparsed-output', executed: true, packageManager: manager, exitCode: auditPayload?.auditExitCode ?? native?.exitCode ?? null,
+            vulnerabilityCounts: vulnerabilities, packagesWithAdvisories: advisories.length, advisories,
+            outdatedStatus: outdatedParsed ? 'completed' : 'unparsed-output', outdatedExitCode: auditPayload?.outdatedExitCode ?? null,
+            outdatedPackages: outdatedPackages.slice(0, 200).map(item => ({ name: String(item.name || item.package || '').slice(0, 160), current: String(item.current || item.version || '').slice(0, 80), wanted: String(item.wanted || '').slice(0, 80), latest: String(item.latest || '').slice(0, 80), location: String(item.location || '').slice(0, 200) })),
+            rawOutputPreview: projectDevelopmentRedact(raw, 1800), outdatedOutputPreview: projectDevelopmentRedact(outdatedRaw, 1000),
+            note: 'Vulnerability and outdated-package results reflect the configured package registry/source at execution time. Package-manager version differences may affect outdated JSON output. No dependency updates or installs were performed.' };
+          return report;
+        }
+        case 'project_environment_check': {
+          const timeout = Math.max(5, Math.min(60, Number(args.timeout_seconds) || 20));
+          const script = `$ErrorActionPreference = 'Continue'
+$names = @('node','npm','pnpm','yarn','bun','git')
+$items = foreach ($name in $names) { $command = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1; if (-not $command) { [pscustomobject]@{ name = $name; installed = $false; version = $null; exitCode = $null } } else { $output = (& $name --version 2>&1 | Out-String).Trim(); [pscustomobject]@{ name = $name; installed = $true; version = $output.Substring(0, [Math]::Min(160, $output.Length)); exitCode = $LASTEXITCODE } } }
+ConvertTo-Json -InputObject @($items) -Compress -Depth 4`;
+          const approved = await requireAgentApproval({ title: 'Probe the local JavaScript development environment?', subtitle: 'Fixed read-only version checks', detail: `Checks: node, npm, pnpm, yarn, bun and git
+Timeout: ${timeout} seconds
+
+RunMind will only query executable availability and version output. It will not install, update, configure or repair tools.`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, executed: false };
+          const native = await callAgentHost('process.powershell', { script, working_directory: '', timeout_seconds: timeout, contextId: workspaceContext.id }, signal, timeout * 1000 + 15000);
+          let toolsFound = []; try { toolsFound = JSON.parse(String(native?.stdout || '')); } catch (_) {}
+          const index = await loadProjectIndex();
+          const declared = index?.toolchains || {};
+          const rootRecord = projectDevelopmentPackageRecords(index).find(item => item.path === 'package.json' && item.data);
+          return { executed: true, exitCode: native?.exitCode ?? null, tools: Array.isArray(toolsFound) ? toolsFound : [], declared: { nodeEngine: rootRecord?.data?.engines?.node || null, packageManager: rootRecord?.data?.packageManager || declared.packageManager || null, lockfiles: declared.lockfiles || [] },
+            comparison: 'Compare observed versions with package.json engines/packageManager and lockfiles. An installed version alone does not prove compatibility.', stdoutPreview: projectDevelopmentRedact(native?.stdout || '', 12000), stderrPreview: projectDevelopmentRedact(native?.stderr || '', 3000) };
+        }
+        case 'project_run_script': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const index = await loadProjectIndex() || await buildProjectIndex({ force: false, signal });
+          if (!index) throw new Error('Project index could not be loaded or built.');
+          const requestedPackagePath = String(args.package_path || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+          const packageRelativePath = requestedPackagePath ? `${requestedPackagePath}/package.json` : 'package.json';
+          if (requestedPackagePath.split('/').some(part => part === '..' || part === '.')) throw new Error('package_path must remain inside the selected workspace.');
+          const packageRecord = projectDevelopmentPackageRecords(index).find(item => item.path.toLowerCase() === packageRelativePath.toLowerCase() && item.data);
+          if (!packageRecord) throw new Error(`No valid ${packageRelativePath} was found in the project index.`);
+          const scriptName = String(args.script || '').trim();
+          if (!/^[A-Za-z0-9:_-]{1,100}$/.test(scriptName) || typeof packageRecord.data.scripts?.[scriptName] !== 'string') throw new Error(`'${scriptName}' is not a declared package.json script.`);
+          const packageManager = String(packageRecord.data.packageManager || index.toolchains?.packageManager || (index.toolchains?.lockfiles?.some(item => item.file === 'package-lock.json') ? 'npm' : '')).split('@')[0].toLowerCase();
+          const executable = { npm: 'npm.cmd', pnpm: 'pnpm.cmd', yarn: 'yarn.cmd', bun: 'bun.exe' }[packageManager];
+          if (!executable) throw new Error('The package manager is ambiguous or unsupported. Declare packageManager or provide one unambiguous lockfile before running scripts.');
+          const scriptEvidence = `${scriptName} ${packageRecord.data.scripts[scriptName]}`;
+          const category = /test|spec|vitest|jest|mocha|playwright|tap/i.test(scriptEvidence) ? 'test' : /build|bundle|compile|tsc|vite|webpack|rollup|esbuild/i.test(scriptEvidence) ? 'build' : /lint|eslint|prettier|format|typecheck|check/i.test(scriptEvidence) ? 'quality' : 'other';
+          const commandName = executable.replace(/'/g, "''");
+          const safeScript = scriptName.replace(/'/g, "''");
+          const runArguments = packageManager === 'bun' ? `& '${commandName}' run '${safeScript}'` : `& '${commandName}' run '${safeScript}'`;
+          const timeout = Math.max(1, Math.min(900, Number(args.timeout_seconds) || 300));
+          const packageDirectory = requestedPackagePath;
+          const approved = await requireAgentApproval({ title: `Run package script '${scriptName}'?`, subtitle: `${packageManager} · ${category} · executes project code`, detail: `Package: ${packageRelativePath}
+Command: ${packageManager} run ${scriptName}
+Working directory: ${packageDirectory || '(workspace root)'}
+Declared script: ${String(packageRecord.data.scripts[scriptName]).slice(0, 700)}
+Timeout: ${timeout} seconds
+
+The script may execute arbitrary project lifecycle/build/test code and may write files or access the network. RunMind records only a redacted command/result summary; full output remains in this tool result.`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, executed: false };
+          const started = Date.now();
+          const runScript = `$ErrorActionPreference = 'Continue'\n$nodeVersion = if (Get-Command node -ErrorAction SilentlyContinue) { (& node --version 2>&1 | Out-String).Trim() } else { 'not-found' }\n$managerVersion = if (Get-Command '${commandName}' -ErrorAction SilentlyContinue) { (& '${commandName}' --version 2>&1 | Out-String).Trim() } else { 'not-found' }\n$osVersion = [Environment]::OSVersion.VersionString\n$powerShellVersion = [string]$PSVersionTable.PSVersion\nWrite-Output ('[RunMind Environment] node={0}; packageManager=${packageManager}; packageManagerVersion={1}; os={2}; powershell={3}' -f $nodeVersion.Replace([char]13,' ').Replace([char]10,' '), $managerVersion.Replace([char]13,' ').Replace([char]10,' '), $osVersion, $powerShellVersion)\n${runArguments}\nexit $LASTEXITCODE`;
+          const native = await callAgentHost('process.powershell', { script: runScript, working_directory: packageDirectory, timeout_seconds: timeout, contextId: workspaceContext.id }, signal, timeout * 1000 + 15000);
+          const output = `${native?.stdout || ''}\n${native?.stderr || ''}`.trim();
+          const excerpt = output.split(/\r?\n/).filter(line => /(?:test|pass|fail|error|exception|warning|built|compiled|vulnerab)/i.test(line)).slice(-8).join('\n') || output.slice(-500);
+          const environmentLine = output.split(/\r?\n/).find(line => line.startsWith('[RunMind Environment]')) || '';
+          const environment = Object.fromEntries([...environmentLine.matchAll(/(node|packageManager|packageManagerVersion|os|powershell)=([^;]+)/g)].map(match => [match[1], match[2].trim().slice(0, 100)]));
+          if (category !== 'other') {
+            const normalizedFailure = projectDevelopmentRedact(native?.stderr || native?.stdout || '', 2000).toLowerCase().replace(/\d+/g, '#').slice(0, 200);
+            await projectDevelopmentEnsureIdentity(signal);
+            projectDevelopmentRecordRun({ kind: category, command: `${packageManager} run ${scriptName}`, scriptName, success: Number(native?.exitCode) === 0, exitCode: native?.exitCode, durationMs: Date.now() - started, excerpt, failureSignature: normalizedFailure, environment });
+          }
+          return { package: packageRelativePath, packageManager, script: scriptName, declaredCommand: String(packageRecord.data.scripts[scriptName]).slice(0, 700), executed: true, exitCode: native?.exitCode ?? null, success: Number(native?.exitCode) === 0, durationMs: Date.now() - started, environment, stdout: String(native?.stdout || '').slice(0, 30000), stderr: String(native?.stderr || '').slice(0, 12000), outputTruncated: native?.outputTruncated === true, historyRecorded: category !== 'other' && !!projectDevelopmentIdentity?.key };
+        }
+        case 'project_session_memory': {
+          const identity = await projectDevelopmentEnsureIdentity(signal);
+          if (!identity?.available) throw new Error(identity?.reason || 'Select the native workspace before accessing cross-session project memory.');
+          if (String(args.action || 'read') === 'read') return projectDevelopmentReadMemory();
+          if (String(args.action || '') !== 'remember_decision') throw new Error('Unsupported project memory action.');
+          const approved = await requireAgentApproval({ title: 'Remember this project decision?', subtitle: 'Local cross-session memory · no project file will be changed', detail: `Decision: ${String(args.title || '').slice(0, 160)}
+
+${String(args.detail || '').slice(0, 900)}
+
+This note is stored locally in the RunMind WebView profile for this workspace.`, risky: false, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, saved: false };
+          return projectDevelopmentRecordDecision(args.title, args.detail);
+        }
+        case 'project_agent_change_audit': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const identity = await projectDevelopmentEnsureIdentity(signal);
+          if (!identity?.available) throw new Error(identity?.reason || 'Select the native workspace before auditing Agent-owned changes.');
+          const approved = await requireAgentApproval({ title: 'Inspect Git status for the Agent change audit?', subtitle: 'Git read-only · ownership verification', detail: 'Reads current changed paths to compare them with RunMind-owned change receipts. No Git state or source file is modified.', risky: false, permissionCategory: 'gitRead' }, signal);
+          if (!approved) return { cancelled: true, message: 'Agent change audit was declined.' };
+          const snapshot = await callAgentHost('git.run', { action: 'review_snapshot', contextId: workspaceContext.id }, signal, 60000);
+          const report = projectDevelopmentBuildOwnedChangeAudit(snapshot);
+          for (const item of (report.ownedChanges || []).slice(0, 30)) {
+            try {
+              let before = '';
+              if (item.backupPath) { const source = await getFileAtPath(agentDirectoryHandle, item.backupPath); const file = await source.handle.getFile(); if (file.size <= 2 * 1024 * 1024) before = await file.text(); }
+              let after = '', currentExists = true, currentFile = null;
+              try { const current = await getFileAtPath(agentDirectoryHandle, item.path); currentFile = await current.handle.getFile(); if (currentFile.size <= 2 * 1024 * 1024) after = await currentFile.text(); }
+              catch (error) { if (error?.name === 'NotFoundError') currentExists = false; else throw error; }
+              const currentSha256 = currentExists && currentFile ? await projectDevelopmentHashBlob(currentFile).catch(() => '') : '';
+              const textPath = /\.(?:[cm]?[jt]sx?|html?|css|svg|json|md|ya?ml|xml|txt|toml)$/i.test(item.path);
+              const oldLines = before.split(/\r?\n/), newLines = after.split(/\r?\n/);
+              let prefix = 0; while (prefix < Math.min(oldLines.length, newLines.length) && oldLines[prefix] === newLines[prefix]) prefix++;
+              let suffix = 0; while (suffix < oldLines.length - prefix && suffix < newLines.length - prefix && oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]) suffix++;
+              item.currentExists = currentExists;
+              item.currentSha256 = currentSha256 || null;
+              item.hashMatchesRecordedWrite = !!currentSha256 && currentSha256 === item.recordedCurrentSha256;
+              item.beforeAfter = textPath && (item.backupPath || item.operation === 'create') ? { firstChangedLine: prefix + 1, removed: oldLines.slice(prefix, Math.max(prefix, oldLines.length - suffix)).slice(0, 60), added: newLines.slice(prefix, Math.max(prefix, newLines.length - suffix)).slice(0, 60), truncated: oldLines.length - prefix - suffix > 60 || newLines.length - prefix - suffix > 60 } : null;
+              item.writeStillMatchesRecordedHash = item.operation === 'delete' ? !currentExists : !!currentSha256 && currentSha256 === item.recordedCurrentSha256;
+            } catch (error) { item.auditReadError = String(error?.message || error).slice(0, 200); }
+          }
+          return report;
         }
         case 'project_symbol_graph': {
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');

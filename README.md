@@ -41,6 +41,10 @@ Example theme header:
 
 For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
 
+## RunMind 3.3.0 — P6 Development Intelligence (P0–P5 retained)
+
+RunMind 3.3.0 adds Git-aware change review with architecture/test/asset impact, build/test script intelligence, local flakiness and repeated-failure signals, supplied CI result comparison, dependency/lockfile and approved advisory/outdated checks, JavaScript toolchain environment probes, before/after Agent change receipts and bounded local project decisions/checkpoint continuity. The same tools and five new developer workflows are shared across all three hosts. Git review is read-only; script execution, dependency audits, environment probes, decision memory and backup restoration require the applicable approval. CI is not queried automatically, package dependencies are never updated automatically, and interrupted operations are never automatically replayed. See `P6-RELEASE-NOTES.md` and `docs/DEVELOPMENT-INTELLIGENCE.md`.
+
 ## RunMind 3.2.0 — P5 System Manager Health Intelligence (P0–P4 retained)
 
 RunMind 3.2.0 connects Windows service, event, crash, resource, network and storage evidence into a shared on-demand diagnostic workflow across Standalone, PowerToys Run and PowerToys Command Palette.

@@ -1,6 +1,18 @@
 # RunMind Roadmap
 
-## Current source baseline: 3.2.0 — P5 System Manager Health Intelligence
+## Current source baseline: 3.3.0 — P6 Development Intelligence
+
+## Completed milestone: P6 — Development Intelligence
+
+P6 connects Git evidence, the project architecture index, build/test history, dependency/environment checks, Agent-owned file receipts and bounded cross-session project memory through the existing shared Agent Core. See `P6-RELEASE-NOTES.md`, `docs/DEVELOPMENT-INTELLIGENCE.md`, `docs/P6-IMPLEMENTATION-AUDIT.md` and `docs/P6-WINDOWS-ACCEPTANCE.md`. Windows/.NET certification remains a separate target-machine gate.
+
+- Git-aware review reports staged/unstaged/untracked/conflicted changes, diffs and static architecture/test/asset impact.
+- Build/Test Intelligence inspects scripts, tests, JS/TS tooling and common CI configuration; approved script runs record redacted outcomes for heuristic flaky/repeated-failure detection. CI outcomes are user-supplied only.
+- Dependency/environment checks cover package/lockfile mismatch, npm/pnpm/Yarn advisory/outdated audit with approval, and fixed Node/package-manager/Git version probes.
+- Agent-owned create/edit/delete/restore receipts include before/after hashes, backups and optional pre-write Git baseline; recovery remains separately approved.
+- Project memory retains bounded, redacted decisions, run summaries, and interrupted checkpoints, keyed to the native workspace fingerprint and local WebView profile.
+- No CI provider connector, package installation/update, automatic Git mutation or automatic rollback is introduced. Project-language scope remains JS/TS/JSX/TSX/HTML/CSS with SVG assets.
+
 
 ## Completed milestone: P0 — Foundation & Reliability
 

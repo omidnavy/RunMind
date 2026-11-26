@@ -1,3 +1,15 @@
+## 3.3.0 — P6 Development Intelligence
+
+- Add fixed, bounded Git review snapshots for branch/status, staged and unstaged diffs, untracked paths, merge conflicts and whitespace findings; expose an architecture-aware review tool.
+- Link actual Git path changes to the current static project graph, dependent modules, affected tests and HTML/CSS/SVG consumers.
+- Add Build/Test Intelligence for package scripts, test discovery, common CI configuration, tooling declarations and recorded local test/build/quality outcomes.
+- Add heuristic repeated-failure and possible-flakiness detection, current-change investigation context and optional comparison against user-supplied CI results; no remote CI provider is queried.
+- Add package/lockfile consistency analysis, approved npm/pnpm/Yarn vulnerability and outdated-package queries, and approved fixed Windows probes for Node.js/package-manager/Git versions.
+- Record bounded before/after SHA-256 receipts and backup paths for Agent-owned create/edit/multi-edit/delete/restore operations; add safe change audit with bounded before/after previews and current-hash verification.
+- Extend bounded local project memory with approved project decisions, redacted build/test/quality run summaries and interrupted checkpoint operation previews; restore only for the same native workspace fingerprint and same WebView profile, with explicit resume.
+- Add five built-in development workflows; keep all hosts on the shared Agent Core and permission/approval system.
+- Bump all three host packages and Command Palette Appx identity to 3.3.0 / 3.3.0.0. No new runtime dependency or programming-language support.
+
 ## 3.2.0 — P5 System Manager Health Intelligence
 
 - Extend Windows service inspection with structured startup mode, service account, binary path, declared dependencies, recovery/failure configuration and trigger information; add bounded, cycle-safe recursive dependency trees.

@@ -77,6 +77,7 @@
       summary: redactText(value.summary || '', 1400),
       plan: Array.isArray(value.plan) ? value.plan.slice(0, 12).map(item => ({ step: redactText(item?.step, 180), status: ['pending', 'in_progress', 'completed'].includes(item?.status) ? item.status : 'pending' })) : [],
       operationIds: Array.isArray(value.operationIds) ? [...new Set(value.operationIds.filter(item => /^[a-f0-9-]{36}$/i.test(String(item))))].slice(0, 60) : [],
+      recoveryOperations: Array.isArray(value.recoveryOperations) ? value.recoveryOperations.slice(-60).map(item => ({ id: String(item?.id || '').slice(0, 80), name: redactText(item?.name || '', 100), status: redactText(item?.status || 'unknown', 40), error: redactText(item?.error || '', 350), resultPreview: redactText(item?.resultPreview || '', 350), startedAt: String(item?.startedAt || '').slice(0, 40), finishedAt: String(item?.finishedAt || '').slice(0, 40) })) : [],
       resumedFrom: /^[a-f0-9-]{36}$/i.test(String(value.resumedFrom || '')) ? String(value.resumedFrom) : '',
       createdAt: String(value.createdAt || '').slice(0, 40),
       updatedAt: String(value.updatedAt || '').slice(0, 40),

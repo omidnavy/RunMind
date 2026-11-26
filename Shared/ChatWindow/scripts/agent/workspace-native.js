@@ -198,7 +198,9 @@
   async function syncNativeWorkspaceAccess(signal) {
     const status = await callAgentHost('process.workspace.status', { contextId: workspaceContext.id }, signal, 10000);
     if (!status?.selected) return { selected: false };
-    return { selected: true, ...(await activateNativeWorkspace(status)) };
+    const activated = await activateNativeWorkspace(status);
+    try { await global.restoreProjectAgentTaskCheckpoints?.(signal); } catch (_) { /* Workspace activation must not depend on optional project-memory storage. */ }
+    return { selected: true, ...activated };
   }
 
   global.createNativeWorkspaceDirectoryHandle = createNativeWorkspaceDirectoryHandle;

@@ -1013,6 +1013,60 @@ public sealed partial class AgentHostBridge : IDisposable
         }
     }
 
+    private static string GetWorkspaceFingerprint(string root)
+    {
+        var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)).ToUpperInvariant();
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized))).ToLowerInvariant();
+    }
+
+    private static async Task<object> BuildGitReviewSnapshotAsync(string root, CancellationToken cancellationToken)
+    {
+        async Task<(int ExitCode, string Output, string Error)> Run(params string[] arguments)
+        {
+            var command = new List<string> { "-c", "core.quotepath=false", "-c", "color.ui=false" };
+            command.AddRange(arguments);
+            return await ExecuteGitProcessAsync(root, command, cancellationToken).ConfigureAwait(false);
+        }
+
+        var status = await Run("status", "--porcelain=v1", "--branch", "--untracked-files=all").ConfigureAwait(false);
+        if (status.ExitCode != 0) throw new IOException($"Git status failed with exit code {status.ExitCode}. {Limit(status.Error, 1200)}");
+        var unstaged = await Run("diff", "--no-ext-diff", "--no-color", "--find-renames", "--unified=3").ConfigureAwait(false);
+        if (unstaged.ExitCode != 0) throw new IOException($"Git working-tree diff failed with exit code {unstaged.ExitCode}. {Limit(unstaged.Error, 1200)}");
+        var staged = await Run("diff", "--cached", "--no-ext-diff", "--no-color", "--find-renames", "--unified=3").ConfigureAwait(false);
+        if (staged.ExitCode != 0) throw new IOException($"Git staged diff failed with exit code {staged.ExitCode}. {Limit(staged.Error, 1200)}");
+        var untracked = await Run("ls-files", "--others", "--exclude-standard", "-z").ConfigureAwait(false);
+        if (untracked.ExitCode != 0) throw new IOException($"Git untracked-file inventory failed with exit code {untracked.ExitCode}. {Limit(untracked.Error, 1200)}");
+        var conflicts = await Run("ls-files", "-u", "--stage").ConfigureAwait(false);
+        if (conflicts.ExitCode != 0) throw new IOException($"Git conflict inventory failed with exit code {conflicts.ExitCode}. {Limit(conflicts.Error, 1200)}");
+        var whitespace = await Run("diff", "--check").ConfigureAwait(false);
+        var branch = await Run("rev-parse", "--abbrev-ref", "HEAD").ConfigureAwait(false);
+        var statusLines = status.Output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        var fileLines = statusLines.Where(line => !line.StartsWith("##", StringComparison.Ordinal)).ToArray();
+        var conflictPaths = fileLines.Where(line => line.Length >= 3 && (line[0] == 'U' || line[1] == 'U' || (line[0] == 'A' && line[1] == 'A') || (line[0] == 'D' && line[1] == 'D')))
+            .Select(line => line.Length > 3 ? line[3..] : string.Empty).Where(path => path.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return new
+        {
+            action = "review_snapshot",
+            success = true,
+            folder = Path.GetFileName(root),
+            branch = branch.ExitCode == 0 ? branch.Output.Trim() : "unknown",
+            status = status.Output,
+            changedFileCount = fileLines.Length,
+            stagedDiff = staged.Output,
+            unstagedDiff = unstaged.Output,
+            untrackedPaths = untracked.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries).Take(200).ToArray(),
+            conflictPaths,
+            conflictIndexEntries = conflicts.Output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries).Take(200).ToArray(),
+            diffCheck = new { exitCode = whitespace.ExitCode, output = Limit(whitespace.Output + whitespace.Error, 12000) },
+            truncated = status.Output.Contains("[output truncated", StringComparison.OrdinalIgnoreCase)
+                || staged.Output.Contains("[output truncated", StringComparison.OrdinalIgnoreCase)
+                || unstaged.Output.Contains("[output truncated", StringComparison.OrdinalIgnoreCase)
+                || untracked.Output.Contains("[output truncated", StringComparison.OrdinalIgnoreCase)
+                || conflicts.Output.Contains("[output truncated", StringComparison.OrdinalIgnoreCase),
+            note = "Snapshot includes staged and unstaged tracked diffs plus untracked paths. Untracked file contents are not included; read them through the selected workspace before assessing them. Conflict and whitespace findings are Git evidence, not automatic fixes."
+        };
+    }
+
     private object ProcessWorkspaceStatus(string contextId)
     {
         lock (_workspaceStateLock)
@@ -1023,7 +1077,9 @@ public sealed partial class AgentHostBridge : IDisposable
             && !string.IsNullOrWhiteSpace(_processWorkspaceId)
             && string.Equals(GetProcessWorkspaceId(contextId), _processWorkspaceId, StringComparison.OrdinalIgnoreCase);
         return new { selected, folder = selected ? Path.GetFileName(_processWorkspaceRoot) : null,
-            workspaceId = selected ? _processWorkspaceId : null, unified = true };
+            workspaceId = selected ? _processWorkspaceId : null,
+            workspaceFingerprint = selected ? GetWorkspaceFingerprint(_processWorkspaceRoot!) : null,
+            unified = true };
     
         }
     }
@@ -1523,6 +1579,7 @@ public sealed partial class AgentHostBridge : IDisposable
         switch (action)
         {
             case "status": values.AddRange(new[] { "status", "--short", "--branch" }); break;
+            case "review_snapshot": return await BuildGitReviewSnapshotAsync(root, cancellationToken).ConfigureAwait(false);
             case "diff": values.AddRange(new[] { "diff", "--no-ext-diff", "--no-color" }); AddOptionalValidatedPath(values, args, "path"); break;
             case "log": values.AddRange(new[] { "log", "-n", "30", "--oneline", "--decorate" }); break;
             case "show":

@@ -3,14 +3,14 @@
     const WORKFLOW_PARALLEL_SAFE_TOOLS = new Set([
       'current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf',
       'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file',
-      'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_search', 'project_index_overview', 'project_validate', 'project_understanding', 'project_diagnostics', 'project_mission_control', 'project_test_impact', 'project_release_readiness', 'validate_json',
+      'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_search', 'project_index_overview', 'project_validate', 'project_understanding', 'project_diagnostics', 'project_mission_control', 'project_test_impact', 'project_release_readiness', 'project_development_review', 'project_build_test_intelligence', 'project_agent_change_audit', 'validate_json',
       'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders',
       'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap',
       'read_rss_feed', 'page_to_markdown', 'compare_webpages', 'project_change_impact', 'development_session_timeline'
     ]);
     const WORKFLOW_READ_APPROVAL_TOOLS = new Set([
       'fetch_webpage','web_search','research_topic','list_files','read_file','search_files','file_info','checksum_file',
-      'compare_files','project_overview','project_search','project_index_overview','project_validate','project_understanding','project_diagnostics','project_mission_control','project_test_impact','project_release_readiness','validate_json','validate_json_schema','validate_dataset','verify_artifact','read_pdf','inspect_archive',
+      'compare_files','project_overview','project_search','project_index_overview','project_validate','project_understanding','project_diagnostics','project_mission_control','project_test_impact','project_release_readiness','project_development_review','project_build_test_intelligence','project_agent_change_audit','validate_json','validate_json_schema','validate_dataset','verify_artifact','read_pdf','inspect_archive',
       'infer_dataset_schema','analyze_csv','compare_datasets','generate_statistics','compare_folders','read_image',
       'image_metadata','extract_links','extract_metadata','extract_tables','read_sitemap','read_rss_feed',
       'page_to_markdown','check_links','compare_webpages','crawl_website','project_change_impact','development_session_timeline'
@@ -31,7 +31,19 @@
     function persistAgentTaskCheckpoints() {
       try { localStorage.setItem(agentTaskCheckpointStorageKey(), JSON.stringify(agentTaskCheckpoints.slice(-AGENT_TASK_CHECKPOINT_LIMIT).map(item => RunMindP4.normalizeCheckpoint(item)).filter(Boolean))); }
       catch (_) { /* Checkpoints are a recovery aid; storage failure must never block an Agent run. */ }
+      try { if (typeof projectDevelopmentPersistCheckpoints === 'function') projectDevelopmentPersistCheckpoints(agentTaskCheckpoints, workflowOperationHistory); } catch (_) { /* Cross-session project memory must never block task execution. */ }
     }
+    async function restoreProjectAgentTaskCheckpoints(signal = null) {
+      try {
+        if (typeof projectDevelopmentEnsureIdentity !== 'function') return { available: false, restored: 0 };
+        const identity = await projectDevelopmentEnsureIdentity(signal);
+        if (!identity?.available) return { available: false, restored: 0, reason: identity?.reason || '' };
+        const result = projectDevelopmentRestoreCheckpoints(agentTaskCheckpoints, workspaceContext?.id || '');
+        if (result.restored) { agentTaskCheckpoints = agentTaskCheckpoints.slice(-AGENT_TASK_CHECKPOINT_LIMIT); persistAgentTaskCheckpoints(); renderAgentTaskCheckpoints(); }
+        return result;
+      } catch (error) { return { available: false, restored: 0, reason: String(error?.message || error).slice(0, 240) }; }
+    }
+    globalThis.restoreProjectAgentTaskCheckpoints = restoreProjectAgentTaskCheckpoints;
     function createAgentTaskCheckpoint(request, selection, resumedFrom = '') {
       const now = new Date().toISOString();
       const checkpoint = { id: crypto.randomUUID(), task: RunMindP4.redactText(request, 1800), workspaceId: String(workspaceContext?.id || ''), status: 'running', stage: 'starting', summary: 'Task accepted; no tool operations recorded yet.', plan: [], operationIds: [], resumedFrom, provider: String(selection?.provider || ''), model: String(selection?.model || '').slice(0, 120), createdAt: now, updatedAt: now, completedAt: '' };
@@ -86,7 +98,8 @@
       if (!item) return;
       if (String(item.workspaceId || '') !== String(workspaceContext?.id || '')) { showToast('Reconnect the same workspace context before resuming this task. No operation was dispatched.'); return; }
       if (!selectedModel()) { showToast('Select an available model before resuming this task.'); return; }
-      const operations = workflowOperationHistory.filter(row => row.checkpointId === item.id || item.operationIds.includes(row.id)).map(row => `${row.name}: ${row.status}${row.error ? ` (${row.error})` : ''}`).slice(-40);
+      const liveOperations = workflowOperationHistory.filter(row => row.checkpointId === item.id || item.operationIds.includes(row.id));
+      const operations = (liveOperations.length ? liveOperations : (item.recoveryOperations || [])).map(row => `${row.name}: ${row.status}${row.error ? ` (${row.error})` : row.resultPreview ? ` (${row.resultPreview})` : ''}`).slice(-40);
       const progress = [
         'Resume the following previously checkpointed task. The original user request remains the goal.',
         `Original request:\n${item.task}`,
@@ -111,11 +124,13 @@
       const selected = checkpointId ? agentTaskCheckpoints.filter(item => item.id === checkpointId) : agentTaskCheckpoints.slice(-1);
       if (checkpointId && !selected.length) return { available: false, message: 'The requested checkpoint ID is not present in this local chat profile.' };
       const ids = new Set(selected.map(item => item.id));
-      const operationRows = workflowOperationHistory.filter(row => ids.size ? ids.has(row.checkpointId) : true).map(row => ({ type: 'tool-operation', id: row.id, checkpointId: row.checkpointId || '', name: row.name, status: row.status, layer: row.batchSequence, group: row.parallelGroupId || '', executionMode: row.executionMode, startedAt: row.startedAt, finishedAt: row.finishedAt, durationMs: row.durationMs, summary: RunMindP4.redactText(row.error || row.resultPreview || '', 900) }));
+      const liveOperationRows = workflowOperationHistory.filter(row => ids.size ? ids.has(row.checkpointId) : true);
+      const restoredOperationRows = selected.flatMap(item => (item.recoveryOperations || []).map(row => ({ ...row, checkpointId: item.id })));
+      const operationRows = (liveOperationRows.length ? liveOperationRows : restoredOperationRows).map(row => ({ type: 'tool-operation', id: row.id, checkpointId: row.checkpointId || '', name: row.name, status: row.status, layer: row.batchSequence, group: row.parallelGroupId || '', executionMode: row.executionMode, startedAt: row.startedAt, finishedAt: row.finishedAt, durationMs: row.durationMs, summary: RunMindP4.redactText(row.error || row.resultPreview || '', 900) }));
       const checkpointRows = selected.flatMap(item => [{ type: 'task-checkpoint', id: item.id, status: item.status, stage: item.stage, timestamp: item.createdAt, summary: item.summary }, { type: 'checkpoint-update', id: item.id, status: item.status, stage: item.stage, timestamp: item.updatedAt, summary: item.summary }]);
       const subagentRows = workflowSubagentHistory.filter(item => !ids.size || item.checkpointId === [...ids][0]).map(item => ({ type: 'sub-agent', id: item.id, role: item.role, status: item.status, timestamp: item.completedAt || item.startedAt, summary: RunMindP4.redactText(item.summary || item.error || '', 900) }));
       const events = [...operationRows, ...checkpointRows, ...subagentRows].filter(item => item.timestamp || item.startedAt || item.finishedAt).sort((a,b) => Date.parse(a.timestamp || a.startedAt || a.finishedAt || 0) - Date.parse(b.timestamp || b.startedAt || b.finishedAt || 0));
-      return { available: true, checkpoint: selected.map(item => ({ id: item.id, task: item.task, status: item.status, stage: item.stage, plan: item.plan })), events: events.slice(-maximum), summary: { checkpoints: selected.length, operations: operationRows.length, subagents: subagentRows.length, eventsReturned: Math.min(maximum, events.length) }, limitations: ['Timeline is local to this chat profile and only includes recorded RunMind events.', 'Interrupted operations may have unknown external outcomes.', 'Timeline matching does not prove causality and does not read arbitrary project logs.'] };
+      return { available: true, checkpoint: selected.map(item => ({ id: item.id, task: item.task, status: item.status, stage: item.stage, plan: item.plan })), events: events.slice(-maximum), summary: { checkpoints: selected.length, operations: operationRows.length, subagents: subagentRows.length, eventsReturned: Math.min(maximum, events.length) }, limitations: ['Cross-session checkpoints are available only when the same native workspace fingerprint is available in the RunMind WebView profile.', 'Interrupted operations may have unknown external outcomes.', 'Timeline matching does not prove causality and does not read arbitrary project logs.'] };
     }
     function renderDevelopmentSessionTimeline() {
       if (!workflowTimeline) return;
