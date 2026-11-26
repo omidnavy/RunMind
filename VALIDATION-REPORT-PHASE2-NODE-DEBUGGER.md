@@ -57,3 +57,9 @@ The script now runs all bundled Node tests (Phase 1 plus the current Phase 2 inc
 - Debugger sessions are local to the current host instance (up to eight sessions); they are not shared over IPC between different RunMind hosts.
 - Targets run with the current Windows account permissions. Node Inspector access is powerful; approval boundaries do not turn it into a process sandbox.
 - Runtime CPU/heap profiling, Playwright automation, dedicated API/backend testing, and development-server lifecycle management remain later Phase 2 increments.
+## Windows build-log correction (2026-11-21)
+
+- Fixed C# anonymous-object initializer at `Shared/NodeDebuggerBridge.cs:430`: escaped the reserved identifier as `@params`, preserving the serialized JSON property name `params` required by the Chrome DevTools Protocol.
+- Added/retained regression coverage for the source contract.
+- Re-ran the complete bundled Node test suite after the correction: **70/70 passed**.
+- Windows/.NET compilation still requires execution on the user's Windows machine.

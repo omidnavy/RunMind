@@ -427,7 +427,7 @@ internal sealed class NodeDebuggerSession : IDisposable
                     boundedFrames.Add(frameNode);
                 }
             }
-            value = JsonSerializer.SerializeToElement(new { method = "Debugger.paused", params = new { reason = "paused", callFrames = boundedFrames, data = new { truncated = true } } });
+            value = JsonSerializer.SerializeToElement(new { method = "Debugger.paused", @params = new { reason = "paused", callFrames = boundedFrames, data = new { truncated = true } } });
         }
         if (method == "Debugger.paused")
         {
