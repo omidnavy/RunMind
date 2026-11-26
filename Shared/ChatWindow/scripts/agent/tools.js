@@ -1,9 +1,34 @@
     'use strict';
 
+    function normalizeSystemManagerOperationResult(result, toolName, args = {}) {
+      if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+      const target = String(args.processId ?? args.service ?? args.container ?? args.name ?? args.applicationId ?? args.target ?? args.adapterId ?? 'system').slice(0, 256);
+      const action = String(args.action || toolName.replace(/^system_manager_/, '').replaceAll('_', '-') || 'inspect').slice(0, 80);
+      const stateVerified = typeof result.actualState === 'string' && typeof result.requestedState === 'string' && result.actualState.toLowerCase() === result.requestedState.toLowerCase();
+      const verified = typeof result.verified === 'boolean' ? result.verified
+        : typeof result.closed === 'boolean' ? result.closed
+          : typeof result.saved === 'boolean' ? result.saved
+            : result.installed === true || result.reset === true || result.removed === true || stateVerified || result.exitCode === 0 || result.diagnostics !== undefined || Array.isArray(result.processes) || Array.isArray(result.startupApplications) || Array.isArray(result.applications) || Array.isArray(result.services) || Array.isArray(result.adapters) || Array.isArray(result.items);
+      const accepted = typeof result.accepted === 'boolean' ? result.accepted
+        : typeof result.requestAccepted === 'boolean' ? result.requestAccepted
+          : typeof result.activationRequested === 'boolean' ? result.activationRequested
+            : typeof result.launched === 'boolean' ? result.launched
+              : typeof result.activated === 'boolean' ? result.activated
+                : typeof result.saved === 'boolean' ? result.saved
+                  : Array.isArray(result.closeRequested) ? result.closeRequested.length > 0
+                    : typeof result.closed === 'boolean' ? result.closed : verified;
+      const completed = typeof result.completed === 'boolean' ? result.completed : (!result.cancelled && verified);
+      const success = typeof result.success === 'boolean' ? result.success : (!result.cancelled && verified);
+      return { ...result, success, accepted, completed, verified, action: result.action || action, target: result.target || result.application || result.id || target,
+        message: result.message || result.note || (verified ? 'The operation completed and its result was verified.' : accepted ? 'The operation was accepted, but its final outcome could not be verified.' : 'The operation did not complete successfully.') };
+    }
     async function executeAgentTool(name, args, signal, assistantMessage, taskContext = {}) {
       const previousTool = activeAgentApprovalTool;
       activeAgentApprovalTool = name;
-      try { return await executeAgentToolInternal(name, args, signal, assistantMessage, taskContext); }
+      try {
+        const result = await executeAgentToolInternal(name, args, signal, assistantMessage, taskContext);
+        return name.startsWith('system_manager_') ? normalizeSystemManagerOperationResult(result, name, args) : result;
+      }
       finally { activeAgentApprovalTool = previousTool; }
     }
     async function searchWebQuery(query, signal, maximum = 8) {
@@ -55,12 +80,13 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'project_validate', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_diagnostics']);
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_diagnostics']);
       if (name.startsWith('system_manager_')) {
         if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in the System Manager menu first.');
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
         if (name === 'system_manager_find_applications') { const query = String(args.query || '').trim(); if (!query) throw new Error('A non-empty application name is required.'); return await callAgentHost('systemManager.apps.list',{query},signal); }
         if (name === 'system_manager_list_startup_applications') return await callAgentHost('systemManager.startup.list',{query:String(args.query||'')},signal);
+        if (name === 'system_manager_set_startup_application') return await callAgentHost('systemManager.startup.set',{action:String(args.action||''),name:String(args.name||''),source:String(args.source||'')},signal);
         if (name === 'system_manager_list_adapters') return await callAgentHost('systemManager.adapters.list',{},signal);
         if (name === 'system_manager_container_action') {
           const action = String(args.action || '').toLowerCase();
@@ -251,7 +277,7 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
         return { skills: skills.map(skill => ({ ...skill, loaded: (workspaceContext.enabledSkills || []).includes(skill.name) })), count: skills.length, sources: [{ scope: 'builtin', supported: !!window.chrome?.webview, authorized: !!window.chrome?.webview, location: 'application-bundled Skills' }, { scope: 'global', supported: !!window.chrome?.webview, authorized: !!window.chrome?.webview, location: '%LOCALAPPDATA%\\RunMind\\Skills' }, { scope: 'project', supported: true, authorized: !!agentDirectoryHandle, location: '.agents/skills' }], note: 'Lists bundled built-in skills, installed global skills, and authorized project skills. Metadata discovery does not load instructions. Load only relevant skills explicitly; scripts are never executed automatically.' };
       }
       if (name === 'load_agent_skill') return await loadAgentSkill(String(args.name || ''), String(args.scope || ''), Array.isArray(args.references) ? args.references : [], signal);
-      if (readOnlyTools.has(name) && !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
+      if (readOnlyTools.has(name) && !(name === 'javascript_refactor' && args.apply === true) && !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
         const detail = name === 'web_search' ? String(args.query || '') : name === 'fetch_webpage' ? String(args.url || '') : name === 'read_file' || name === 'list_files' ? String(args.path || '(selected folder root)') : JSON.stringify(args);
         const approved = await requireAgentApproval({ title: 'Allow read-only access?', subtitle: `Agent tool · ${name}`, detail, allowForTask: true, toolName: name }, signal);
         if (!approved) return { cancelled: true, message: 'User declined this tool call.' };
@@ -744,6 +770,18 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
         case 'project_symbol_graph': {
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');
           return await getProjectSymbolGraph({ path: args.path || '', name: args.name || '', limit: args.limit || 200 });
+        }
+        case 'javascript_refactor': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const path = String(args.path || '');
+          if (!/\.(?:js|mjs|cjs)$/i.test(path)) throw new Error('AST refactoring currently supports .js, .mjs and .cjs files only.');
+          const current = await readWorkspaceText(path, 2 * 1024 * 1024);
+          if (current.source !== 'workspace' || !current.handle) throw new Error('Refactoring is restricted to an existing file in the selected workspace.');
+          const result = projectIndexRefactorJavaScript(current.text, { action: String(args.action || 'rename-symbol'), oldName: String(args.old_name || ''), newName: String(args.new_name || args.function_name || ''), declarationStart: args.declaration_start ?? args.selection_start, selectionEnd: args.selection_end });
+          if (!result.changed) return { ...result, path };
+          if (args.apply !== true) return { ...result, path, applied: false, nextStep: 'Review the returned content and diff. Call javascript_refactor again with apply=true only after the user approves the change.' };
+          const applied = await executeAgentToolInternal('edit_file', { path, content: result.content }, signal, assistantMessage, taskContext);
+          return { ...result, path, applied: !applied?.cancelled, editResult: applied };
         }
         case 'project_validate': {
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');

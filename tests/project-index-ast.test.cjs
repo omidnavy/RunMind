@@ -9,7 +9,7 @@ const projectIndexPath = path.join(__dirname, '..', 'Shared', 'ChatWindow', 'scr
 const source = fs.readFileSync(projectIndexPath, 'utf8');
 const context = { acorn, console, AbortController, DOMException, setInterval, clearInterval };
 context.globalThis = context;
-vm.runInNewContext(`${source}\nglobalThis.__extract = projectIndexExtractJavaScript; globalThis.__extractFile = projectIndexExtract; globalThis.__graph = projectIndexLocalImportGraph;`, context);
+vm.runInNewContext(`${source}\nglobalThis.__extract = projectIndexExtractJavaScript; globalThis.__extractFile = projectIndexExtract; globalThis.__graph = projectIndexLocalImportGraph; globalThis.__refactor = projectIndexRefactorJavaScript; globalThis.__crossRefs = projectIndexCrossFileReferences;`, context);
 
  test('Acorn extracts declarations, imports, and identifier occurrence counts', () => {
   const code = `import thing, { value as alias } from './thing.js';
@@ -196,4 +196,132 @@ test('project index schema v4 preserves original manifest text across incrementa
   assert.match(source, /value\.version===4/);
   assert.match(source, /manifestText:isManifest\?text\.slice\(0,64000\):null/);
   assert.match(source, /prior\.manifestText\|\|prior\.text\.slice/);
+});
+
+
+test('AST rename changes only the selected lexical binding and its references', () => {
+  const code = `const value = 1;\nfunction outer() { const value = 2; return value; }\nconsole.log(value);`;
+  const analysis = context.__extract(code);
+  const inner = analysis.symbolDetails.filter(item => item.name === 'value').sort((a, b) => a.start - b.start).at(-1);
+  const result = context.__refactor(code, { action: 'rename-symbol', oldName: 'value', newName: 'innerValue', declarationStart: inner.start });
+  assert.equal(result.changed, true);
+  assert.match(result.content, /const innerValue = 2; return innerValue;/);
+  assert.match(result.content, /const value = 1;/);
+  assert.match(result.content, /console\.log\(value\)/);
+  assert.equal(context.__extract(result.content).parseError, null);
+});
+
+test('AST rename requires a declaration selector when names are ambiguous', () => {
+  const code = `const item = 1; function run() { const item = 2; return item; }`;
+  assert.throws(() => context.__refactor(code, { action: 'rename-symbol', oldName: 'item', newName: 'entry' }), /declarations in this file/);
+});
+
+test('AST rename rejects invalid identifiers and collisions', () => {
+  const code = `const value = 1; const other = 2; console.log(value, other);`;
+  const value = context.__extract(code).symbolDetails.find(item => item.name === 'value');
+  assert.throws(() => context.__refactor(code, { action: 'rename-symbol', oldName: 'value', newName: 'other', declarationStart: value.start }), /already exists/);
+  assert.throws(() => context.__refactor(code, { action: 'rename-symbol', oldName: 'value', newName: 'not-valid!', declarationStart: value.start }), /valid JavaScript identifier/);
+});
+
+test('AST import organization sorts only independent contiguous groups', () => {
+  const code = `import z from 'zeta';\nimport a from 'alpha';\n\n// Keep this comment attached to the following import.\nimport c from 'charlie';\nimport b from 'bravo';\n`;
+  const result = context.__refactor(code, { action: 'organize-imports' });
+  assert.equal(result.changed, true);
+  assert.ok(result.content.indexOf("import a from 'alpha'") < result.content.indexOf("import z from 'zeta'"));
+  assert.ok(result.content.indexOf('// Keep this comment') < result.content.indexOf("import c from 'charlie'"));
+  assert.ok(result.content.indexOf("import c from 'charlie'") < result.content.indexOf("import b from 'bravo'")); // The comment pins this group; leave its order unchanged.
+  assert.equal(context.__extract(result.content).parseError, null);
+});
+
+
+test('AST rename preserves object property keys for shorthand references and destructuring', () => {
+  const code = `const value = 1; const object = { value }; const { value: copied } = object; const { value: extracted } = object; console.log(value, copied, extracted);`;
+  const binding = context.__extract(code).symbolDetails.find(item => item.name === 'value');
+  const result = context.__refactor(code, { action: 'rename-symbol', oldName: 'value', newName: 'renamed', declarationStart: binding.start });
+  assert.match(result.content, /const object = \{ value: renamed \}/);
+  assert.match(result.content, /const \{ value: copied \}/);
+  assert.match(result.content, /const \{ value: extracted \}/);
+  assert.match(result.content, /console\.log\(renamed, copied, extracted\)/);
+  assert.equal(context.__extract(result.content).parseError, null);
+});
+
+
+test('current RunMind JavaScript repository files parse through the semantic engine', () => {
+  for (const relative of [
+    'Shared/ChatWindow/scripts/agent/project-index.js',
+    'Shared/ChatWindow/scripts/agent/tools.js',
+    'Shared/ChatWindow/scripts/providers.js',
+    'Shared/ChatWindow/scripts/core.js'
+  ]) {
+    const sourceText = fs.readFileSync(path.join(__dirname, '..', relative), 'utf8');
+    const parsed = context.__extract(sourceText, relative);
+    assert.equal(parsed.parseError, null, `${relative}: ${parsed.parseError?.message || 'parse failed'}`);
+    assert.ok(parsed.symbolDetails.length > 0, `${relative}: no symbols extracted`);
+  }
+});
+
+
+test('AST extract-function moves complete safe statements and captures outer bindings', () => {
+  const code = `const value = 3;\nconsole.log(value);\nconsole.log('done');\n`;
+  const start = code.indexOf('console.log(value)');
+  const end = code.indexOf(';', code.indexOf("console.log('done')")) + 1;
+  const result = context.__refactor(code, { action: 'extract-function', newName: 'reportResult', declarationStart: start, selectionEnd: end });
+  assert.match(result.content, /function reportResult\(\)/);
+  assert.match(result.content, /console\.log\(value\);/);
+  assert.match(result.content, /reportResult\(\);/);
+  assert.equal(context.__extract(result.content).parseError, null);
+});
+
+test('AST extract-function rejects partial statements and control-flow-sensitive selections', () => {
+  const code = `function run() { if (ready) { return; } }`;
+  const start = code.indexOf('return');
+  const end = code.indexOf(';', start) + 1;
+  assert.throws(() => context.__refactor(code, { action: 'extract-function', newName: 'doReturn', declarationStart: start, selectionEnd: end }), /control-flow or binding semantics/);
+  const wholeStart = code.indexOf('if (ready)');
+  const wholeEnd = code.indexOf('}', wholeStart) + 1;
+  assert.throws(() => context.__refactor(code, { action: 'extract-function', newName: 'checkReady', declarationStart: wholeStart, selectionEnd: wholeEnd }), /control-flow or binding semantics/);
+});
+
+
+test('import organization does not reorder side-effect imports or cross blank-line groups', () => {
+  const code = `import z from 'zeta';\nimport a from 'alpha';\n\nimport 'polyfill';\nimport d from 'delta';\nimport c from 'charlie';\n`;
+  const result = context.__refactor(code, { action: 'organize-imports' });
+  assert.ok(result.content.indexOf("import a from 'alpha'") < result.content.indexOf("import z from 'zeta'"));
+  assert.ok(result.content.indexOf("import 'polyfill'") < result.content.indexOf("import d from 'delta'"));
+  assert.ok(result.content.indexOf("import d from 'delta'") < result.content.indexOf("import c from 'charlie'"));
+});
+
+test('AST rename supports CommonJS script files with top-level return fallback', () => {
+  const code = `const value = 1; if (value) return value;`;
+  const binding = context.__extract(code).symbolDetails.find(item => item.name === 'value');
+  const result = context.__refactor(code, { action: 'rename-symbol', oldName: 'value', newName: 'result', declarationStart: binding.start });
+  assert.equal(result.changed, true);
+  assert.match(result.content, /const result = 1; if \(result\) return result/);
+});
+
+
+test('AST extract-function preserves nested block indentation', () => {
+  const code = `function run() {\n  if (ready) {\n    console.log(value);\n  }\n}\n`;
+  const start = code.indexOf('if (ready)');
+  const end = code.indexOf('}', code.indexOf('console.log(value)')) + 1;
+  const result = context.__refactor(code, { action: 'extract-function', newName: 'logWhenReady', declarationStart: start, selectionEnd: end });
+  assert.match(result.content, /function logWhenReady\(\) \{\n    if \(ready\) \{\n      console\.log\(value\);\n    \}\n  \}/);
+  assert.equal(context.__extract(result.content).parseError, null);
+});
+
+
+test('cross-file symbol graph maps imported local references back to the exporting module', () => {
+  const files = [
+    { path: 'src/lib.js', exports: [{ exported: 'greet', local: 'greet' }] },
+    { path: 'src/main.js', symbolDetails: [{ name: 'greetLocal', kind: 'import', start: 12 }], references: [
+      { name: 'greetLocal', declaration: 12, start: 60, end: 70, access: 'read', read: true, write: false },
+      { name: 'greetLocal', declaration: 12, start: 90, end: 100, access: 'read', read: true, write: false }
+    ] }
+  ];
+  const graph = { resolvedBindings: [{ from: 'src/main.js', to: 'src/lib.js', local: 'greetLocal', imported: 'greet', exported: 'greet' }] };
+  const result = context.__crossRefs(files, graph, { name: 'greet' });
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].from, 'src/main.js');
+  assert.equal(result.results[0].to, 'src/lib.js');
+  assert.equal(result.results[0].referenceCount, 2);
 });

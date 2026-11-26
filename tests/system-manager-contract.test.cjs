@@ -77,3 +77,78 @@ test('service restart is only verified after an observed stop/start cycle', () =
   assert.match(native, /restartCycleCompleted = start\.exitCode == 0/);
   assert.match(native, /actualState == desiredState && restartCycleCompleted/);
 });
+
+
+test('startup entries support confirmed reversible enable and disable for Run keys', () => {
+  assert.match(bridge, /"systemManager\.startup\.set"\s*=>\s*Task\.FromResult\(SystemManagerSetStartupApplication/);
+  assert.match(tools, /system_manager_set_startup_application/);
+  assert.match(providers, /system_manager_set_startup_application/);
+  assert.match(native, /DisabledStartupEntries/);
+  assert.match(native, /alwaysAsk:\s*true/);
+  assert.match(native, /RunOnce and Startup-folder entries remain inventory-only|RunOnce and Startup-folder entries are inventory-only/);
+  assert.match(native, /requestedState = "disabled"/);
+  assert.match(native, /requestedState = "enabled"/);
+});
+
+test('system diagnostics include bounded hardware, driver and listener ownership details', () => {
+  assert.match(native, /driverquery\.exe/);
+  assert.match(native, /Win32_Processor/);
+  assert.match(native, /Win32_PhysicalMemory/);
+  assert.match(native, /Win32_VideoController/);
+  assert.match(native, /netstat\.exe/);
+  assert.match(native, /processId = pid, processName/);
+  assert.match(native, /RunFixedDiagnosticCommand/);
+});
+
+
+test('multi-file edits snapshot originals, back up every file before writes, and attempt rollback', () => {
+  const editStart = tools.indexOf("case 'edit_files'");
+  const editEnd = tools.indexOf("case 'restore_file_backup'", editStart);
+  const method = tools.slice(editStart, editEnd);
+  assert.ok(editStart >= 0 && editEnd > editStart);
+  assert.match(method, /workspaceFilesMatchSnapshot/);
+  assert.match(method, /createWorkspaceBackup/);
+  assert.ok(method.indexOf('createWorkspaceBackup') < method.indexOf('createWritable'));
+  assert.match(method, /catch \(rollbackError\)/);
+  assert.match(method, /Rollback was incomplete/);
+  assert.match(method, /Recovery backups were preserved/);
+});
+
+test('application operations are normalized into accepted, completed, verified and success dimensions', () => {
+  assert.match(tools, /function normalizeSystemManagerOperationResult/);
+  for (const field of ['success', 'accepted', 'completed', 'verified', 'action', 'target', 'message']) assert.match(tools, new RegExp(`${field}\\s*[,}:]`));
+  assert.match(tools, /name\.startsWith\('system_manager_'\) \? normalizeSystemManagerOperationResult/);
+});
+
+
+test('AST refactoring tool is exposed preview-first and applies through approved file editing', () => {
+  assert.match(tools, /case 'javascript_refactor'/);
+  assert.match(tools, /projectIndexRefactorJavaScript/);
+  assert.match(tools, /executeAgentToolInternal\('edit_file'/);
+  assert.match(providers, /name: 'javascript_refactor'/);
+  assert.match(providers, /apply=true routes through the existing approved edit_file flow/);
+});
+
+test('Windows validation script builds the complete three-host solution after Node tests', () => {
+  const script = read('Validate-Phase1-Windows.ps1');
+  assert.match(script, /node --test/);
+  assert.match(script, /RunMind\.sln/);
+  assert.match(script, /dotnet build/);
+  assert.match(script, /Platform=\$Platform/);
+});
+
+
+test('System Manager result normalization recognizes adapter install, reset and removal outcomes', () => {
+  assert.match(tools, /result\.installed === true/);
+  assert.match(tools, /result\.reset === true/);
+  assert.match(tools, /result\.removed === true/);
+  assert.match(tools, /result\.installed === true/);
+});
+
+
+test('network diagnostics map TCP and UDP listeners to process identities', () => {
+  assert.match(native, /new\[\] \{ "-ano", "-p", "tcp" \}/);
+  assert.match(native, /new\[\] \{ "-ano", "-p", "udp" \}/);
+  assert.match(native, /udpListeners/);
+  assert.match(native, /tcpListeners/);
+});

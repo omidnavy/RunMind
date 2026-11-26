@@ -67,11 +67,41 @@ Repeat the same repository onboarding, one approved file edit, one native test c
 
 Acceptance: the shared Agent tools, project index behavior, permissions, adapters, and results are materially consistent. Host-specific packaging/launch differences are documented rather than silently treated as parity.
 
+## 8. JavaScript semantic analysis and refactoring
+
+1. Build the project index for a representative `.js/.mjs/.cjs` repository.
+2. Inspect declarations, lexical references, read/write classification, call sites, module edges, cycles, and cross-file references from resolved imports.
+3. Request a symbol rename using the exact declaration offset from `project_symbol_graph`; inspect the preview and approve application through the normal edit/backup flow.
+4. Request import organization and verify comment-pinned groups, blank-line groups, and side-effect-only imports are preserved.
+5. Request extract-function using exact statement offsets; verify unsupported control-flow and binding-sensitive selections are rejected.
+
+Acceptance: every proposed file change is previewed and applied through approved file editing with recovery backup; malformed code, ambiguous bindings, collisions, and unsupported extraction semantics are rejected.
+
+## 9. Startup management and diagnostics
+
+1. Enable System Manager, Application Management, discovery and launch capabilities.
+2. List startup entries and select a disposable HKCU Run test entry.
+3. Disable it with fresh native confirmation; verify the value is absent and the recovery entry exists.
+4. Re-enable it with fresh native confirmation; verify the exact original command is restored.
+5. Enable System Information and Network Information; inspect hardware/driver inventory, TCP/UDP listener ownership, addresses, gateways, and DNS.
+
+Acceptance: RunOnce and Startup-folder entries remain inventory-only; HKLM permission failures are reported without escalation; startup commands are preserved for recovery; diagnostics remain read-only and bounded.
+
 ## Known limits to keep visible
 
-- Current symbol/import extraction is regex-based. The local import graph is best-effort for relative JavaScript/TypeScript/Python imports; it is not an AST, compiler, or complete cross-language reference graph.
-- Static project validation does not execute builds, tests, linters, Playwright, or audits.
+- Acorn semantic analysis and AST refactoring currently support `.js`, `.mjs`, and `.cjs`. JSX/TS/TSX and other languages remain heuristic; full TypeScript/compiler semantics are not included.
+- Cross-file references are derived from statically resolved import bindings. Dynamic imports, unresolved modules, custom loaders, full Node conditional resolution, and all package-manager install layouts are not modeled.
+- Extract-function is intentionally conservative: it accepts complete consecutive statements in a Program/block and rejects declarations, return/break/continue, await/yield, `this`, `arguments`, direct eval, and other control-flow-sensitive constructs.
+- Rename is currently single-file; it does not automatically rename public APIs and every importer in the workspace.
+- Static project validation does not execute builds, tests, linters, Playwright, or audits. Approved native commands are separate operations.
 - Native PowerShell/.exe execution runs as the current Windows user and is not sandboxed.
 - Packaged Windows application activation and default-handler opens do not prove a visible window, focus, or completed navigation.
 - The built-in RunMind adapter can pass a startup prompt but cannot operate on the WebView conversation database or control an existing conversation session.
 - Windows compilation and live integration across all three hosts must be completed on a Windows machine.
+
+
+## Remaining Phase 1 release gates (updated)
+
+The current unreleased increment adds preview-first AST rename/import organization/conservative extract-function, static cross-file import reference mapping, reversible HKCU/HKLM Run startup toggles, hardware/driver and TCP/UDP listener diagnostics, normalized System Manager outcomes, and a real local Git repository integration test. The automated tests validate the JS refactor logic and native source contracts. They do not substitute for Windows execution.
+
+Before declaring Phase 1 complete, build and run Standalone, PowerToys Run, and Command Palette on Windows; exercise registry startup changes with a disposable test entry; verify hardware/driver/network diagnostics; test service/process/container operations; and run the same agent-driven repository workflow through all three hosts.

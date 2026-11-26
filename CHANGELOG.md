@@ -1,3 +1,11 @@
+## Unreleased — Phase 1 completion work
+
+- Added cross-file references for statically resolved import bindings, plus preview-first Acorn AST refactoring for scope-aware single-file JavaScript symbol renames, conservative statement extraction, and safe import sorting. Shorthand object properties retain their public property keys; ambiguous declarations and name collisions are rejected. Applying a preview uses the existing approved edit-and-backup workflow.
+- Added reversible enable/disable operations for exact HKCU/HKLM Run startup entries. Disabled commands are preserved in a RunMind recovery registry key; every change requires native confirmation. RunOnce and Startup-folder entries remain inventory-only.
+- Expanded Windows diagnostics with bounded driver inventory, hardware inventory through a fixed PowerShell CIM query, and TCP listeners mapped to process IDs where accessible.
+- Normalized System Manager tool results with success, accepted, completed, verified, action, target and message fields while preserving native operation details.
+- Added real temporary Git repository integration coverage and source-level multi-file backup/rollback contract tests.
+
 ## Phase 1 semantic JavaScript and System Manager increments
 
 - Upgrade the project-index schema/key to v4 and force re-indexing of prior records.

@@ -514,6 +514,87 @@ public sealed partial class AgentHostBridge
         return new { success = true, action = "list-startup-applications", completed = true, verified = true, startupApplications = results, count = results.Count, truncated = results.Count >= 250, message = $"Retrieved {results.Count} startup entries." };
     }
 
+    private static object SystemManagerSetStartupApplication(JsonElement args)
+    {
+        RequireSystemCapability("applications", "launchApplications");
+        var action = ReadString(args, "action", 16).ToLowerInvariant();
+        var name = ReadString(args, "name", 180);
+        var source = ReadString(args, "source", 64);
+        if (action is not ("enable" or "disable")) throw new InvalidDataException("Startup action must be enable or disable.");
+        if (name.Length == 0 || name.Any(char.IsControl)) throw new InvalidDataException("A valid exact startup entry name is required.");
+        var location = source switch
+        {
+            "HKCU Run (Registry64)" => (RegistryHive.CurrentUser, RegistryView.Registry64),
+            "HKCU Run (Registry32)" => (RegistryHive.CurrentUser, RegistryView.Registry32),
+            "HKLM Run (Registry64)" => (RegistryHive.LocalMachine, RegistryView.Registry64),
+            "HKLM Run (Registry32)" => (RegistryHive.LocalMachine, RegistryView.Registry32),
+            _ => throw new InvalidDataException("Only exact HKCU/HKLM Run registry entries can be enabled or disabled. RunOnce and Startup-folder entries are inventory-only.")
+        };
+        var keyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        var backupPath = @"Software\RunMind\DisabledStartupEntries";
+        var backupName = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source + "\n" + name)));
+        using var baseKey = RegistryKey.OpenBaseKey(location.Item1, location.Item2);
+        using var runKey = baseKey.OpenSubKey(keyPath, writable: true) ?? throw new InvalidOperationException("The selected startup registry key does not exist or is not writable.");
+        using var backupKey = Registry.CurrentUser.CreateSubKey(backupPath, writable: true) ?? throw new InvalidOperationException("RunMind could not create its startup recovery registry key.");
+        if (action == "disable")
+        {
+            var command = runKey.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+            if (string.IsNullOrWhiteSpace(command)) throw new InvalidOperationException("The startup entry no longer exists or is not a string value. Refresh the startup inventory.");
+            if (backupKey.GetValue(backupName) is not null) throw new InvalidOperationException("A RunMind disabled-entry backup already exists. Enable the saved entry before retrying.");
+            if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Disable startup application", $"Entry: {name}\nSource: {source}\nCommand: {command}\n\nRunMind will remove this Run registry value and preserve its exact command in a recovery entry. This does not uninstall the application.", alwaysAsk: true))
+                return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, action = "disable-startup", target = name, requestedState = "disabled", actualState = "enabled", message = "The user declined the startup change." };
+            backupKey.SetValue(backupName, command, RegistryValueKind.String);
+            try { runKey.DeleteValue(name, throwOnMissingValue: false); }
+            catch { backupKey.DeleteValue(backupName, throwOnMissingValue: false); throw; }
+            var verified = runKey.GetValue(name) is null && string.Equals(backupKey.GetValue(backupName) as string, command, StringComparison.Ordinal);
+            return new { success = verified, accepted = true, completed = true, verified, action = "disable-startup", target = name, requestedState = "disabled", actualState = runKey.GetValue(name) is null ? "disabled" : "enabled", source, recoveryStored = backupKey.GetValue(backupName) is string, message = verified ? "Startup entry disabled; its original command is preserved for re-enabling." : "The registry change was attempted but could not be fully verified." };
+        }
+        else
+        {
+            var command = backupKey.GetValue(backupName) as string;
+            if (string.IsNullOrWhiteSpace(command)) throw new InvalidOperationException("No RunMind recovery entry exists for this startup item. Refresh the inventory and do not reconstruct its command manually.");
+            if (runKey.GetValue(name) is not null) throw new InvalidOperationException("A startup entry with this name already exists. RunMind will not overwrite it.");
+            if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Enable startup application", $"Entry: {name}\nSource: {source}\nCommand: {command}\n\nRunMind will restore the previously saved Run registry value.", alwaysAsk: true))
+                return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, action = "enable-startup", target = name, requestedState = "enabled", actualState = "disabled", message = "The user declined the startup change." };
+            runKey.SetValue(name, command, RegistryValueKind.String);
+            var verified = string.Equals(runKey.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string, command, StringComparison.Ordinal);
+            if (verified) backupKey.DeleteValue(backupName, throwOnMissingValue: false);
+            return new { success = verified, accepted = true, completed = true, verified, action = "enable-startup", target = name, requestedState = "enabled", actualState = verified ? "enabled" : "disabled", source, recoveryStored = !verified, message = verified ? "Startup entry restored and verified." : "The registry write was attempted but the restored value could not be verified; recovery data was retained." };
+        }
+    }
+
+    private static (int ExitCode, string Output) RunFixedDiagnosticCommand(string executable, IEnumerable<string> arguments, int timeoutMilliseconds = 15000)
+    {
+        if (!File.Exists(executable)) return (-1, string.Empty);
+        try
+        {
+            var start = new ProcessStartInfo(executable) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+            foreach (var argument in arguments) start.ArgumentList.Add(argument);
+            using var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start diagnostic utility '{Path.GetFileName(executable)}'.");
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(timeoutMilliseconds)) { try { process.Kill(entireProcessTree: true); } catch { } return (-2, string.Empty); }
+            var output = outputTask.GetAwaiter().GetResult();
+            _ = errorTask.GetAwaiter().GetResult();
+            return (process.ExitCode, output.Length > 1024 * 1024 ? output[..(1024 * 1024)] : output);
+        }
+        catch { return (-1, string.Empty); }
+    }
+
+    private static string[] ParseCsvDiagnosticRow(string line)
+    {
+        var values = new List<string>(); var current = new StringBuilder(); var quoted = false;
+        for (var index = 0; index < line.Length; index++)
+        {
+            var character = line[index];
+            if (character == '"') { if (quoted && index + 1 < line.Length && line[index + 1] == '"') { current.Append('"'); index++; } else quoted = !quoted; }
+            else if (character == ',' && !quoted) { values.Add(current.ToString()); current.Clear(); }
+            else current.Append(character);
+        }
+        values.Add(current.ToString());
+        return values.ToArray();
+    }
+
     private static object SystemManagerListApplications(string query, bool forceRefresh = false)
     {
         RequireSystemCapability("applications", "discoverApplications");
@@ -1537,6 +1618,24 @@ public sealed partial class AgentHostBridge
                 }
                 catch { return null; }
             }).Where(drive => drive is not null).ToArray();
+            var systemDirectory = Environment.GetFolderPath(Environment.SpecialFolder.System);
+            var driverQuery = RunFixedDiagnosticCommand(Path.Combine(systemDirectory, "driverquery.exe"), new[] { "/fo", "csv", "/nh" });
+            if (driverQuery.ExitCode == 0)
+                data["drivers"] = driverQuery.Output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries).Take(100).Select(line => ParseCsvDiagnosticRow(line)).Where(row => row.Length >= 4).Select(row => new { module = row[0], displayName = row[1], driverType = row[2], linkDate = row[3], path = row.Length > 4 ? row[4] : string.Empty }).ToArray();
+            else
+            {
+                data["drivers"] = Array.Empty<object>();
+                data["driverDiagnosticWarning"] = "Driver inventory is unavailable or exceeded its diagnostic timeout.";
+            }
+            var powerShell = Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+            const string hardwareScript = "$ErrorActionPreference='Stop'; $classes='Win32_Processor','Win32_PhysicalMemory','Win32_VideoController','Win32_DiskDrive'; $items=@(); foreach($class in $classes){ Get-CimInstance -ClassName $class -ErrorAction SilentlyContinue | ForEach-Object { $items += ($_ | Select-Object @{n='class';e={$class}},Name,Manufacturer,Model,NumberOfCores,NumberOfLogicalProcessors,Capacity,AdapterRAM,DriverVersion,Size | ConvertTo-Json -Compress -Depth 2 | ConvertFrom-Json) } }; ConvertTo-Json -InputObject $items -Compress -Depth 3";
+            var hardware = RunFixedDiagnosticCommand(powerShell, new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", hardwareScript }, 20000);
+            if (hardware.ExitCode == 0 && hardware.Output.Length > 0)
+            {
+                try { using var hardwareDocument = JsonDocument.Parse(hardware.Output); data["hardware"] = hardwareDocument.RootElement.Clone(); }
+                catch { data["hardwareDiagnosticWarning"] = "Hardware inventory returned data that could not be parsed as JSON."; }
+            }
+            else data["hardwareDiagnosticWarning"] = "Hardware inventory was unavailable; Windows PowerShell CIM support may be disabled.";
         }
         if ((bool?)capabilities?["environmentInformation"] == true)
         {
@@ -1548,16 +1647,52 @@ public sealed partial class AgentHostBridge
         }
         if ((bool?)capabilities?["networkInformation"] == true)
         {
-            var adapters = NetworkInterface.GetAllNetworkInterfaces().Take(50).Select(adapter => new
+            var adapters = new List<object>();
+            foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces().Take(50))
             {
-                name = adapter.Name, description = adapter.Description, type = adapter.NetworkInterfaceType.ToString(),
-                status = adapter.OperationalStatus.ToString(), speedBitsPerSecond = adapter.Speed,
-                addresses = adapter.GetIPProperties().UnicastAddresses.Take(20).Select(item => item.Address.ToString()).ToArray(),
-                gateways = adapter.GetIPProperties().GatewayAddresses.Take(10).Select(item => item.Address.ToString()).ToArray(),
-                dnsServers = adapter.GetIPProperties().DnsAddresses.Take(10).Select(item => item.ToString()).ToArray()
-            }).ToArray();
+                try
+                {
+                    var properties = adapter.GetIPProperties();
+                    adapters.Add(new
+                    {
+                        name = adapter.Name, description = adapter.Description, type = adapter.NetworkInterfaceType.ToString(),
+                        status = adapter.OperationalStatus.ToString(), speedBitsPerSecond = adapter.Speed,
+                        addresses = properties.UnicastAddresses.Take(20).Select(item => item.Address.ToString()).ToArray(),
+                        gateways = properties.GatewayAddresses.Take(10).Select(item => item.Address.ToString()).ToArray(),
+                        dnsServers = properties.DnsAddresses.Take(10).Select(item => item.ToString()).ToArray()
+                    });
+                }
+                catch { }
+            }
             var properties = IPGlobalProperties.GetIPGlobalProperties();
-            data["network"] = new { hostName = properties.HostName, domainName = properties.DomainName, adapters, activeTcpConnections = properties.GetActiveTcpConnections().Take(200).Select(item => new { local = item.LocalEndPoint.ToString(), remote = item.RemoteEndPoint.ToString(), state = item.State.ToString() }).ToArray(), tcpListeners = properties.GetActiveTcpListeners().Take(100).Select(item => item.ToString()).ToArray() };
+            var netstatPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "netstat.exe");
+            var netstat = RunFixedDiagnosticCommand(netstatPath, new[] { "-ano", "-p", "tcp" });
+            var listeners = new List<object>();
+            if (netstat.ExitCode == 0)
+            {
+                foreach (var line in netstat.Output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length < 5 || !parts[0].Equals("TCP", StringComparison.OrdinalIgnoreCase) || !parts[^2].Equals("LISTENING", StringComparison.OrdinalIgnoreCase) || !int.TryParse(parts[^1], out var pid)) continue;
+                    string? processName = null; try { using var owner = Process.GetProcessById(pid); processName = owner.ProcessName; } catch { }
+                    listeners.Add(new { local = parts[1], processId = pid, processName });
+                    if (listeners.Count >= 200) break;
+                }
+            }
+            var udpNetstat = RunFixedDiagnosticCommand(netstatPath, new[] { "-ano", "-p", "udp" });
+            var udpListeners = new List<object>();
+            if (udpNetstat.ExitCode == 0)
+            {
+                foreach (var line in udpNetstat.Output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length < 4 || !parts[0].Equals("UDP", StringComparison.OrdinalIgnoreCase) || !int.TryParse(parts[^1], out var pid)) continue;
+                    string? processName = null; try { using var owner = Process.GetProcessById(pid); processName = owner.ProcessName; } catch { }
+                    udpListeners.Add(new { local = parts[1], processId = pid, processName });
+                    if (udpListeners.Count >= 200) break;
+                }
+            }
+            data["network"] = new { hostName = properties.HostName, domainName = properties.DomainName, adapters, activeTcpConnections = properties.GetActiveTcpConnections().Take(200).Select(item => new { local = item.LocalEndPoint.ToString(), remote = item.RemoteEndPoint.ToString(), state = item.State.ToString() }).ToArray(), tcpListeners = listeners, tcpListenerCount = listeners.Count, tcpListenerSource = netstat.ExitCode == 0 ? "netstat -ano" : "unavailable", udpListeners, udpListenerCount = udpListeners.Count, udpListenerSource = udpNetstat.ExitCode == 0 ? "netstat -ano" : "unavailable" };
         }
         return new { diagnostics = data, note = "Read-only Windows and process diagnostics. Service and network details are included only when their individual capabilities are enabled." };
     }

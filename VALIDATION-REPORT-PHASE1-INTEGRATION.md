@@ -30,11 +30,11 @@
 ## Remaining Phase 1 limitations
 
 - JavaScript uses bundled Acorn AST parsing for `.js`, `.mjs`, and `.cjs`, with lexical-scope reference resolution, read/write classification, call sites, named/default/re-export metadata, relative imports, workspace package `exports`, package `imports` aliases, common Node built-ins, and bounded cycle detection. JSX/TSX and TypeScript remain heuristic; full Node runtime resolution, TypeScript path mappings, complete cross-file call resolution, and compiler-grade semantics remain outstanding.
-- AST-aware rename/extract/import refactoring and preview/apply integration remain outstanding. The existing multi-file editor is not yet wired to symbol-aware refactoring.
+- AST-aware rename, conservative extract-function, and import organization are now preview-first tools. Applying a preview routes through the approved edit_file backup/snapshot flow. Rename remains single-file; cross-file public API rename is not automatic.
 - Git operations are implemented, but complete model-driven end-to-end workflows (inspect → modify → test → review diff → stage → commit) have not been verified through all three hosts.
 - Multi-file editing is safer and recoverable, but it is not a transactional filesystem commit; the API cannot atomically replace multiple independent files.
 - The RunMind adapter now starts a new Standalone window for a saved session or new conversation. It does not attach to, enumerate, or mutate an already-running WebView session, and this behavior is not shared as an IPC session API across the PowerToys hosts.
-- Phase 1 is not declared complete until TypeScript/JSX and other-language compiler analysis, scope-aware cross-file references, native multi-host build/runtime verification, and integrated model-driven workflows are validated.
+- Phase 1 remains a release candidate pending Windows multi-host build/runtime verification and integrated model-driven workflows. TypeScript/compiler analysis is not a Phase 1 blocker; JSX/TSX remain heuristic and full Node runtime resolution is not modeled.
 
 
 ## AST and semantic JavaScript increment validation
@@ -72,3 +72,34 @@
 - Windows/.NET compilation and live Windows service/process/Podman execution remain unverified in this environment. The native additions must be built and exercised on the target Windows machine before treating the expanded System Manager actions as runtime-validated.
 
 - Current increment validation: 17/17 shared runtime JavaScript files passed `node --check`; 2/2 JSON files parsed; 7/7 project XML files parsed; 26/26 Node tests passed.
+
+
+## Unreleased Phase 1 completion increment
+
+### Added
+- Cross-file symbol references now map statically resolved imported bindings to their local lexical use sites.
+- Preview-first Acorn refactoring: scope-aware single-file rename, conservative statement extraction, and import organization. Rename preserves shorthand object property keys, rejects ambiguous target bindings unless `declaration_start` is provided, rejects same-scope name collisions, and reparses proposed output before returning it. Apply routes through the existing approved `edit_file` implementation with backup and snapshot verification.
+- Reversible startup enable/disable for exact HKCU/HKLM `Run` entries. The original command is preserved under the current user's RunMind recovery registry key; every mutation requires fresh native confirmation. `RunOnce` and Startup-folder entries are deliberately inventory-only.
+- Windows hardware/driver inventory and TCP/UDP listener-to-process mapping using fixed diagnostic executables/commands and bounded output/timeouts.
+- Tool-layer System Manager result normalization and local Git integration test.
+
+### Validation
+- Semantic AST and refactoring tests, System Manager contract tests, and real local Git workflow integration tests are run with Node's built-in test runner.
+- Multi-file mutation source checks verify original snapshots, backup-before-write ordering, rollback attempts, and retained recovery backups.
+- JavaScript syntax checks are run over the shared scripts. JSON/XML validation and ZIP integrity checks are performed before packaging.
+
+### Limitations / release gates
+- No .NET SDK/compiler or Windows runtime is available in this execution environment. The WPF/PowerToys/Command Palette projects, registry operations, PowerShell CIM query, `driverquery`, `netstat`, services and Podman actions are not compiled or runtime-verified here.
+- AST refactoring currently supports `.js`, `.mjs`, `.cjs`; JSX/TS/TSX remain outside the Acorn refactor path. Rename is single-file and does not automatically update importers or exported API consumers.
+- Startup mutations cover HKCU/HKLM `Run` keys only. `RunOnce` and Startup-folder entries are listed but not modified.
+- Git integration test exercises Git itself in a temporary repository; it is not an end-to-end native bridge test. Multi-file recovery checks are source-contract tests, not injected browser filesystem failures.
+- Phase 1 is a release candidate pending Windows build and three-host runtime validation, not a fully certified release.
+
+
+## Final portable validation for the 2026-11-21 completion candidate
+
+- Node suite: 47/47 tests passed, including semantic JavaScript/refactoring, System Manager source-contract, and real temporary Git repository integration tests.
+- JavaScript syntax: 18/18 files under `Shared/ChatWindow` passed `node --check`.
+- JSON: 2/2 files parsed. XML/XAML/project/manifest files: 7/7 parsed.
+- C# source delimiter sanity: `SystemManager.cs` and `AgentHostBridge.cs` passed a lexical delimiter-balance check. This is not compilation.
+- The environment has no .NET SDK/MSBuild/PowerShell/Windows runtime; all three host builds and native Windows operations remain unverified. Run `Validate-Phase1-Windows.ps1` and the manual scenarios in `docs/PHASE1-INTEGRATED-VALIDATION.md` before declaring Phase 1 complete.

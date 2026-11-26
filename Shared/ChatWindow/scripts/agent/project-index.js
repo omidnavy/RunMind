@@ -331,6 +331,161 @@
       const identifierOccurrences=new Map(); for(const ref of references)identifierOccurrences.set(ref.name,(identifierOccurrences.get(ref.name)||0)+1);
       return {supported:true,engine:'acorn-semantic-local',calls:calls.slice(0,5000),imports:[...imports].slice(0,120),symbols:[...new Set(symbolDetails.map(item=>item.name))].slice(0,120),symbolDetails:symbolDetails.slice(0,500),identifierOccurrences:[...identifierOccurrences].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)).slice(0,500),references:references.slice(0,5000),exports:exports.slice(0,500),importBindings:importBindings.slice(0,500),parseError:null};
     }
+    function projectIndexRefactorJavaScript(source, { action = 'rename-symbol', oldName = '', newName = '', declarationStart = null, selectionEnd = null } = {}) {
+      const parser = globalThis.acorn;
+      if (!parser || typeof parser.parse !== 'function') throw new Error('Acorn parser is unavailable.');
+      const text = String(source ?? '');
+      let ast;
+      const comments = [];
+      try { ast = parser.parse(text, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true, onComment: comments }); }
+      catch (moduleError) {
+        if (action === 'organize-imports') throw new Error(`Import organization requires a successfully parsed ES module: ${moduleError.message || moduleError}`);
+        comments.length = 0;
+        try { ast = parser.parse(text, { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true, allowReturnOutsideFunction: true, onComment: comments }); }
+        catch (scriptError) { throw new Error(`JavaScript refactoring requires a successfully parsed source file: ${scriptError.message || scriptError}`); }
+      }
+
+      if (action === 'organize-imports') {
+        const imports = (ast.body || []).filter(node => node.type === 'ImportDeclaration');
+        if (imports.length < 2) return { action, changed: false, content: text, edits: 0, message: 'Fewer than two top-level imports; no changes needed.' };
+        const edits = [];
+        let run = [];
+        let runHasLeadingComment = comments.some(comment => comment.start < (imports[0]?.start ?? 0));
+        const flush = () => {
+          if (run.length < 2 || runHasLeadingComment) { run = []; runHasLeadingComment = false; return; }
+          if (run.some(node => !node.specifiers?.length)) { run = []; runHasLeadingComment = false; return; }
+          const original = run.map(node => text.slice(node.start, node.end));
+          const sorted = run.map((node, index) => ({ node, value: original[index], key: String(node.source?.value || '').toLowerCase(), index }))
+            .sort((a, b) => a.key.localeCompare(b.key) || a.index - b.index).map(item => item.value);
+          if (sorted.some((value, index) => value !== original[index])) edits.push({ start: run[0].start, end: run[run.length - 1].end, value: sorted.join(text.includes('\r\n') ? '\r\n' : '\n') });
+          run = [];
+          runHasLeadingComment = false;
+        };
+        for (const node of imports) {
+          const previous = run.at(-1);
+          if (previous) {
+            const gapStart = previous.end, gapEnd = node.start;
+            const gap = text.slice(gapStart, gapEnd);
+            const hasComment = comments.some(comment => comment.start >= gapStart && comment.end <= gapEnd);
+            const blankLine = (gap.match(/\r?\n/g) || []).length > 1;
+            if (!/^\s*$/.test(gap) || hasComment || blankLine) { flush(); runHasLeadingComment = hasComment; }
+          }
+          run.push(node);
+        }
+        flush();
+        let content = text;
+        for (const edit of edits.sort((a,b) => b.start-a.start)) content = content.slice(0, edit.start) + edit.value + content.slice(edit.end);
+        try { parser.parse(content, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true }); }
+        catch (error) { throw new Error(`Import organization produced invalid JavaScript; no change was returned: ${error.message || error}`); }
+        return { action, changed: edits.length > 0, content, edits: edits.length, message: edits.length ? `Reordered ${edits.length} independent import group(s). Comments and separated import groups were preserved.` : 'Imports are already organized.' };
+      }
+
+      if (action === 'extract-function') {
+        const functionName = String(newName || '');
+        const selectionStart = Number(declarationStart);
+        const selectionEndOffset = Number(selectionEnd);
+        if (!/^[A-Za-z_$][\w$]*$/.test(functionName) || !Number.isInteger(selectionStart) || !Number.isInteger(selectionEndOffset) || selectionStart < 0 || selectionEndOffset <= selectionStart)
+          throw new Error('Extract function requires a valid function_name, selection_start and selection_end source offsets.');
+        try { parser.parse(`function ${functionName}() {}`, { ecmaVersion: 'latest', sourceType: 'module' }); }
+        catch (_) { throw new Error(`'${functionName}' is not a valid JavaScript function name.`); }
+        const analysis = projectIndexExtractJavaScript(text);
+        if (analysis.parseError) throw new Error(`Cannot extract from a file with parse errors: ${analysis.parseError.message}`);
+        if ((analysis.symbolDetails || []).some(item => item.name === functionName) || (analysis.references || []).some(item => item.name === functionName && item.resolution === 'unresolved')) throw new Error(`A '${functionName}' binding or unresolved reference already exists in this file; choose another function name.`);
+        let selectedNodes = null;
+        const findStatements = node => {
+          if (!node || typeof node.type !== 'string' || selectedNodes) return;
+          if ((node.type === 'Program' || node.type === 'BlockStatement') && Array.isArray(node.body)) {
+            const startIndex = node.body.findIndex(item => item.start === selectionStart);
+            if (startIndex >= 0) {
+              for (let endIndex = startIndex; endIndex < node.body.length; endIndex++) {
+                if (node.body[endIndex].end === selectionEndOffset) { selectedNodes = node.body.slice(startIndex, endIndex + 1); break; }
+                if (node.body[endIndex].end > selectionEndOffset) break;
+              }
+            }
+          }
+          for (const key of Object.keys(node)) {
+            if (['start','end','loc','range'].includes(key)) continue;
+            const value = node[key];
+            if (Array.isArray(value)) { for (const child of value) if (child && typeof child.type === 'string') findStatements(child); }
+            else if (value && typeof value.type === 'string') findStatements(value);
+          }
+        };
+        findStatements(ast);
+        if (!selectedNodes?.length || selectedNodes.at(-1).end !== selectionEndOffset) throw new Error('The selected source offsets must exactly cover one or more consecutive statements in the same Program or block body.');
+        const forbidden = new Set(['VariableDeclaration','FunctionDeclaration','ClassDeclaration','ReturnStatement','BreakStatement','ContinueStatement','AwaitExpression','YieldExpression','ThisExpression','Super','WithStatement','LabeledStatement']);
+        let unsafeReason = '';
+        const inspect = node => {
+          if (!node || typeof node.type !== 'string' || unsafeReason) return;
+          if (forbidden.has(node.type)) { unsafeReason = node.type; return; }
+          if (node.type === 'Identifier' && node.name === 'arguments') { unsafeReason = 'arguments'; return; }
+          if (node.type === 'MetaProperty' && node.meta?.name === 'new' && node.property?.name === 'target') { unsafeReason = 'new.target'; return; }
+          if (node.type === 'CallExpression' && node.callee?.type === 'Identifier' && node.callee.name === 'eval') { unsafeReason = 'direct eval'; return; }
+          for (const key of Object.keys(node)) {
+            if (['start','end','loc','range'].includes(key)) continue;
+            const value = node[key];
+            if (Array.isArray(value)) { for (const child of value) if (child && typeof child.type === 'string') inspect(child); }
+            else if (value && typeof value.type === 'string') inspect(value);
+          }
+        };
+        for (const node of selectedNodes) inspect(node);
+        if (unsafeReason) throw new Error(`Extraction was blocked because the selection contains '${unsafeReason}', whose control-flow or binding semantics would change when moved into a function.`);
+        const lineStart = text.lastIndexOf('\n', selectionStart - 1) + 1;
+        const indent = text.slice(lineStart, selectionStart);
+        if (!/^[\t ]*$/.test(indent)) throw new Error('The first selected statement must begin after indentation only; inline statement extraction is not supported.');
+        const selectedText = text.slice(selectionStart, selectionEndOffset);
+        const lines = selectedText.split(/\r?\n/);
+        const commonIndent = indent.length;
+        const newline = text.includes('\r\n') ? '\r\n' : '\n';
+        const body = lines.map(line => { if (!line.trim().length) return ''; const leading = line.match(/^[\t ]*/)[0].length; return indent + '  ' + line.slice(Math.min(commonIndent, leading)); }).join(newline);
+        const replacement = `function ${functionName}() {${newline}${body}${newline}${indent}}${newline}${indent}${functionName}();`;
+        const content = text.slice(0, selectionStart) + replacement + text.slice(selectionEndOffset);
+        try { parser.parse(content, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true }); }
+        catch (_) { parser.parse(content, { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true, allowReturnOutsideFunction: true }); }
+        return { action, changed: true, content, edits: 1, functionName, extractedStatements: selectedNodes.length, message: `Prepared extraction of ${selectedNodes.length} statement(s) into '${functionName}'. Variable declarations and control-flow-sensitive constructs are deliberately rejected; outer bindings are captured by the new function. Review before applying.` };
+      }
+
+      if (action !== 'rename-symbol') throw new Error(`Unsupported JavaScript refactoring action: ${action}`);
+      if (!/^[A-Za-z_$][\w$]*$/.test(String(newName)) || !String(oldName)) throw new Error('Provide a valid oldName and a valid JavaScript identifier for newName.');
+      try { parser.parse(`let ${newName};`, { ecmaVersion: 'latest', sourceType: 'module' }); }
+      catch (_) { throw new Error(`'${newName}' is not a valid JavaScript binding identifier.`); }
+      const analysis = projectIndexExtractJavaScript(text);
+      if (analysis.parseError) throw new Error(`Cannot rename in a file with parse errors: ${analysis.parseError.message}`);
+      const candidates = (analysis.symbolDetails || []).filter(item => item.name === oldName && (declarationStart == null || item.start === Number(declarationStart)));
+      if (!candidates.length) throw new Error(`No declaration for '${oldName}' matched the requested scope.`);
+      if (candidates.length > 1) throw new Error(`'${oldName}' has ${candidates.length} declarations in this file. Supply declarationStart from project_symbol_graph to select one safely.`);
+      const binding = candidates[0];
+      if (binding.name === newName) return { action, changed: false, content: text, edits: 0, message: 'The symbol already has that name.' };
+      const collision = (analysis.symbolDetails || []).some(item => item.name === newName && item.scope === binding.scope && item.start !== binding.start);
+      if (collision) throw new Error(`A '${newName}' declaration already exists in the same scope category; rename was blocked to avoid a collision.`);
+      const positions = [binding.start, ...(analysis.references || []).filter(item => item.declaration === binding.start).map(item => item.start)];
+      const uniquePositions = [...new Set(positions)];
+      const replacements = new Map(uniquePositions.map(start => [start, newName]));
+      const visitShorthand = node => {
+        if (!node || typeof node.type !== 'string') return;
+        if (node.type === 'Property' && node.shorthand && node.key?.type === 'Identifier' && node.key.name === oldName) {
+          const valueIdentifier = node.value?.type === 'Identifier' ? node.value : node.value?.type === 'AssignmentPattern' ? node.value.left : null;
+          if (valueIdentifier?.type === 'Identifier' && replacements.has(valueIdentifier.start)) replacements.set(valueIdentifier.start, `${oldName}: ${newName}`);
+        }
+        for (const key of Object.keys(node)) {
+          if (['start','end','loc','range'].includes(key)) continue;
+          const value = node[key];
+          if (Array.isArray(value)) { for (const child of value) if (child && typeof child.type === 'string') visitShorthand(child); }
+          else if (value && typeof value.type === 'string') visitShorthand(value);
+        }
+      };
+      visitShorthand(ast);
+      const edits = [...replacements.keys()].sort((a,b) => b-a);
+      let content = text;
+      for (const start of edits) {
+        const current = content.slice(start, start + oldName.length);
+        if (current !== oldName) throw new Error('The source no longer matches the parsed identifier positions; refresh the project index and retry.');
+        content = content.slice(0, start) + replacements.get(start) + content.slice(start + oldName.length);
+      }
+      try { parser.parse(content, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true }); }
+      catch (_) { parser.parse(content, { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true, allowReturnOutsideFunction: true }); }
+      return { action, changed: true, content, edits: edits.length, symbol: { oldName, newName, declarationStart: binding.start, scope: binding.scope }, message: `Prepared a scope-aware rename in this file (${edits.length} identifier edits). This operation does not rename imports in other files; review the preview before applying.` };
+    }
+
     function projectIndexExtract(text, language, path = '') {
       const imports = [], symbols = [];
       const addMatches = (regex, target, max=120) => { let match; while ((match=regex.exec(text)) && target.length<max) { const value=match.slice(1).filter(Boolean).at(-1)?.trim() || ''; if(value && !target.includes(value)) target.push(value); } };
@@ -442,6 +597,24 @@
       hits.sort((a,b)=>b.score-a.score||a.path.localeCompare(b.path));
       return {query,kind,indexUpdatedAt:index.updatedAt,totalMatches:hits.length,results:hits.slice(0,Math.max(1,Math.min(100,limit))),note:'The persistent index is refreshed automatically when a workspace is selected and periodically while the chat is open; manual refresh remains available.'};
     }
+    function projectIndexCrossFileReferences(files, graph, { path = '', name = '', limit = 200 } = {}) {
+      const byPath = new Map((files || []).map(file => [file.path, file]));
+      const results = [];
+      for (const binding of graph?.resolvedBindings || []) {
+        if (path && binding.from !== path && binding.to !== path) continue;
+        if (name && binding.local !== name && binding.imported !== name && binding.exported !== name) continue;
+        const importer = byPath.get(binding.from);
+        const target = byPath.get(binding.to);
+        if (!importer || !target) continue;
+        const declaration = (importer.symbolDetails || []).find(item => item.name === binding.local && item.kind === 'import');
+        if (!declaration) continue;
+        const references = (importer.references || []).filter(item => item.declaration === declaration.start).map(item => ({ start: item.start, end: item.end, access: item.access, read: item.read, write: item.write }));
+        results.push({ from: binding.from, to: binding.to, local: binding.local, imported: binding.imported, exported: binding.exported, importDeclarationStart: declaration.start, referenceCount: references.length, references });
+      }
+      const maximum = Math.max(1, Math.min(1000, Number(limit) || 200));
+      return { results: results.slice(0, maximum), truncated: results.length > maximum, note: 'Cross-file reference edges are derived from statically resolved import bindings and lexical references in the importing module. Dynamic runtime references and unresolved imports are not included.' };
+    }
+
     async function getProjectSymbolGraph({path='',name='',limit=200}={}) {
       const index=await loadProjectIndex();
       if(!index)throw new Error('Build the project index before requesting the symbol graph.');
@@ -455,8 +628,9 @@
       const externalImports=(graph.externalImports||[]).filter(item=>!path||item.from===path);
       const resolved=(graph.resolvedBindings||[]).filter(item=>(!path||item.from===path||item.to===path)&&(!name||item.local===name||item.imported===name));
       const unresolved=(graph.unresolvedBindings||[]).filter(item=>(!path||item.from===path||item.to===path)&&(!name||item.local===name||item.imported===name));
+      const crossFileReferences=projectIndexCrossFileReferences(index.files,graph,{path,name,limit});
       const maximum=Math.max(1,Math.min(1000,Number(limit)||200));
-      return {indexUpdatedAt:index.updatedAt,filters:{path:path||null,name:name||null},declarations:declarations.slice(0,maximum),references:references.slice(0,maximum),calls:calls.slice(0,maximum),moduleEdges:edges.slice(0,maximum),circularDependencies:circularDependencies.slice(0,100),externalImports:externalImports.slice(0,maximum),resolvedImports:resolved.slice(0,maximum),unresolvedImports:unresolved.slice(0,maximum),truncated:declarations.length>maximum||references.length>maximum||calls.length>maximum||edges.length>maximum||circularDependencies.length>100||externalImports.length>maximum||resolved.length>maximum||unresolved.length>maximum,scope:'JavaScript lexical bindings, syntactic call sites, and statically-resolved relative module exports; not a complete TypeScript/compiler symbol graph.'};
+      return {indexUpdatedAt:index.updatedAt,filters:{path:path||null,name:name||null},declarations:declarations.slice(0,maximum),references:references.slice(0,maximum),calls:calls.slice(0,maximum),moduleEdges:edges.slice(0,maximum),circularDependencies:circularDependencies.slice(0,100),externalImports:externalImports.slice(0,maximum),resolvedImports:resolved.slice(0,maximum),unresolvedImports:unresolved.slice(0,maximum),crossFileReferences:crossFileReferences.results,crossFileReferencesTruncated:crossFileReferences.truncated,truncated:crossFileReferences.truncated||declarations.length>maximum||references.length>maximum||calls.length>maximum||edges.length>maximum||circularDependencies.length>100||externalImports.length>maximum||resolved.length>maximum||unresolved.length>maximum,scope:'JavaScript lexical bindings, syntactic call sites, statically-resolved module exports, and cross-file references through resolved static imports; dynamic/runtime references, unresolved imports, and full compiler semantics are not included.'};
     }
     async function getProjectIndexOverview() {
       const index=await loadProjectIndex();

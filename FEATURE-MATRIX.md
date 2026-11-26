@@ -110,7 +110,7 @@
 |---|---|---|---|
 | Developer | Package-manager and lockfile detection | Implemented in project index | Detects npm, pnpm, Yarn, Bun, uv, Poetry, Pipenv, Cargo, Go, Composer and Bundler lockfiles; Node packageManager field takes precedence when present |
 | Developer | Declared script command suggestions | Implemented in static validation | Suggestions are derived only from detected Node package manager and scripts declared in package.json; never executed by validation |
-| Developer | Local import relationships | Heuristic | JavaScript relative paths are matched to indexed files and named exports; TypeScript/JSX/Python remain heuristic; package aliases, conditional exports, and compiler resolution are not evaluated |
+| Developer | Local import relationships | Static/partial | JavaScript AST metadata resolves relative imports, selected workspace package exports/import aliases, re-exports, cycles, and cross-file references for statically resolved imports; TypeScript/JSX/Python remain heuristic; runtime conditional resolution is incomplete |
 | System Manager | Container command output and timeout | Hardened | Asynchronous process wait, user-configurable timeout (0 = no automatic timeout), cancellation, process-tree termination, bounded stdout/stderr |
 | System Manager | Native confirmation and permissions | Preserved | System Manager remains disabled by default; destructive process/container operations still require native confirmation |
 
@@ -121,8 +121,24 @@
 
 ### Explicit Phase 1 gaps
 
-- Acorn provides syntax-tree parsing for JavaScript (.js/.mjs/.cjs), including declaration and identifier-occurrence extraction. TypeScript, JSX, and other languages still use heuristic extraction. Compiler-grade cross-file binding/reference resolution is not included.
+- Acorn provides syntax-tree parsing for JavaScript (.js/.mjs/.cjs), including declaration and identifier-occurrence extraction. TypeScript, JSX, and other languages still use heuristic extraction. Cross-file use sites are mapped for statically resolved import bindings; complete compiler-grade binding/reference resolution and dynamic runtime resolution are not included.
 - Runtime build, test, lint, Playwright and dependency-audit commands are not executed by static validation. They require an explicitly selected native workspace and fresh approval.
 - Native process execution runs as the current Windows user and is not a security sandbox.
 - Multi-host Windows compilation and end-to-end execution must be validated on Windows; this environment cannot establish those results.
 - RunMind's built-in adapter can submit a startup prompt, but does not manage an already-running conversation/session store.
+
+
+## Phase 1 completion increment (Unreleased)
+
+| Capability | Status | Scope / limitation |
+|---|---|---|
+| JavaScript AST refactoring | Implemented | Preview-first rename/import organization and conservative statement extraction; one file at a time; applies through approved edit with backup; cross-file API rename is not automatic |
+| JavaScript import organization | Implemented | Sorts independent contiguous top-level import groups; preserves comment-pinned groups |
+| Startup entry management | Implemented | Enable/disable exact HKCU/HKLM Run values with recovery; RunOnce and Startup-folder entries are inventory-only |
+| Hardware and driver diagnostics | Implemented | Fixed PowerShell CIM query and bounded `driverquery` inventory; requires Windows runtime validation |
+| TCP listener ownership | Implemented | `netstat -ano` listener mapping to PID/process name where accessible |
+| System Manager result contract | Implemented | Tool-layer normalized success/accepted/completed/verified fields |
+| Git integration test | Implemented | Real local temporary-repository smoke test; native bridge still needs Windows integration validation |
+| Multi-file recovery tests | Implemented | Source-level ordering/rollback contract tests; browser filesystem failure injection remains outstanding |
+
+| Cross-file symbol references | Implemented (static) | Maps resolved import bindings to lexical use sites in importing modules; dynamic/unresolved references remain outside the graph |

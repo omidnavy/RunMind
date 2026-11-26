@@ -4,32 +4,32 @@
 
 ## Active milestone: Phase 1 Developer Workbench completion + System Manager hardening
 
-The 2.6.3 source baseline includes the adapter management surface, cross-model prompt compatibility, truthful action outcomes, generic application discovery, and the shared Agent Core/native bridge across all three hosts.
+The 2.6.3 source baseline includes the adapter management surface, cross-model prompt compatibility, truthful action outcomes, generic application discovery, JavaScript project intelligence, expanded System Manager operations, and the shared Agent Core/native bridge across all three hosts. The current bundle is a Phase 1 completion candidate pending Windows build/runtime validation.
 
 ### Milestone scope and implementation direction
 
 This milestone coordinates the remaining Phase 1 Developer Workbench work with System Manager hardening. It does not include Phases 2–6. The implementation should remain shared across Standalone, PowerToys Run, and PowerToys Command Palette.
 
-- Improve project intelligence with bounded persistent indexing, package-manager/lockfile detection, declared script discovery, and best-effort local import relationships. The import graph remains heuristic, not AST/compiler-grade.
+- Improve project intelligence with bounded incremental indexing, package-manager/lockfile detection, declared script discovery, Acorn AST analysis for `.js/.mjs/.cjs`, lexical symbol/reference/call analysis, statically resolved module edges, package exports/import aliases, circular-dependency detection, and cross-file use sites for resolved imports.
 - Keep build, test, lint, Playwright, API, and dependency-audit execution behind the existing native workspace selection and fresh PowerShell/native command approval. Static validation must never imply execution.
 - Preserve Git/workspace operations, Skills, Profiles, MCP, workflow/task recovery foundations, and existing three-host shared architecture.
-- Harden System Manager process handling, adapter validation, container lifecycle execution, truthful launch/activation outcomes, and native permission checks.
-- Keep true AST/compiler analysis, full debugging/profiling, embedded Playwright, database work, MCP advanced protocol features, and sub-agent orchestration outside this milestone unless separately agreed.
+- Harden System Manager process handling, adapter validation, container lifecycle execution, reversible startup Run-key management, hardware/driver and TCP/UDP listener diagnostics, truthful operational result contracts, and native permission checks.
+- Keep full TypeScript/compiler semantics, complete Node runtime resolution, full debugging/profiling, embedded Playwright, database work, MCP advanced protocol features, and sub-agent orchestration outside this milestone unless separately agreed. JavaScript AST analysis and conservative refactoring are now included.
 
 ### Included in this source bundle
 
 - Existing project indexing, workspace tools, Git, native PowerShell/.exe execution, MCP, Deep Research, workflows, task recovery, Project Profiles and Skills Manager are preserved.
-- System Manager remains optional and disabled by default. Native master/group/capability checks remain authoritative.
+- System Manager remains optional and disabled by default. Native master/group/capability checks remain authoritative. Startup Run-key changes require fresh native confirmation and preserve a recovery command.
 - Application discovery uses a bounded local index with refresh on stale data or search miss. Sources include App Paths, Windows uninstall registration, Start Menu shortcuts, bounded common install locations, PATH and the Windows Apps folder. Matching ranks normalized names, aliases, executable names, prefixes, substrings and tokens.
 - Packaged Windows applications are represented by validated AppUserModelIDs and activated through `shell:AppsFolder`. This confirms only that Windows accepted an activation request; it does not verify a visible window or action completion.
 - Launch requests use a stable application ID from current discovery. Executable paths are revalidated natively. Existing desktop windows are reused and brought forward by default; foreground activation is reported as verified only when Windows reports the target window as foreground.
 - If an existing process cannot be activated, RunMind does not silently create a duplicate. The user can request a new process explicitly.
 - New-window requests are supported only for a bounded allowlist of applications with known command-line support. New-process behavior is best-effort because some applications redirect to an existing instance.
 - Per-application launch behavior preferences (`ask`, `reuse`, `new-window`, `new-process`) are stored in the existing System Manager settings file. Changing a preference always requires native confirmation.
-- Application close uses graceful main-window close requests and mandatory native confirmation. It never force-terminates a process; packaged applications are not force-closed.
+- Application close uses graceful main-window close requests and mandatory native confirmation. It never force-terminates a process; packaged applications are not force-closed. Startup inventory includes Run/RunOnce and Startup folders; enable/disable currently applies only to exact HKCU/HKLM Run entries, with recovery.
 - Declarative application adapters use the same stable application-ID launch path. The System Manager flyout now lists adapters and supports custom manifest installation/removal with native confirmation. The built-in RunMind adapter can start RunMind with a supplied prompt through its existing startup argument. No scripts or shell commands are introduced.
 - System Manager policy is appended to the existing leading Agent system message instead of adding a second system message, improving compatibility with stricter model chat templates.
-- Native launch results distinguish verified process startup, verified foreground activation, new-window request, existing-instance handoff and unverified navigation.
+- Native launch results distinguish verified process startup, verified foreground activation, new-window request, existing-instance handoff and unverified navigation. Tool-layer results consistently expose success, accepted, completed, and verified dimensions.
 - `list_available_tools` reports the exact tool definitions exposed in the current Agent session. `list_agent_skills` and `load_agent_skill` work without requiring a project folder; project-scoped skills still require an authorized workspace.
 
 ### Explicit limitations
@@ -54,8 +54,8 @@ This milestone coordinates the remaining Phase 1 Developer Workbench work with S
 - No duplicated conversation, project-index, Skills, workflow, or permission engines.
 - Native operations are explicit, bounded, and approval-gated where they change application state.
 - System Manager is optional and disabled by default.
-- No shell execution is hidden behind application discovery or ordinary read-only diagnostics.
-- No arbitrary scripts, forced focus, GUI automation, automatic administrator elevation, or registry modification. Windows service start/stop is now available only through the explicit service capability and mandatory confirmation.
+- No shell execution is hidden behind application discovery or ordinary read-only diagnostics. Fixed diagnostic utilities use fixed arguments; no user-provided command strings are accepted by these diagnostic paths.
+- No arbitrary scripts, forced focus, GUI automation, or automatic administrator elevation. Registry changes are limited to the explicit, reversible startup Run-entry tool and always require native confirmation. Windows service start/stop is available only through the explicit service capability and mandatory confirmation.
 
 
 ## 2.6.2 — System Management Skills & Capability Contracts
@@ -68,3 +68,8 @@ This milestone coordinates the remaining Phase 1 Developer Workbench work with S
 ## 2.6.3 — Developer Intelligence & System Manager
 
 Implemented in this source snapshot: Windows Notepad adapter, File Explorer folder/file actions, Docker/Podman container lifecycle/read operations, and four coding skills. The adapter editor/override UI and native conversation-session management remain follow-up work; RunMind conversations currently live in WebView IndexedDB and are not exposed as a native session store.
+
+
+## Phase 1 completion candidate — 2026-11-21
+
+Implemented in the current source increment: JavaScript AST rename/import organization/conservative extract-function previews; cross-file reference edges for resolved static imports; reversible HKCU/HKLM Run startup toggles; hardware/driver and TCP/UDP listener diagnostics; normalized System Manager outcomes; real local Git workflow tests; and a Windows validation script for all three projects. The release gate remains open until the Windows solution build and three-host runtime scenarios pass.

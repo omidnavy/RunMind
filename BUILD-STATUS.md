@@ -85,3 +85,12 @@ Source updates include three bundled Agent Skills, native skill discovery/loadin
 - Fixed the shared adapter override record initializer and connected the adapter tab, Edit, and Reset UI actions.
 - System Manager includes separate Settings and Application Adapters tabs, bounded panel/list scrolling, built-in adapter override storage, Edit/Reset actions, and custom adapter management. Full RunMind conversation management through the native adapter remains unimplemented; the existing `.runmind` save/open UI is still available.
 - Windows/.NET compilation and runtime validation are still required.
+
+
+## Phase 1 completion candidate — 2026-11-21
+
+The current source includes preview-first JavaScript AST rename/import organization, reversible HKCU/HKLM Run startup toggles, hardware/driver and TCP/UDP listener diagnostics, normalized System Manager tool results, real local Git workflow coverage, and multi-file recovery contract checks. Portable Node tests pass in the development environment.
+
+**Windows release gate remains open.** This environment does not contain the .NET SDK or a Windows runtime, so no current C# compilation or Windows operation is claimed. Run `Validate-Phase1-Windows.ps1` on Windows with the .NET 10 SDK, Node.js, and restored NuGet dependencies to compile all three host projects and execute the portable tests. Then perform the manual three-host runtime checklist in `docs/PHASE1-INTEGRATED-VALIDATION.md`.
+
+Portable validation on 2026-11-21: 47/47 Node tests, 18/18 JavaScript syntax checks, 2/2 JSON files, 7/7 XML files, and C# delimiter sanity passed. This does not replace .NET compilation or Windows runtime validation.
