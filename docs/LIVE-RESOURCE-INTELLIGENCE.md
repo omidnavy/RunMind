@@ -8,7 +8,7 @@ Live Resource Intelligence adds a user-started, read-only Windows telemetry sess
 
 Open **Windows System Manager → Live Monitor**. Enable the System Manager master switch in Settings. Choose a session duration and sampling interval, then explicitly select **Start monitoring**. The Start action is the explicit user authorization for this read-only session; the separate `resourceMonitoring` capability checkbox is not required for the UI monitor and remains in effect for the finite Agent resource-report tool. Use **Stop** to end early. The dashboard shows current values, rolling charts, process rankings and a CSV export.
 
-Supported UI durations are 1, 5 and 15 minutes. Native validation accepts 30–900 seconds. Supported intervals are 1, 2 and 5 seconds. The browser retains at most 900 accepted samples. The native bridge retains only the current session's previous process/system/network baselines; it does not write telemetry to disk. The Process Intelligence card uses this existing live process inventory and adds on-demand details and guarded process actions; see [Process Intelligence](PROCESS-INTELLIGENCE.md).
+Supported UI durations are 1, 5 and 15 minutes. Native validation accepts 30–900 seconds. Supported intervals are 1, 2 and 5 seconds. The browser retains at most 900 accepted samples. The native bridge retains only the current session's previous process/system/network baselines; it does not write telemetry to disk. The Process Intelligence card uses this existing live process inventory and adds on-demand details and guarded process actions; see [Process Intelligence](system/PROCESS-INTELLIGENCE.md).
 
 ## Data sources and semantics
 
@@ -40,7 +40,7 @@ The live view exposes fixed display indicators at 85% host CPU and 90% physical-
 - Switching tabs or closing the System Manager flyout only hides the UI; sampling and chart history continue in the same WebView session. The user can reopen the flyout to see current readings and the accumulated trace. Explicit Stop, duration expiry, page/WebView teardown, RunMind window close or native-host disposal ends the session.
 - There is no background service, scheduled collector or silent startup collection.
 - Samples are held in WebView memory only, capped at 900, and may be exported by the user to CSV. RunMind does not persist the samples.
-- The telemetry session itself is read-only and does not automatically change process state. Process Intelligence actions are separate, explicitly invoked native operations with separate permission checks and fresh confirmations; service-hosted and protected processes are blocked. See [Process Intelligence](PROCESS-INTELLIGENCE.md).
+- The telemetry session itself is read-only and does not automatically change process state. Process Intelligence actions are separate, explicitly invoked native operations with separate permission checks and fresh confirmations; service-hosted and protected processes are blocked. See [Process Intelligence](system/PROCESS-INTELLIGENCE.md).
 
 ## Architecture
 
@@ -55,4 +55,4 @@ GPU readings use optional Windows PDH counters; availability depends on the inst
 
 ## Validation boundary
 
-Portable source-contract tests and JavaScript syntax checks do not compile the native C# or prove Windows performance-counter and process-handle behavior. Before release, build all four hosts with .NET 10 on Windows and complete `P7-WINDOWS-ACCEPTANCE.md` in Standalone, PowerToys Run and Command Palette. Check actual collection overhead on a machine with a large process inventory and with VPN/virtual network adapters.
+Portable source-contract tests and JavaScript syntax checks do not compile the native C# or prove Windows performance-counter and process-handle behavior. Before release, build all four hosts with .NET 10 on Windows and complete the [P7 Windows acceptance checklist](P7-WINDOWS-ACCEPTANCE.md) in Standalone, PowerToys Run and Command Palette. Check actual collection overhead on a machine with a large process inventory and with VPN/virtual network adapters.

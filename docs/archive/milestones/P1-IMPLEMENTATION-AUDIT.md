@@ -72,4 +72,4 @@ See `BUILD-STATUS.md` for the exact portable test, syntax, JSON/XML, archive and
 
 ## Mission Control specification
 
-The detailed 2.8.1 report contract, freshness behavior, status meanings, UI safety and verification limits are documented in [`../../PROJECT-MISSION-CONTROL.md`](../../PROJECT-MISSION-CONTROL.md).
+The detailed 2.8.1 report contract, freshness behavior, status meanings, UI safety and verification limits are documented in [`../../PROJECT-MISSION-CONTROL.md`](../../product/PROJECT-MISSION-CONTROL.md).

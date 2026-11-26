@@ -61,4 +61,4 @@ Record host version, Windows version, Node/.NET versions, test fixture commit/ha
 
 ## Mission Control detail checks
 
-Use [`../../PROJECT-MISSION-CONTROL.md`](../../PROJECT-MISSION-CONTROL.md) as the behavior reference. Validate one fresh-index report, one stale-index refresh, one failed-refresh case where practical, and explicit changed-path impact analysis.
+Use [`../../PROJECT-MISSION-CONTROL.md`](../../product/PROJECT-MISSION-CONTROL.md) as the behavior reference. Validate one fresh-index report, one stale-index refresh, one failed-refresh case where practical, and explicit changed-path impact analysis.
