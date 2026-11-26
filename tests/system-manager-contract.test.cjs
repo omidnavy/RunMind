@@ -184,7 +184,7 @@ test('TypeScript compiler API is bundled offline and loaded before project index
   assert.doesNotMatch(read('Shared/ChatWindow.html'), /vendor\/typescript\/typescript\.js/);
   assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /script\.src = 'ChatWindow\/vendor\/typescript\/typescript\.js'/);
   assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /typescript-compiler-api/);
-  assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /PROJECT_INDEX_PREFIX = 'runmind\.project-index\.v6\.'/);
+  assert.match(read('Shared/ChatWindow/scripts/agent/project-index.js'), /PROJECT_INDEX_PREFIX = 'runmind\.project-index\.v7\.'/);
 });
 
 test('public API rename is preview-first and applies through the approved multi-file editor', () => {

@@ -1,3 +1,16 @@
+## 2.7.0 — P0 Reliability & Unified Workspace Foundation (2026-11-22)
+
+- Unify Agent file access and native project operations behind one native-host-owned workspace root per conversation. The WebView receives an opaque selection identity and a File System Access-compatible virtual directory/file handle, not an absolute Windows path.
+- Persist workspace root and selection identity under Local AppData with cross-host synchronization. Rebind stale cached handles after a workspace change and reject operations carrying an outdated selection identity.
+- Route file tools, project indexing, Skills, Git, PowerShell/native execution, development servers, API tests, Node debugging and Playwright through the same selected root. Relative subdirectories remain contained within that root; Git clone activates its destination as the same shared workspace.
+- Add bounded native workspace file RPC with path traversal/rooted-path/alternate-stream checks, reparse-point protection, chunked 256 KB transfers, 128 MB file limit, atomic writes and selection revalidation at commit.
+- Persist development-server ownership across host restarts. Recovery requires matching conversation, workspace selection identity, PID, process start time and executable path. Stop requires a registry claim, fresh approval and identity revalidation. Unknown port owners are never adopted or stopped.
+- Improve Agent tool selection guidance for targeted diagnostics and Playwright. Add explicit selector/value validation, exact action-index errors, repeated-call blocking and a deterministic completion audit so tool execution cannot end with an empty assistant response.
+- Classify Playwright CORS as a browser security-policy event. Preserve the raw event while separating expected/undeclared CORS blocks and preflight responses from JavaScript exceptions, ordinary HTTP errors and unexpected transport failures.
+- Fix native workspace picker argument propagation (`forceChange`) so initial selection and explicit workspace replacement pass the correct selection intent.
+- Restrict language-aware project analysis/diagnostics to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Node package-manager detection is limited to npm, pnpm, Yarn and Bun. Other programming-language integrations are intentionally out of scope.
+- Add P0 acceptance documentation and source-contract coverage for shared workspace identity, stale-handle rejection, server recovery, tool selection, final-response fallback and CORS classification.
+
 ## 2.6.4 — Project Understanding & Diagnostics reliability
 
 - Make Project Understanding an explicit architecture/code intelligence workflow that uses the persistent index, symbol graph, compiler-backed references, and source tracing.

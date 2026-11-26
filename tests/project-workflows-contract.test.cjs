@@ -27,16 +27,16 @@ test('Project Diagnostics is a separate operational readiness workflow', () => {
   assert.match(workflows, /Never install, update, repair, format, or modify project files/);
 });
 
-test('Project diagnostics are explicit about the still-separate native execution workspace', () => {
-  assert.match(workflows, /native execution workspace separate from the browser file workspace/);
+test('Project diagnostics reuse one shared workspace and avoid duplicate folder selection', () => {
+  assert.match(workflows, /same conversation-scoped workspace identity/);
+  assert.match(workflows, /Never ask the user to select the same folder a second time/);
   assert.match(workflows, /complete static diagnostics first/);
 });
 
 test('Playwright tool schema applies action-specific selector and value requirements', () => {
   const line = providers.split(/\r?\n/).find(value => value.includes("name: 'playwright_run'"));
   assert.ok(line);
-  assert.match(line, /allOf: \[\{ anyOf: \[/);
   assert.match(line, /required: \['action','selector','value'\]/);
-  assert.match(line, /required: \['action','selector'\]/);
-  assert.match(line, /required: \['action','value'\]/);
+  assert.match(line, /Every action object must include action, selector, and value/);
+  assert.match(line, /RunMind performs action-specific preflight validation/);
 });

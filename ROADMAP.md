@@ -1,64 +1,65 @@
 # RunMind Roadmap
 
-## Current source baseline: 2.6.3 — Developer Intelligence & System Manager
+## Current source baseline: 2.7.0 — P0 Reliability & Unified Workspace Foundation
 
-## Active milestone: Phase 2 — Debugging & Quality
+### P0 status
 
-The 2.6.3 baseline includes the Phase 1 Developer Workbench and System Manager capabilities. The Node Debugger increment has been built successfully by the user on Windows across all three hosts. Runtime Diagnostics & Profiling has been confirmed working by the user across the three Windows hosts. Playwright Browser Integration is implemented in the current working bundle and awaits three-host Windows build/runtime validation. API & Backend Testing and Development Server Management are implemented in the current working bundle and await three-host Windows build/runtime validation.
+P0 implementation is present in the 2.7.0 source candidate. The portable Node suite and source-level contract tests pass; the three-host Windows/.NET build and manual acceptance scenarios remain a required user-side release gate.
 
-### Milestone scope and implementation direction
+- **Unified Workspace Selection:** native host owns one canonical, persisted workspace root per conversation. Agent file operations use the native file bridge; Git and native execution use the same identity. No browser folder-name path inference is used. The native picker is shown once for first selection and only again for an explicit change or a legacy conversation without native workspace state.
+- **Phase 2 acceptance:** Node debugger/runtime profiling have prior user-confirmed Windows validation. Playwright, API and development-server workflows are implemented; run the full validation script and acceptance guide against 2.7.0 before sign-off.
+- **Agent reliability:** action schema and native preflight validation, targeted tool selection guidance, identical-call retry protection, task completion audit and deterministic non-empty fallback are implemented.
+- **Development-server ownership:** durable server records are scoped to conversation and workspace selection identity. PID, process start time and executable path must match before recovery. Historical logs cannot be reattached after host restart and are reported unavailable.
+- **Playwright CORS classification:** raw browser policy events are retained; expected and undeclared CORS blocks are distinct from application/JavaScript errors and unexpected transport failures. User-declared expected CORS origins are classified as expected policy blocks.
 
-- Extend the existing Node Inspector sessions with V8 heap diagnostics, CPU sampling profiles, streamed heap snapshots, and bounded timestamped memory sampling.
-- Keep profiling tools in the shared Agent Core across Standalone, PowerToys Run, and PowerToys Command Palette; do not introduce a second agent or duplicate session manager.
-- Require fresh approval for profiling starts and heap snapshots, bound all retained samples/artifacts, and keep runtime profiling unavailable to Deep Research and delegated sub-agent tasks.
-- Keep the Phase 2 lifecycle increments in the shared Agent Core; Development Server Management is now implemented and awaits Windows validation.
-- Preserve the existing Phase 1 Developer Workbench, Git, Skills, Profiles, MCP, workflows, and System Manager capabilities without broad rewrites.
+### Supported project-language scope
 
-### Included in this source bundle
+Language-aware developer functionality is intentionally limited to **JavaScript, TypeScript, JSX/TSX, HTML and CSS**. Node package managers are npm, pnpm, Yarn and Bun. Other file types can still be read/searched as generic text or configuration, but no additional language parsers, compiler integrations, debuggers, build/test ecosystems or language-specific package managers are planned for the current scope.
 
-- Existing project indexing, workspace tools, Git, native PowerShell/.exe execution, MCP, Deep Research, workflows, task recovery, Project Profiles and Skills Manager are preserved.
-- System Manager remains optional and disabled by default. Native master/group/capability checks remain authoritative. Startup Run/RunOnce and Startup-folder changes require fresh native confirmation and preserve a recovery command/file copy.
-- Application discovery uses a bounded local index with refresh on stale data or search miss. Sources include App Paths, Windows uninstall registration, Start Menu shortcuts, bounded common install locations, PATH and the Windows Apps folder. Matching ranks normalized names, aliases, executable names, prefixes, substrings and tokens.
-- Packaged Windows applications are represented by validated AppUserModelIDs and activated through `shell:AppsFolder`. This confirms only that Windows accepted an activation request; it does not verify a visible window or action completion.
-- Launch requests use a stable application ID from current discovery. Executable paths are revalidated natively. Existing desktop windows are reused and brought forward by default; foreground activation is reported as verified only when Windows reports the target window as foreground.
-- If an existing process cannot be activated, RunMind does not silently create a duplicate. The user can request a new process explicitly.
-- New-window requests are supported only for a bounded allowlist of applications with known command-line support. New-process behavior is best-effort because some applications redirect to an existing instance.
-- Per-application launch behavior preferences (`ask`, `reuse`, `new-window`, `new-process`) are stored in the existing System Manager settings file. Changing a preference always requires native confirmation.
-- Application close uses graceful main-window close requests and mandatory native confirmation. It never force-terminates a process; packaged applications are not force-closed. Startup inventory includes Run/RunOnce and Startup folders; reversible enable/disable applies to exact registry values and inventoried `.lnk`/`.exe` Startup-folder files, with recovery copies.
-- Declarative application adapters use the same stable application-ID launch path. The System Manager flyout now lists adapters and supports custom manifest installation/removal with native confirmation. The built-in RunMind adapter can start RunMind with a supplied prompt through its existing startup argument. No scripts or shell commands are introduced.
-- System Manager policy is appended to the existing leading Agent system message instead of adding a second system message, improving compatibility with stricter model chat templates.
-- Native launch results distinguish verified process startup, verified foreground activation, new-window request, existing-instance handoff and unverified navigation. Tool-layer results consistently expose success, accepted, completed, and verified dimensions.
-- `list_available_tools` reports the exact tool definitions exposed in the current Agent session. `list_agent_skills` and `load_agent_skill` work without requiring a project folder; project-scoped skills still require an authorized workspace.
+### P0 validation gate
 
-### Explicit limitations
+Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` using Node.js 24 and .NET 10. Then complete `docs/P0-FOUNDATION-ACCEPTANCE.md` across Standalone, PowerToys Run and Command Palette. Do not mark P0 Windows-certified until all three hosts build and the manual workspace, server recovery, tool selection/final response and CORS checks pass.
 
-- Public API rename is limited to direct named exports and statically resolved import/re-export sites (20-file cap); default exports, export-star chains, dynamic imports and unresolved references are not changed.
-- The current source bundle does not contain the Bionic bundled-skill payload. The skill inventory therefore reports installed Global and authorized Project skills only; it does not invent a Built-in/Bionic scope.
-- Packaged-app activation does not currently pass arbitrary command-line arguments and cannot verify visible windows, focus, or URL navigation.
-- New-window support is limited to applications with known command-line flags. Other applications can use reuse or new-process behavior.
-- Graceful close applies to accessible desktop main windows. It does not force-close background-only or packaged applications.
-- Windows foreground activation is subject to Windows security restrictions; RunMind never uses focus-stealing workarounds.
-- The TypeScript compiler pass is bounded to 500 indexed source files/12 MB, uses no default library bundle, and does not run full semantic diagnostics. Actual Node resolution requires Node on PATH and the native workspace to match the selected project folder. Structured Playwright browser automation uses the project-installed package through the shared native runner; the existing CLI workflow remains available. Structured API/backend suites use the shared Node.js fetch runner with explicit approval and same-origin request/redirect bounds; workflow-guided PowerShell remains available for other project-specific tests.
+## Next roadmap after P0
 
-### Next candidates
+### P1 — Project Mission Control and change impact
 
-- **Unified workspace selection (new requirement):** one Agent workspace selection must establish the folder used by file operations, Git where applicable, PowerShell, native executables, development servers, API tests, Node debugging, and Playwright. Remove the second native folder prompt; any subdirectory must be a relative path inside the same authorized root. This requires replacing the browser-only `FileSystemDirectoryHandle` as the authority with a native-host-owned canonical workspace root and a narrow, path-contained file RPC for the Agent's existing file operations. Do not infer absolute paths from `FileSystemDirectoryHandle.name`; the browser API does not expose them. Keep per-operation approval for process execution and file mutations.
-- Complete Windows build/runtime validation for Playwright Browser Integration and API & Backend Testing across all three hosts.
-- Complete Windows build/runtime validation for Playwright Browser Integration and API & Backend Testing across all three hosts.
-- Windows validation of Development Server Management across all three hosts; broaden project-type discovery in a later increment if required.
-- Windows-targeted automated integration tests for discovery, launch, activation, close, and all three hosts.
-- Better app-specific adapters where a real user workflow justifies them.
-- Full Skill repository/archive import with referenced resources and update checks, if needed.
+- Project onboarding/readiness workflow coordinating Project Understanding, Project Diagnostics and existing build/test tools.
+- Test Impact Analysis based on the existing JavaScript/TypeScript symbol and dependency graph.
+- Release Readiness report combining tests, browser/API checks, dependency audit, Git status and build artifacts.
 
-### Compatibility and security principles
+### P2 — System Manager intelligence
 
-- One shared Agent Core across all three hosts.
-- No duplicated conversation, project-index, Skills, workflow, or permission engines.
-- Native operations are explicit, bounded, and approval-gated where they change application state.
-- System Manager is optional and disabled by default.
-- No shell execution is hidden behind application discovery or ordinary read-only diagnostics. Fixed diagnostic utilities use fixed arguments; no user-provided command strings are accepted by these diagnostic paths.
-- No arbitrary scripts, forced focus, GUI automation, or automatic administrator elevation. Registry changes are limited to the explicit, reversible startup Run-entry tool and always require native confirmation. Windows service start/stop is available only through the explicit service capability and mandatory confirmation.
+- Windows Event Log reader and correlated crash investigation.
+- Bounded CPU/memory/disk/network sampling.
+- Scheduled Task inspection and controlled reversible operations.
+- Storage health and targeted DNS/TCP/proxy diagnostics.
+- Windows security posture inventory (Defender, Firewall, BitLocker, Secure Boot, TPM and UAC), read-only first.
 
+### P3 — Developer infrastructure
+
+- Podman-first development workflows: Compose discovery, Containerfile inspection/build diagnostics, service/port/network/volume relationships.
+- PostgreSQL and SQLite tooling, beginning with schema inspection, read-only SQL and migration review.
+- OpenAPI/JSON Schema contract tests and richer API test suites.
+- Log/session timeline correlation across development servers, Node debugger, API calls and Playwright.
+
+### P4 — Agent workflow quality
+
+- Better MCP resource discovery and health reporting.
+- More robust multi-tool orchestration, checkpoints and recovery.
+- Test Impact Analysis and release reports integrated into agent task completion.
+
+No new project-language support is planned in these milestones unless the user explicitly changes the scope. The focus is to deepen the JavaScript/TypeScript/JSX/HTML/CSS toolchain and add cross-cutting capabilities.
+
+### Architecture principles
+
+- One shared Agent Core across Standalone, PowerToys Run and Command Palette.
+- One native-host-owned workspace identity per conversation; no second folder picker for the same selection.
+- No duplicate project indexes, permission engines, Skills engines, Git adapters or process managers.
+- Native process execution is bounded, user-approved and runs with the current Windows user's permissions; workspace path containment is not a process sandbox.
+- Unknown processes and port owners are never terminated. Development-server recovery is identity-verified and approval-gated.
+- Read-only diagnostics first; mutations require explicit approval and verifiable outcomes.
+- Keep implementations proportionate: every abstraction must remove real duplication or satisfy a concrete security/runtime requirement.
 
 ## 2.6.2 — System Management Skills & Capability Contracts
 

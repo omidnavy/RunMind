@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const childProcess = require('node:child_process');
 const vm = require('node:vm');
-const { validateRequest, parseInputJson, run, MAX_ACTIONS } = require('../Shared/PlaywrightRunner.cjs');
+const { validateRequest, parseInputJson, run, MAX_ACTIONS, isCorsPolicyMessage, extractCorsTargetUrl, classifyCorsPolicyBlocks, matchesCorsTarget } = require('../Shared/PlaywrightRunner.cjs');
 
 function makeFakePlaywright(options = {}) {
   const failChannels = new Set(options.failChannels || []);
@@ -17,7 +17,12 @@ function makeFakePlaywright(options = {}) {
     setDefaultTimeout(value) { calls.push(['setDefaultTimeout', value]); },
     setDefaultNavigationTimeout(value) { calls.push(['setDefaultNavigationTimeout', value]); },
     on(name, callback) { handlers.set(name, callback); },
-    async goto(url) { calls.push(['goto', url]); page.currentUrl = url; },
+    async goto(url) {
+      calls.push(['goto', url]); page.currentUrl = url;
+      for (const text of options.consoleMessages || []) handlers.get('console')?.({ type: () => 'error', text: () => text });
+      for (const request of options.requestFailures || []) handlers.get('requestfailed')?.({ url: () => request.url, method: () => request.method || 'GET', failure: () => ({ errorText: request.error || 'net::ERR_FAILED' }) });
+      for (const response of options.responses || []) handlers.get('response')?.({ status: () => response.status, url: () => response.url, request: () => ({ method: () => response.method || 'GET' }) });
+    },
     url() { return page.currentUrl || 'about:blank'; },
     async title() { return 'RunMind Test Page'; },
     locator(selector) {
@@ -64,6 +69,84 @@ test('Playwright request validation accepts a bounded structured workflow', () =
   assert.equal(result.browser, 'chromium');
   assert.equal(result.channel, 'auto');
   assert.equal(result.actions.length, 4);
+});
+
+test('Playwright classifies CORS as a browser security-policy event, not an application or transport failure', () => {
+  const message = "Access to fetch at 'https://api.example.test/v1/items?x=1' from origin 'http://127.0.0.1:4320' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present.";
+  assert.equal(isCorsPolicyMessage(message), true);
+  const target = extractCorsTargetUrl(message);
+  assert.equal(target, 'https://api.example.test/v1/items?x=1');
+  const policy = [{ kind: 'cors', source: 'console', url: target, origin: 'https://api.example.test', expected: false }];
+  const failed = [
+    { url: target, method: 'GET', error: 'net::ERR_FAILED', classification: 'network_failure', browserPolicyBlock: false },
+    { url: 'https://unrelated.example.test/data', method: 'GET', error: 'ECONNRESET', classification: 'network_failure', browserPolicyBlock: false }
+  ];
+  const http = [{ url: target, method: 'OPTIONS', status: 403, classification: 'http_error', browserPolicyBlock: false }, { url: target, method: 'GET', status: 500, classification: 'http_error', browserPolicyBlock: false }];
+  classifyCorsPolicyBlocks(failed, http, policy);
+  assert.equal(failed[0].classification, 'cors_policy_block');
+  assert.equal(failed[0].applicationFailure, false);
+  assert.equal(failed[0].expectedCorsPolicyBlock, false);
+  assert.equal(failed[1].classification, 'network_failure');
+  assert.equal(http[0].classification, 'cors_preflight_response');
+  assert.equal(http[0].applicationFailure, false);
+  assert.equal(http[1].classification, 'http_error');
+});
+
+test('Playwright marks declared CORS origins as expected and keeps unrelated requests separate', () => {
+  const request = validateRequest({ expected_cors_origins: ['https://api.example.test'], actions: [{ action: 'inspect_page' }] });
+  assert.deepEqual(request.expectedCorsOrigins, ['https://api.example.test']);
+  assert.throws(() => validateRequest({ expected_cors_origins: ['https://api.example.test/v1'], actions: [{ action: 'inspect_page' }] }), /exact credential-free HTTP\(S\) origins/);
+  assert.equal(matchesCorsTarget('https://api.example.test/v1/items?x=1', 'https://api.example.test/v1/items'), true);
+  assert.equal(matchesCorsTarget('https://api.example.test/v1/items?x=1', 'https://api.example.test/v1/items?x=2'), false);
+  assert.equal(matchesCorsTarget('https://api.example.test/v2/items', 'https://api.example.test/v1/items'), false);
+});
+
+test('Playwright reports CORS separately from application console and unexpected network failures', async () => {
+  const target = 'https://api.example.test/v1/items';
+  const message = `Access to fetch at '${target}' from origin 'http://127.0.0.1:4320' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present.`;
+  const fake = makeFakePlaywright({
+    consoleMessages: [message, 'Uncaught TypeError: application bug'],
+    requestFailures: [{ url: target, error: 'net::ERR_FAILED' }, { url: 'https://other.example.test/data', error: 'net::ERR_CONNECTION_RESET' }],
+    responses: [{ url: target, method: 'OPTIONS', status: 403 }, { url: 'https://app.example.test/api', method: 'GET', status: 500 }]
+  });
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'runmind-playwright-cors-'));
+  try {
+    const result = await run({ expected_cors_origins: ['https://api.example.test'], actions: [{ action: 'goto', value: 'http://127.0.0.1:4320/' }] }, { playwright: fake.playwright, artifactDirectory: directory });
+    assert.equal(result.success, true);
+    assert.equal(result.consoleErrors.length, 1);
+    assert.match(result.consoleErrors[0], /application bug/);
+    assert.equal(result.consoleEvents.length, 2);
+    assert.equal(result.browserPolicyBlocks.length, 1);
+    assert.equal(result.browserPolicyBlocks[0].expected, true);
+    assert.equal(result.browserPolicyBlocks[0].applicationFailure, false);
+    assert.equal(result.failedRequests[0].classification, 'cors_policy_block');
+    assert.equal(result.failedRequests[0].expectedCorsPolicyBlock, true);
+    assert.equal(result.failedRequests[1].classification, 'network_failure');
+    assert.equal(result.httpErrors[0].classification, 'cors_preflight_response');
+    assert.equal(result.httpErrors[1].classification, 'http_error');
+    assert.equal(result.networkSummary.consoleErrorCount, 1);
+    assert.equal(result.networkSummary.rawConsoleErrorEventCount, 2);
+    assert.equal(result.networkSummary.expectedCorsBlockCount, 1);
+    assert.equal(result.networkSummary.unexpectedNetworkFailureCount, 1);
+    assert.equal(result.networkSummary.applicationHttpErrorCount, 1);
+    assert.equal(result.networkSummary.corsPreflightResponseCount, 1);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('undeclared CORS remains a browser policy event, not an application or transport failure', async () => {
+  const target = 'https://api.example.test/resource';
+  const message = `Access to fetch at '${target}' from origin 'http://127.0.0.1:4320' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present.`;
+  const fake = makeFakePlaywright({ consoleMessages: [message], requestFailures: [{ url: target, error: 'net::ERR_FAILED' }] });
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'runmind-playwright-cors-'));
+  try {
+    const result = await run({ actions: [{ action: 'goto', value: 'http://127.0.0.1:4320/' }] }, { playwright: fake.playwright, artifactDirectory: directory });
+    assert.equal(result.success, true);
+    assert.equal(result.consoleErrors.length, 0);
+    assert.equal(result.browserPolicyBlocks[0].expected, false);
+    assert.equal(result.networkSummary.undeclaredCorsBlockCount, 1);
+    assert.equal(result.networkSummary.unexpectedNetworkFailureCount, 0);
+    assert.equal(result.failedRequests[0].classification, 'cors_policy_block');
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
 test('Playwright selects installed Edge/Chrome before bundled Chromium and supports explicit channels', () => {

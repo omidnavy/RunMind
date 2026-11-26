@@ -9,8 +9,8 @@
     <PlatformTarget>$(Platform)</PlatformTarget>
     <AssemblyName>RunMind.CommandPalette</AssemblyName>
     <RootNamespace>RunMind.CommandPalette</RootNamespace>
-    <Version>2.6.4</Version>
-    <AppxPackageVersion>2.6.4.0</AppxPackageVersion>
+    <Version>2.7.0</Version>
+    <AppxPackageVersion>2.7.0.0</AppxPackageVersion>
     <AppxPackageIdentityName>RunMind.CommandPalette</AppxPackageIdentityName>
     <AppxPackagePublisher>CN=Omid Navy</AppxPackagePublisher>
     <EnableMsixTooling>true</EnableMsixTooling>
@@ -82,7 +82,9 @@
     <Content Include="..\Shared\PlaywrightRunner.cjs" Link="PlaywrightRunner.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\Shared\ApiTestRunner.cjs" Link="ApiTestRunner.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
+    <Compile Include="..\Shared\WorkspaceFileSystem.cs" Link="Shared\WorkspaceFileSystem.cs" />
     <Compile Include="..\Shared\DevelopmentServerManager.cs" Link="Shared\DevelopmentServerManager.cs" />
+    <Compile Include="..\Shared\DevelopmentServerRegistry.cs" Link="Shared\DevelopmentServerRegistry.cs" />
     <Compile Include="..\Shared\NodeDebuggerBridge.cs" Link="Shared\NodeDebuggerBridge.cs" />
     <Compile Include="..\Shared\SystemManager.cs" Link="Shared\SystemManager.cs" />
     <Compile Include="..\Shared\InlineModelSettings.cs" Link="Shared\InlineModelSettings.cs" />

@@ -39,10 +39,6 @@ public sealed partial class AgentHostBridge : IDisposable
     private static readonly HttpClient DownloadClient = CreateDownloadClient();
     private const string SharedStoreMutexName = @"Local\RunMind.ProjectProfileRegistry.v1";
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _requests = new(StringComparer.Ordinal);
-    private string? _gitWorkspaceRoot;
-    private string? _gitWorkspaceContextId;
-    private string? _processWorkspaceRoot;
-    private string? _processWorkspaceContextId;
     private int _disposed;
 
     public bool TryHandleMessage(string? source, string? messageJson, CoreWebView2 core, Dispatcher dispatcher)
@@ -101,11 +97,11 @@ public sealed partial class AgentHostBridge : IDisposable
         }
         catch (OperationCanceledException)
         {
-            await PostAsync(core, dispatcher, new { type = "runmind.agentHostResult", requestId, ok = false, error = "The native operation was cancelled or reached its time limit." }).ConfigureAwait(false);
+            await PostAsync(core, dispatcher, new { type = "runmind.agentHostResult", requestId, ok = false, error = "The native operation was cancelled or reached its time limit.", errorName = "AbortError" }).ConfigureAwait(false);
         }
         catch (Exception error)
         {
-            await PostAsync(core, dispatcher, new { type = "runmind.agentHostResult", requestId, ok = false, error = Limit(error.Message, 2000) }).ConfigureAwait(false);
+            await PostAsync(core, dispatcher, new { type = "runmind.agentHostResult", requestId, ok = false, error = Limit(error.Message, 2000), errorName = error switch { FileNotFoundException or DirectoryNotFoundException => "NotFoundError", UnauthorizedAccessException => "NotAllowedError", InvalidDataException or ArgumentException => "TypeError", _ => "Error" } }).ConfigureAwait(false);
         }
         finally
         {
@@ -140,6 +136,8 @@ public sealed partial class AgentHostBridge : IDisposable
             "systemManager.apps.close" => Task.FromResult(SystemManagerCloseApplication(args)),
             "systemManager.open.target" => Task.FromResult(SystemManagerOpenTarget(args)),
             "systemManager.process.list" => Task.FromResult(SystemManagerListProcesses(ReadString(args, "query", 120))),
+            "systemManager.port.owner" => Task.FromResult(SystemManagerFindPortOwner(args)),
+            "systemManager.process.tree" => Task.FromResult(SystemManagerProcessTree(args)),
             "systemManager.process.close" => Task.FromResult(SystemManagerCloseProcess(args)),
             "systemManager.process.terminate" => Task.FromResult(SystemManagerTerminateProcess(args)),
             "systemManager.diagnostics" => Task.FromResult(SystemManagerDiagnostics()),
@@ -151,8 +149,10 @@ public sealed partial class AgentHostBridge : IDisposable
             "skills.installContent" => Task.FromResult(InstallGlobalSkillContent(args.TryGetProperty("content", out var skillContent) && skillContent.ValueKind == JsonValueKind.String ? skillContent.GetString() ?? string.Empty : string.Empty, ReadString(args, "source", 2048))),
             "skills.remove" => Task.FromResult(RemoveGlobalSkill(ReadString(args, "name", 100))),
             "git.select" => Task.FromResult(SelectGitWorkspace(ReadString(args, "contextId", 64))),
-            "process.selectWorkspace" => Task.FromResult(SelectProcessWorkspace(ReadString(args, "contextId", 64))),
+            "process.selectWorkspace" => Task.FromResult(SelectProcessWorkspace(ReadString(args, "contextId", 64), ReadBool(args, "forceChange"))),
             "process.workspace.status" => Task.FromResult(ProcessWorkspaceStatus(ReadString(args, "contextId", 64))),
+            "process.workspace.clear" => Task.FromResult(ClearPersistedWorkspace(ReadString(args, "contextId", 64))),
+            "workspace.fs" => Task.FromResult(WorkspaceFileSystem(args)),
             "process.powershell" => RunPowerShellAsync(args, cancellationToken),
             "process.run" => RunNativeProcessAsync(args, cancellationToken),
             "debugger.launch" => NodeDebuggerLaunchAsync(args, cancellationToken),
@@ -818,38 +818,30 @@ public sealed partial class AgentHostBridge : IDisposable
 
     private object SelectGitWorkspace(string contextId)
     {
-        if (!Guid.TryParse(contextId, out _)) throw new InvalidDataException("A valid conversation workspace context is required before selecting a Git repository.");
-        string? selected = null;
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-        {
-            using var dialog = new System.Windows.Forms.FolderBrowserDialog
-            {
-                Description = "Choose the Git repository folder that RunMind may access",
-                UseDescriptionForTitle = true,
-                ShowNewFolderButton = false,
-            };
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) selected = dialog.SelectedPath;
-        });
-        if (string.IsNullOrWhiteSpace(selected)) return new { cancelled = true };
-        var root = Path.GetFullPath(selected);
-        EnsureNoReparseAncestors(root);
+        var root = RequireWorkspaceRoot(contextId);
         var gitDirectory = Path.Combine(root, ".git");
-        if (!Directory.Exists(gitDirectory) || IsReparsePoint(gitDirectory)) throw new InvalidDataException("The selected folder is not a normal Git working tree with a local .git directory. Git worktrees and linked git directories are not enabled in this release.");
-        _gitWorkspaceRoot = root;
-        _gitWorkspaceContextId = contextId;
-        return new { selected = true, folder = Path.GetFileName(root), repository = true };
+        if (!Directory.Exists(gitDirectory) || IsReparsePoint(gitDirectory))
+            throw new InvalidDataException("The selected shared workspace is not a supported local Git repository root. Select the repository root once as the workspace; Git will reuse that same selection without opening another folder picker.");
+        return new { selected = true, folder = Path.GetFileName(root), repository = true, reusedWorkspace = true,
+            note = "Git is using the canonical native workspace selected for this conversation; no second folder picker was opened." };
     }
 
-
-    private object SelectProcessWorkspace(string contextId)
+    private object SelectProcessWorkspace(string contextId, bool forceChange = false)
     {
         if (!Guid.TryParse(contextId, out _)) throw new InvalidDataException("A valid conversation workspace context is required before selecting a native execution workspace.");
+        if (!forceChange)
+        {
+            var existing = ReadPersistedWorkspaceEntry(contextId);
+            if (existing is not null)
+                return new { selected = true, folder = Path.GetFileName(existing.Root), workspaceId = contextId, selectionId = existing.SelectionId, reused = true,
+                    note = "The selected workspace is shared by Agent file access, Git and native project tools. No second folder picker was opened." };
+        }
         string? selected = null;
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
             using var dialog = new System.Windows.Forms.FolderBrowserDialog
             {
-                Description = "Choose the project folder where RunMind may execute approved commands",
+                Description = forceChange ? "Choose the new project workspace for this conversation" : "Choose the project workspace for this conversation",
                 UseDescriptionForTitle = true,
                 ShowNewFolderButton = false,
             };
@@ -858,29 +850,20 @@ public sealed partial class AgentHostBridge : IDisposable
         if (string.IsNullOrWhiteSpace(selected)) return new { cancelled = true };
         var root = Path.GetFullPath(selected);
         EnsureNoReparseAncestors(root);
-        if (!Directory.Exists(root) || IsReparsePoint(root)) throw new InvalidDataException("The selected native execution workspace is not a normal directory.");
-        _processWorkspaceRoot = root;
-        _processWorkspaceContextId = contextId;
-        return new { selected = true, folder = Path.GetFileName(root), note = "Native process execution is scoped to this folder for relative working directories. Commands still run with the current Windows user's permissions." };
-    }
-
-    private object ProcessWorkspaceStatus(string contextId)
-    {
-        var selected = Guid.TryParse(contextId, out _) && string.Equals(contextId, _processWorkspaceContextId, StringComparison.OrdinalIgnoreCase)
-            && !string.IsNullOrWhiteSpace(_processWorkspaceRoot) && Directory.Exists(_processWorkspaceRoot);
-        return new { selected, folder = selected ? Path.GetFileName(_processWorkspaceRoot) : null };
+        if (!Directory.Exists(root) || IsReparsePoint(root)) throw new InvalidDataException("The selected workspace is not a normal directory.");
+        var selectionId = PersistWorkspaceRoot(contextId, root);
+        var gitDirectory = Path.Combine(root, ".git");
+        var gitRepository = Directory.Exists(gitDirectory) && !IsReparsePoint(gitDirectory);
+        return new { selected = true, folder = Path.GetFileName(root), workspaceId = contextId, selectionId, gitRepository,
+            note = "One native workspace selection is shared by Agent file access, Git (when this is a repository root), and approved native project tools. Commands still run with the current Windows user's permissions." };
     }
 
     private string GetProcessWorkingDirectory(JsonElement args)
     {
         var contextId = ReadString(args, "contextId", 64);
-        var root = _processWorkspaceRoot;
-        if (!Guid.TryParse(contextId, out _) || !string.Equals(contextId, _processWorkspaceContextId, StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
-            throw new InvalidOperationException("Select a native execution workspace first with select_native_workspace.");
-
+        _ = RequireWorkspaceRoot(contextId);
         var relative = ReadString(args, "working_directory", 1024).Trim();
-        return ResolveProcessWorkspacePath(relative, "working_directory", requireDirectory: true);
+        return ResolveProcessWorkspacePath(relative, "working_directory", requireDirectory: true, contextId);
     }
 
     /// <summary>
@@ -890,10 +873,9 @@ public sealed partial class AgentHostBridge : IDisposable
     /// workspace's trailing path segments and resolve the remainder from the workspace root.
     /// Both resolution paths remain strictly contained by the selected workspace.
     /// </summary>
-    private string ResolveProcessWorkspacePath(string relativePath, string parameterName, bool requireDirectory)
+    private string ResolveProcessWorkspacePath(string relativePath, string parameterName, bool requireDirectory, string contextId)
     {
-        var root = Path.GetFullPath(_processWorkspaceRoot
-            ?? throw new InvalidOperationException("Select a native execution workspace first with select_native_workspace."));
+        var root = Path.GetFullPath(RequireWorkspaceRoot(contextId));
         EnsureNoReparseAncestors(root);
 
         if (string.IsNullOrWhiteSpace(relativePath)) return root;
@@ -1301,19 +1283,16 @@ public sealed partial class AgentHostBridge : IDisposable
         var result = await ExecuteGitProcessAsync(parent, new[] { "clone", "--progress", "--", uri.AbsoluteUri, destination }, cancellationToken, TimeSpan.FromMinutes(18), message => progress(0, null, message)).ConfigureAwait(false);
         if (result.ExitCode != 0) throw new IOException($"Git clone failed with exit code {result.ExitCode}. {Limit(result.Error, 1600)}");
         if (!Directory.Exists(Path.Combine(destination, ".git"))) throw new IOException("Git clone ended without creating a valid repository directory.");
-        _gitWorkspaceRoot = destination;
-        _gitWorkspaceContextId = contextId;
-        return new { cloned = true, folder = leaf, output = result.Output, error = result.Error, exitCode = result.ExitCode };
+        var selectionId = PersistWorkspaceRoot(contextId, destination);
+        return new { cloned = true, folder = leaf, selectionId, workspaceId = contextId, output = result.Output, error = result.Error, exitCode = result.ExitCode,
+            note = "The cloned repository is now the shared workspace for this conversation. Agent files, Git and native tools use the same selection." };
     }
 
     private async Task<object> RunGitAsync(JsonElement args, CancellationToken cancellationToken)
     {
         var contextId = ReadString(args, "contextId", 64);
-        var root = _gitWorkspaceRoot;
-        if (!Guid.TryParse(contextId, out _) || !string.Equals(contextId, _gitWorkspaceContextId, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Select a Git repository for this conversation first with git_select_repository.");
-        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) throw new InvalidOperationException("Select a Git repository first with git_select_repository.");
-        root = Path.GetFullPath(root);
+        var root = Path.GetFullPath(RequireWorkspaceRoot(contextId));
+        if (!Directory.Exists(root)) throw new InvalidOperationException("The selected workspace no longer exists.");
         EnsureNoReparseAncestors(root);
         var gitDirectory = Path.Combine(root, ".git");
         if (IsReparsePoint(root) || !Directory.Exists(gitDirectory) || IsReparsePoint(gitDirectory)) throw new InvalidDataException("The Git repository changed or is no longer a supported local working tree.");
@@ -1670,6 +1649,7 @@ public sealed partial class AgentHostBridge : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         foreach (var request in _requests.Values) { try { request.Cancel(); } catch (ObjectDisposedException) { } }
         _requests.Clear();
+        CleanupWorkspaceFileSessions();
         StopNodeDebuggerSessions();
     }
 }

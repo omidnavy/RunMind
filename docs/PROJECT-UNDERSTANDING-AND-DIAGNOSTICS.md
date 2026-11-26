@@ -20,6 +20,6 @@ Project Diagnostics can identify which build/test commands are configured and wh
 
 All three consume Project Understanding rather than duplicating its index or symbol graph.
 
-## Current workspace limitation
+## Shared workspace
 
-The browser file workspace and native execution workspace are still separate in this release because browser directory handles do not expose a canonical Windows path. Static Project Understanding and Project Diagnostics complete using the selected browser workspace. Live environment checks or native command execution require the native workspace and fresh per-command approval. Do not select the same folder twice just to finish static diagnostics.
+The native host owns one canonical workspace root per conversation. Agent file operations use a path-free directory/file adapter over the native file bridge; project indexing, Skills, Git (when the selected root is a repository), PowerShell, native commands, development servers, API tests, Playwright and Node debugging reuse the same selection identity. The native picker is shown for first selection, an explicit workspace change, or a legacy conversation with no persisted native selection. Every process or test execution still requires its own approval. Workspace containment is path authorization, not a process sandbox.

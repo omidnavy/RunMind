@@ -15,7 +15,7 @@ The first Phase 2 increment adds a native Node Inspector client to the existing 
 
 ## Launch behavior
 
-1. Select the native workspace for the current chat.
+1. Select the shared project workspace once for the current conversation; debugger launch reuses it.
 2. Launch a workspace-relative `.js`, `.mjs`, or `.cjs` path.
 3. RunMind starts `node.exe --inspect-brk=127.0.0.1:0` with `ProcessStartInfo.ArgumentList`, never through a shell.
 4. RunMind reads the Inspector endpoint from stderr and connects over loopback.

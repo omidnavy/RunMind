@@ -1,30 +1,39 @@
 # Unified Workspace Selection
 
-## Requirement
+## Status in RunMind 2.7.0
 
-A user selects a project workspace once for the Agent. Native capabilities must inherit that same workspace automatically. The user should not be asked to choose the same directory again for PowerShell, native executables, development servers, API testing, Node debugging, or Playwright.
+The native host now owns the canonical workspace root. A conversation selects the folder once through the Windows folder dialog. The WebView receives a context ID, display name and opaque selection identity, then exposes a File System Access-compatible virtual directory/file handle backed by the native `workspace.fs` RPC.
 
-`working_directory` remains optional and, when supplied, is a relative subdirectory of the one selected workspace. A tool must never widen the authorized root or silently switch to a different folder.
+The same per-conversation selection is used by Agent file operations, project indexing, Skills, Git when applicable, approved PowerShell/native execution, development-server management, API testing, Node debugging and Playwright. Native `working_directory` parameters are relative subdirectories and cannot widen the authorized root.
 
-## Current implementation boundary
+## Identity and concurrency
 
-The Agent's file tools currently use the browser File System Access API (`FileSystemDirectoryHandle`). The native process bridge has a separate Windows folder picker and stores `_processWorkspaceRoot` independently.
+- Workspace state is persisted under Local AppData by conversation context ID, with a stable selection ID and a cross-host named mutex.
+- Every native file operation re-reads the persisted entry; it does not rely on a mutable singleton `current workspace` field.
+- Cached WebView handles are rebound when the selected identity changes. Old selection IDs are rejected rather than redirected to the new folder.
+- A project-index entry is keyed by conversation and workspace selection identity, so changing the selected root invalidates old indexing results.
+- Multiple chats/contexts in one host remain independent. Multiple RunMind hosts can share a selection when they use the same conversation context ID.
 
-A `FileSystemDirectoryHandle` exposes a display name and scoped file/directory operations, but it does not expose the absolute Windows path to JavaScript. Its `name` is not a unique path and must not be used to guess a directory. Therefore the native host cannot safely inherit the current browser selection by copying the folder name.
+## File access and safety
 
-## Target design
+`WorkspaceFileSystem.cs` accepts relative paths only. It rejects rooted paths, drive/alternate-data-stream syntax, dot/parent segments, and reparse-point traversal. Reads and writes use bounded 256 KB chunks with a 128 MB file limit. Writes use temporary files and atomic commit; the native bridge rechecks the workspace selection identity at commit and aborts stale sessions.
 
-1. The native host owns one canonical, normalized workspace root per conversation context. The folder is selected once through the OS folder picker.
-2. The WebView receives a workspace context identifier and display metadata, not an unrestricted absolute path used as an authority.
-3. Existing Agent file operations move behind a small native workspace RPC: list directory, read file, write/create, move/copy/rename, delete, metadata, and bounded traversal/search. Each path is resolved against the selected root and checked for traversal and reparse points.
-4. Existing file mutation approval, backup, snapshot verification, content limits, and rollback behavior remain in place. The bridge is a storage implementation change, not a permissions reduction.
-5. PowerShell, native executable, development-server, API, debugger, and Playwright tools use the same root resolver. `working_directory` is only a relative subdirectory. The separate `select_native_workspace` tool and its second folder picker are removed from the normal workflow.
-6. Changing or clearing the Agent workspace invalidates the native root, active process-relative context, and file handles associated with the previous root. Existing RunMind-owned processes remain tracked for safe explicit shutdown.
+The JS adapter in `native-workspace.js` implements the directory/file handle methods used by the Agent's existing file operations. It exposes no absolute workspace path to JavaScript.
 
-## Migration boundary
+Existing file mutation approvals, backups, snapshots and project-relative tool boundaries remain in place. Process execution remains separate and requires fresh approval; this workspace bridge is path authorization, not a process sandbox.
 
-Do not combine browser-handle path guessing, directory-name matching outside the selected root, or current-working-directory heuristics with this change. Those approaches can authorize the wrong directory. The migration is complete only when all Agent workspace file operations and all native project operations use the same host-owned root, and the three host applications compile and pass their integration tests.
+## Selection behavior
 
-## Current status
+- First project operation prompts for one native workspace selection.
+- Later file/native operations in the same conversation reuse the persisted selection. `select_native_workspace` is idempotent and returns `alreadySelected: true` without showing another picker.
+- An explicit change action opens the picker and creates a new selection identity.
+- If status cannot be verified, RunMind fails closed; it does not assume no selection and reopen a duplicate picker.
+- Legacy browser directory handles cannot reveal an absolute Windows path and are not used as native authority; a one-time native selection is required when migrating an old conversation without a persisted native workspace.
 
-The current Phase 2 patch improves relative path normalization for the existing browser workspace and native workspace resolvers, but it does **not** yet remove the second native folder picker. The native-host-owned workspace and file RPC migration remains a required implementation item before this requirement can be marked complete.
+## Git and clone
+
+Git uses the same context-bound workspace root. Repository clone persists the new destination as the conversation's workspace and rebinds Agent file access to that selection; no second folder picker is required after cloning.
+
+## Remaining validation
+
+The architecture and portable contract tests are implemented. The Windows three-host build and manual acceptance flow still need to be completed on the user's Windows installation. See `docs/P0-FOUNDATION-ACCEPTANCE.md`.

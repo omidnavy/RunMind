@@ -4,11 +4,11 @@
 
 RunMind exposes one structured `playwright_run` Agent tool through the existing Agent Core and native host bridge. It executes one bounded browser workflow per call. Standalone, PowerToys Run, and PowerToys Command Palette all use the same implementation.
 
-The runner is a small bundled CommonJS file (`Shared/PlaywrightRunner.cjs`). It loads the `playwright` package from the selected native workspace at runtime. RunMind does not bundle Playwright, download browsers, edit the project's package manifest, or install dependencies.
+The runner is a small bundled CommonJS file (`Shared/PlaywrightRunner.cjs`). It loads the `playwright` package from the selected shared project workspace at runtime. RunMind does not bundle Playwright, download browsers, edit the project's package manifest, or install dependencies.
 
 ## Project setup
 
-From the project directory selected as the native execution workspace, install the Playwright package using the project's normal package manager. For npm:
+From the selected shared project workspace (or its documented package subdirectory), install the Playwright package using the project's normal package manager. For npm:
 
 ```powershell
 npm install --save-dev playwright
@@ -27,7 +27,7 @@ npx playwright install firefox
 npx playwright install webkit
 ```
 
-The native execution workspace must currently be selected with `select_native_workspace`; this remains a separate selection from the Agent's browser file workspace in this source version. The optional `working_directory` argument is relative to that native root and is useful for monorepos where the package is installed in a subproject. The separate-prompt issue is tracked in `UNIFIED-WORKSPACE-SELECTION.md` and is not considered solved by path normalization.
+Playwright reuses the conversation's shared native-host-owned workspace. The first workspace selection authorizes both Agent file operations and native execution; do not select the same folder again. The optional `working_directory` argument is relative to that shared root and is useful for monorepos where the package is installed in a subproject. An explicit workspace change creates a new selection identity and invalidates stale project handles.
 
 ## Supported structured actions
 
@@ -75,13 +75,13 @@ Example Agent action plan:
 ## Dependencies and limitations
 
 - Node.js must be on PATH; the existing native Node toolchain requirement applies.
-- The project must have a locally resolvable `playwright` package. `playwright-core` alone, a globally installed package, remote browser services, and package-manager Plug'n'Play layouts are not currently supported.
+- The selected shared project workspace (or the relative subproject containing the Playwright dependency) must have a locally resolvable `playwright` package. `playwright-core` alone, a globally installed package, remote browser services, and package-manager Plug'n'Play layouts are not currently supported.
 - Chromium is the default. The `auto` channel tries installed Microsoft Edge, installed Google Chrome, then bundled Chromium. Explicit Edge/Chrome channels require the corresponding browser to be installed. Firefox and WebKit work when the project package and matching browser binaries are installed.
 - If a browser CDN returns HTTP 403, this is an external browser-download restriction; use an installed Edge/Chrome channel instead of repeatedly retrying the same download.
 - The current increment is a bounded workflow runner, not a persistent interactive browser session. Each call starts from a clean context.
 - Authentication flows requiring an existing user profile, persistent cookies, downloads, file uploads, arbitrary `page.evaluate`, browser extensions, and GUI-visible headed mode are outside this increment.
-- API/backend testing and development-server lifecycle management are implemented as separate tools in the same Phase 2 Agent Core. They share the native workspace resolver; the unified Agent-file/native-process workspace remains a separate architectural migration.
+- API/backend testing and development-server lifecycle management are implemented as separate tools in the same Phase 2 Agent Core. They reuse the same conversation-scoped workspace identity as Agent file operations; they do not require another folder selection.
 
 ## Validation
 
-`tests/playwright-browser.integration.test.cjs` tests request validation, BOM-safe JSON input, scheme/credential rejection, action bounds, semantic/ARIA page inspection against a deterministic Playwright test double, structured workflow execution, assertion failure behavior, ephemeral context settings, tool approval wiring, and deployment through all three host projects. `test-fixtures/playwright-app` provides a local HTML app for manual Windows browser validation; it has no runtime dependencies, but the selected fixture workspace must have Playwright and Chromium installed. It does not claim a real browser was launched in this environment. The user must run the Windows Release x64 validation script to compile the native C# bridge in all three hosts.
+`tests/playwright-browser.integration.test.cjs` tests request validation, BOM-safe JSON input, scheme/credential rejection, action bounds, semantic/ARIA page inspection against a deterministic Playwright test double, structured workflow execution, assertion failure behavior, ephemeral context settings, tool approval wiring, and deployment through all three host projects. `test-fixtures/playwright-app` provides a local HTML app for manual Windows browser validation; it has no runtime dependencies, but the selected fixture workspace must have Playwright and Chromium installed. It does not claim a real browser was launched in this environment. Run the Windows Release x64 validation script to compile the native C# bridge in all three hosts. P0 acceptance additionally covers unified workspace selection and server ownership recovery.

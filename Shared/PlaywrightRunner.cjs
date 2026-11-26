@@ -24,6 +24,17 @@ function validateRequest(input) {
   const channel = String(input.channel || 'auto').toLowerCase();
   if (!['auto', 'bundled', 'msedge', 'chrome'].includes(channel)) throw new Error('Browser channel must be auto, bundled, msedge, or chrome.');
   if (browser !== 'chromium' && !['auto', 'bundled'].includes(channel)) throw new Error('Installed Edge/Chrome channels are available only with Chromium.');
+  const expectedCorsOrigins = [];
+  if (input.expected_cors_origins != null) {
+    if (!Array.isArray(input.expected_cors_origins) || input.expected_cors_origins.length > 20) throw new Error('expected_cors_origins must be an array containing at most 20 HTTP(S) origins.');
+    for (const item of input.expected_cors_origins) {
+      let url;
+      try { url = new URL(String(item)); } catch { throw new Error(`Invalid expected CORS origin: '${item}'.`); }
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash)
+        throw new Error('Expected CORS entries must be exact credential-free HTTP(S) origins, without a path, query, or fragment.');
+      expectedCorsOrigins.push(url.origin);
+    }
+  }
   if (!Array.isArray(input.actions) || input.actions.length < 1 || input.actions.length > MAX_ACTIONS) throw new Error(`Provide between 1 and ${MAX_ACTIONS} browser actions.`);
   const allowed = new Set(['goto','inspect_page','click','fill','press','check','uncheck','select_option','wait_for','expect_text','expect_url','expect_title','expect_visible','expect_hidden','read_text','count','screenshot']);
   const actions = input.actions.map((raw, index) => {
@@ -48,7 +59,66 @@ function validateRequest(input) {
     if (action === 'screenshot' && raw.name != null && !/^[a-zA-Z0-9_-]{1,60}$/.test(String(raw.name))) throw new Error(`Action ${index + 1} screenshot name may contain only letters, numbers, underscores, and hyphens.`);
     return { action, selector, value, state: String(raw.state || 'visible'), match: String(raw.match || 'contains'), name: String(raw.name || `step-${index + 1}`) };
   });
-  return { browser, channel, actions };
+  return { browser, channel, expectedCorsOrigins: [...new Set(expectedCorsOrigins)], actions };
+}
+
+function isCorsPolicyMessage(message) {
+  const text = String(message || '');
+  return /blocked by CORS policy|cross-origin request blocked|CORS request did not succeed|access-control-allow-origin|preflight request.*(?:CORS|cross.origin)|CORS.*preflight/i.test(text);
+}
+
+function extractCorsTargetUrl(message) {
+  const text = String(message || '');
+  const patterns = [/(?:Access to (?:fetch|XMLHttpRequest) at|request to)\s+['"](https?:\/\/[^'"]+)['"]/i, /https?:\/\/[^\s'"<>]+/i];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) { try { return new URL(match[1] || match[0]).href; } catch { } }
+  }
+  return '';
+}
+
+function normalizeCorsUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    url.hash = '';
+    return { exact: url.href, pathKey: `${url.origin}${url.pathname}`, hasQuery: !!url.search };
+  } catch { return null; }
+}
+
+function matchesCorsTarget(candidate, target) {
+  const left = normalizeCorsUrl(candidate);
+  const right = normalizeCorsUrl(target);
+  if (!left || !right) return false;
+  if (left.exact === right.exact) return true;
+  // Browser messages often omit the query string. Only use origin+pathname fallback
+  // when the CORS target itself contains no query, avoiding over-classification.
+  return !right.hasQuery && left.pathKey === right.pathKey;
+}
+
+function classifyCorsPolicyBlocks(failedRequests, httpErrors, browserPolicyBlocks) {
+  const corsTargets = browserPolicyBlocks.filter(item => item.kind === 'cors' && item.url);
+  for (const request of failedRequests) {
+    const match = corsTargets.find(target => matchesCorsTarget(request.url, target.url));
+    if (match) {
+      request.classification = 'cors_policy_block';
+      request.browserPolicyBlock = true;
+      request.applicationFailure = false;
+      request.expectedCorsPolicyBlock = match.expected === true;
+      request.corsOrigin = match.origin || '';
+      request.note = 'The browser blocked this request under CORS policy; this is not classified as an application JavaScript exception or an unexpected transport failure.';
+    }
+  }
+  for (const item of httpErrors) {
+    const match = item.method === 'OPTIONS' ? corsTargets.find(target => matchesCorsTarget(item.url, target.url)) : null;
+    if (match) {
+      item.classification = 'cors_preflight_response';
+      item.browserPolicyBlock = true;
+      item.applicationFailure = false;
+      item.expectedCorsPolicyBlock = match.expected === true;
+      item.corsOrigin = match.origin || '';
+      item.note = 'This OPTIONS response is associated with a browser-enforced CORS preflight block, not an application HTTP failure for the requested operation.';
+    }
+  }
 }
 
 function createArtifactDirectory(env = process.env) {
@@ -212,13 +282,35 @@ async function run(input, dependencies = {}) {
     page.setDefaultTimeout(10000);
     page.setDefaultNavigationTimeout(30000);
     const consoleErrors = [];
+    const consoleEvents = [];
     const pageErrors = [];
     const failedRequests = [];
     const httpErrors = [];
-    page.on('console', message => { if (message.type() === 'error' && consoleErrors.length < 50) consoleErrors.push(message.text().slice(0, 1000)); });
+    const browserPolicyBlocks = [];
+    const expectedCorsOrigins = new Set(request.expectedCorsOrigins);
+    page.on('console', message => {
+      if (message.type() !== 'error') return;
+      const text = message.text().slice(0, 1000);
+      if (consoleEvents.length < 50) consoleEvents.push({ type: message.type(), text });
+      if (isCorsPolicyMessage(text)) {
+        const url = extractCorsTargetUrl(text);
+        let origin = '';
+        try { origin = url ? new URL(url).origin : ''; } catch { }
+        if (browserPolicyBlocks.length < 50) browserPolicyBlocks.push({ kind: 'cors', source: 'console', url: String(url || '').slice(0, 2000), origin,
+          expected: !!origin && expectedCorsOrigins.has(origin), classification: 'browser_security_policy', applicationFailure: false,
+          message: text, note: 'The browser enforced CORS. The raw console event is preserved in consoleEvents/browserPolicyBlocks; it is not counted as an application console error or unexpected transport failure.' });
+        return;
+      }
+      if (consoleErrors.length < 50) consoleErrors.push(text);
+    });
     page.on('pageerror', error => { if (pageErrors.length < 50) pageErrors.push(String(error.message || error).slice(0, 1000)); });
-    page.on('requestfailed', request => { if (failedRequests.length < 50) failedRequests.push({ url: request.url().slice(0, 2000), error: String(request.failure()?.errorText || 'request failed').slice(0, 500) }); });
-    page.on('response', response => { if (response.status() >= 400 && httpErrors.length < 50) httpErrors.push({ status: response.status(), url: response.url().slice(0, 2000) }); });
+    page.on('requestfailed', request => {
+      if (failedRequests.length >= 50) return;
+      failedRequests.push({ url: request.url().slice(0, 2000), method: request.method(), error: String(request.failure()?.errorText || 'request failed').slice(0, 500), classification: 'network_failure', browserPolicyBlock: false, applicationFailure: false });
+    });
+    page.on('response', response => {
+      if (response.status() >= 400 && httpErrors.length < 50) httpErrors.push({ status: response.status(), url: response.url().slice(0, 2000), method: response.request().method(), classification: 'http_error', browserPolicyBlock: false, applicationFailure: true });
+    });
     const results = [];
     let failed = false;
     for (let index = 0; index < request.actions.length; index++) {
@@ -273,7 +365,29 @@ async function run(input, dependencies = {}) {
         break;
       }
     }
-    return { success: !failed, browser: request.browser, url: page.url().slice(0, 4000), title: (await page.title().catch(() => '')).slice(0, 1000), steps: results, completedSteps: results.filter(item => item.ok).length, totalSteps: request.actions.length, consoleErrors, pageErrors, failedRequests, httpErrors, artifactDirectory };
+    classifyCorsPolicyBlocks(failedRequests, httpErrors, browserPolicyBlocks);
+    const expectedCorsBlocks = browserPolicyBlocks.filter(item => item.expected).length;
+    const unexpectedPolicyBlocks = browserPolicyBlocks.filter(item => !item.expected).length;
+    const unexpectedNetworkFailures = failedRequests.filter(item => !item.browserPolicyBlock).length;
+    const applicationHttpErrors = httpErrors.filter(item => !item.browserPolicyBlock).length;
+    const corsPreflightResponses = httpErrors.filter(item => item.classification === 'cors_preflight_response').length;
+    const policyBlockedRequests = failedRequests.filter(item => item.browserPolicyBlock).length;
+    const networkSummary = {
+      // Counts distinguish raw browser events from actionable application/transport failures.
+      consoleErrorCount: consoleErrors.length,
+      rawConsoleErrorEventCount: consoleEvents.length,
+      pageErrorCount: pageErrors.length,
+      failedRequestCount: failedRequests.length,
+      unexpectedNetworkFailureCount: unexpectedNetworkFailures,
+      httpErrorCount: httpErrors.length,
+      applicationHttpErrorCount: applicationHttpErrors,
+      corsPolicyBlockCount: browserPolicyBlocks.length,
+      expectedCorsBlockCount: expectedCorsBlocks,
+      undeclaredCorsBlockCount: unexpectedPolicyBlocks,
+      policyBlockedRequestCount: policyBlockedRequests,
+      corsPreflightResponseCount: corsPreflightResponses
+    };
+    return { success: !failed, browser: request.browser, url: page.url().slice(0, 4000), title: (await page.title().catch(() => '')).slice(0, 1000), steps: results, completedSteps: results.filter(item => item.ok).length, totalSteps: request.actions.length, consoleErrors, consoleEvents, pageErrors, failedRequests, httpErrors, browserPolicyBlocks, expectedCorsOrigins: request.expectedCorsOrigins, networkSummary, artifactDirectory };
   } finally {
     if (context) await context.close().catch(() => {});
     await browser.close().catch(() => {});
@@ -299,4 +413,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = { validateRequest, parseInputJson, inspectPage, run, MAX_ACTIONS, MAX_INPUT_BYTES };
+module.exports = { validateRequest, parseInputJson, inspectPage, run, isCorsPolicyMessage, extractCorsTargetUrl, classifyCorsPolicyBlocks, normalizeCorsUrl, matchesCorsTarget, MAX_ACTIONS, MAX_INPUT_BYTES };

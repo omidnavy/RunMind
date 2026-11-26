@@ -31,7 +31,7 @@ public sealed partial class AgentHostBridge
         var scriptPath = ReadString(args, "script_path", 2048).Trim();
         if (scriptPath.Length == 0 || Path.IsPathRooted(scriptPath)) throw new InvalidDataException("script_path must be a workspace-relative JavaScript entry file.");
         if (!new[] { ".js", ".mjs", ".cjs" }.Contains(Path.GetExtension(scriptPath), StringComparer.OrdinalIgnoreCase)) throw new InvalidDataException("Node debugger launch currently supports JavaScript entry files ending in .js, .mjs, or .cjs.");
-        var fullScript = ResolveProcessWorkspacePath(scriptPath, "script_path", requireDirectory: false);
+        var fullScript = ResolveProcessWorkspacePath(scriptPath, "script_path", requireDirectory: false, ReadString(args, "contextId", 64));
         EnsureNoReparseAncestors(fullScript);
         if ((File.GetAttributes(fullScript) & FileAttributes.ReparsePoint) != 0) throw new FileNotFoundException("The JavaScript debug target is a reparse point.", fullScript);
 
@@ -185,7 +185,7 @@ public sealed partial class AgentHostBridge
                 var path = ReadString(args, "path", 2048).Trim();
                 if (path.Length == 0 || Path.IsPathRooted(path)) throw new InvalidDataException("Breakpoint path must be workspace-relative.");
                 _ = GetProcessWorkingDirectory(args); // Validate the active workspace context.
-                var root = Path.GetFullPath(_processWorkspaceRoot ?? throw new InvalidOperationException("Select a native workspace first."));
+                var root = Path.GetFullPath(RequireWorkspaceRoot(ReadString(args, "contextId", 64)));
                 var fullPath = Path.GetFullPath(Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar)));
                 var prefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
                 if (!fullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath)) throw new InvalidDataException("Breakpoint target must be an existing file inside the selected workspace.");

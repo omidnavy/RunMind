@@ -9,6 +9,8 @@ const os = require('node:os');
 const root = path.resolve(__dirname, '..');
 const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 const bridge = read('Shared/DevelopmentServerManager.cs');
+const registry = read('Shared/DevelopmentServerRegistry.cs');
+const mcp = read('Shared/ChatWindow/scripts/agent/mcp.js');
 const dispatch = read('Shared/AgentHostBridge.cs');
 const tools = read('Shared/ChatWindow/scripts/agent/tools.js');
 const providers = read('Shared/ChatWindow/scripts/providers.js');
@@ -43,9 +45,11 @@ test('tool schema exposes the complete lifecycle without arbitrary command input
 
 test('native workspace selection is idempotent within a chat and does not reopen the picker', () => {
   assert.match(tools, /const existing = await callAgentHost\('process\.workspace\.status'/);
-  assert.match(tools, /if \(existing\?\.selected\) return/);
-  assert.match(tools, /No second folder picker was opened/);
-  assert.match(providers, /returns it without opening another folder picker/);
+  assert.match(mcp, /if \(status\?\.selected && status\.selectionId\)/);
+  assert.match(mcp, /alreadySelected: true/);
+  assert.match(mcp, /createNativeWorkspaceHandle\(workspaceContext\.id/);
+  assert.match(tools, /no second picker was opened/i);
+  assert.match(providers, /If already selected for this conversation, reuse it without opening another folder picker/);
 });
 
 test('project startup is resolved only from an existing package.json script', () => {
@@ -109,8 +113,10 @@ test('multiple servers and output capture are bounded', () => {
 
 test('only a process session created and retained by this host can be terminated', () => {
   assert.match(bridge, /DevelopmentServers\.TryGetValue\(id, out var session\)/);
-  assert.match(bridge, /session\.Process\.Kill\(true\)/);
-  assert.match(bridge, /Only servers started by this host can be stopped/);
+  assert.match(bridge, /verifiedProcess\.Kill\(true\)/);
+  assert.match(registry, /TryClaimDevelopmentServerStop/);
+  assert.match(registry, /VerifyDevelopmentServerIdentity/);
+  assert.match(bridge, /Unknown or stale processes cannot be stopped/);
   assert.match(tools, /process tree only if this host originally launched and still owns the recorded server session/);
   assert.doesNotMatch(bridge, /Process\.GetProcessById\([^\n]*\)\.Kill/);
 });
@@ -140,11 +146,11 @@ test('System Manager timeout input uses shared field styling and settings tabs u
 
 
 test('native workspace resolver handles both repository-root and selected-project-root paths', () => {
-  assert.match(dispatch, /ResolveProcessWorkspacePath\(relative, "working_directory", requireDirectory: true\)/);
+  assert.match(dispatch, /ResolveProcessWorkspacePath\(relative, "working_directory", requireDirectory: true, contextId\)/);
   assert.match(dispatch, /var maximumOverlap = Math\.Min\(rootSegments\.Length, relativeSegments\.Length\)/);
   assert.match(dispatch, /SequenceEqual\(relativeSegments\.Take\(overlap\), StringComparer\.OrdinalIgnoreCase\)/);
   assert.match(dispatch, /Select the package folder as the workspace and leave working_directory empty/);
-  assert.match(nativeDebugger, /ResolveProcessWorkspacePath\(scriptPath, "script_path", requireDirectory: false\)/);
+  assert.match(nativeDebugger, /ResolveProcessWorkspacePath\(scriptPath, "script_path", requireDirectory: false, ReadString\(args, "contextId", 64\)\)/);
   assert.match(providers, /If the selected workspace is the fixture folder itself, pass server\.cjs/);
 
   const resolve = (workspace, relative, exists) => {

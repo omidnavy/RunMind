@@ -80,7 +80,25 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'node_debugger_list_sessions', 'node_debugger_events', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_diagnostics']);
+      const ensureNativeWorkspace = async () => {
+        const contextId = workspaceContext.id;
+        const status = await callAgentHost('process.workspace.status', { contextId }, signal, 10000);
+        if (status?.selected && status.selectionId) {
+          const current = agentDirectoryHandle;
+          if (current?.isNativeWorkspace !== true || current.contextId !== contextId || current.selectionId !== status.selectionId) {
+            const handle = createNativeWorkspaceHandle(contextId, status.folder || 'workspace', status.selectionId);
+            await persistAgentFolderHandle(handle);
+            notifyWorkspaceHandleChanged('rebound');
+          }
+          return status;
+        }
+        const access = await requestFolderAccess(signal);
+        if (!access?.granted) throw new Error(access?.message || 'Select the shared project workspace before using this native developer tool.');
+        const refreshed = await callAgentHost('process.workspace.status', { contextId }, signal, 10000);
+        if (!refreshed?.selected || !refreshed.selectionId) throw new Error('The native workspace selection was not persisted. Select it again before continuing.');
+        return refreshed;
+      };
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'node_debugger_list_sessions', 'node_debugger_events', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_find_port_owner', 'system_manager_process_tree', 'system_manager_diagnostics']);
       if (name.startsWith('system_manager_')) {
         if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in the System Manager menu first.');
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
@@ -88,6 +106,8 @@
         if (name === 'system_manager_list_startup_applications') return await callAgentHost('systemManager.startup.list',{query:String(args.query||'')},signal);
         if (name === 'system_manager_set_startup_application') return await callAgentHost('systemManager.startup.set',{action:String(args.action||''),name:String(args.name||''),source:String(args.source||''),entryPath:String(args.entry_path||'')},signal);
         if (name === 'system_manager_list_adapters') return await callAgentHost('systemManager.adapters.list',{},signal);
+        if (name === 'system_manager_find_port_owner') return await callAgentHost('systemManager.port.owner',{port:args.port,protocol:String(args.protocol||'tcp')},signal,15000);
+        if (name === 'system_manager_process_tree') return await callAgentHost('systemManager.process.tree',{processId:args.processId},signal,15000);
         if (name === 'system_manager_container_action') {
           const action = String(args.action || '').toLowerCase();
           if (!['start','stop','restart'].includes(action) && !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
@@ -142,13 +162,7 @@
         const action = String(args.action || '').toLowerCase();
         if (!['discover','start','list','logs','health','stop'].includes(action)) throw new Error('Choose discover, start, list, logs, health, or stop.');
         const contextId = workspaceContext.id;
-        const workspaceStatus = await callAgentHost('process.workspace.status', { contextId }, signal, 10000);
-        if (!workspaceStatus?.selected) {
-          const selected = await requireAgentApproval({ title: 'Select a native development-server workspace?', subtitle: 'Native process access · current Windows user permissions', detail: 'Choose the local project folder that contains package.json. RunMind will discover and launch project-defined package scripts from this folder. Starting a server runs project code with your Windows account permissions.', risky: true, alwaysAsk: true }, signal);
-          if (!selected) return { cancelled: true, message: 'Native workspace selection was declined.' };
-          const selection = await callAgentHost('process.selectWorkspace', { contextId }, signal, 120000);
-          if (!selection?.selected) return { cancelled: true, message: 'Native workspace selection was cancelled.' };
-        }
+        await ensureNativeWorkspace();
         const payload = { action, working_directory: String(args.working_directory || ''), contextId };
         if (action === 'start') {
           const script = String(args.script || '');
@@ -181,17 +195,29 @@ RunMind will terminate the process tree only if this host originally launched an
       }
       if (name === 'playwright_run') {
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('Playwright browser automation is disabled in Deep Research and delegated sub-agent tasks. Run it from the primary Agent session with explicit approval.');
+        await ensureNativeWorkspace();
         const actions = Array.isArray(args.actions) ? args.actions.slice(0, 30) : [];
         if (!actions.length || actions.length > 30) throw new Error('Provide between 1 and 30 structured Playwright actions.');
+        const selectorActions = new Set(['click','fill','press','check','uncheck','select_option','wait_for','expect_text','expect_visible','expect_hidden','read_text','count']);
+        const valueActions = new Set(['goto','fill','press','select_option','expect_text','expect_url','expect_title']);
+        for (let index = 0; index < actions.length; index++) {
+          const action = String(actions[index]?.action || '').toLowerCase();
+          if (selectorActions.has(action) && !String(actions[index]?.selector || '').trim())
+            throw new Error(`Playwright action ${index + 1} ('${action}') is missing its required selector. Use a CSS selector copied from inspect_page, such as '#request-name' or '[role=\"status\"]'.`);
+          if (valueActions.has(action) && !String(actions[index]?.value ?? '').length)
+            throw new Error(`Playwright action ${index + 1} ('${action}') is missing its required value.`);
+        }
         const browser = ['chromium','firefox','webkit'].includes(String(args.browser || 'chromium').toLowerCase()) ? String(args.browser || 'chromium').toLowerCase() : 'chromium';
         const channel = ['auto','bundled','msedge','chrome'].includes(String(args.channel || 'auto').toLowerCase()) ? String(args.channel || 'auto').toLowerCase() : 'auto';
+        const expectedCorsOrigins = Array.isArray(args.expected_cors_origins) ? args.expected_cors_origins.slice(0, 20).map(value => String(value)) : [];
         const preview = actions.map((item, index) => `${index + 1}. ${String(item.action || 'unknown')}${item.selector ? ` · ${String(item.selector).slice(0, 160)}` : ''}${item.value ? ` · ${String(item.value).slice(0, 240)}` : ''}`).join('\n');
-        const approved = await requireAgentApproval({ title: 'Run this Playwright browser test?', subtitle: `${browser} · ${channel} browser channel · isolated temporary context`, detail: `Project workspace: ${workspaceContext.folderName || '(native workspace selected separately)'}\nWorking directory: ${String(args.working_directory || '(workspace root)')}\nTimeout: ${Math.max(15, Math.min(300, Number(args.timeout_seconds) || 120))} seconds\n\nActions:\n${preview}\n\nWeb pages execute their own code and may perform network or application-side effects. RunMind uses a fresh ephemeral context, does not persist cookies or login state, and exposes no arbitrary JavaScript evaluation. Screenshots are saved locally. Every run is separately approved.`, risky: true, alwaysAsk: true }, signal);
+        const approved = await requireAgentApproval({ title: 'Run this Playwright browser test?', subtitle: `${browser} · ${channel} browser channel · isolated temporary context`, detail: `Project workspace: ${workspaceContext.folderName || '(shared native workspace)'}\nWorking directory: ${String(args.working_directory || '(workspace root)')}\nExpected CORS blocks: ${expectedCorsOrigins.length ? expectedCorsOrigins.join(', ') : '(none declared)'}\nTimeout: ${Math.max(15, Math.min(300, Number(args.timeout_seconds) || 120))} seconds\n\nActions:\n${preview}\n\nWeb pages execute their own code and may perform network or application-side effects. RunMind uses a fresh ephemeral context, does not persist cookies or login state, and exposes no arbitrary JavaScript evaluation. Screenshots are saved locally. Every run is separately approved.`, risky: true, alwaysAsk: true }, signal);
         if (!approved) return { cancelled: true, message: 'Playwright browser run was declined.' };
-        return await callAgentHost('playwright.run', { browser, channel, actions, working_directory: String(args.working_directory || ''), timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(30000, Math.min(315000, (Number(args.timeout_seconds) || 120) * 1000 + 15000)));
+        return await callAgentHost('playwright.run', { browser, channel, actions, expected_cors_origins: expectedCorsOrigins, working_directory: String(args.working_directory || ''), timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(30000, Math.min(315000, (Number(args.timeout_seconds) || 120) * 1000 + 15000)));
       }
       if (name === 'api_test_run') {
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('API/backend testing is disabled in Deep Research and delegated sub-agent tasks. Run it from the primary Agent session with explicit approval.');
+        await ensureNativeWorkspace();
         const requests = Array.isArray(args.requests) ? args.requests.slice(0, 20) : [];
         if (!requests.length || requests.length > 20) throw new Error('Provide between 1 and 20 API requests.');
         let base;
@@ -208,7 +234,7 @@ RunMind will terminate the process tree only if this host originally launched an
           const body = item.body_json !== undefined ? ' · JSON body supplied' : item.body_text !== undefined ? ' · text body supplied' : '';
           return `${index + 1}. ${method} ${target}${body}${headerNames ? ` · headers: ${headerNames}` : ''}`;
         }).join('\n');
-        const approved = await requireAgentApproval({ title: 'Run these API/backend tests?', subtitle: `${base.origin}${base.pathname} · ${requests.length} HTTP requests`, detail: `Selected project workspace: ${workspaceContext.folderName || '(native workspace selected separately)'}\nBase URL: ${base.origin}${base.pathname}\nPer-request timeout: ${timeoutSeconds} seconds\n\nRequests:\n${preview}\n\nThis executes real HTTP requests as your Windows user. POST/PUT/PATCH/DELETE and even GET endpoints may change application state. All requests and redirects are restricted to the base URL origin. Secrets may be supplied with {{env:VARIABLE_NAME}} placeholders; their values are not shown in this approval. Responses are bounded and common credential fields are redacted.`, risky: true, alwaysAsk: true }, signal);
+        const approved = await requireAgentApproval({ title: 'Run these API/backend tests?', subtitle: `${base.origin}${base.pathname} · ${requests.length} HTTP requests`, detail: `Selected project workspace: ${workspaceContext.folderName || '(shared workspace)'}\nBase URL: ${base.origin}${base.pathname}\nPer-request timeout: ${timeoutSeconds} seconds\n\nRequests:\n${preview}\n\nThis executes real HTTP requests as your Windows user. POST/PUT/PATCH/DELETE and even GET endpoints may change application state. All requests and redirects are restricted to the base URL origin. Secrets may be supplied with {{env:VARIABLE_NAME}} placeholders; their values are not shown in this approval. Responses are bounded and common credential fields are redacted.`, risky: true, alwaysAsk: true }, signal);
         if (!approved) return { cancelled: true, message: 'API/backend test run was declined.' };
         return await callAgentHost('api.test.run', { base_url: base.href, requests, timeout_seconds: timeoutSeconds, working_directory: String(args.working_directory || ''), contextId: workspaceContext.id }, signal, Math.min(300000, Math.max(30000, requests.length * timeoutSeconds * 1000 + 15000)));
       }
@@ -240,6 +266,7 @@ RunMind will terminate the process tree only if this host originally launched an
         return await callAgentHost('debugger.runtime.memoryMonitor', { session_id: String(args.session_id || ''), action, interval_ms: args.interval_ms, duration_seconds: args.duration_seconds }, signal, 20000);
       }
       if (name === 'node_debugger_launch') {
+        await ensureNativeWorkspace();
         const scriptPath = String(args.script_path || '').trim();
         if (!scriptPath || scriptPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(scriptPath)) throw new Error('Provide a workspace-relative script_path.');
         const commandArguments = Array.isArray(args.arguments) ? args.arguments.map(value => String(value)) : [];
@@ -249,6 +276,7 @@ RunMind will terminate the process tree only if this host originally launched an
         return await callAgentHost('debugger.launch', { script_path: scriptPath, arguments: commandArguments, working_directory: workingDirectory, contextId: workspaceContext.id }, signal, 45000);
       }
       if (name === 'node_debugger_attach') {
+        await ensureNativeWorkspace();
         const port = Number(args.port);
         if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Provide a valid local Node Inspector port.');
         const approved = await requireAgentApproval({ title: 'Attach to this local Node.js debugger?', subtitle: 'Node Inspector · loopback only', detail: `Inspector port: 127.0.0.1:${port}\n\nAttaching grants RunMind access to pause execution, inspect application state, and evaluate expressions. Evaluation requires a separate approval. RunMind refuses non-loopback Inspector endpoints.`, risky: true, alwaysAsk: true }, signal);
@@ -282,14 +310,22 @@ RunMind will terminate the process tree only if this host originally launched an
       if (name === 'select_native_workspace') {
         const contextId = workspaceContext.id;
         const existing = await callAgentHost('process.workspace.status', { contextId }, signal, 10000);
-        if (existing?.selected) return { ...existing, alreadySelected: true, message: `Native execution workspace '${existing.folder || 'selected folder'}' is already selected for this chat. No second folder picker was opened.` };
-        const approved = await requireAgentApproval({ title: 'Select a native execution workspace?', subtitle: 'Native process access · this chat window only', detail: 'Choose the local project directory in which approved PowerShell scripts and native executables may run. This current release keeps the browser file workspace and native execution workspace separate because the browser folder handle does not expose an absolute Windows path. This does not sandbox processes.', risky: true, alwaysAsk: true }, signal);
+        if (existing?.selected && existing.selectionId) {
+          await activateNativeWorkspaceHandle(contextId, existing.folder, existing.selectionId);
+          return { ...existing, alreadySelected: true, message: `Shared workspace '${existing.folder || 'selected folder'}' is already selected for this chat. Agent file tools, Git and native project tools are using the same folder; no second picker was opened.` };
+        }
+        const approved = await requireAgentApproval({ title: 'Select the shared project workspace?', subtitle: 'Native workspace access · this chat window only', detail: 'Choose the project folder once. RunMind will use this same folder for Agent file access, project indexing, Skills, Git (when the folder is a repository root), Playwright, API tests, development servers, Node debugging, PowerShell and native commands. This does not sandbox processes; every execution still requires its own approval.', risky: true, alwaysAsk: true }, signal);
         if (!approved) return { cancelled: true };
-        const result = await callAgentHost('process.selectWorkspace', { contextId }, signal);
-        if (result?.selected) return { ...result, message: `Native execution workspace selected: ${result.folder}. Every process invocation will still require fresh approval.` };
+        const result = await callAgentHost('process.selectWorkspace', { contextId }, signal, 120000);
+        if (result?.selected && result.selectionId) {
+          await activateNativeWorkspaceHandle(contextId, result.folder, result.selectionId);
+          notifyWorkspaceHandleChanged('selected');
+          return { ...result, message: `Shared workspace selected: ${result.folder}. Agent file access and native tools now use the same folder. Every execution still requires fresh approval.` };
+        }
         return result;
       }
       if (name === 'powershell_execute') {
+        await ensureNativeWorkspace();
         const script = String(args.script || '');
         if (!script.trim()) throw new Error('Provide a non-empty PowerShell script.');
         const workingDirectory = String(args.working_directory || '').trim();
@@ -304,6 +340,7 @@ PowerShell is not sandboxed and may access files and resources available to your
         return await callAgentHost('process.powershell', { script, working_directory: workingDirectory, timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(60000, Math.min(930000, (Number(args.timeout_seconds) || 300) * 1000 + 15000)));
       }
       if (name === 'run_native_command') {
+        await ensureNativeWorkspace();
         const executable = String(args.executable || '').trim();
         const commandArguments = Array.isArray(args.arguments) ? args.arguments.map(value => String(value)) : [];
         if (!executable) throw new Error('Provide an executable name ending in .exe.');
@@ -319,9 +356,17 @@ The process is not sandboxed and runs with your Windows account permissions.`, r
         return await callAgentHost('process.run', { executable, arguments: commandArguments, working_directory: workingDirectory, timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(60000, Math.min(930000, (Number(args.timeout_seconds) || 300) * 1000 + 15000)));
       }
       if (name === 'git_select_repository') {
-        const approved = await requireAgentApproval({ title: 'Select a Git repository?', subtitle: 'Native folder access · this chat window only', detail: 'Choose the repository directory RunMind may access. This native Git selection is separate from the browser workspace folder grant. Repository access always requires a fresh confirmation.', risky: true, alwaysAsk: true, permissionCategory: 'gitWrite' }, signal);
-        if (!approved) return { cancelled: true };
-        return await callAgentHost('git.select', { contextId: workspaceContext.id }, signal);
+        const contextId = workspaceContext.id;
+        const status = await callAgentHost('process.workspace.status', { contextId }, signal, 10000);
+        if (!status?.selected) {
+          const approved = await requireAgentApproval({ title: 'Select the shared project workspace?', subtitle: 'Native workspace access · this chat window only', detail: 'Choose the project folder once. Git will reuse this same native workspace when it is a Git repository root; it will not open a second folder picker.', risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true };
+          const selected = await callAgentHost('process.selectWorkspace', { contextId }, signal, 120000);
+          if (!selected?.selected || !selected.selectionId) return { cancelled: true, message: 'Workspace selection was cancelled.' };
+          await activateNativeWorkspaceHandle(contextId, selected.folder, selected.selectionId);
+          notifyWorkspaceHandleChanged('selected');
+        }
+        return await callAgentHost('git.select', { contextId }, signal, 15000);
       }
       if (name === 'git_clone') {
         const rawUrl = String(args.url || '').trim();
@@ -341,12 +386,20 @@ Git credentials, if required, must already be configured in Windows.`, risky: tr
           workspaceContext.id = clonedContextId;
           bootWorkspaceContextId = null;
           workspaceContext.folderName = String(result.folder || '').slice(0, 256);
+          if (result.selectionId) {
+            const handle = createNativeWorkspaceHandle(clonedContextId, result.folder || 'workspace', result.selectionId);
+            await persistAgentFolderHandle(handle);
+            notifyWorkspaceHandleChanged('selected');
+            result.browserWorkspace = 'The cloned repository is now the single shared workspace for Agent file access, Git, debugging and native project tools. No second folder selection is required.';
+          } else {
+            result.browserWorkspace = 'The clone completed, but the native workspace identity was not returned. Re-select the cloned folder before using project file tools.';
+          }
           updateAgentFolderButton(); rebuildActiveToolDefinitions(deepResearchEnabled);
-          result.browserWorkspace = 'The cloned folder is selected for native Git in this conversation. To enable browser-based file tools, call request_folder_access and select the cloned folder; browser grants cannot be transferred from a native folder picker.';
         }
         return result;
       }
       if (gitRoutes[name]) {
+        await ensureNativeWorkspace();
         const [action, category] = gitRoutes[name];
         const detail = ['fetch','pull','push'].includes(action)
           ? `Action: ${action}
@@ -362,11 +415,12 @@ This discards local working-tree and index changes.`
 ${(args.paths || []).join('\n')}`
                   : JSON.stringify(args, null, 2);
         const approved = await requireAgentApproval({ title: `Allow Git ${action.replace('_',' ')}?`, subtitle: `Git · ${category === 'gitDestructive' ? 'destructive' : category === 'gitRemote' ? 'remote' : category === 'gitWrite' ? 'repository write' : 'read-only'}`, detail: `${detail}
-Repository: selected native Git folder${category !== 'gitRead' ? '\nGit hooks or configured helpers may execute as part of this operation.' : ''}`, risky: category !== 'gitRead', alwaysAsk: category === 'gitDestructive' || action === 'commit', permissionCategory: category }, signal);
+Repository: selected shared project workspace${category !== 'gitRead' ? '\nGit hooks or configured helpers may execute as part of this operation.' : ''}`, risky: category !== 'gitRead', alwaysAsk: category === 'gitDestructive' || action === 'commit', permissionCategory: category }, signal);
         if (!approved) return { cancelled: true, message: 'Git operation was not run because approval was declined.' };
         return await callAgentHost('git.run', { action, ...args, contextId: workspaceContext.id }, signal);
       }
       if (name === 'download_file') {
+        await ensureNativeWorkspace();
         const rawUrl = String(args.url || '').trim();
         let target; try { target = new URL(rawUrl); } catch (_) { throw new Error('Provide a valid absolute HTTP or HTTPS URL.'); }
         if (!['http:','https:'].includes(target.protocol) || target.username || target.password) throw new Error('Downloads require a credential-free HTTP or HTTPS URL.');
@@ -961,7 +1015,8 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
           return { ...result, path, applied: !applied?.cancelled, editResult: applied };
         }
         case 'node_resolve_modules': {
-          if (!agentDirectoryHandle) throw new Error('Select a project workspace first.');
+          await ensureNativeWorkspace();
+          if (!agentDirectoryHandle?.isNativeWorkspace) throw new Error('The shared native project workspace is unavailable.');
           const path = String(args.path || '').replace(/\\/g, '/');
           const specifiers = Array.isArray(args.specifiers) ? args.specifiers.map(value => String(value)).filter(Boolean).slice(0, 100) : [];
           if (!path || path.startsWith('/') || path.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Provide a safe workspace-relative importer path.');
@@ -1005,28 +1060,19 @@ RunMind will execute a fixed resolver script using Node's createRequire().resolv
               } else if (path.endsWith('.sln')) {
                 const valid = /^Microsoft Visual Studio Solution File/m.test(text) && /Project\(/.test(text);
                 checks.push({ path: item.path, status: valid ? 'valid' : 'warning', format: 'solution', message: valid ? 'Solution header and project entries found.' : 'Expected Visual Studio solution header or project entries were not found.' });
-              } else if (path === 'go.mod') {
-                const module = text.match(/^module\s+([^\s]+)/m)?.[1] || '';
-                checks.push({ path: item.path, status: module ? 'valid' : 'warning', format: 'go.mod', ...(module ? { module } : { message: 'No module directive found.' }) });
-              } else if (path === 'cargo.toml') {
-                const hasPackage = /^\s*\[package\]/m.test(text), hasDependencies = /^\s*\[(?:dev-|build-)?dependencies\]/m.test(text);
-                checks.push({ path: item.path, status: hasPackage ? 'valid' : 'warning', format: 'toml', hasPackageSection: hasPackage, hasDependenciesSection: hasDependencies });
-              } else if (path === 'pyproject.toml') {
-                const hasProject = /^\s*\[project\]/m.test(text), hasTool = /^\s*\[tool\./m.test(text);
-                checks.push({ path: item.path, status: hasProject || hasTool ? 'valid' : 'warning', format: 'toml', hasProjectSection: hasProject, hasToolSection: hasTool });
               } else {
                 checks.push({ path: item.path, status: 'inspected', format: path.endsWith('.txt') ? 'text' : 'manifest', note: 'No full parser is available for this manifest format.' });
               }
             } catch (error) { checks.push({ path: item.path, status: 'invalid', error: String(error?.message || error).slice(0, 400) }); }
           }
-          const testFiles = index.files.filter(file => /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$|(?:^|\/)test_[^/]+\.py$/i.test(file.path)).map(file => file.path).slice(0, 100);
+          const testFiles = index.files.filter(file => /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$/i.test(file.path)).map(file => file.path).slice(0, 100);
           const toolchains = index.toolchains || { packageManager: null, packageManagerSource: 'not detected', lockfiles: [], ecosystems: [] };
           const manager = toolchains.packageManager;
           const scriptCommands = manager && ['npm','pnpm','yarn','bun'].includes(manager)
             ? Object.fromEntries(Object.keys(packageScripts).filter(key => ['build','test','lint','check','typecheck','audit'].includes(key)).map(key => [key, manager === 'npm' ? `npm run ${key}` : manager === 'yarn' ? `yarn ${key}` : `${manager} run ${key}`]))
             : {};
           const importGraph = index.importGraph || { localImportEdges: [], filesWithIncomingImports: [], note: 'No local import graph is available; refresh the project index.' };
-          return { root: index.rootName, indexedAt: index.updatedAt, manifestsChecked: checks.length, valid: checks.filter(item => item.status === 'valid').length, invalid: checks.filter(item => item.status === 'invalid').length, warnings: checks.filter(item => item.status === 'warning').length, checks, frameworks, toolchains, packageScripts, scriptCommands, importGraph: { localImportEdges: importGraph.localImportEdges.length, mostImportedFiles: importGraph.filesWithIncomingImports, note: importGraph.note }, testFilesFound: testFiles.length, testFiles, executionPerformed: false, note: 'Static manifest checks, lockfile/toolchain detection, heuristic local import links, and test-file discovery only. Script commands are derived from the detected package manager and declared package.json scripts; they are suggestions, not executed. For actual build, lint, test, Playwright, or audit execution, use the native PowerShell tool after selecting a native workspace and obtaining fresh approval.' };
+          return { root: index.rootName, indexedAt: index.updatedAt, manifestsChecked: checks.length, valid: checks.filter(item => item.status === 'valid').length, invalid: checks.filter(item => item.status === 'invalid').length, warnings: checks.filter(item => item.status === 'warning').length, checks, frameworks, toolchains, packageScripts, scriptCommands, importGraph: { localImportEdges: importGraph.localImportEdges.length, mostImportedFiles: importGraph.filesWithIncomingImports, note: importGraph.note }, testFilesFound: testFiles.length, testFiles, executionPerformed: false, note: 'Static manifest checks, lockfile/toolchain detection, heuristic local import links, and test-file discovery only. Script commands are derived from the detected package manager and declared package.json scripts; they are suggestions, not executed. For actual build, lint, test, Playwright, or audit execution, use the native PowerShell tool with this shared workspace and obtain fresh approval.' };
         }
         case 'list_developer_workflows': return { workflows: (await loadDeveloperWorkflows()).map(({id,name,description,builtIn})=>({id,name,description,builtIn})) };
         case 'start_developer_workflow': return await startDeveloperWorkflow(args.id, args.context || '');
