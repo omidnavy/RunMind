@@ -1,39 +1,42 @@
-# RunMind 2.5.1 — Validation Report
+# RunMind 2.5.2 — Validation Report
 
-**Release:** 2.5.1 — System Manager Flyout & Verified Application Launch  
-**Base:** RunMind 2.5.0.2 complete source bundle  
+**Release:** 2.5.2 — System Manager Action Reliability  
+**Base:** Complete RunMind 2.5.1 source bundle  
 **Validation date:** 2026-11-17
 
 ## Changes in this bundle
 
-- Moved Windows System Manager into its own toolbar flyout, separate from Agent Settings. Existing settings control IDs, shared native settings storage, capability switches, permission profiles, and native enforcement are retained.
-- Reduced Agent Settings navigation to its four remaining sections: Agent, Project, Skills, and Security.
-- Application discovery now resolves Start Menu `.lnk` files to their executable targets and excludes shortcuts whose targets are missing or invalid.
-- Registry/App Paths values are normalized to executable paths; stale catalog entries are filtered against the current filesystem before being returned.
-- Application launch uses the resolved executable directly with shell execution disabled, validates it still exists, and waits for process startup.
-- A launch is reported as successful only when the matching executable process remains active or the request is handed off to an existing instance. If the process exits without a matching running instance, the result is `launched: false`, `verified: false`, with the exit code and reason.
-- Agent tool instructions now explicitly prohibit claiming that an app opened unless the native result has both `launched: true` and `verified: true`.
+- Added a conditional Agent system instruction requiring fresh System Manager discovery and execution for each new user request. Earlier tool results, process IDs, and assistant claims cannot satisfy a later request.
+- Named-browser URL requests are directed through the selected executable with the URL passed as an argument. The default URL handler is no longer presented as a substitute for launching a named browser.
+- Application search now requires a non-empty query in the model tool schema, browser-side executor, and native bridge. Native results echo the query and describe the discovery sources.
+- Added Windows uninstall registry discovery using registered DisplayIcon executable paths or a matching executable name under InstallLocation, complementing App Paths, Start Menu shortcuts and PATH.
+- Launch verification snapshots pre-existing process IDs. A surviving old process is no longer sufficient to report a successful launch. A launcher exit with an old instance still alive is reported as an unverified handoff; a newly running process is reported separately.
+- Default-handler open results report request acceptance only. They do not claim the target application, visible window, focus, or URL navigation was verified.
+- Retained the dedicated System Manager flyout and all three supported hosts.
 
 ## Static validation
 
-| Check | Result |
-|---|---|
-| JavaScript syntax (`node --check`) for all ChatWindow scripts | Passed |
-| JSON parsing | Passed |
-| XML parsing for project files, XAML, and MSIX manifest | Passed |
-| HTML element ID uniqueness | Passed |
-| Dedicated System Manager flyout exists; old Agent Settings tab references removed | Passed |
-| Existing System Manager control IDs retained | Passed |
-| Version synchronization across all three hosts and MSIX manifest | Passed — 2.5.1 / 2.5.1.0 |
-| Shared `SystemManager.cs` included by all three host projects | Passed |
-| C# lexical delimiter scan for `SystemManager.cs` and `AgentHostBridge.cs` | Passed |
-| ZIP archive integrity | Passed |
-| SHA-256 checksum verification | Passed |
+| Check | Result | Notes |
+|---|---|---|
+| JavaScript syntax | Passed | `node --check` passed for all 17 ChatWindow JavaScript files. |
+| JSON parsing | Passed | All 2 JSON files parsed. |
+| XML parsing | Passed | All 4 project/manifest XML files parsed. |
+| HTML ID uniqueness | Passed | 341 IDs; no duplicates. |
+| Host/package version synchronization | Passed | Standalone, PowerToys Run, Command Palette: 2.5.2; MSIX: 2.5.2.0. |
+| Shared native source inclusion | Passed | `Shared/SystemManager.cs` is included by all three host projects. |
+| C# lexical delimiter scan | Passed | Braces, parentheses and brackets balance in `SystemManager.cs` and `AgentHostBridge.cs`; this is not a compiler check. |
+| Fresh-request policy wiring | Passed | Runtime conditional system instruction and launch tool descriptions are present. |
+| Required application query | Passed | Tool schema, JS executor and native bridge reject empty search queries. |
+| Registry discovery wiring | Passed | Uninstall registry scan validates executable paths before catalog insertion. |
+| Launch result semantics | Passed | Old process survival alone cannot produce `launched=true` / `verified=true`. |
+| Default-handler result semantics | Passed | Native result marks the request accepted but the target open unverified. |
+| ZIP archive integrity | Passed | Final archive passes `unzip -t`. |
+| SHA-256 checksum | Passed | Generated for the final ZIP; companion `.sha256` file included. |
 
 ## Not performed
 
-- No Windows/.NET compilation was performed in this environment (`dotnet`, `csc`, and `mcs` are unavailable).
-- No live Windows UI or application launch tests were performed.
-- The Start Menu COM shortcut resolver, Firefox Developer Edition discovery/launch, Steam single-instance handoff, and all three host flyouts require runtime validation on Windows.
+- No Windows/.NET compilation was performed in this environment; `dotnet`, `csc`, and `mcs` are unavailable.
+- No live Windows launch, URL navigation, process enumeration, registry discovery, or UI-focus tests were performed.
+- Steam discovery and Firefox Developer Edition repeated-launch behavior still require runtime validation on the target Windows machine.
 
-This is a complete source bundle with static validation, not a claim of a compiled binary release. Please build the complete Release x64 solution on Windows and test both installed and missing applications before relying on the new launch verification behavior.
+This is a complete source bundle with static validation, not a compiled or runtime-verified Windows release. Build the complete Release x64 solution on Windows and test the same repeated-prompt cases from the 2.5.0.2/2.5.1 review before relying on the behavior.

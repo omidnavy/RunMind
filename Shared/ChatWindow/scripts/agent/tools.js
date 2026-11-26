@@ -59,7 +59,7 @@
       if (name.startsWith('system_manager_')) {
         if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in the System Manager menu first.');
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
-        if (name === 'system_manager_find_applications') return await callAgentHost('systemManager.apps.list',{query:String(args.query||'')},signal);
+        if (name === 'system_manager_find_applications') { const query = String(args.query || '').trim(); if (!query) throw new Error('A non-empty application name is required. Search for the exact application instead of listing the whole catalog.'); return await callAgentHost('systemManager.apps.list',{query},signal); }
         if (name === 'system_manager_list_adapters') return await callAgentHost('systemManager.adapters.list',{},signal);
         if (name === 'system_manager_install_adapter') return await callAgentHost('systemManager.adapters.save',{adapter:args.adapter||{}},signal);
         if (name === 'system_manager_list_processes') return await callAgentHost('systemManager.process.list',{query:String(args.query||'')},signal);

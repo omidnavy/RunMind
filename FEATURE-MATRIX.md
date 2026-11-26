@@ -1,6 +1,6 @@
-# RunMind 2.5.1 — Feature Matrix
+# RunMind 2.5.2 — Feature Matrix
 
-| Area | Capability | Status in 2.5.1 | Notes |
+| Area | Capability | Status in 2.5.2 | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
@@ -22,9 +22,9 @@
 | System Manager | Optional master switch | Implemented | Disabled by default; shared native settings |
 | System Manager | Group and individual capability switches | Implemented | Applications, processes, diagnostics |
 | System Manager | Permission profiles | Implemented | Restricted/Balanced/Custom; per-action launch/open permission |
-| System Manager | Application discovery | Implemented | Start Menu shortcut targets resolved to existing executables; App Paths + PATH, local cache, on-demand refresh |
-| System Manager | Generic application launch | Implemented | Only discovered existing executables; direct launch plus matching-process verification |
-| System Manager | Open files/folders/HTTPS URLs | Implemented | Native default handlers |
+| System Manager | Application discovery | Implemented | App Paths, uninstall registry, Start Menu shortcuts and PATH; non-empty query required; local cache refreshes on search miss |
+| System Manager | Generic application launch | Implemented | Only discovered existing executables; fresh per-request execution; new-process startup verified; existing-instance handoff explicitly unverified |
+| System Manager | Open files/folders/HTTPS URLs | Implemented | Windows default-handler request accepted; target application/window/focus/navigation are not verified |
 | System Manager | Process inspection | Implemented | Read-only; detail fields individually gated |
 | System Manager | Process termination | Implemented | Disabled by default; mandatory fresh confirmation and identity revalidation |
 | System Manager | OS/environment/service/network diagnostics | Implemented | Individual switches; read-only |
@@ -38,4 +38,14 @@
 
 - System Manager configuration is exposed through its own toolbar flyout.
 - Application discovery resolves Start Menu shortcut targets and filters missing executable paths.
-- Launch success is reported only when the matching process remains active or the request is handed off to an existing instance.
+- Launch success checks whether a matching process remains active.
+
+
+## 2.5.2 changes
+
+| Area | Capability | Status in 2.5.2 | Notes |
+|---|---|---|---|
+| System Manager | Fresh action per user request | Implemented | Runtime instructions prohibit reusing earlier tool results as completion of a new launch request. |
+| System Manager | Installed application discovery | Implemented | Includes App Paths, uninstall registry entries, Start Menu shortcuts and PATH; search query is mandatory. |
+| System Manager | Launch verification | Implemented | New process startup and unverified existing-instance handoff are distinct outcomes. A running process does not prove visible focus. |
+| System Manager | Default-handler open | Implemented | Reports Windows request acceptance without claiming application/window/navigation verification. |

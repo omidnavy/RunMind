@@ -1,8 +1,8 @@
 # RunMind Roadmap
 
-## Current release: 2.5.1 — System Manager Flyout & Verified Application Launch
+## Current release: 2.5.2 — System Manager Action Reliability
 
-This release extends the shared Agent Core with stronger developer workflows, automatic Skill-content recognition and preview-confirmed installation, HTTPS Skill source import, and an optional Windows System Manager. Version 2.5.1 gives System Manager its own toolbar flyout and verifies application process startup. Standalone, PowerToys Run, and PowerToys Command Palette remain supported.
+RunMind 2.5.2 hardens System Manager action semantics: each new user request requires fresh discovery and launch execution, application discovery includes uninstall registry entries, stale process existence is no longer treated as a confirmed handoff, and default-handler opens are explicitly unverified. The dedicated System Manager flyout from 2.5.1 is retained. Standalone, PowerToys Run, and PowerToys Command Palette remain supported.
 
 ### Included in this source bundle
 
@@ -10,8 +10,8 @@ This release extends the shared Agent Core with stronger developer workflows, au
 - Skill installation: existing local folder installer; direct HTTPS `SKILL.md` import; GitHub repository/tree/blob and GitLab tree/blob URLs resolved to raw `SKILL.md`; pasted valid Skill content is detected before normal chat submission and requires preview/confirmation. Global and project scopes are supported for these content-only imports.
 - Skill imports validate frontmatter and size, reject duplicate names, stage global installs, retain source metadata, and never execute scripts. Direct URL imports currently import `SKILL.md` only; additional referenced resource files should be installed through the existing folder installer.
 - System Manager is disabled by default and its Agent tools are withheld unless enabled. Application, process, and diagnostics groups have individual capability switches. The native bridge independently enforces the master/group/capability switches.
-- Application discovery uses a bounded Start Menu and App Paths scan, persisted local catalog with five-minute freshness, and native launch/open operations. Launches must reference a discovered catalog entry. File/folder opening and HTTPS URL opening are supported.
-- Process listing and diagnostics are read-only. Process termination is an individual capability and always requires a native Windows confirmation; the bridge revalidates PID, process name and process start time, checks executable identity when available, and blocks a protected-process list. Application launch/open confirmations are enforced natively according to the selected profile.
+- Application discovery uses App Paths, Windows uninstall registry entries, Start Menu shortcuts and PATH, with a persisted local catalog and refresh on search miss. Searches require a non-empty application name and launches must reference a discovered executable. Named-browser URLs are passed to that browser; default-handler requests are explicitly not treated as verified application launches.
+- Process listing and diagnostics are read-only. Process termination is an individual capability and always requires a native Windows confirmation; the bridge revalidates PID, process name and process start time, checks executable identity when available, and blocks a protected-process list. Application launch/open confirmations are enforced natively according to the selected profile. A new user request requires fresh discovery and launch calls; prior conversation results cannot satisfy it. Existing-instance handoff and default-handler acceptance are reported as unverified.
 - System diagnostics can report OS/runtime data, PATH entries, Windows service status, network adapters, active TCP connections and listeners, depending on enabled capability switches.
 - Added reusable workflows for project test execution, Playwright test-runner checks, API smoke testing, and dependency security audits. These workflows use the existing approved PowerShell/native execution path; they do not silently install dependencies or claim tests ran without confirmed command results.
 

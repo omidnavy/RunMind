@@ -1,3 +1,13 @@
+## [2.5.2] — System Manager Action Reliability (2026-11-17)
+
+- Require a fresh application discovery and launch sequence for every new user request; prior conversation turns and tool results cannot satisfy a new action.
+- Named-browser URL requests are passed as arguments to the selected browser executable instead of being delegated to the Windows default URL handler.
+- Require a non-empty application search query in the tool schema, browser-side executor, and native bridge.
+- Expand discovery to Windows uninstall registry entries and executable candidates in registered install locations, in addition to App Paths, Start Menu shortcuts, and PATH.
+- Stop treating the continued existence of any old process as proof that a new launch request was handed off. Existing-instance handoff is now explicitly unverified.
+- Default-handler opens report request acceptance only; visible application, focus, and navigation are not claimed as verified.
+- Retain the dedicated System Manager flyout introduced in 2.5.1 and all three supported hosts.
+
 ## [2.5.1] — System Manager Flyout & Verified Application Launch (2026-11-17)
 
 - Moved Windows System Manager into its own toolbar flyout, separate from Agent Settings.

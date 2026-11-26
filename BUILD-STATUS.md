@@ -1,4 +1,4 @@
-# RunMind 2.5.1 — System Manager Flyout & Verified Application Launch
+# RunMind 2.5.2 — System Manager Action Reliability
 
 ## Release bundle status
 
@@ -7,7 +7,7 @@
 - Added developer workflows for project builds/tests, static analysis/lint, Playwright test-runner checks, API smoke tests, and dependency security audits. They use existing native execution tools and require explicit per-command approval.
 - Extended Skills Manager with direct HTTPS `SKILL.md` imports, GitHub/GitLab repository-folder URL resolution, pasted Skill-content detection, preview/confirmation, Global/Project scope, frontmatter validation, duplicate protection, and source metadata. Scripts are never executed.
 - Added optional Windows System Manager, disabled by default, with shared native settings, group/individual switches, application discovery/catalog, generic launch/open operations, declarative application adapters, process inspection/termination, and read-only system diagnostics.
-- Added `Shared/SystemManager.cs` to all three host projects and synchronized project/package metadata to 2.5.1 / 2.5.1.0.
+- Added `Shared/SystemManager.cs` to all three host projects and synchronized project/package metadata to 2.5.2 / 2.5.2.0.
 
 ## Validation performed in this environment
 
@@ -29,3 +29,13 @@ See `VALIDATION-REPORT.md` for exact checks and limitations. JavaScript syntax, 
 - Application discovery resolves Start Menu shortcut targets and filters missing executables.
 - Application launch now uses direct executable startup and checks for a matching running process before returning success.
 - Windows/.NET build and live application-launch behavior still require validation on a Windows target.
+
+
+## 2.5.2 update
+
+- Added a conditional Agent system instruction requiring fresh System Manager discovery and launch for every new user request; prior conversation results cannot satisfy a new action.
+- Named-browser URL requests are directed through the selected executable with the URL as an argument, not through the Windows default URL handler.
+- Application search requires a non-empty query at the tool schema, JavaScript executor, and native bridge boundaries.
+- Discovery now includes Windows uninstall registry entries and executable candidates under registered install locations, improving coverage for apps such as Steam.
+- Existing process PIDs are snapshotted before launch. A surviving old PID alone is no longer treated as a verified launch; launcher exit/handoff and process-running states are reported separately.
+- Default-handler opens report request acceptance only; they do not claim an application, visible window, focus, or navigation was verified.

@@ -124,7 +124,7 @@ public sealed partial class AgentHostBridge : IDisposable
             "permissions.get" => Task.FromResult(ReadPermissionPolicy()),
             "systemManager.settings.get" => Task.FromResult(SystemManagerSettingsGet()),
             "systemManager.settings.save" => Task.FromResult(SystemManagerSettingsSave(args)),
-            "systemManager.apps.list" => Task.FromResult(SystemManagerListApplications(ReadString(args, "query", 120))),
+            "systemManager.apps.list" => Task.FromResult(SystemManagerListApplications(RequireSystemManagerSearchQuery(args))),
             "systemManager.adapters.list" => Task.FromResult(SystemManagerListAdapters()),
             "systemManager.adapters.save" => Task.FromResult(SystemManagerSaveAdapter(args)),
             "systemManager.adapters.launch" => Task.FromResult(SystemManagerLaunchAdapter(args)),
@@ -158,6 +158,13 @@ public sealed partial class AgentHostBridge : IDisposable
             && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
             && uri.IsDefaultPort && string.IsNullOrEmpty(uri.UserInfo)
             && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string RequireSystemManagerSearchQuery(JsonElement args)
+    {
+        var query = ReadString(args, "query", 120);
+        if (query.Length == 0) throw new InvalidDataException("A non-empty application search query is required. Search for the application by name; an empty query does not enumerate the catalog.");
+        return query;
     }
 
     private static string ReadString(JsonElement value, string name, int maximum)

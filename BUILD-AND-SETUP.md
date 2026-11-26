@@ -1,4 +1,4 @@
-# RunMind 2.5.1 — Build and setup
+# RunMind 2.5.2 — Build and setup
 
 This guide covers the current full-source release and retains explicitly labeled historical notes where useful.
 

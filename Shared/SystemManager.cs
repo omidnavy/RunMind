@@ -255,6 +255,44 @@ public sealed partial class AgentHostBridge
             catch { }
             if (rows.Count >= 1000) break;
         }
+        // Uninstall registration is a useful source for desktop applications that do not
+        // register App Paths or expose a Start Menu shortcut (Steam is a common example).
+        foreach (var hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                using var uninstall = baseKey.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall");
+                if (uninstall is null) continue;
+                foreach (var entryName in uninstall.GetSubKeyNames().Take(1500))
+                {
+                    try
+                    {
+                        using var entry = uninstall.OpenSubKey(entryName);
+                        var displayName = entry?.GetValue("DisplayName") as string;
+                        if (string.IsNullOrWhiteSpace(displayName)) continue;
+                        var displayIcon = entry?.GetValue("DisplayIcon") as string;
+                        var hasExecutableIcon = !string.IsNullOrWhiteSpace(displayIcon) && TryResolveApplicationExecutable(displayIcon, out _);
+                        if (hasExecutableIcon) Add(displayName, displayIcon!, "Installed application registry");
+                        var installLocation = Environment.ExpandEnvironmentVariables((entry?.GetValue("InstallLocation") as string ?? string.Empty).Trim().Trim('"'));
+                        if (!hasExecutableIcon && !string.IsNullOrWhiteSpace(installLocation) && Directory.Exists(installLocation) && !IsReparsePoint(installLocation))
+                        {
+                            var executableName = new string(displayName.Where(character => !Path.GetInvalidFileNameChars().Contains(character)).ToArray()).Trim();
+                            if (executableName.Length > 0)
+                            {
+                                var executable = Path.Combine(installLocation, executableName + ".exe");
+                                if (File.Exists(executable) && !IsReparsePoint(executable)) Add(displayName, executable, "Installed application registry");
+                            }
+                        }
+                    }
+                    catch { }
+                    if (rows.Count >= 1000) break;
+                }
+            }
+            catch { }
+            if (rows.Count >= 1000) break;
+        }
         foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), Environment.GetFolderPath(Environment.SpecialFolder.StartMenu) }.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var pending = new Stack<(string path, int depth)>(); pending.Push((root, 0)); var seen = 0;
@@ -288,7 +326,7 @@ public sealed partial class AgentHostBridge
         {
             return SystemManagerListApplications(query, forceRefresh: true);
         }
-        return new { applications = matches, count = matches.Count, catalog = "persistent local catalog with five-minute freshness and on-demand refresh", note = "Start Menu shortcuts are resolved to their executable targets; missing or invalid targets are excluded from discovery." };
+        return new { query = query.Trim(), applications = matches, count = matches.Count, catalog = "persistent local catalog with five-minute freshness and refresh on search miss", note = "Results are filtered against the exact search query. Discovery includes App Paths, installed-application registry entries, Start Menu shortcuts and PATH; missing or invalid executable targets are excluded." };
     }
 
     private sealed record SystemApplicationAdapter(string id, string displayName, string match, Dictionary<string, string[]> operations, bool builtIn);
@@ -460,22 +498,28 @@ public sealed partial class AgentHostBridge
             : "(none)";
         if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Launch application", $"Application: {Path.GetFileNameWithoutExtension(path)}\nPath: {path}\nArguments:\n{argumentPreview}")) return new { launched = false, cancelled = true, reason = "user-declined" };
 
-        var existingProcesses = FindRunningProcessesForExecutable(path);
+        // Capture the exact pre-existing PIDs. Their continued existence alone is not
+        // proof that this launch request was delivered to the running application.
+        var existingProcesses = FindRunningProcessesForExecutable(path).ToHashSet();
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows did not return a process for the application launch.");
         var processId = process.Id;
-        try { process.WaitForExit(1400); } catch { }
+        try { process.WaitForExit(1800); } catch { }
         process.Refresh();
         if (!process.HasExited)
-            return new { launched = true, verified = true, processId, alreadyRunning = false, application = Path.GetFileNameWithoutExtension(path), path, note = "The executable process is still running." };
+            return new { launched = true, verified = true, processRunning = true, handoffAccepted = false, processId, alreadyRunning = false, application = Path.GetFileNameWithoutExtension(path), path,
+                note = "A newly started process for the selected executable is still running. This verifies process startup, not that a visible window received focus." };
 
+        var exitCode = process.ExitCode;
         var matchingProcesses = FindRunningProcessesForExecutable(path);
-        var existingInstance = matchingProcesses.FirstOrDefault(id => id != processId);
-        if (existingInstance != 0 || existingProcesses.Any(id => matchingProcesses.Contains(id)))
-            return new { launched = true, verified = true, processId = existingInstance != 0 ? existingInstance : matchingProcesses.First(), alreadyRunning = true, application = Path.GetFileNameWithoutExtension(path), path, note = "The launch request was handed to an existing application instance." };
+        var survivingPriorInstance = matchingProcesses.FirstOrDefault(id => existingProcesses.Contains(id));
+        if (survivingPriorInstance != 0 && exitCode == 0)
+            return new { launched = false, verified = false, processRunning = true, handoffAccepted = true, processId = survivingPriorInstance, alreadyRunning = true, application = Path.GetFileNameWithoutExtension(path), path,
+                reason = "existing-instance-handoff-unverified", exitCode,
+                message = "The launcher exited successfully and a pre-existing instance is still running. Windows/application handoff is plausible, but RunMind cannot verify that the requested URL or action reached that instance. Do not report the requested navigation or focus as confirmed." };
 
-        return new { launched = false, verified = false, processId, application = Path.GetFileNameWithoutExtension(path), path,
-            reason = "process-exited", exitCode = process.ExitCode,
-            message = "The executable started but exited before a matching application process could be verified. RunMind is not reporting this as a successful launch." };
+        return new { launched = false, verified = false, processRunning = matchingProcesses.Count > 0, handoffAccepted = false, processId, application = Path.GetFileNameWithoutExtension(path), path,
+            reason = "process-exited", exitCode,
+            message = "The launch process exited before a new running process or a confirmed handoff could be verified. RunMind is not reporting this as a successful launch." };
     }
 
     private static object SystemManagerOpenTarget(JsonElement args)
@@ -487,14 +531,16 @@ public sealed partial class AgentHostBridge
         {
             if (!ConfirmSystemManagerAction("openTargets", "RunMind · Open URL", uri.AbsoluteUri)) return new { opened = false, cancelled = true, reason = "user-declined" };
             Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
-            return new { opened = true, type = "url", target = uri.AbsoluteUri };
+            return new { requestAccepted = true, opened = false, verified = false, type = "url", target = uri.AbsoluteUri,
+                note = "Windows accepted the default-handler request. The target application, visible window, focus and navigation are not verified. Use the application-specific launch tool when the user named an application." };
         }
         if (!Path.IsPathFullyQualified(target)) throw new InvalidDataException("File and folder targets must be fully qualified paths.");
         EnsureNoReparseAncestors(target);
         if (!File.Exists(target) && !Directory.Exists(target)) throw new FileNotFoundException("The requested file or folder does not exist.");
         if (!ConfirmSystemManagerAction("openTargets", "RunMind · Open file or folder", target)) return new { opened = false, cancelled = true, reason = "user-declined" };
         Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
-        return new { opened = true, type = Directory.Exists(target) ? "folder" : "file", target };
+        return new { requestAccepted = true, opened = false, verified = false, type = Directory.Exists(target) ? "folder" : "file", target,
+            note = "Windows accepted the default-handler request. The target application's visible window and focus are not verified." };
     }
 
     private static object SystemManagerListProcesses(string query)

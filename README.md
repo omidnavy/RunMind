@@ -328,6 +328,6 @@ Standalone and PowerToys use separate WebView2 profiles. Their chat settings, cr
 RunMind for Command Palette includes an About section in its extension settings. Website: [https://omid.navy](https://omid.navy).
 
 
-### System Manager (2.5.1)
+### System Manager (2.5.2)
 
 Windows System Manager now has a dedicated toolbar flyout, separate from Agent Settings. Application discovery resolves Start Menu shortcuts and filters missing targets. Launch requests are verified against a matching running process; short-lived launches that cannot be verified are reported as failures.
