@@ -40,3 +40,20 @@ The shared Agent Core exposes `development_server_manage` through the existing n
 ## Validation
 
 Portable tests assert native dispatch, all-host shared-source presence, tool schema, project-script validation, fresh approvals, loopback-only health checks, port-conflict handling, bounded multi-server/log behavior, and ownership-only termination. These checks do not replace Windows C# compilation or live process lifecycle testing.
+
+
+## Windows runtime test walkthrough
+
+A dependency-free fixture is included at `test-fixtures/development-server`. Select the repository root as the native workspace; pass `test-fixtures/development-server` as `working_directory`.
+
+1. **Discover:** ask the Agent to call `development_server_manage` with `{ action: "discover", working_directory: "test-fixtures/development-server" }`. Confirm `dev`, `dev-alt`, and `fail` are listed and `dev` is suggested.
+2. **Start and readiness:** call `start` with `script: "dev"`, `port: 4317`, `readiness_url: "http://127.0.0.1:4317/health"`, and `readiness_timeout_seconds: 15`. Approve the displayed npm script. Confirm `state: running` and `ready: true`.
+3. **HTTP check:** open `http://127.0.0.1:4317/health` in a browser, or ask the Agent to call `health` with the returned `server_id`. Expect HTTP 200 and `status: ok`.
+4. **Logs:** call `logs` with that `server_id`. Confirm the listening message appears and the fake `token` value is redacted.
+5. **Multiple servers:** start `dev-alt` on port 4318 with readiness URL `http://127.0.0.1:4318/health`. Call `list`; confirm both sessions appear.
+6. **Startup failure:** call `start` with `script: "fail"` and no port/readiness URL. Confirm it reports `state: exited`, `startup_failure: true`, and exit code 17.
+7. **Port conflict safety:** in a separate PowerShell window, run `node .\test-fixtures\development-server\server.cjs 4317` from the repository root. Attempt another RunMind start of `dev` on port 4317. Confirm RunMind reports the port is occupied and does not stop the manually launched server. Stop the manual server with Ctrl+C.
+8. **Approved cleanup:** call `stop` for each RunMind-owned running `server_id`. Read the approval prompt and approve. Confirm `list` shows the sessions exited and both local URLs stop responding.
+9. **Ownership check:** start an external fixture server manually and verify it cannot be stopped using a RunMind session ID; only IDs returned from a RunMind `start` call are eligible.
+
+Use the same test sequence independently in Standalone, PowerToys Run, and Command Palette. Server session ownership is per host process, so stop sessions in the same host that started them. Do not close a host while its test servers are running; sessions are not adopted after restart.

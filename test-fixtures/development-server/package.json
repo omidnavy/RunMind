@@ -1,0 +1,10 @@
+{
+  "name": "runmind-development-server-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node server.cjs 4317",
+    "dev-alt": "node server.cjs 4318",
+    "fail": "node fail.cjs"
+  }
+}
