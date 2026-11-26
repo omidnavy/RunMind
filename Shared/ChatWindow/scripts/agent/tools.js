@@ -80,7 +80,7 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_diagnostics']);
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'node_debugger_list_sessions', 'node_debugger_events', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_diagnostics']);
       if (name.startsWith('system_manager_')) {
         if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in the System Manager menu first.');
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
@@ -135,6 +135,47 @@
         git_stage: ['stage','gitWrite'], git_unstage: ['unstage','gitWrite'], git_commit: ['commit','gitWrite'], git_create_branch: ['create_branch','gitWrite'], git_switch_branch: ['switch_branch','gitWrite'], git_merge: ['merge','gitWrite'], git_revert: ['revert','gitWrite'], git_cherry_pick: ['cherry_pick','gitWrite'], git_stash: ['stash','gitWrite'],
         git_fetch: ['fetch','gitRemote'], git_pull: ['pull','gitRemote'], git_push: ['push','gitRemote'], git_reset_hard: ['reset_hard','gitDestructive'], git_clean: ['clean','gitDestructive'], git_restore: ['restore','gitDestructive'], git_delete_branch: ['delete_branch','gitDestructive']
       };
+      const debuggerTools = new Set(['node_debugger_launch','node_debugger_attach','node_debugger_list_sessions','node_debugger_command','node_debugger_events','node_debugger_stop']);
+      if (debuggerTools.has(name) && (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth))
+        throw new Error('Node.js debugger access is disabled in Deep Research and delegated sub-agent tasks. Use the primary Agent session with explicit approval.');
+      if (name === 'node_debugger_launch') {
+        const scriptPath = String(args.script_path || '').trim();
+        if (!scriptPath || scriptPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(scriptPath)) throw new Error('Provide a workspace-relative script_path.');
+        const commandArguments = Array.isArray(args.arguments) ? args.arguments.map(value => String(value)) : [];
+        const workingDirectory = String(args.working_directory || '').trim();
+        const approved = await requireAgentApproval({ title: 'Launch this Node.js script under the debugger?', subtitle: 'Node Inspector · current Windows user permissions', detail: `Script: ${scriptPath}\nArguments: ${JSON.stringify(commandArguments)}\nWorking directory: ${workingDirectory || '(workspace root)'}\n\nRunMind starts Node.js with --inspect-brk bound only to 127.0.0.1. The debugger can inspect application state and evaluate expressions; evaluation requires a separate approval. The script runs with your Windows account permissions and is not sandboxed.`, risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true, message: 'Node.js debug launch was declined.' };
+        return await callAgentHost('debugger.launch', { script_path: scriptPath, arguments: commandArguments, working_directory: workingDirectory, contextId: workspaceContext.id }, signal, 45000);
+      }
+      if (name === 'node_debugger_attach') {
+        const port = Number(args.port);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Provide a valid local Node Inspector port.');
+        const approved = await requireAgentApproval({ title: 'Attach to this local Node.js debugger?', subtitle: 'Node Inspector · loopback only', detail: `Inspector port: 127.0.0.1:${port}\n\nAttaching grants RunMind access to pause execution, inspect application state, and evaluate expressions. Evaluation requires a separate approval. RunMind refuses non-loopback Inspector endpoints.`, risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true, message: 'Node.js debugger attachment was declined.' };
+        return await callAgentHost('debugger.attach', { port, working_directory: '', contextId: workspaceContext.id }, signal, 20000);
+      }
+      if (name === 'node_debugger_list_sessions') return await callAgentHost('debugger.sessions.list', {}, signal);
+      if (name === 'node_debugger_events') return await callAgentHost('debugger.sessions.events', { session_id: String(args.session_id || ''), maximum: args.maximum }, signal);
+      if (name === 'node_debugger_command') {
+        const action = String(args.action || '').toLowerCase();
+        const allowed = ['pause','resume','step_over','step_into','step_out','pause_on_exceptions','set_breakpoint','remove_breakpoint','stack','inspect_scope','evaluate','scripts'];
+        if (!allowed.includes(action)) throw new Error(`Unsupported debugger action. Allowed: ${allowed.join(', ')}.`);
+        if (action === 'evaluate') {
+          const expression = String(args.expression || '').trim();
+          if (!expression || expression.length > 8192) throw new Error('Provide a non-empty expression no longer than 8 KB.');
+          const approved = await requireAgentApproval({ title: 'Evaluate an expression in the paused Node.js process?', subtitle: 'Node Inspector · executes in the target process', detail: `Expression:\n${expression}\n\nV8 side-effect checks are enabled, but debugger evaluation is powerful and may access application state.`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, message: 'Debugger expression evaluation was declined.' };
+        }
+        return await callAgentHost('debugger.sessions.command', { session_id: String(args.session_id || ''), action, path: String(args.path || ''), line: args.line, column: args.column, breakpoint_id: String(args.breakpoint_id || ''), object_id: String(args.object_id || ''), expression: String(args.expression || ''), call_frame_id: String(args.call_frame_id || ''), exception_state: String(args.exception_state || ''), contextId: workspaceContext.id }, signal, 20000);
+      }
+      if (name === 'node_debugger_stop') {
+        const terminate = args.terminate_process === true;
+        if (terminate) {
+          const approved = await requireAgentApproval({ title: 'Terminate the Node.js debug process?', subtitle: 'Process termination · process started by RunMind only', detail: `Session: ${String(args.session_id || '')}\n\nRunMind will terminate the process tree only if it originally launched that process. Attached external processes can only be detached.`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, message: 'Node.js process termination was declined.' };
+        }
+        return await callAgentHost('debugger.sessions.stop', { session_id: String(args.session_id || ''), terminate_process: terminate }, signal, 10000);
+      }
       if (['select_native_workspace','powershell_execute','run_native_command'].includes(name) && (deepResearchEnabled || taskContext?.deepResearch))
         throw new Error('Native process execution is disabled in Deep Research and delegated sub-agent tasks. Use Agent Mode for explicitly approved local execution.');
       if (name === 'select_native_workspace') {

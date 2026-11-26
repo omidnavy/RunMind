@@ -153,6 +153,12 @@ public sealed partial class AgentHostBridge : IDisposable
             "process.selectWorkspace" => Task.FromResult(SelectProcessWorkspace(ReadString(args, "contextId", 64))),
             "process.powershell" => RunPowerShellAsync(args, cancellationToken),
             "process.run" => RunNativeProcessAsync(args, cancellationToken),
+            "debugger.launch" => NodeDebuggerLaunchAsync(args, cancellationToken),
+            "debugger.attach" => NodeDebuggerAttachAsync(args, cancellationToken),
+            "debugger.sessions.list" => Task.FromResult(NodeDebuggerListSessions()),
+            "debugger.sessions.events" => Task.FromResult(NodeDebuggerReadEvents(args)),
+            "debugger.sessions.command" => NodeDebuggerCommandAsync(args, cancellationToken),
+            "debugger.sessions.stop" => NodeDebuggerStopAsync(args),
             "git.run" => RunGitAsync(args, cancellationToken),
             "git.clone" => CloneRepositoryAsync(args, cancellationToken, progress),
             "download.file" => DownloadFileAsync(args, cancellationToken, (bytes, total) => progress(bytes, total, null)),
@@ -1431,5 +1437,6 @@ public sealed partial class AgentHostBridge : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         foreach (var request in _requests.Values) { try { request.Cancel(); } catch (ObjectDisposedException) { } }
         _requests.Clear();
+        StopNodeDebuggerSessions();
     }
 }

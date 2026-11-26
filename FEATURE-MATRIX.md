@@ -1,4 +1,4 @@
-# RunMind 2.6.3 — Feature Matrix (Phase 1 completion candidate; Windows validation pending)
+# RunMind 2.6.3 — Feature Matrix (Phase 1 baseline + Phase 2 development; Windows host validation required)
 
 | Area | Capability | Status in current 2.6.3 working bundle | Notes |
 |---|---|---|---|
@@ -44,6 +44,23 @@
 | Security | Skill scripts auto-execution | Not allowed | Never executed by installer |
 | Security | Native process execution | Approval required | Runs as current Windows user; not sandboxed |
 
+
+## Phase 2 — Debugging & Quality (initial increment)
+
+| Area | Capability | Status | Notes |
+|---|---|---|---|
+| Debugger | Shared Node Inspector launch | Implemented with limits | Workspace-relative `.js`/`.mjs`/`.cjs`; `--inspect-brk` on IPv4 loopback; fresh approval; current-user execution, not sandboxed |
+| Debugger | Attach to Node Inspector | Implemented with limits | Loopback-only target discovery; verifies `type: node`; attach does not release `--inspect-brk` until explicit Resume |
+| Debugger | Execution control | Implemented | Pause, resume, step over/into/out, and pause-on-exception modes |
+| Debugger | Breakpoints | Implemented with limits | Workspace-relative URL breakpoints and removal; source maps / generated-source mapping not included |
+| Debugger | Stack and scope inspection | Implemented with limits | Paused call-frame snapshots and bounded Runtime property inspection |
+| Debugger | Expression evaluation | Implemented with limits | Separate fresh approval; V8 side-effect check; not a sandbox |
+| Debugger | Events and process output | Implemented with limits | Exceptions, console, script and pause events; bounded 256 events, 64 KB stdout/stderr each |
+| Debugger | Multiple sessions | Implemented with limits | Maximum eight sessions per host; attached processes are never terminated by RunMind |
+| Runtime quality | CPU/heap profiling and leak analysis | Not yet implemented | Planned next increment |
+| Browser quality | Playwright browser automation | Not yet implemented | Planned after runtime profiling |
+| API quality | Dedicated HTTP/API test client | Not yet implemented | Planned after browser automation |
+| Development servers | Start/readiness/log/health/stop lifecycle | Not yet implemented | Planned after API testing |
 
 ## 2.6.1 changes
 

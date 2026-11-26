@@ -1,3 +1,22 @@
+# RunMind Changelog
+
+## Unreleased — Phase 2 Native Node.js Debugger foundation (2026-11-21)
+
+- Add a shared native Node Inspector bridge used by Standalone, PowerToys Run, and PowerToys Command Palette through the existing Agent Core; no separate debugger agent or additional NuGet dependency.
+- Add approved launch of workspace-relative `.js`, `.mjs`, and `.cjs` entry points using `node.exe --inspect-brk=127.0.0.1:0`; process arguments use `ProcessStartInfo.ArgumentList`, the target runs as the current Windows user, and a native workspace must be selected.
+- Add approved attach to Node Inspector endpoints discovered over `127.0.0.1` only. The discovered target must identify as `node`, and the returned WebSocket URL must use a loopback IP and the requested port.
+- Add pause/resume, step over/into/out, exception pause modes, URL breakpoints, breakpoint removal, paused call-frame snapshots, scope property inspection, loaded script metadata, and bounded event/stdout/stderr capture.
+- Require a separate fresh approval for expression evaluation; use `Debugger.evaluateOnCallFrame` with `returnByValue`, `awaitPromise: false`, and V8 `throwOnSideEffect`. This is a guardrail, not a sandbox.
+- Restrict the debugger to eight concurrent sessions per host, bounded event/output/message buffers, local Inspector connections, and a fixed CDP method allowlist. Deep Research and delegated sub-agent contexts cannot invoke the debugger tools.
+- Add lifecycle safeguards: detaching an attached external process never terminates it; RunMind can terminate only a process it launched, with a separate approval; paused sessions cannot be silently detached; host disposal cleans up RunMind-launched child processes. Attaching to `--inspect-brk` does not release its startup pause until the user explicitly resumes.
+- Capture child output using bounded chunk reads rather than line-based reads, preventing unbounded buffering from very long output lines.
+- Add a real Node Inspector integration test covering break-on-start, URL breakpoint, paused local evaluation, resume, detach, and attach/pause/resume against an already-running Node process.
+
+### Phase 2 status
+- Implemented in this increment: Native Node.js Debugger foundation.
+- Not yet implemented: CPU/heap profiling, Playwright browser automation, dedicated API/backend testing, and development-server lifecycle management.
+- Validation available here: Node.js integration and source-contract tests. C# compilation and runtime validation for all three Windows hosts must still be run on Windows.
+
 
 ## 2.6.3 Windows build correction
 

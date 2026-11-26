@@ -8,13 +8,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$reportDirectory = Join-Path $root 'artifacts\phase1-validation'
+$reportDirectory = Join-Path $root 'artifacts\windows-validation'
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
 $logPath = Join-Path $reportDirectory ("validation-{0}-{1}.log" -f $Configuration, $Platform)
 Start-Transcript -Path $logPath -Force | Out-Null
 
 try {
-    Write-Host '=== RunMind Phase 1 Windows validation ===' -ForegroundColor Cyan
+    Write-Host '=== RunMind full Windows validation ===' -ForegroundColor Cyan
     Write-Host "Configuration: $Configuration | Platform: $Platform"
     Push-Location $root
     try {
@@ -23,7 +23,7 @@ try {
         node --version
         dotnet --info
 
-        Write-Host '--- Node integration and contract tests ---' -ForegroundColor Cyan
+        Write-Host '--- All Node integration and contract tests (Phase 1 + current Phase 2) ---' -ForegroundColor Cyan
         node --test (Get-ChildItem (Join-Path $root 'tests') -Filter '*.test.cjs' | ForEach-Object { $_.FullName })
         if ($LASTEXITCODE -ne 0) { throw "Node tests failed with exit code $LASTEXITCODE." }
 
