@@ -806,8 +806,61 @@
         const result=await callAgentHost('systemManager.settings.save',{settings});
         systemManagerSettingsCache=result?.settings || settings;
         rebuildActiveToolDefinitions(deepResearchEnabled); renderSystemManagerSettings();
+        await loadSystemManagerAdapters();
         showToast('System Manager settings saved.');
       } catch(error) { showToast(`Could not save System Manager settings: ${error?.message || error}`); await loadSystemManagerSettings(); }
+    }
+    async function loadSystemManagerAdapters() {
+      const list = document.getElementById('systemManagerAdapterList');
+      const status = document.getElementById('systemManagerAdapterStatus');
+      if (!list) return;
+      list.textContent = 'Loading adapters…';
+      try {
+        const result = await callAgentHost('systemManager.adapters.list', {});
+        const adapters = Array.isArray(result?.adapters) ? result.adapters : [];
+        list.replaceChildren();
+        if (!adapters.length) {
+          const empty = document.createElement('p'); empty.className = 'setting-note'; empty.textContent = 'No adapters are registered.'; list.append(empty);
+        }
+        for (const adapter of adapters) {
+          const row = document.createElement('div'); row.className = 'capability-row system-manager-adapter-row';
+          const copy = document.createElement('div'); copy.className = 'capability-copy';
+          const title = document.createElement('strong'); title.textContent = adapter.displayName || adapter.id;
+          const detail = document.createElement('span'); detail.textContent = `${adapter.builtIn ? 'Built-in' : 'Custom'} · matches ${adapter.match} · ${(adapter.operations || []).join(', ')}`;
+          copy.append(title, detail); row.append(copy);
+          if (!adapter.builtIn) {
+            const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'setting-reset'; remove.textContent = 'Remove'; remove.dataset.adapterRemove = adapter.id; row.append(remove);
+          }
+          list.append(row);
+        }
+        if (status) status.textContent = `${adapters.length} adapter(s) · custom manifests: ${result?.customAdapterDirectory || 'local System Manager directory'}`;
+      } catch (error) {
+        list.textContent = `Adapter management unavailable: ${error?.message || error}`;
+        if (status) status.textContent = 'Enable System Manager, Application Management, and application launch permission.';
+      }
+    }
+    async function installSystemManagerAdapterFromUi() {
+      const input = document.getElementById('systemManagerAdapterManifest');
+      const status = document.getElementById('systemManagerAdapterStatus');
+      if (!input) return;
+      let adapter;
+      try { adapter = JSON.parse(input.value); } catch (error) { if (status) status.textContent = `Invalid JSON: ${error.message}`; return; }
+      if (!adapter || typeof adapter !== 'object' || Array.isArray(adapter)) { if (status) status.textContent = 'The manifest must be a JSON object.'; return; }
+      try {
+        const result = await callAgentHost('systemManager.adapters.save', { adapter });
+        if (result?.installed) { input.value = ''; if (status) status.textContent = `Installed ${result.displayName}.`; await loadSystemManagerAdapters(); }
+        else if (result?.cancelled) { if (status) status.textContent = 'Installation cancelled.'; }
+        else if (status) status.textContent = 'The adapter was not installed.';
+      } catch (error) { if (status) status.textContent = `Could not install adapter: ${error?.message || error}`; }
+    }
+    async function removeSystemManagerAdapterFromUi(adapterId) {
+      const status = document.getElementById('systemManagerAdapterStatus');
+      try {
+        const result = await callAgentHost('systemManager.adapters.remove', { adapterId });
+        if (result?.removed) { if (status) status.textContent = `Removed ${result.displayName}.`; await loadSystemManagerAdapters(); }
+        else if (result?.cancelled) { if (status) status.textContent = 'Removal cancelled.'; }
+        else if (status) status.textContent = `Adapter '${adapterId}' was not found.`;
+      } catch (error) { if (status) status.textContent = `Could not remove adapter: ${error?.message || error}`; }
     }
     async function loadSharedPermissionPolicy() {
       try {

@@ -478,6 +478,12 @@
     for (const id of ['systemManagerEnabled','systemManagerProfile','systemManagerLaunchPermission','systemManagerOpenPermission','systemManagerGroupApplications','systemManagerGroupProcesses','systemManagerGroupDiagnostics','systemManagerDiscoverApplications','systemManagerLaunchApplications','systemManagerOpenTargets','systemManagerListProcesses','systemManagerInspectProcesses','systemManagerTerminateProcesses','systemManagerSystemInformation','systemManagerEnvironmentInformation','systemManagerServiceInformation','systemManagerNetworkInformation']) {
       document.getElementById(id)?.addEventListener('change', () => { void saveSystemManagerSettingsFromUi(); });
     }
+    $('#refreshSystemManagerAdapters')?.addEventListener('click', () => { void loadSystemManagerAdapters(); });
+    $('#installSystemManagerAdapter')?.addEventListener('click', () => { void installSystemManagerAdapterFromUi(); });
+    $('#systemManagerAdapterList')?.addEventListener('click', event => {
+      const button = event.target.closest('button[data-adapter-remove]');
+      if (button) void removeSystemManagerAdapterFromUi(button.dataset.adapterRemove);
+    });
     $('#refreshAgentSkills').addEventListener('click', () => { void refreshAgentSkillManager(); });
     $('#installAgentSkill').addEventListener('click', () => { void installManagedAgentSkill(); });
     $('#installAgentSkillUrl').addEventListener('click', () => { void installAgentSkillFromUrl(); });
@@ -589,6 +595,7 @@
       void workspaceRestorePromise.then(async () => { await refreshAgentSkillManager(); await refreshProjectIndexStatus(); await refreshDeveloperWorkflowList(); });
       void loadSharedPermissionPolicy();
       void loadSystemManagerSettings();
+      void loadSystemManagerAdapters();
       renderAgentTaskHistory();
       setAgentMode(false);
       try {

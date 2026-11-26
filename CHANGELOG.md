@@ -1,8 +1,28 @@
+## [2.6.1] — System Manager UI & Model Compatibility (2026-11-18)
+
+### Reliability and compatibility
+- Keep all System Manager policy in the single leading Agent system message. This avoids model chat templates rejecting a second system message while preserving the same action policy.
+- Normalize native application launch outcomes so process startup, foreground activation, new-window requests, existing-instance handoff and navigation verification are reported independently.
+- Explicitly report that a started process does not prove a visible window or completed URL navigation.
+
+### Application adapters
+- Add an Application Adapters manager to the System Manager flyout. It lists built-in/custom adapters, supports refreshing, and provides a JSON manifest installer with native confirmation.
+- Add removal of custom adapter manifests with native confirmation; built-in adapters cannot be removed.
+- Add a first-party RunMind adapter that starts RunMind with a supplied Agent prompt using its existing `--prompt` startup argument. It uses the normal discovered-application and native launch/permission path; it does not create another Agent runtime or bypass approvals.
+- Add the built-in-only `send-prompt` operation for the RunMind adapter; custom adapters remain limited to `open-file`, `open-folder`, and `open-url`. Argument templates remain the only supported execution mechanism.
+
+### UI
+- Correct checkbox styling so checkbox/radio inputs are excluded from full-width text-input rules, including the LM Studio native metadata option.
+
+### Preserved boundaries
+- Keep generic application discovery and all existing adapters. No model-specific or example-application special cases are added.
+- Keep System Manager optional, native confirmation/permission checks, and the no-shell/no-script adapter model.
+
 ## [2.6.0] — System Manager & Agent Reliability (2026-11-17)
 
 ### Application intelligence and lifecycle
 - Replace exact-substring-only discovery with ranked matching across normalized names, executable names, aliases, registered and common install locations, Start Menu shortcuts, App Paths, PATH and packaged Windows Apps.
-- Add bounded Windows Apps folder discovery for packaged applications such as Calculator; packaged activation is explicitly reported as requested, not as a verified visible window or completed action.
+- Add bounded Windows Apps folder discovery for packaged applications; packaged activation is explicitly reported as requested, not as a verified visible window or completed action.
 - Rebuild the local application index when stale or when a search misses; validate candidate executables again before launch.
 - Return stable application IDs and ranked match reasons instead of asking the model to echo executable paths back to native code.
 - Default to reuse-and-activate for already-running desktop applications. If foreground activation cannot be verified, do not silently create a duplicate process.

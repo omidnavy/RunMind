@@ -1,4 +1,4 @@
-# RunMind 2.6.0 — Build and setup
+# RunMind 2.6.1 — Build and setup
 
 This guide covers the current full-source release and retains explicitly labeled historical notes where useful.
 
@@ -29,7 +29,7 @@ The shared ChatWindow runtime separates its workspace and conversation IndexedDB
 This ZIP is a full source-project snapshot, not a changed-files-only overlay. It includes the application projects, shared sources, brand assets, PowerToys reference assemblies under `lib\x64`, screenshots, build/package/install scripts, and documentation. The generated PDF/OCR runtime resources are intentionally not prebundled: `Prepare-RunMind-OCR.ps1` downloads the pinned package versions and language models into `Vendor` and `OCR\tessdata` during the release build. The integration currently targets Windows x64. `Build-Release-x64.bat` is the single release entry point: it restores the solution including the `win-x64` runtime pack, cleans and builds Standalone, the PowerToys Run plugin, and the Command Palette extension, then creates and signs the Command Palette MSIX. It opts out of .NET CLI telemetry for all `dotnet` processes started by the script and suppresses first-run/logo output. It does not install any application. `Install-RunMind-CommandPalette.bat` trusts the public signing certificate when needed, installs the already-built MSIX, and makes a guarded attempt to configure the direct RunMind alias; it does not restore packages, run OCR preparation, compile, or package anything.
 
 
-### RunMind 2.6.0 System Manager behavior
+### RunMind 2.6.1 System Manager behavior
 
 - Application discovery stores a bounded local index at `%LOCALAPPDATA%\RunMind\SystemManager\applications.json`. It searches registered desktop applications, Start Menu shortcuts, bounded Program Files/per-user Programs locations, PATH and packaged applications in `shell:AppsFolder`; stale data and search misses trigger a refresh.
 - Agent launch calls use the `applicationId` returned by discovery. Do not pass an arbitrary executable path to the native launch operation.
@@ -173,3 +173,12 @@ Indexing skips common dependency/build/cache folders and credential/secret paths
 4. Commands run as the current Windows user. They are not sandboxed and can access resources available to that account. Do not approve untrusted scripts. Execution is cancellable, capped at 15 minutes, and captures up to 512 KB of output per stream.
 
 Project indexing now starts automatically when a browser workspace is selected or restored. While the chat is visible, RunMind periodically scans workspace metadata every 60 seconds and incrementally refreshes changed records. Manual refresh remains available. This is polling, not an instantaneous filesystem watcher.
+
+
+### Application Adapters (2.6.1)
+
+- Open Windows System Manager → Application Adapters to inspect built-in and custom adapters.
+- Custom adapters are installed from JSON manifests. Supported operations are `open-file`, `open-folder`, and `open-url`; templates may use only `{target}` and `{line}`. No scripts, shell commands, or executable paths are accepted.
+- Remove custom adapters from the same list. Install and removal both require native confirmation; built-in adapters cannot be removed.
+- The built-in RunMind adapter supports `send-prompt`, passing the prompt to the discovered RunMind executable through its existing `--prompt` startup argument. It uses normal application discovery and System Manager launch permissions.
+- A process-start result does not prove a visible window or completed navigation. The action result includes separate outcome, process-start, activation, window and navigation verification fields.

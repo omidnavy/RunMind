@@ -1,18 +1,21 @@
-# RunMind 2.6.0 — System Manager & Agent Reliability
+# RunMind 2.6.1 — System Manager UI & Model Compatibility
 
 ## Release bundle status
 
-- Full-source baseline: RunMind 2.5.2 source snapshot supplied for this release.
+- Full-source baseline: RunMind 2.6.0 source bundle, updated in place for this release.
 - Preserves Standalone, PowerToys Run, PowerToys Command Palette, the shared ChatWindow, Agent Core, native bridge, Skills, MCP, Deep Research, Git, workflows, Project Profiles and existing permissions.
 - System Manager discovery now ranks flexible application matches across executable and packaged Windows applications, with bounded live refresh on stale index/search miss.
 - Launches use a stable application ID from current discovery, not a model-supplied executable path. Existing desktop windows are reused/activated by default; failed foreground activation does not silently start a duplicate.
 - Adds explicit new-window/new-process choices, persistent ask/reuse/new-window/new-process per-application preferences, and graceful close requests with mandatory native confirmation.
 - Adds current-session tool inventory and makes Global skill discovery/loading available without a project folder while retaining workspace authorization for Project skills.
-- Synchronizes host/package metadata to 2.6.0 / 2.6.0.0.
+- Adds the adapter manager UI, confirmed custom adapter removal, and the first-party RunMind prompt adapter.
+- Merges System Manager policy into the leading system message for compatibility with strict model chat templates; normalizes action outcome reporting.
+- Fixes checkbox dimensions in settings fields.
+- Synchronizes host/package metadata to 2.6.1 / 2.6.1.0.
 
 ## Validation performed in this environment
 
-See `VALIDATION-REPORT.md` for exact checks and limitations. JavaScript syntax, HTML ID consistency, JSON/XML parsing, tool-to-native-dispatch wiring, C# lexical delimiter balance, release metadata, ZIP integrity, and SHA-256 are checked here.
+See `VALIDATION-REPORT.md` for exact checks and limitations. Windows/.NET compilation and live Windows behavior have not been verified in this environment. JavaScript syntax, HTML ID consistency, JSON/XML parsing, tool-to-native-dispatch wiring, C# lexical delimiter balance, release metadata, ZIP integrity, and SHA-256 are checked here.
 
 ## Target-machine validation still required
 

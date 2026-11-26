@@ -127,6 +127,7 @@ public sealed partial class AgentHostBridge : IDisposable
             "systemManager.apps.list" => Task.FromResult(SystemManagerListApplications(RequireSystemManagerSearchQuery(args))),
             "systemManager.adapters.list" => Task.FromResult(SystemManagerListAdapters()),
             "systemManager.adapters.save" => Task.FromResult(SystemManagerSaveAdapter(args)),
+            "systemManager.adapters.remove" => Task.FromResult(SystemManagerRemoveAdapter(args)),
             "systemManager.adapters.launch" => Task.FromResult(SystemManagerLaunchAdapter(args)),
             "systemManager.apps.launch" => Task.FromResult(SystemManagerLaunchApplication(args)),
             "systemManager.apps.behavior.save" => Task.FromResult(SystemManagerSetApplicationBehavior(args)),

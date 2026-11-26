@@ -123,7 +123,7 @@
     .agent-settings-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
     .agent-settings-fields .setting-field { gap: 5px; }
     .agent-settings-fields .setting-field label { line-height: 1.35; }
-    .agent-settings-fields .setting-field input, .agent-settings-fields .setting-field select { box-sizing: border-box; width: 100%; min-width: 0; height: 35px; }
+    .agent-settings-fields .setting-field input:not([type="checkbox"]):not([type="radio"]), .agent-settings-fields .setting-field select { box-sizing: border-box; width: 100%; min-width: 0; height: 35px; }
     .agent-settings-optional { color: var(--color-muted); font-size: 10px; font-weight: 450; }
     .agent-settings-checkbox { display: flex; align-items: flex-start; gap: 8px; min-width: 0; color: var(--color-text); font-size: 11px; line-height: 1.45; cursor: pointer; }
     .agent-settings-checkbox input { flex: 0 0 15px; width: 15px; height: 15px; margin: 1px 0 0; accent-color: var(--color-accent); }
@@ -267,11 +267,11 @@
     .setting-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .setting-field[hidden] { display: none !important; }
     .setting-field label { font-size: 11px; color: var(--color-muted); font-weight: 600; }
-    .setting-field input { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-input); color: var(--color-text); }
-    .setting-field input:focus { outline: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent); outline-offset: 1px; }
+    .setting-field input:not([type="checkbox"]):not([type="radio"]) { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-input); color: var(--color-text); }
+    .setting-field input:not([type="checkbox"]):not([type="radio"]):focus { outline: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent); outline-offset: 1px; }
     .nemotron-conversational-field { grid-column: 1 / -1; }
     .setting-field .setting-checkbox-label { display: flex; flex-direction: row; align-items: center; gap: 8px; width: fit-content; max-width: 100%; margin: 0; color: var(--color-text); font-size: 12px; line-height: 1.4; font-weight: 650; cursor: pointer; }
-    .setting-field .setting-checkbox-label input[type="checkbox"] { appearance: auto; flex: 0 0 16px; width: 16px; min-width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--color-accent); }
+    .setting-field input[type="checkbox"], .setting-field input[type="radio"], .setting-field .setting-checkbox-label input[type="checkbox"] { appearance: auto; flex: 0 0 16px; width: 16px; min-width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--color-accent); }
     .setting-field .setting-checkbox-label span { min-width: 0; }
     .system-prompt-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
     .system-prompt-editor { display: block; width: 100%; min-height: 105px; max-height: 280px; margin-top: 8px; padding: 9px; resize: vertical; font: 11px/1.5 var(--font-ui); }
@@ -291,6 +291,13 @@
     .model-info-panel { width: min(390px, calc(100vw - 24px)); }
     .model-info-provider { color: var(--color-muted); font-size: 11px; margin-bottom: 10px; }
     .capability-row { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 9px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); }
+    .system-manager-adapter-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+    .system-manager-adapter-row .capability-copy { display: grid; min-width: 0; gap: 3px; }
+    .system-manager-adapter-row .capability-copy strong { font-size: 11px; }
+    .system-manager-adapter-row .capability-copy span { color: var(--color-muted); font-size: 10px; overflow-wrap: anywhere; }
+    .adapter-install-details { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--color-border); }
+    .adapter-install-details > summary { color: var(--color-text); font-size: 11px; font-weight: 650; cursor: pointer; }
+    .adapter-install-details textarea { width: 100%; min-height: 125px; resize: vertical; font: 10px/1.45 var(--font-mono); }
     .capability-row > strong { font-size: 12px; }
     .capability-row > span { color: var(--color-muted); font-size: 10px; overflow-wrap: anywhere; }
     .capability-actions { display: flex; gap: 8px; margin-top: 4px; }

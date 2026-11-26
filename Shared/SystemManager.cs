@@ -240,7 +240,6 @@ public sealed partial class AgentHostBridge
 
     private static string NormalizeApplicationQuery(string query)
     {
-        if (query.Contains("notepad++", StringComparison.OrdinalIgnoreCase)) return "notepad plus plus";
         var words = NormalizeApplicationSearchText(query).Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
         var leadingVerbs = new HashSet<string>(new[] { "open", "launch", "start", "run", "find", "search", "please" }, StringComparer.Ordinal);
         var genericWords = new HashSet<string>(new[] { "the", "my", "a", "an", "application", "app", "program", "browser", "called" }, StringComparer.Ordinal);
@@ -256,14 +255,9 @@ public sealed partial class AgentHostBridge
         Add(name);
         Add(Path.GetFileNameWithoutExtension(path));
         if (supplied is not null) foreach (var alias in supplied) Add(alias);
-        var combined = string.Join(' ', aliases);
-        if (combined.Contains("firefox", StringComparison.Ordinal)) { Add("firefox"); Add("mozilla firefox"); }
-        if (combined.Contains("developer edition", StringComparison.Ordinal)) { Add("firefox developer edition"); Add("firefox dev edition"); }
-        if (combined.Contains("calculator", StringComparison.Ordinal)) { Add("calculator"); Add("windows calculator"); }
-        if (combined.Contains("steam", StringComparison.Ordinal)) Add("steam");
-        if (name.Contains("notepad++", StringComparison.OrdinalIgnoreCase) || path.Contains("notepad++", StringComparison.OrdinalIgnoreCase) || combined.Contains("notepad plus plus", StringComparison.Ordinal) || combined.Contains("notepad++", StringComparison.Ordinal)) { Add("notepad++"); Add("notepad plus plus"); }
-        if (combined.Contains("visual studio code", StringComparison.Ordinal) || combined.Split(' ').Contains("code")) { Add("vscode"); Add("vs code"); }
-        if (combined.Contains("microsoft edge", StringComparison.Ordinal)) Add("edge");
+        // Search aliases are derived only from the discovered application's own
+        // metadata (display name, executable name, and source-provided names).
+        // Do not add application-specific aliases or rules for individual products.
         return aliases.Take(24).ToArray();
     }
 
@@ -578,6 +572,16 @@ public sealed partial class AgentHostBridge
                 if (rows.Count >= 1500) break;
             }
 
+            // A running Standalone host is itself a discoverable RunMind application.
+            try
+            {
+                var currentExecutable = Process.GetCurrentProcess().MainModule?.FileName;
+                if (!string.IsNullOrWhiteSpace(currentExecutable)
+                    && Path.GetFileName(currentExecutable).Equals("RunMind.exe", StringComparison.OrdinalIgnoreCase))
+                    Add("RunMind", currentExecutable, "Current RunMind host");
+            }
+            catch { }
+
             // Preserve still-valid cached entries only as a fallback after fresh candidates have priority.
             foreach (var item in cached)
             {
@@ -638,6 +642,7 @@ public sealed partial class AgentHostBridge
             new("firefox", "Firefox", "firefox", new Dictionary<string,string[]> { ["open-url"] = new[] { "-new-tab", "{target}" } }, true),
             new("notepad-plus-plus", "Notepad++", "notepad++", new Dictionary<string,string[]> { ["open-file"] = new[] { "-n{line}", "{target}" } }, true),
             new("blender", "Blender", "blender", new Dictionary<string,string[]> { ["open-file"] = new[] { "{target}" } }, true),
+            new("runmind", "RunMind", "RunMind", new Dictionary<string,string[]> { ["send-prompt"] = new[] { "--prompt", "{target}" } }, true),
         };
         Directory.CreateDirectory(SystemManagerAdaptersRoot);
         EnsureNoReparseAncestors(SystemManagerAdaptersRoot);
@@ -712,6 +717,22 @@ public sealed partial class AgentHostBridge
         return new { installed = true, id, displayName = name, operations = operations.Select(pair => pair.Key).ToArray(), path = destination, note = "Declarative adapter installed. It contains argument templates only and cannot execute scripts or shell commands." };
     }
 
+    private static object SystemManagerRemoveAdapter(JsonElement args)
+    {
+        RequireSystemCapability("applications", "launchApplications");
+        var id = ReadString(args, "adapterId", 80);
+        if (id.Length == 0) throw new InvalidDataException("A custom adapter ID is required.");
+        var adapter = ReadSystemApplicationAdapters().FirstOrDefault(item => item.id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (adapter is null) return new { removed = false, reason = "not-found", adapterId = id };
+        if (adapter.builtIn) throw new InvalidOperationException("Built-in adapters cannot be removed.");
+        var path = Path.Combine(SystemManagerAdaptersRoot, id + ".json");
+        if (!File.Exists(path) || IsReparsePoint(path)) throw new FileNotFoundException("The custom adapter manifest is missing or unsafe.", path);
+        if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Remove application adapter", $"Adapter: {adapter.displayName} ({adapter.id})\nThis removes only its declarative manifest. It does not uninstall the application.", alwaysAsk: true))
+            return new { removed = false, cancelled = true, adapterId = id };
+        File.Delete(path);
+        return new { removed = true, adapterId = id, displayName = adapter.displayName };
+    }
+
     private static object SystemManagerListAdapters()
     {
         RequireSystemCapability("applications", "launchApplications");
@@ -724,7 +745,7 @@ public sealed partial class AgentHostBridge
         RequireSystemCapability("applications", "launchApplications");
         var id = ReadString(args, "adapterId", 80);
         var operation = ReadString(args, "operation", 40);
-        var target = ReadString(args, "target", 4096);
+        var target = ReadString(args, "target", 12000);
         var line = args.TryGetProperty("line", out var lineValue) && lineValue.TryGetInt32(out var requestedLine) ? Math.Clamp(requestedLine, 1, 1000000) : 1;
         var adapter = ReadSystemApplicationAdapters().FirstOrDefault(item => item.id.Equals(id, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidDataException("The requested application adapter was not found.");
@@ -732,6 +753,10 @@ public sealed partial class AgentHostBridge
         if (operation == "open-url")
         {
             if (!Uri.TryCreate(target, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.UserInfo)) throw new InvalidDataException("The browser adapter accepts HTTPS URLs only.");
+        }
+        else if (operation == "send-prompt")
+        {
+            if (target.Length is < 1 or > 12000 || target.Any(character => char.IsControl(character) && character is not ('\r' or '\n' or '\t'))) throw new InvalidDataException("A RunMind prompt must contain 1–12,000 printable characters.");
         }
         else
         {
@@ -849,7 +874,7 @@ public sealed partial class AgentHostBridge
             if (arguments.Count > 0) return new { launched = false, verified = false, reason = "packaged-arguments-not-supported", application = application.name, applicationId, message = "The generic Windows Apps folder activation path cannot safely pass command-line arguments to this packaged application. The URL or requested document was not forwarded." };
             if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Activate application", $"Application: {application.name}\nPackage activation ID: {application.appUserModelId}\nArguments: {argumentPreview}")) return new { launched = false, cancelled = true, reason = "user-declined" };
             using var activationProcess = Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true, Arguments = "shell:AppsFolder\\" + application.appUserModelId });
-            return new { launched = false, verified = false, activationRequested = true, requestAccepted = true, alreadyRunning = (bool?)null, application = application.name, applicationId, appUserModelId = application.appUserModelId, behavior, note = "Windows accepted the packaged-app activation request. RunMind cannot verify a visible window, focus, or completion of the application's action." };
+            return new { outcome = "packaged-activation-requested", launched = false, verified = false, processStartedVerified = false, activationVerified = false, windowVerified = false, navigationVerified = false, activationRequested = true, requestAccepted = true, alreadyRunning = (bool?)null, application = application.name, applicationId, appUserModelId = application.appUserModelId, behavior, note = "Windows accepted the packaged-app activation request. RunMind cannot verify a visible window, focus, or completion of the application's action." };
         }
 
         if (!TryResolveApplicationExecutable(application.path ?? string.Empty, out var path))
@@ -867,8 +892,8 @@ public sealed partial class AgentHostBridge
                 return new { launched = false, cancelled = true, reason = "user-declined", application = application.name, applicationId };
             var activationAttempted = TryActivateApplicationWindow(path, out var existingProcessId, out var foregroundConfirmed);
             if (activationAttempted && foregroundConfirmed)
-                return new { launched = false, verified = true, activated = true, processRunning = true, alreadyRunning = true, processId = existingProcessId, application = application.name, applicationId, path, behavior, note = "An existing application window was restored/activated and Windows reported it as the foreground window." };
-            return new { launched = false, verified = false, activated = false, processRunning = true, alreadyRunning = true, processId = existingProcessId > 0 ? existingProcessId : existingProcesses.First(), application = application.name, applicationId, path, behavior, reason = "already-running-not-activated", note = "The application is already running, but RunMind could not verify that its window received foreground focus. No duplicate process was started. Ask the user whether to try a new process." };
+                return new { outcome = "existing-window-activated", launched = false, verified = true, navigationVerified = false, activated = true, activationVerified = true, processStartedVerified = false, processRunning = true, alreadyRunning = true, processId = existingProcessId, application = application.name, applicationId, path, behavior, note = "An existing application window was restored/activated and Windows reported it as the foreground window." };
+            return new { outcome = "already-running-not-activated", launched = false, verified = false, navigationVerified = false, activated = false, activationVerified = false, processStartedVerified = false, processRunning = true, alreadyRunning = true, processId = existingProcessId > 0 ? existingProcessId : existingProcesses.First(), application = application.name, applicationId, path, behavior, reason = "already-running-not-activated", note = "The application is already running, but RunMind could not verify that its window received foreground focus. No duplicate process was started. Ask the user whether to try a new process." };
         }
 
         var start = new ProcessStartInfo(path)
@@ -883,7 +908,7 @@ public sealed partial class AgentHostBridge
         try { process.WaitForExit(1800); } catch { }
         process.Refresh();
         if (!process.HasExited)
-            return new { launched = true, verified = true, processRunning = true, handoffAccepted = false, processId, alreadyRunning = false, application = application.name, applicationId, path, behavior,
+            return new { outcome = behavior == "new-window" ? "new-window-requested-process-started" : "new-process-started", launched = true, verified = true, processStartedVerified = true, windowVerified = false, activationVerified = false, navigationVerified = false, processRunning = true, handoffAccepted = false, processId, alreadyRunning = false, application = application.name, applicationId, path, behavior,
                 note = "A newly started process for the selected executable is still running. This verifies process startup, not that a visible window received focus." };
 
         var exitCode = process.ExitCode;
@@ -892,12 +917,12 @@ public sealed partial class AgentHostBridge
         if (survivingPriorInstance != 0 && exitCode == 0)
         {
             var activationAttempted = TryActivateApplicationWindow(path, out var activatedProcessId, out var foregroundConfirmed);
-            return new { launched = false, verified = foregroundConfirmed, processRunning = true, handoffAccepted = true, activated = activationAttempted && foregroundConfirmed, processId = activatedProcessId > 0 ? activatedProcessId : survivingPriorInstance, alreadyRunning = true, application = application.name, applicationId, path, behavior,
+            return new { outcome = "action-handed-off-unverified", launched = false, verified = false, navigationVerified = false, processStartedVerified = false, activationVerified = activationAttempted && foregroundConfirmed, processRunning = true, handoffAccepted = true, activated = activationAttempted && foregroundConfirmed, processId = activatedProcessId > 0 ? activatedProcessId : survivingPriorInstance, alreadyRunning = true, application = application.name, applicationId, path, behavior,
                 reason = "existing-instance-handoff-unverified", exitCode,
                 message = "The launcher exited successfully and a pre-existing instance remains. RunMind attempted to activate its window, but cannot verify that the requested URL or action reached the existing application. The requested navigation/action remains unverified." };
         }
 
-        return new { launched = false, verified = false, processRunning = matchingProcesses.Count > 0, handoffAccepted = false, processId, application = application.name, applicationId, path, behavior,
+        return new { outcome = "process-exited", launched = false, verified = false, navigationVerified = false, processStartedVerified = false, activationVerified = false, processRunning = matchingProcesses.Count > 0, handoffAccepted = false, processId, application = application.name, applicationId, path, behavior,
             reason = "process-exited", exitCode,
             message = "The launch process exited before a new running process or a confirmed handoff could be verified." };
     }

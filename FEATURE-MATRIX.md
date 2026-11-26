@@ -1,6 +1,6 @@
-# RunMind 2.6.0 — Feature Matrix
+# RunMind 2.6.1 — Feature Matrix
 
-| Area | Capability | Status in 2.6.0 | Notes |
+| Area | Capability | Status in 2.6.1 | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
@@ -38,10 +38,15 @@
 | Security | Native process execution | Approval required | Runs as current Windows user; not sandboxed |
 
 
-## 2.6.0 changes
+## 2.6.1 changes
 
-| Area | Capability | Status in 2.6.0 | Notes |
+| Area | Capability | Status in 2.6.1 | Notes |
 |---|---|---|---|
+| System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
+| System Manager | First-party RunMind adapter | Implemented | Sends a prompt through the existing `--prompt` startup argument |
+| Agent | Single leading system message | Implemented | System Manager policy merged into first message for model-template compatibility |
+| Agent | Structured application action outcomes | Implemented | Process startup, activation, handoff, window and navigation reported separately |
+
 | System Manager | Flexible application discovery | Implemented | Ranked name/alias/executable/token matching; bounded registry, App Paths, Start Menu, bounded common install locations, PATH and Windows Apps folder sources |
 | System Manager | Packaged Windows application discovery | Implemented | Uses Shell AppsFolder/AUMID discovery; activation request is not presented as verified UI launch |
 | System Manager | Stable application selection | Implemented | Launch and preferences use a catalog application ID, validated natively |

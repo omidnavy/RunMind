@@ -1,8 +1,8 @@
 # RunMind Roadmap
 
-## Current release: 2.6.0 — System Manager & Agent Reliability
+## Current release: 2.6.1 — System Manager UI & Model Compatibility
 
-RunMind 2.6.0 focuses on dependable Windows application discovery/actions and truthful Agent introspection. It preserves the three supported hosts and the shared Agent Core/native bridge.
+RunMind 2.6.1 completes the adapter management surface and improves cross-model prompt compatibility and truthful action results. It preserves the generic application discovery and shared Agent architecture introduced in 2.6.0. It preserves the three supported hosts and the shared Agent Core/native bridge.
 
 ### Included in this source bundle
 
@@ -15,7 +15,9 @@ RunMind 2.6.0 focuses on dependable Windows application discovery/actions and tr
 - New-window requests are supported only for a bounded allowlist of applications with known command-line support. New-process behavior is best-effort because some applications redirect to an existing instance.
 - Per-application launch behavior preferences (`ask`, `reuse`, `new-window`, `new-process`) are stored in the existing System Manager settings file. Changing a preference always requires native confirmation.
 - Application close uses graceful main-window close requests and mandatory native confirmation. It never force-terminates a process; packaged applications are not force-closed.
-- Declarative application adapters use the same stable application-ID launch path. No scripts or shell commands are introduced.
+- Declarative application adapters use the same stable application-ID launch path. The System Manager flyout now lists adapters and supports custom manifest installation/removal with native confirmation. The built-in RunMind adapter can start RunMind with a supplied prompt through its existing startup argument. No scripts or shell commands are introduced.
+- System Manager policy is appended to the existing leading Agent system message instead of adding a second system message, improving compatibility with stricter model chat templates.
+- Native launch results distinguish verified process startup, verified foreground activation, new-window request, existing-instance handoff and unverified navigation.
 - `list_available_tools` reports the exact tool definitions exposed in the current Agent session. `list_agent_skills` and `load_agent_skill` work without requiring a project folder; project-scoped skills still require an authorized workspace.
 
 ### Explicit limitations
