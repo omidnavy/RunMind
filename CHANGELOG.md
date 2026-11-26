@@ -1923,3 +1923,10 @@ The original changelog recorded the following reliability follow-ups without ass
 - Isolate COM-server startup in a non-inlined method so the resolver is installed before the extension class is JIT-compiled.
 - Log requested and packaged SDK assembly identities and the package path used for resolution.
 - Add startup diagnostics around CsWinRT wrapper initialization and extension construction.
+
+
+## Unreleased — Phase 2 Development Server Management
+
+- Added shared Agent tooling for package-script discovery and development-server start/list/logs/readiness/health/stop across all three hosts.
+- Added bounded multi-server ownership tracking, port-conflict preflight, loopback-only HTTP readiness/health checks, and bounded stdout/stderr capture.
+- Added fresh approval for startup and termination; termination targets only processes launched by the current RunMind host.

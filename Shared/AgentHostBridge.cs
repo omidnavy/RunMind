@@ -151,6 +151,7 @@ public sealed partial class AgentHostBridge : IDisposable
             "skills.remove" => Task.FromResult(RemoveGlobalSkill(ReadString(args, "name", 100))),
             "git.select" => Task.FromResult(SelectGitWorkspace(ReadString(args, "contextId", 64))),
             "process.selectWorkspace" => Task.FromResult(SelectProcessWorkspace(ReadString(args, "contextId", 64))),
+            "process.workspace.status" => Task.FromResult(ProcessWorkspaceStatus(ReadString(args, "contextId", 64))),
             "process.powershell" => RunPowerShellAsync(args, cancellationToken),
             "process.run" => RunNativeProcessAsync(args, cancellationToken),
             "debugger.launch" => NodeDebuggerLaunchAsync(args, cancellationToken),
@@ -165,6 +166,7 @@ public sealed partial class AgentHostBridge : IDisposable
             "debugger.runtime.memoryMonitor" => NodeRuntimeMemoryMonitorAsync(args, cancellationToken),
             "playwright.run" => PlaywrightRunAsync(args, cancellationToken),
             "api.test.run" => ApiTestRunAsync(args, cancellationToken),
+            "developmentServer.manage" => DevelopmentServerManageAsync(args, cancellationToken),
             "git.run" => RunGitAsync(args, cancellationToken),
             "git.clone" => CloneRepositoryAsync(args, cancellationToken, progress),
             "download.file" => DownloadFileAsync(args, cancellationToken, (bytes, total) => progress(bytes, total, null)),
@@ -859,6 +861,13 @@ public sealed partial class AgentHostBridge : IDisposable
         _processWorkspaceRoot = root;
         _processWorkspaceContextId = contextId;
         return new { selected = true, folder = Path.GetFileName(root), note = "Native process execution is scoped to this folder for relative working directories. Commands still run with the current Windows user's permissions." };
+    }
+
+    private object ProcessWorkspaceStatus(string contextId)
+    {
+        var selected = Guid.TryParse(contextId, out _) && string.Equals(contextId, _processWorkspaceContextId, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(_processWorkspaceRoot) && Directory.Exists(_processWorkspaceRoot);
+        return new { selected, folder = selected ? Path.GetFileName(_processWorkspaceRoot) : null };
     }
 
     private string GetProcessWorkingDirectory(JsonElement args)

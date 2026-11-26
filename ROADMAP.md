@@ -4,14 +4,14 @@
 
 ## Active milestone: Phase 2 — Debugging & Quality
 
-The 2.6.3 baseline includes the Phase 1 Developer Workbench and System Manager capabilities. The Node Debugger increment has been built successfully by the user on Windows across all three hosts. Runtime Diagnostics & Profiling has been confirmed working by the user across the three Windows hosts. Playwright Browser Integration is implemented in the current working bundle and awaits three-host Windows build/runtime validation. API & Backend Testing is implemented in the current working bundle and awaits three-host Windows build/runtime validation.
+The 2.6.3 baseline includes the Phase 1 Developer Workbench and System Manager capabilities. The Node Debugger increment has been built successfully by the user on Windows across all three hosts. Runtime Diagnostics & Profiling has been confirmed working by the user across the three Windows hosts. Playwright Browser Integration is implemented in the current working bundle and awaits three-host Windows build/runtime validation. API & Backend Testing and Development Server Management are implemented in the current working bundle and await three-host Windows build/runtime validation.
 
 ### Milestone scope and implementation direction
 
 - Extend the existing Node Inspector sessions with V8 heap diagnostics, CPU sampling profiles, streamed heap snapshots, and bounded timestamped memory sampling.
 - Keep profiling tools in the shared Agent Core across Standalone, PowerToys Run, and PowerToys Command Palette; do not introduce a second agent or duplicate session manager.
 - Require fresh approval for profiling starts and heap snapshots, bound all retained samples/artifacts, and keep runtime profiling unavailable to Deep Research and delegated sub-agent tasks.
-- Complete the remaining Phase 2 increment: development-server lifecycle management, following API/backend testing.
+- Keep the Phase 2 lifecycle increments in the shared Agent Core; Development Server Management is now implemented and awaits Windows validation.
 - Preserve the existing Phase 1 Developer Workbench, Git, Skills, Profiles, MCP, workflows, and System Manager capabilities without broad rewrites.
 
 ### Included in this source bundle
@@ -43,7 +43,7 @@ The 2.6.3 baseline includes the Phase 1 Developer Workbench and System Manager c
 ### Next candidates
 
 - Complete Windows build/runtime validation for Playwright Browser Integration and API & Backend Testing across all three hosts.
-- Phase 2 development-server lifecycle management.
+- Windows validation of Development Server Management across all three hosts; broaden project-type discovery in a later increment if required.
 - Windows-targeted automated integration tests for discovery, launch, activation, close, and all three hosts.
 - Better app-specific adapters where a real user workflow justifies them.
 - Full Skill repository/archive import with referenced resources and update checks, if needed.
@@ -86,3 +86,10 @@ Implemented in the source increment: JavaScript AST rename/import organization/c
 - Added `api_test_run` to the shared Agent Core and all three native host deployments.
 - Added structured HTTP request suites, JSON/text bodies, response assertions, environment-variable secret placeholders, bounded previews, and same-origin redirect enforcement.
 - Added local HTTP integration coverage; Windows build/runtime validation remains pending.
+
+
+## Phase 2 progress — Development Server Management
+
+- Added the shared `development_server_manage` Agent tool and native process-bridge implementation for Node.js package-script discovery/start, multiple owned server sessions, bounded stdout/stderr logs, HTTP readiness/health checks, port-conflict detection, and explicit stop.
+- Startup and stop require fresh approval. Startup approval displays the actual `package.json` script command. Termination is restricted to process trees launched and tracked by the current RunMind host.
+- Portable lifecycle contract tests: 12/12 passed. Windows C# compilation and live process behavior remain pending.

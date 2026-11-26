@@ -27,6 +27,7 @@
     <Content Include="..\Shared\PlaywrightRunner.cjs" Link="PlaywrightRunner.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\Shared\ApiTestRunner.cjs" Link="ApiTestRunner.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
+    <Compile Include="..\Shared\DevelopmentServerManager.cs" Link="Shared\DevelopmentServerManager.cs" />
     <Compile Include="..\Shared\NodeDebuggerBridge.cs" Link="Shared\NodeDebuggerBridge.cs" />
     <Compile Include="..\Shared\SystemManager.cs" Link="Shared\SystemManager.cs" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />

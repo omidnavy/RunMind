@@ -1,3 +1,12 @@
+## Phase 2 — Development Server Management — 2026-11-21
+
+- Added `development_server_manage` to the shared Agent Core and native process bridge for all three hosts.
+- Discovers project `package.json` scripts and recommends existing `dev`, `start`, or `serve` entries; startup approval displays the actual command and detected pre/post lifecycle hooks.
+- Starts up to eight concurrent Node.js project servers, captures bounded stdout/stderr, checks optional port conflicts, waits for loopback HTTP readiness, reports health, and exposes session logs/listing.
+- Every start and stop requires fresh approval. Only process trees launched and tracked by the current RunMind host can be stopped; external processes are never terminated.
+- Full portable Node suite: **109/109 passed**, including **12/12 development-server contract tests**. JavaScript syntax and all three host project XML checks passed.
+- Windows/.NET compilation and live Windows lifecycle tests remain pending. Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` on Windows. See `docs/PHASE2-DEVELOPMENT-SERVER-MANAGEMENT.md` and `VALIDATION-REPORT-PHASE2-DEVELOPMENT-SERVER.md`.
+
 ## Phase 2 — API & Backend Testing — 2026-11-21
 
 - Added `api_test_run` and a shared native HTTP runner backed by Node.js built-in `fetch`; no additional package dependency.

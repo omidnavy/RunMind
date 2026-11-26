@@ -137,6 +137,46 @@
       };
       const debuggerTools = new Set(['node_debugger_launch','node_debugger_attach','node_debugger_list_sessions','node_debugger_command','node_debugger_events','node_debugger_stop']);
       const runtimeTools = new Set(['node_runtime_diagnostics','node_runtime_cpu_profile','node_runtime_heap_snapshot','node_runtime_memory_monitor']);
+      if (name === 'development_server_manage') {
+        if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('Development server management is disabled in Deep Research and delegated sub-agent tasks. Use the primary Agent session.');
+        const action = String(args.action || '').toLowerCase();
+        if (!['discover','start','list','logs','health','stop'].includes(action)) throw new Error('Choose discover, start, list, logs, health, or stop.');
+        const contextId = workspaceContext.id;
+        const workspaceStatus = await callAgentHost('process.workspace.status', { contextId }, signal, 10000);
+        if (!workspaceStatus?.selected) {
+          const selected = await requireAgentApproval({ title: 'Select a native development-server workspace?', subtitle: 'Native process access · current Windows user permissions', detail: 'Choose the local project folder that contains package.json. RunMind will discover and launch project-defined package scripts from this folder. Starting a server runs project code with your Windows account permissions.', risky: true, alwaysAsk: true }, signal);
+          if (!selected) return { cancelled: true, message: 'Native workspace selection was declined.' };
+          const selection = await callAgentHost('process.selectWorkspace', { contextId }, signal, 120000);
+          if (!selection?.selected) return { cancelled: true, message: 'Native workspace selection was cancelled.' };
+        }
+        const payload = { action, working_directory: String(args.working_directory || ''), contextId };
+        if (action === 'start') {
+          const script = String(args.script || '');
+          if (!script) throw new Error('Run discover first, then provide the selected package script name.');
+          const discovery = await callAgentHost('developmentServer.manage', { action: 'discover', working_directory: String(args.working_directory || ''), contextId }, signal, 15000);
+          const selectedScript = (discovery?.scripts || []).find(item => item.name === script);
+          if (!selectedScript) throw new Error(`The project does not define package script '${script}'. Run discover to inspect available scripts.`);
+          const lifecycleHooks = (discovery?.scripts || []).filter(item => item.name === `pre${script}` || item.name === `post${script}`);
+          payload.script = script;
+          payload.expected_command = String(selectedScript.command || '');
+          payload.expected_pre_command = String(lifecycleHooks.find(item => item.name === `pre${script}`)?.command || '');
+          payload.expected_post_command = String(lifecycleHooks.find(item => item.name === `post${script}`)?.command || '');
+          payload.readiness_url = String(args.readiness_url || '');
+          payload.port = args.port;
+          payload.readiness_timeout_seconds = args.readiness_timeout_seconds;
+          const approved = await requireAgentApproval({ title: 'Start this development server?', subtitle: `${script} · project package script`, detail: `Working directory: ${String(args.working_directory || '(workspace root)')}\nPackage script: ${script}\nActual command: ${String(selectedScript.command || '(not available)')}\nLifecycle hooks: ${lifecycleHooks.length ? lifecycleHooks.map(item => `${item.name}: ${item.command}`).join(' | ') : '(none detected)'}\nReadiness URL: ${payload.readiness_url || '(not configured)'}\nPort preflight: ${args.port || '(not supplied)'}\n
+RunMind will execute this project-defined package.json script using Node.js/npm. Project scripts can execute arbitrary code and inherit your Windows user permissions. The server will remain running after this request. RunMind records the exact process it starts and will not stop external processes.`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, message: 'Development server startup was declined.' };
+        } else if (action === 'stop') {
+          payload.server_id = String(args.server_id || '');
+          const approved = await requireAgentApproval({ title: 'Stop this RunMind development server?', subtitle: 'Process-tree termination · RunMind-owned process only', detail: `Server session: ${payload.server_id}\n
+RunMind will terminate the process tree only if this host originally launched and still owns the recorded server session. Processes started outside RunMind cannot be stopped here.`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, message: 'Development server termination was declined.' };
+        } else {
+          payload.server_id = String(args.server_id || '');
+        }
+        return await callAgentHost('developmentServer.manage', payload, signal, action === 'start' ? 110000 : 20000);
+      }
       if (name === 'playwright_run') {
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('Playwright browser automation is disabled in Deep Research and delegated sub-agent tasks. Run it from the primary Agent session with explicit approval.');
         const actions = Array.isArray(args.actions) ? args.actions.slice(0, 30) : [];

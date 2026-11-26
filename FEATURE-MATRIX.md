@@ -64,7 +64,7 @@
 | Runtime quality | Heap dominator/leak UI | Not included | Open exported V8 snapshots in Chrome/Edge DevTools; native analysis UI is a later candidate |
 | Browser quality | Structured Playwright automation | Implemented in working bundle; Windows build pending | Shared native runner; Chromium/Firefox/WebKit; 1–30 structured actions; fresh approval per run; ephemeral contexts; assertions, console/network diagnostics and screenshots; project-installed package required |
 | API quality | Structured HTTP/API test runner | Implemented in working bundle; Windows build pending | Shared native Node fetch runner; 1–20 sequential requests; status/header/JSON/body assertions; env-backed secrets; same-origin redirects; fresh approval per suite |
-| Development servers | Start/readiness/log/health/stop lifecycle | Not yet implemented | Planned after API testing |
+| Development servers | Start/readiness/log/health/stop lifecycle | Implemented in working bundle; Windows build pending | Shared native process bridge; package.json script discovery; up to eight owned servers; bounded stdout/stderr; loopback readiness/health; port preflight; fresh approval for start/stop; npm CLI required |
 
 ## 2.6.1 changes
 
