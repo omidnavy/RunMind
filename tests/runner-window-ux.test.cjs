@@ -80,5 +80,26 @@ test('Runner text inputs and ComboBox popup use consistent themed dimensions and
   assert.match(app, /<Style TargetType="ComboBox">[\s\S]*?<Setter Property="Height" Value="38" \/>/);
   assert.match(app, /<Popup x:Name="PART_Popup"[\s\S]*?Background="\{DynamicResource RunnerSurface\}"/);
   assert.match(app, /SelectionTextBrush="\{DynamicResource RunnerAccentContrast\}"/);
-  assert.match(main, /SearchBox" Height="48"/);
+  assert.match(main, /SearchBox" Height="52" MinHeight="52"/);
+  assert.match(main, /Padding="0" FocusVisualStyle="\{x:Null\}"/);
+});
+
+
+test('Runner theme selectors display friendly theme names instead of record ToString values', async () => {
+  const ui = await read('RunMind.Runner/RunnerSettingsWindow.xaml');
+  assert.match(ui, /<DataTemplate x:Key="ThemeNameTemplate">[\s\S]*?Text="\{Binding Name\}"/);
+  assert.match(ui, /x:Name="LightThemeBox"[\s\S]{0,300}ItemTemplate="\{StaticResource ThemeNameTemplate\}"/);
+  assert.match(ui, /x:Name="DarkThemeBox"[\s\S]{0,300}ItemTemplate="\{StaticResource ThemeNameTemplate\}"/);
+  assert.doesNotMatch(ui, /DisplayMemberPath=/);
+});
+
+test('Runner inline search input has a consistent centered height without extra vertical padding', async () => {
+  const main = await read('RunMind.Runner/MainWindow.xaml');
+  const match = main.match(/<TextBox x:Name="SearchBox"[\s\S]*?\/>/);
+  assert.ok(match, 'Runner search TextBox exists');
+  assert.match(match[0], /Height="52" MinHeight="52"/);
+  assert.match(match[0], /VerticalContentAlignment="Center"/);
+  assert.match(match[0], /Padding="0"/);
+  assert.match(match[0], /TextRenderingMode="ClearType"/);
+  assert.doesNotMatch(match[0], /Padding="0,4"/);
 });

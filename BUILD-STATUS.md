@@ -133,3 +133,13 @@ Portable validation on the current source:
 - Tests and static checks were repeated from the final extracted source archive.
 
 These checks are source-level and portable. This environment has no .NET SDK, MSBuild, Windows Desktop runtime or Windows multi-monitor desktop. Accordingly, the latest WPF/C# modifications have **not** been compiled or interactively tested here. Run `Build-Release-x64.bat` on Windows and complete `docs/RUNNER-WINDOW-UX-AND-RANKING.md` before accepting this update.
+
+
+## Follow-up: theme selector labels and launcher search field
+
+The user reported two remaining visual defects in the Runner settings/launcher UI. This source corrects both:
+
+- **Theme selector labels:** Light and Dark theme ComboBoxes now use an explicit `ThemeNameTemplate` DataTemplate bound to `ThemeDefinition.Name`. This avoids the custom ComboBox selected-item presenter falling back to the record-generated `ToString()` value (for example, `ThemeDefinition { Id = ..., Name = ... }`). The template explicitly uses the active `RunnerText` brush and truncates long names cleanly.
+- **Launcher search input:** the primary inline search TextBox is now 52 DIPs high with zero extra vertical padding, centered content, and explicit ClearType text rendering. The surrounding 68-DIP search surface remains unchanged.
+
+Validation on the current source: **282/282** full Node regression tests; **57/57** JavaScript syntax checks; **12/12** XML/XAML/project/manifest parse checks. The final archive is tested again after extraction. Windows/.NET compilation and interactive WPF rendering remain pending because this environment has no Windows desktop runtime or .NET SDK.

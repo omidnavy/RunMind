@@ -43,10 +43,11 @@
 
       <Border Grid.Row="2" Background="{DynamicResource RunnerInput}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="12" Padding="16,0" SnapsToDevicePixels="True">
         <Grid>
-          <TextBox x:Name="SearchBox" Height="48" VerticalContentAlignment="Center" VerticalAlignment="Center" FontSize="21"
+          <TextBox x:Name="SearchBox" Height="52" MinHeight="52" VerticalContentAlignment="Center" VerticalAlignment="Center" FontSize="21"
                    Foreground="{DynamicResource RunnerText}" CaretBrush="{DynamicResource RunnerAccent}"
                    SelectionBrush="{DynamicResource RunnerAccent}" SelectionTextBrush="{DynamicResource RunnerAccentContrast}"
-                   Background="Transparent" BorderThickness="0" Padding="0,4" FocusVisualStyle="{x:Null}"
+                   Background="Transparent" BorderThickness="0" Padding="0" FocusVisualStyle="{x:Null}"
+                   TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
                    TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown"
                    ToolTip="Search apps, enter a file or folder path, paste a URL, calculate, or use the RunMind keyword" />
           <TextBlock x:Name="SearchPlaceholder" Text="Search RunMind…" Foreground="{DynamicResource RunnerMuted}" Opacity="0.72" FontSize="21" VerticalAlignment="Center" IsHitTestVisible="False" />

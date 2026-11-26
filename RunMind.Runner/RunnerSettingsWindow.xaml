@@ -4,6 +4,13 @@
         Title="RunMind Runner Settings" Width="780" Height="800" MinWidth="680" MinHeight="620"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
         Background="{DynamicResource RunnerBackground}" Foreground="{DynamicResource RunnerText}">
+  <Window.Resources>
+    <!-- Use an explicit template for ThemeDefinition records. DisplayMemberPath alone
+         can fall back to the record's generated ToString() in the custom ComboBox template. -->
+    <DataTemplate x:Key="ThemeNameTemplate">
+      <TextBlock Text="{Binding Name}" Foreground="{DynamicResource RunnerText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+    </DataTemplate>
+  </Window.Resources>
   <Grid Margin="22">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="14"/><RowDefinition Height="*"/><RowDefinition Height="16"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <StackPanel Grid.Row="0">
@@ -57,9 +64,9 @@
               <TextBlock Grid.Row="0" Text="Mode" VerticalAlignment="Center" Foreground="{DynamicResource RunnerMuted}" />
               <ComboBox x:Name="AppearanceModeBox" Grid.Row="0" Grid.Column="1" Width="230" HorizontalAlignment="Left"><ComboBoxItem Content="System" Tag="system"/><ComboBoxItem Content="Light" Tag="light"/><ComboBoxItem Content="Dark" Tag="dark"/></ComboBox>
               <TextBlock Grid.Row="1" Text="Light theme" VerticalAlignment="Center" Foreground="{DynamicResource RunnerMuted}" Margin="0,10,0,0" />
-              <ComboBox x:Name="LightThemeBox" Grid.Row="1" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,10,0,0" DisplayMemberPath="Name" />
+              <ComboBox x:Name="LightThemeBox" Grid.Row="1" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,10,0,0" ItemTemplate="{StaticResource ThemeNameTemplate}" />
               <TextBlock Grid.Row="2" Text="Dark theme" VerticalAlignment="Center" Foreground="{DynamicResource RunnerMuted}" Margin="0,10,0,0" />
-              <ComboBox x:Name="DarkThemeBox" Grid.Row="2" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,10,0,0" DisplayMemberPath="Name" />
+              <ComboBox x:Name="DarkThemeBox" Grid.Row="2" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,10,0,0" ItemTemplate="{StaticResource ThemeNameTemplate}" />
             </Grid>
           </StackPanel>
         </ScrollViewer>
