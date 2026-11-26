@@ -296,6 +296,7 @@
     .system-manager-adapter-row .capability-copy { display: grid; min-width: 0; gap: 3px; }
     .system-manager-adapter-row .capability-copy strong { font-size: 11px; }
     .system-manager-adapter-row .capability-copy span { color: var(--color-muted); font-size: 10px; overflow-wrap: anywhere; }
+    .adapter-heading-actions, .adapter-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .adapter-install-details { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--color-border); }
     .adapter-install-details > summary { color: var(--color-text); font-size: 11px; font-weight: 650; cursor: pointer; }
     .adapter-install-details textarea { width: 100%; min-height: 125px; resize: vertical; font: 10px/1.45 var(--font-mono); }

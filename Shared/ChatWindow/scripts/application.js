@@ -483,6 +483,34 @@
     });
     setSystemManagerTab('settings');
     $('#refreshSystemManagerAdapters')?.addEventListener('click', () => { void loadSystemManagerAdapters(); });
+    $('#newSystemManagerAdapter')?.addEventListener('click', () => {
+      const input = $('#systemManagerAdapterManifest');
+      const details = input?.closest('details');
+      const saveButton = $('#installSystemManagerAdapter');
+      if (!input || !details) return;
+      input.value = '';
+      input.dataset.adapterEditId = '';
+      details.open = true;
+      if (saveButton) saveButton.textContent = 'Validate and install';
+      const cancelButton = $('#cancelSystemManagerAdapterEdit');
+      if (cancelButton) cancelButton.hidden = true;
+      const status = $('#systemManagerAdapterStatus');
+      if (status) status.textContent = 'Create a new custom adapter manifest. Use a unique lowercase ID and at least one supported operation with argument templates.';
+      input.focus();
+      input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    $('#cancelSystemManagerAdapterEdit')?.addEventListener('click', () => {
+      const input = $('#systemManagerAdapterManifest');
+      const details = input?.closest('details');
+      if (input) { input.value = ''; input.dataset.adapterEditId = ''; }
+      if (details) details.open = false;
+      const saveButton = $('#installSystemManagerAdapter');
+      if (saveButton) saveButton.textContent = 'Validate and install';
+      const cancelButton = $('#cancelSystemManagerAdapterEdit');
+      if (cancelButton) cancelButton.hidden = true;
+      const status = $('#systemManagerAdapterStatus');
+      if (status) status.textContent = 'Edit cancelled. Choose New adapter to install a custom adapter.';
+    });
     $('#installSystemManagerAdapter')?.addEventListener('click', () => { void installSystemManagerAdapterFromUi(); });
     $('#systemManagerAdapterList')?.addEventListener('click', event => {
       const button = event.target.closest('button[data-adapter-remove], button[data-adapter-edit], button[data-adapter-reset]');
@@ -496,11 +524,19 @@
         if (!input || !details) return;
         let operations = {};
         try { operations = JSON.parse(button.dataset.adapterOperations || '{}'); } catch (_) {}
+        if (Object.values(operations).some(templates => !Array.isArray(templates) || templates.length < 1)) {
+          const status = $('#systemManagerAdapterStatus');
+          if (status) status.textContent = 'This adapter returned incomplete operation templates and cannot be edited safely. Refresh the adapter list and try again.';
+          return;
+        }
         input.value = JSON.stringify({ id: button.dataset.adapterEdit, displayName: button.dataset.adapterName || button.dataset.adapterEdit, match: button.dataset.adapterMatch || '', operations }, null, 2);
+        input.dataset.adapterEditId = button.dataset.adapterEdit;
         details.open = true;
         if (saveButton) saveButton.textContent = 'Save built-in override';
+        const cancelButton = $('#cancelSystemManagerAdapterEdit');
+        if (cancelButton) cancelButton.hidden = false;
         const status = $('#systemManagerAdapterStatus');
-        if (status) status.textContent = `Edit argument templates for ${button.dataset.adapterName || button.dataset.adapterEdit}. Keep the built-in ID, display name and match unchanged. Empty operation arrays must be filled with argument templates before saving.`;
+        if (status) status.textContent = `Edit argument templates for ${button.dataset.adapterName || button.dataset.adapterEdit}. Keep the built-in ID, display name and match unchanged. The current argument templates are loaded for editing. Keep the built-in identity and application match unchanged.`;
         input.focus();
         input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }

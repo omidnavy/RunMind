@@ -2,7 +2,7 @@
 
 **Release:** 2.6.3 — Developer Intelligence & System Manager  
 **Base:** User-uploaded RunMind 2.6.3 source ZIP  
-**Update:** Compile-error correction, adapter UI event wiring, and additional RunMind-native skills
+**Update:** Compile-error correction, adapter UI and save-flow fixes, and additional RunMind-native skills
 
 ## Changes in this update
 
@@ -10,7 +10,9 @@
 - Wired Settings/Application Adapters tab navigation and explicitly initialized the default Settings view.
 - Fixed tab visibility: adapter/settings cards now honor the `hidden` state despite their flex layout.
 - Removed the nested Settings-page scrollbar so the System Manager panel owns vertical scrolling; the adapter list retains its own bounded list scroll.
-- Wired built-in adapter Edit and Reset actions. Edit prepopulates the manifest editor with the built-in identity and supported operation names; users supply argument templates. The native bridge still fixes built-in identity/match and enforces allowed operations and confirmation.
+- Wired built-in adapter Edit and Reset actions. The native adapter inventory now returns the effective argument templates, and Edit prepopulates the manifest with those real templates rather than empty arrays.
+- Fixed the save failure: empty operation arrays were rejected by native validation; Edit now loads valid existing templates, and successful native save results identify built-in overrides.
+- Added a persistent New adapter action and Cancel edit action. Both restore a clean custom-install state; successful saves also clear edit state and return the install button to its default label.
 - Added four skills adapted from the supplied Bionic bundle: `file-history`, `skill-management`, `create-skill`, and `install-skill`.
 - Updated Agent skill-selection guidance to load these only for relevant tasks.
 - Updated release documentation to reflect implemented adapter UI and the remaining conversation-management limitation.
@@ -32,6 +34,7 @@
 | XML parsing | Passed — 7 project/manifest/XAML files |
 | Skill frontmatter, folder/name match, and size limits | Passed — 11 skills |
 | Corrected C# initializer and adapter UI wiring assertions | Passed |
+| New/cancel adapter actions, effective template loading, save-state reset, and override result assertions | Passed |
 | Tab visibility, default-tab initialization, and single-panel-scroll regression assertions | Passed |
 | Adapter tab bounded scrolling source assertion | Passed |
 | Host skill content inclusion | Passed by shared `Skills\**\*.*` content glob in all three hosts |

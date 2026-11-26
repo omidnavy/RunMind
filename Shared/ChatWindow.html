@@ -425,12 +425,12 @@
                 </div>
               </section>
               <section class="agent-settings-card" id="systemManagerAdaptersCard" data-system-manager-view="adapters">
-                <div class="agent-settings-card-heading"><div><h3>Application Adapters</h3><p>Inspect built-in adapters and manage safe declarative adapters. Adapters provide supported argument handling; they do not bypass application discovery or native permissions.</p></div><button type="button" class="setting-reset" id="refreshSystemManagerAdapters">Refresh</button></div>
+                <div class="agent-settings-card-heading"><div><h3>Application Adapters</h3><p>Inspect built-in adapters and manage safe declarative adapters. Adapters provide supported argument handling; they do not bypass application discovery or native permissions.</p></div><div class="adapter-heading-actions"><button type="button" class="setting-reset" id="newSystemManagerAdapter">New adapter</button><button type="button" class="setting-reset" id="refreshSystemManagerAdapters">Refresh</button></div></div>
                 <div id="systemManagerAdapterList" class="capability-list"><p class="setting-note">Enable System Manager and application launch permission to manage adapters.</p></div>
                 <details class="adapter-install-details"><summary>Install custom adapter</summary>
                   <p class="setting-note">Paste a JSON manifest. Only argument templates are accepted; scripts, shell commands and executable paths are not supported. Installation requires native confirmation.</p>
                   <div class="setting-field"><label for="systemManagerAdapterManifest">Adapter JSON manifest</label><textarea id="systemManagerAdapterManifest" rows="8" spellcheck="false" placeholder='{"id":"my-editor","displayName":"My Editor","match":"Editor","operations":{"open-file":["{target}"]}}'></textarea></div>
-                  <div class="setting-footer"><button type="button" class="setting-reset" id="installSystemManagerAdapter">Validate and install</button></div>
+                  <div class="setting-footer adapter-editor-actions"><button type="button" class="setting-reset" id="cancelSystemManagerAdapterEdit" hidden>Cancel edit</button><button type="button" class="setting-reset" id="installSystemManagerAdapter">Validate and install</button></div>
                 </details>
                 <p class="setting-note" id="systemManagerAdapterStatus" aria-live="polite"></p>
               </section>

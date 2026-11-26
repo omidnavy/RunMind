@@ -747,7 +747,7 @@ public sealed partial class AgentHostBridge
             if (isOverride && File.Exists(destination)) File.Replace(temp, destination, null); else File.Move(temp, destination, false);
         }
         catch { try { if (File.Exists(temp)) File.Delete(temp); } catch { } throw; }
-        return new { installed = true, id, displayName = name, operations = operations.Select(pair => pair.Key).ToArray(), path = destination, note = "Declarative adapter installed. It contains argument templates only and cannot execute scripts or shell commands." };
+        return new { installed = true, overridden = isOverride, id, displayName = name, operations = operations.Select(pair => pair.Key).ToArray(), path = destination, note = "Declarative adapter installed. It contains argument templates only and cannot execute scripts or shell commands." };
     }
 
     private static object SystemManagerResetAdapter(JsonElement args)
@@ -794,7 +794,8 @@ public sealed partial class AgentHostBridge
                 access = operation == "open-url" ? "external-navigation" : "local-file-system",
                 stateChanging = true,
                 confirmation = "native System Manager permission policy",
-                resultFields = new[] { "accepted", "launched", "verified", "outcome", "message" }
+                resultFields = new[] { "accepted", "launched", "verified", "outcome", "message" },
+                templates = item.operations[operation]
             }).ToArray()
         }).ToArray();
         return new { adapters, count = adapters.Length, customAdapterDirectory = SystemManagerAdaptersRoot, format = "JSON manifests; argument arrays only; no scripts or shell commands", operationMetadata = "Required/optional parameters, access classification, confirmation policy, and result fields are descriptive; native validation and permissions remain authoritative." };

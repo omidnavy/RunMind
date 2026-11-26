@@ -829,7 +829,7 @@
           const detail = document.createElement('span'); detail.textContent = `${adapter.builtIn ? 'Built-in' : 'Custom'} · matches ${adapter.match} · ${(adapter.operations || []).map(operation => typeof operation === 'string' ? operation : operation?.name).filter(Boolean).join(', ')}`;
           copy.append(title, detail); row.append(copy);
           if (adapter.builtIn) {
-            const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'setting-reset'; edit.textContent = 'Edit'; edit.dataset.adapterEdit = adapter.id; edit.dataset.adapterName = adapter.displayName || adapter.id; edit.dataset.adapterMatch = adapter.match || ''; edit.dataset.adapterOperations = JSON.stringify(Object.fromEntries((adapter.operations || []).map(op => [op.name, []]))); row.append(edit);
+            const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'setting-reset'; edit.textContent = 'Edit'; edit.dataset.adapterEdit = adapter.id; edit.dataset.adapterName = adapter.displayName || adapter.id; edit.dataset.adapterMatch = adapter.match || ''; edit.dataset.adapterOperations = JSON.stringify(Object.fromEntries((adapter.operations || []).map(op => [op.name, Array.isArray(op.templates) ? op.templates : []]))); row.append(edit);
             if (adapter.hasOverride) { const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'setting-reset'; reset.textContent = 'Reset'; reset.dataset.adapterReset = adapter.id; row.append(reset); }
           }
           if (!adapter.builtIn) {
@@ -852,7 +852,7 @@
       if (!adapter || typeof adapter !== 'object' || Array.isArray(adapter)) { if (status) status.textContent = 'The manifest must be a JSON object.'; return; }
       try {
         const result = await callAgentHost('systemManager.adapters.save', { adapter });
-        if (result?.installed) { input.value = ''; const saveButton = document.getElementById('installSystemManagerAdapter'); if (saveButton) saveButton.textContent = 'Validate and install'; if (status) status.textContent = `${result.overridden ? 'Saved override for' : 'Installed'} ${result.displayName}.`; await loadSystemManagerAdapters(); }
+        if (result?.installed) { input.value = ''; input.dataset.adapterEditId = ''; const saveButton = document.getElementById('installSystemManagerAdapter'); if (saveButton) saveButton.textContent = 'Validate and install'; const cancelButton = document.getElementById('cancelSystemManagerAdapterEdit'); if (cancelButton) cancelButton.hidden = true; const details = input.closest('details'); if (details) details.open = false; if (status) status.textContent = `${result.overridden ? 'Saved override for' : 'Installed'} ${result.displayName}.`; await loadSystemManagerAdapters(); }
         else if (result?.cancelled) { if (status) status.textContent = 'Installation cancelled.'; }
         else if (status) status.textContent = 'The adapter was not installed.';
       } catch (error) { if (status) status.textContent = `Could not install adapter: ${error?.message || error}`; }

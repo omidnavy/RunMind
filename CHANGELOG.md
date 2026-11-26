@@ -8,7 +8,9 @@
 - Added coding, debugging, testing-and-quality, and code-review Agent Skills.
 - Added RunMind-native `file-history`, `skill-management`, `create-skill`, and `install-skill` skills, adapted from the supplied Bionic bundle. They use RunMind Git, backup, and skill-manager capabilities; Bionic-only browser/session APIs were not copied.
 - Fixed a C# record `with` initializer in shared adapter override loading that prevented all three hosts from compiling.
-- Wired System Manager tab navigation and built-in adapter Edit/Reset controls; Edit now opens the declarative manifest editor prefilled with the built-in operation names.
+- Wired System Manager tab navigation and built-in adapter Edit/Reset controls. Built-in Edit now loads the actual effective argument templates, and native adapter inventory exposes those templates for the editor.
+- Fixed built-in adapter saving: the editor no longer creates empty operation arrays that native validation rejects; successful saves report whether an override was created.
+- Added persistent New adapter and Cancel edit actions so leaving built-in edit mode restores a clean custom-adapter install form.
 - Added shared coding execution guidance emphasizing project inspection, root-cause fixes, preserving user changes, proportionate validation, and honest verification reporting.
 - Retained the existing system-management, container-management, and runmind-management skills.
 
