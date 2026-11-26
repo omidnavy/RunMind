@@ -29,9 +29,12 @@ Use the current System Manager tools and adapter inventory; never assume a parti
 - Declarative adapters are argument templates, not scripts. Never reinterpret their fields as shell commands.
 - Do not substitute arbitrary PowerShell/native execution when an adapter operation is unavailable. Explain the limitation instead.
 
-## Windows services and containers
+## Processes, Windows services, and containers
+- Use `system_manager_list_startup_applications` to inspect Run/RunOnce registry entries and Startup folders. It is read-only; never claim it disables or modifies startup entries.
+- Process inventory returns parent PID and memory usage. When process inspection is enabled, it also returns cumulative CPU time, private memory, thread/handle counts, priority, responsiveness, executable path, and start time. CPU time is cumulative, not a sampled utilization percentage.
+- Prefer `system_manager_close_process` for a graceful close of a process with an accessible main window. It validates the PID/name/path/start-time identity, always requires native confirmation, and never force-kills. If graceful close is unavailable or insufficient and the user explicitly authorized termination, use the separate `system_manager_terminate_process`; it always requires confirmation and protects critical Windows process names.
 - Use the service action tool only when the System Diagnostics group and `serviceInformation` capability are enabled.
-- Service actions are `list`, `inspect`, `start`, and `stop`. Use exact service names. Start/stop always require a fresh native confirmation; if the request is declined or the OS denies access, stop and report that outcome.
-- After requesting a service start/stop, inspect it again. Report the resulting service state only when the follow-up inspection confirms it.
-- Container actions support Docker and Podman through discrete CLI arguments. State-changing actions require native confirmation.
+- Service actions are `list`, `inspect`, `config`, `dependents`, `start`, `stop`, and `restart`. Use exact service names. State changes always require fresh native confirmation; if declined or denied, stop and report that outcome.
+- After a service state change, rely on the returned `actualState` and `verified` fields. A restart is verified only when RunMind observed the stop/start cycle and confirmed the final running state.
+- Container actions support Podman and Docker through discrete CLI arguments; auto-detection prefers Podman. Read-only actions include `list`, `inspect`, `logs`, `stats`, `images`, `volumes`, `networks`, and `health`. Start/stop/restart always require native confirmation and an inspect-based state check.
 - The System Manager command timeout is user-configurable. `0` means no automatic timeout; task cancellation remains active. Do not claim that `0` disables cancellation.

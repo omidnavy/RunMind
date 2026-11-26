@@ -27,6 +27,33 @@ public sealed partial class AgentHostBridge
     private static string SystemManagerAdapterOverridesRoot => Path.Combine(SystemManagerAdaptersRoot, "Overrides");
     private sealed record SystemApplicationRecord(string id, string name, string path, string source, string version, string[]? aliases = null, string? appUserModelId = null);
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct NativeProcessEntry32
+    {
+        public uint dwSize; public uint cntUsage; public uint th32ProcessID; public UIntPtr th32DefaultHeapID;
+        public uint th32ModuleID; public uint cntThreads; public uint th32ParentProcessID; public int pcPriClassBase;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint processId);
+    [DllImport("kernel32.dll", EntryPoint = "Process32FirstW", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool Process32FirstW(IntPtr snapshot, ref NativeProcessEntry32 entry);
+    [DllImport("kernel32.dll", EntryPoint = "Process32NextW", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool Process32NextW(IntPtr snapshot, ref NativeProcessEntry32 entry);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CloseHandle(IntPtr handle);
+    private static Dictionary<int, int> ReadProcessParentIds()
+    {
+        var result = new Dictionary<int, int>();
+        var snapshot = CreateToolhelp32Snapshot(0x00000002, 0);
+        if (snapshot == new IntPtr(-1)) return result;
+        try
+        {
+            var entry = new NativeProcessEntry32 { dwSize = (uint)Marshal.SizeOf<NativeProcessEntry32>(), szExeFile = string.Empty };
+            if (Process32FirstW(snapshot, ref entry)) do { result[(int)entry.th32ProcessID] = (int)entry.th32ParentProcessID; } while (Process32NextW(snapshot, ref entry));
+        }
+        catch { }
+        finally { CloseHandle(snapshot); }
+        return result;
+    }
+
     [DllImport("user32.dll")]
     private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")]
@@ -409,6 +436,82 @@ public sealed partial class AgentHostBridge
             if (shell is not null && Marshal.IsComObject(shell)) Marshal.FinalReleaseComObject(shell);
         }
         return results;
+    }
+
+    private static object SystemManagerListStartupApplications(string query)
+    {
+        RequireSystemCapability("applications", "discoverApplications");
+        var results = new List<object>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Add(string name, string source, string command, string? shortcutPath = null)
+        {
+            if (results.Count >= 250 || string.IsNullOrWhiteSpace(name)) return;
+            if (!string.IsNullOrWhiteSpace(query) && !name.Contains(query, StringComparison.OrdinalIgnoreCase)) return;
+            var executable = NormalizeExecutableCandidate(command);
+            if (string.IsNullOrWhiteSpace(executable) && !string.IsNullOrWhiteSpace(shortcutPath))
+            {
+                try { executable = ResolveShortcutTarget(shortcutPath); } catch { }
+            }
+            var key = $"{source}|{name}|{executable}";
+            if (!seen.Add(key)) return;
+            results.Add(new { name = name[..Math.Min(name.Length, 180)], source, executablePath = executable, shortcutPath });
+        }
+
+        var runLocations = new[]
+        {
+            (RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Run", "HKCU Run"),
+            (RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\RunOnce", "HKCU RunOnce"),
+            (RegistryHive.LocalMachine, @"Software\Microsoft\Windows\CurrentVersion\Run", "HKLM Run"),
+            (RegistryHive.LocalMachine, @"Software\Microsoft\Windows\CurrentVersion\RunOnce", "HKLM RunOnce")
+        };
+        foreach (var (hive, subKey, source) in runLocations)
+        {
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+            {
+                try
+                {
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    using var key = baseKey.OpenSubKey(subKey, writable: false);
+                    if (key is null) continue;
+                    foreach (var valueName in key.GetValueNames().Take(100))
+                    {
+                        try
+                        {
+                            var command = key.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                            if (!string.IsNullOrWhiteSpace(command)) Add(valueName, $"{source} ({view})", command);
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+        }
+
+        foreach (var (folder, source) in new[]
+        {
+            (Environment.GetFolderPath(Environment.SpecialFolder.Startup), "User Startup Folder"),
+            (Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup), "Common Startup Folder")
+        })
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder) || IsReparsePoint(folder)) continue;
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(folder).Take(100))
+                {
+                    try
+                    {
+                        if (IsReparsePoint(file)) continue;
+                        var extension = Path.GetExtension(file);
+                        if (!extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase) && !extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)) continue;
+                        var target = extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase) ? ResolveShortcutTarget(file) : file;
+                        Add(Path.GetFileNameWithoutExtension(file), source, target, extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase) ? file : null);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+        return new { success = true, action = "list-startup-applications", completed = true, verified = true, startupApplications = results, count = results.Count, truncated = results.Count >= 250, message = $"Retrieved {results.Count} startup entries." };
     }
 
     private static object SystemManagerListApplications(string query, bool forceRefresh = false)
@@ -868,15 +971,20 @@ public sealed partial class AgentHostBridge
         var action = ReadString(args, "action", 20).ToLowerInvariant();
         var container = ReadString(args, "container", 128);
         var runtime = ReadString(args, "runtime", 16).ToLowerInvariant();
-        if (action is not ("list" or "inspect" or "start" or "stop" or "restart" or "logs")) throw new InvalidDataException("Supported container actions are list, inspect, start, stop, restart, and logs.");
+        if (action is not ("list" or "inspect" or "start" or "stop" or "restart" or "logs" or "stats" or "images" or "volumes" or "networks" or "health")) throw new InvalidDataException("Supported container actions are list, inspect, start, stop, restart, logs, stats, images, volumes, networks, and health.");
         if (runtime is not ("auto" or "docker" or "podman")) throw new InvalidDataException("Runtime must be auto, docker, or podman.");
-        if (action != "list" && !System.Text.RegularExpressions.Regex.IsMatch(container, "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")) throw new InvalidDataException("A container name or ID using letters, numbers, dot, underscore, or hyphen is required.");
+        if (action is not ("list" or "stats" or "images" or "volumes" or "networks") && !System.Text.RegularExpressions.Regex.IsMatch(container, "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")) throw new InvalidDataException("A container name or ID using letters, numbers, dot, underscore, or hyphen is required.");
         var engines = runtime == "auto" ? new[] { "podman", "docker" } : new[] { runtime };
         var executable = engines.Select(name => FindExecutable(name + ".exe") ?? FindExecutable(name)).FirstOrDefault(path => !string.IsNullOrWhiteSpace(path));
-        if (executable is null) return new { available = false, runtime, action, message = "Neither Docker nor Podman was found on PATH. Install or expose a supported runtime, then retry." };
+        if (executable is null) return new { available = false, success = false, accepted = false, completed = false, verified = false, runtime, action, message = "Neither Docker nor Podman was found on PATH. Install or expose a supported runtime, then retry." };
         var commandArguments = action switch
         {
             "list" => new[] { "ps", "-a", "--format", "{{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Image}}" },
+            "stats" => new[] { "stats", "--no-stream" },
+            "images" => new[] { "images", "--format", "{{.ID}}\t{{.Repository}}:{{.Tag}}\t{{.Size}}" },
+            "volumes" => new[] { "volume", "ls" },
+            "networks" => new[] { "network", "ls" },
+            "health" => new[] { "inspect", "--format", "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}", container },
             "inspect" => new[] { "inspect", container },
             "start" => new[] { "start", container },
             "stop" => new[] { "stop", "--time", "10", container },
@@ -884,7 +992,7 @@ public sealed partial class AgentHostBridge
             _ => new[] { "logs", "--tail", "200", container }
         };
         var stateChanging = action is "start" or "stop" or "restart";
-        if (stateChanging && !ConfirmSystemManagerAction("launchApplications", $"RunMind · {runtime} container {action}", $"Runtime: {Path.GetFileNameWithoutExtension(executable)}\nContainer: {container}\nAction: {action}", alwaysAsk: true)) return new { accepted = false, cancelled = true, runtime, action, container };
+        if (stateChanging && !ConfirmSystemManagerAction("launchApplications", $"RunMind · {runtime} container {action}", $"Runtime: {Path.GetFileNameWithoutExtension(executable)}\nContainer: {container}\nAction: {action}", alwaysAsk: true)) return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, runtime, action, container, message = "The user declined the container state change." };
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         foreach (var value in commandArguments) start.ArgumentList.Add(value);
         using var process = new Process { StartInfo = start };
@@ -908,52 +1016,147 @@ public sealed partial class AgentHostBridge
         }
         var output = await stdoutTask.ConfigureAwait(false);
         var error = await stderrTask.ConfigureAwait(false);
-        return new { available = true, accepted = process.ExitCode == 0, completed = process.ExitCode == 0, verified = process.ExitCode == 0 && (action is "list" or "inspect"), runtime = Path.GetFileNameWithoutExtension(executable), action, container, exitCode = process.ExitCode, output = output.text, outputTruncated = output.truncated, error = error.text, errorTruncated = error.truncated, message = process.ExitCode == 0 ? "Runtime command completed. For start/stop/restart, use inspect or list to verify the resulting state." : "Container runtime returned a non-zero exit code." };
+        var actualState = (string?)null;
+        var verified = process.ExitCode == 0 && !stateChanging;
+        if (process.ExitCode == 0 && stateChanging)
+        {
+            var verifyStart = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
+            verifyStart.ArgumentList.Add("inspect"); verifyStart.ArgumentList.Add("--format"); verifyStart.ArgumentList.Add("{{.State.Status}}"); verifyStart.ArgumentList.Add(container);
+            using var verifyProcess = new Process { StartInfo = verifyStart };
+            if (verifyProcess.Start())
+            {
+                using var verifyTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                if (timeoutSeconds > 0) verifyTimeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+                var verifyOutputTask = ReadBoundedProcessOutputAsync(verifyProcess.StandardOutput, verifyTimeout.Token);
+                var verifyErrorTask = ReadBoundedProcessOutputAsync(verifyProcess.StandardError, verifyTimeout.Token);
+                try { await verifyProcess.WaitForExitAsync(verifyTimeout.Token).ConfigureAwait(false); actualState = (await verifyOutputTask.ConfigureAwait(false)).text.Trim(); _ = await verifyErrorTask.ConfigureAwait(false); }
+                catch (OperationCanceledException)
+                {
+                    try { if (!verifyProcess.HasExited) verifyProcess.Kill(entireProcessTree: true); } catch { }
+                    try { await verifyProcess.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+                    try { await Task.WhenAll(verifyOutputTask, verifyErrorTask).ConfigureAwait(false); } catch { }
+                    if (cancellationToken.IsCancellationRequested) throw;
+                }
+                var desired = action == "stop" ? "exited" : "running";
+                verified = verifyProcess.ExitCode == 0 && string.Equals(actualState, desired, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        var success = process.ExitCode == 0 && (!stateChanging || verified);
+        return new { available = true, success, accepted = process.ExitCode == 0, completed = process.ExitCode == 0, verified, runtime = Path.GetFileNameWithoutExtension(executable), action, container, requestedState = stateChanging ? (action == "stop" ? "exited" : "running") : null, actualState, exitCode = process.ExitCode, output = output.text, outputTruncated = output.truncated, error = error.text, errorTruncated = error.truncated, message = success ? (stateChanging ? $"Container state verified: {actualState}." : "Runtime query completed.") : stateChanging && process.ExitCode == 0 ? $"Runtime accepted the action, but the requested state could not be verified. Actual state: {actualState ?? "unknown"}." : "Container runtime returned a non-zero exit code." };
     }
 
-    private async Task<object> SystemManagerServiceActionAsync(JsonElement args, CancellationToken cancellationToken)
+    private async Task<(int exitCode, string output, string error)> RunServiceControlAsync(string[] arguments, CancellationToken cancellationToken)
     {
-        RequireSystemCapability("diagnostics", "serviceInformation");
-        var action = ReadString(args, "action", 16).ToLowerInvariant();
-        var service = ReadString(args, "service", 128);
-        if (action is not ("list" or "inspect" or "start" or "stop")) throw new InvalidDataException("Supported service actions are list, inspect, start, and stop.");
-        if (action != "list" && !System.Text.RegularExpressions.Regex.IsMatch(service, "^[A-Za-z0-9_.-]{1,128}$")) throw new InvalidDataException("A valid Windows service name is required.");
-        if (action is "start" or "stop")
-        {
-            if (!ConfirmSystemManagerAction("launchApplications", $"RunMind · {action} Windows service", $"Service: {service}\nAction: {action}\nThis changes Windows service state and may affect applications or the operating system.", alwaysAsk: true))
-                return new { accepted = false, cancelled = true, action, service };
-        }
         var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "sc.exe");
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
-        if (action == "list") { start.ArgumentList.Add("query"); start.ArgumentList.Add("state="); start.ArgumentList.Add("all"); }
-        else if (action == "inspect") { start.ArgumentList.Add("queryex"); start.ArgumentList.Add(service); }
-        else { start.ArgumentList.Add(action); start.ArgumentList.Add(service); }
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
         if (!process.Start()) throw new InvalidOperationException("Could not start the Windows Service Control utility.");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var timeoutSeconds = (int?)ReadSystemManagerSettings()["commandTimeoutSeconds"] ?? 0;
         if (timeoutSeconds > 0) timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-        var stdoutTask = ReadBoundedProcessOutputAsync(process.StandardOutput, timeout.Token);
-        var stderrTask = ReadBoundedProcessOutputAsync(process.StandardError, timeout.Token);
+        var stdout = ReadBoundedProcessOutputAsync(process.StandardOutput, timeout.Token);
+        var stderr = ReadBoundedProcessOutputAsync(process.StandardError, timeout.Token);
         try { await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false); }
         catch (OperationCanceledException)
         {
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
             try { await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
-            try { await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false); } catch { }
+            try { await Task.WhenAll(stdout, stderr).ConfigureAwait(false); } catch { }
             if (cancellationToken.IsCancellationRequested) throw;
-            throw new TimeoutException(timeoutSeconds == 0 ? "The Windows service command was cancelled." : $"The Windows service command exceeded the configured {timeoutSeconds}-second timeout.");
+            throw new TimeoutException(timeoutSeconds == 0 ? "The Windows service operation was cancelled." : $"The Windows service operation exceeded {timeoutSeconds} seconds.");
         }
-        var output = await stdoutTask.ConfigureAwait(false);
-        var error = await stderrTask.ConfigureAwait(false);
-        return new { accepted = process.ExitCode == 0, action, service = action == "list" ? null : service, exitCode = process.ExitCode, output = output.text, outputTruncated = output.truncated, error = error.text, errorTruncated = error.truncated, note = action is "start" or "stop" ? "Service Control accepted the request; inspect the service to verify its resulting state." : "Service information returned by Windows Service Control." };
+        var output = await stdout.ConfigureAwait(false);
+        var error = await stderr.ConfigureAwait(false);
+        return (process.ExitCode, output.text, error.text);
     }
 
-    private static bool SupportsNewWindowBehavior(SystemApplicationRecord application)
+    private static string? ParseServiceState(string output)
     {
-        if (!string.IsNullOrWhiteSpace(application.appUserModelId)) return false;
-        var executable = Path.GetFileName(application.path ?? string.Empty);
-        return new[] { "firefox.exe", "chrome.exe", "msedge.exe", "brave.exe", "vivaldi.exe", "opera.exe", "code.exe" }.Contains(executable, StringComparer.OrdinalIgnoreCase);
+        var match = System.Text.RegularExpressions.Regex.Match(output, @"(?im)^\s*STATE\s*:\s*\d+\s+([A-Z_]+)");
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    private async Task<object> SystemManagerServiceActionAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        RequireSystemCapability("diagnostics", "serviceInformation");
+        var action = ReadString(args, "action", 20).ToLowerInvariant();
+        var service = ReadString(args, "service", 128);
+        if (action is not ("list" or "inspect" or "start" or "stop" or "restart" or "config" or "dependents"))
+            throw new InvalidDataException("Supported service actions are list, inspect, config, dependents, start, stop, and restart.");
+        if (action != "list" && !System.Text.RegularExpressions.Regex.IsMatch(service, "^[A-Za-z0-9_.-]{1,128}$"))
+            throw new InvalidDataException("A valid Windows service name is required.");
+
+        if (action == "list")
+        {
+            var result = await RunServiceControlAsync(new[] { "query", "state=", "all" }, cancellationToken).ConfigureAwait(false);
+            return new { success = result.exitCode == 0, accepted = result.exitCode == 0, action, completed = true, verified = result.exitCode == 0, exitCode = result.exitCode, output = result.output, error = result.error, message = result.exitCode == 0 ? "Service enumeration completed." : "Service enumeration failed." };
+        }
+        if (action == "config" || action == "dependents")
+        {
+            var command = action == "config" ? new[] { "qc", service } : new[] { "enumdepend", service };
+            var result = await RunServiceControlAsync(command, cancellationToken).ConfigureAwait(false);
+            return new { success = result.exitCode == 0, accepted = result.exitCode == 0, action, target = service, completed = true, verified = result.exitCode == 0, exitCode = result.exitCode, output = result.output, error = result.error, message = result.exitCode == 0 ? (action == "config" ? "Service configuration retrieved." : "Dependent services retrieved.") : "The service query failed." };
+        }
+        if (action == "inspect")
+        {
+            var query = await RunServiceControlAsync(new[] { "queryex", service }, cancellationToken).ConfigureAwait(false);
+            var config = await RunServiceControlAsync(new[] { "qc", service }, cancellationToken).ConfigureAwait(false);
+            return new { success = query.exitCode == 0, accepted = query.exitCode == 0, action, target = service, completed = true, verified = query.exitCode == 0, actualState = ParseServiceState(query.output), queryExitCode = query.exitCode, query = query.output, configuration = config.output, error = string.Join("\n", new[] { query.error, config.error }.Where(value => !string.IsNullOrWhiteSpace(value))), message = query.exitCode == 0 ? "Service state and configuration retrieved." : "Service inspection failed." };
+        }
+
+        if (!ConfirmSystemManagerAction("launchApplications", $"RunMind · {action} Windows service", $"Service: {service}\nAction: {action}\nThis changes Windows service state and may affect applications or the operating system.", alwaysAsk: true))
+            return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, action, target = service, message = "The user declined the service operation." };
+
+        var commandOutput = new List<string>();
+        var commandErrors = new List<string>();
+        var accepted = true;
+        var restartCycleCompleted = action != "restart";
+        if (action == "restart")
+        {
+            var before = await RunServiceControlAsync(new[] { "query", service }, cancellationToken).ConfigureAwait(false);
+            var beforeState = ParseServiceState(before.output);
+            if (beforeState == "RUNNING")
+            {
+                var stop = await RunServiceControlAsync(new[] { "stop", service }, cancellationToken).ConfigureAwait(false);
+                commandOutput.Add(stop.output); commandErrors.Add(stop.error); accepted &= stop.exitCode == 0;
+                if (stop.exitCode == 0)
+                {
+                    var stopped = false;
+                    for (var attempt = 0; attempt < 20 && !stopped; attempt++)
+                    {
+                        await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+                        var state = await RunServiceControlAsync(new[] { "query", service }, cancellationToken).ConfigureAwait(false);
+                        stopped = ParseServiceState(state.output) == "STOPPED";
+                    }
+                    if (!stopped) accepted = false;
+                }
+            }
+            if (accepted)
+            {
+                var start = await RunServiceControlAsync(new[] { "start", service }, cancellationToken).ConfigureAwait(false);
+                commandOutput.Add(start.output); commandErrors.Add(start.error); accepted &= start.exitCode == 0;
+                restartCycleCompleted = start.exitCode == 0;
+            }
+        }
+        else
+        {
+            var result = await RunServiceControlAsync(new[] { action, service }, cancellationToken).ConfigureAwait(false);
+            commandOutput.Add(result.output); commandErrors.Add(result.error); accepted = result.exitCode == 0;
+        }
+
+        string? actualState = null;
+        var desiredState = action == "stop" ? "STOPPED" : "RUNNING";
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var state = await RunServiceControlAsync(new[] { "query", service }, cancellationToken).ConfigureAwait(false);
+            actualState = ParseServiceState(state.output);
+            if (actualState == desiredState) break;
+            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+        }
+        var verified = actualState == desiredState && restartCycleCompleted;
+        return new { success = verified, accepted, completed = true, verified, action, target = service, requestedState = desiredState, actualState, output = string.Join("\n", commandOutput), error = string.Join("\n", commandErrors.Where(value => !string.IsNullOrWhiteSpace(value))), message = verified ? $"Service {service} is verified {desiredState.ToLowerInvariant()}." : $"Service command completed, but the requested state could not be verified. Actual state: {actualState ?? "unknown"}." };
     }
 
     private static object SystemManagerSetApplicationBehavior(JsonElement args)
@@ -1211,6 +1414,7 @@ public sealed partial class AgentHostBridge
     {
         RequireSystemCapability("processes", "listProcesses");
         var rows = new List<object>();
+        var parentIds = ReadProcessParentIds();
         var includeDetails = (bool?)ReadSystemManagerSettings()["capabilities"]?["inspectProcesses"] == true;
         foreach (var process in Process.GetProcesses())
         {
@@ -1218,17 +1422,59 @@ public sealed partial class AgentHostBridge
             {
                 var name = process.ProcessName;
                 if (!string.IsNullOrWhiteSpace(query) && !name.Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
-                string? path = null; DateTime? started = null;
-                if (includeDetails) { try { path = process.MainModule?.FileName; } catch { } }
+                string? path = null; DateTime? started = null; double? cpuSeconds = null; int? threadCount = null; int? handleCount = null; string? priority = null; bool? responding = null;
+                if (includeDetails)
+                {
+                    try { path = process.MainModule?.FileName; } catch { }
+                    try { cpuSeconds = Math.Round(process.TotalProcessorTime.TotalSeconds, 3); } catch { }
+                    try { threadCount = process.Threads.Count; } catch { }
+                    try { handleCount = process.HandleCount; } catch { }
+                    try { priority = process.PriorityClass.ToString(); } catch { }
+                    try { if (process.MainWindowHandle != IntPtr.Zero) responding = process.Responding; } catch { }
+                }
                 try { started = process.StartTime.ToUniversalTime(); } catch { }
                 long memory = 0; try { memory = process.WorkingSet64; } catch { }
-                rows.Add(new { name, processId = process.Id, memoryBytes = memory, executablePath = path, startedAtUtc = started });
+                long privateMemory = 0; try { privateMemory = process.PrivateMemorySize64; } catch { }
+                rows.Add(new { name, processId = process.Id, parentProcessId = parentIds.TryGetValue(process.Id, out var parentId) ? parentId : (int?)null, memoryBytes = memory, privateMemoryBytes = privateMemory, cpuSeconds, threadCount, handleCount, priority, responding, executablePath = path, startedAtUtc = started });
             }
             catch { }
             finally { process.Dispose(); }
-            if (rows.Count >= 250) break;
+            if (rows.Count >= 500) break;
         }
-        return new { processes = rows, count = rows.Count, truncated = rows.Count >= 250 };
+        return new { success = true, accepted = true, action = "list-processes", completed = true, verified = true, processes = rows, count = rows.Count, truncated = rows.Count >= 500, detailFieldsEnabled = includeDetails, message = $"Retrieved {rows.Count} process records." };
+    }
+
+    private static object SystemManagerCloseProcess(JsonElement args)
+    {
+        RequireSystemCapability("processes", "terminateProcesses");
+        if (!args.TryGetProperty("processId", out var pidElement) || !pidElement.TryGetInt32(out var pid) || pid <= 0)
+            throw new InvalidDataException("A valid process ID is required.");
+        var expectedName = ReadString(args, "expectedName", 260);
+        var expectedPath = ReadString(args, "expectedPath", 2048);
+        var expectedStartedAt = ReadString(args, "expectedStartedAtUtc", 80);
+        if (!DateTimeOffset.TryParse(expectedStartedAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var expectedStart))
+            throw new InvalidDataException("A process start timestamp from the process listing is required to prevent PID-reuse actions.");
+        Process process;
+        try { process = Process.GetProcessById(pid); }
+        catch (ArgumentException) { return new { success = true, accepted = false, action = "close-process", target = pid.ToString(CultureInfo.InvariantCulture), completed = true, verified = true, requestedState = "closed", actualState = "exited", message = "The process has already exited." }; }
+        using (process)
+        {
+            if (process.HasExited) return new { success = true, accepted = false, action = "close-process", target = pid.ToString(CultureInfo.InvariantCulture), completed = true, verified = true, requestedState = "closed", actualState = "exited", message = "The process has already exited." };
+            if (string.IsNullOrWhiteSpace(expectedName) || !string.Equals(process.ProcessName, expectedName, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The process identity changed since discovery; close was cancelled.");
+            DateTimeOffset actualStart;
+            try { actualStart = new DateTimeOffset(process.StartTime.ToUniversalTime()); } catch { throw new UnauthorizedAccessException("RunMind cannot verify this process start time; close was blocked."); }
+            if (Math.Abs((actualStart - expectedStart).TotalSeconds) > 1) throw new InvalidOperationException("The PID now belongs to a different process instance; close was cancelled.");
+            string? actualPath = null; try { actualPath = process.MainModule?.FileName; } catch { }
+            if (!string.IsNullOrWhiteSpace(expectedPath) && !string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The executable path changed since discovery; close was cancelled.");
+            var protectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "svchost", "dwm", "fontdrvhost" };
+            if (protectedNames.Contains(process.ProcessName)) throw new UnauthorizedAccessException("RunMind will not send a close request to a protected Windows process.");
+            if (process.MainWindowHandle == IntPtr.Zero) return new { success = false, accepted = false, action = "close-process", target = pid.ToString(CultureInfo.InvariantCulture), completed = false, verified = false, requestedState = "closed", actualState = "running-no-main-window", message = "This process has no accessible main window. RunMind did not terminate it." };
+            if (!ConfirmSystemManagerAction("terminateProcesses", "RunMind · Close process gracefully", $"Process: {process.ProcessName}\nPID: {pid}\nExecutable: {actualPath ?? "Unavailable"}\n\nRunMind will send a normal window-close request. It will not force-terminate the process.", alwaysAsk: true))
+                return new { success = false, accepted = false, cancelled = true, action = "close-process", target = pid.ToString(CultureInfo.InvariantCulture), completed = false, verified = false, requestedState = "closed", actualState = "running", message = "The user declined the graceful close request." };
+            var requested = process.CloseMainWindow();
+            var exited = requested && process.WaitForExit(5000);
+            return new { success = exited, accepted = requested, action = "close-process", target = pid.ToString(CultureInfo.InvariantCulture), completed = requested, verified = exited, requestedState = "closed", actualState = exited ? "exited" : "running", message = exited ? "The process closed gracefully." : requested ? "A close request was sent, but the process is still running." : "Windows did not accept a main-window close request. The process was not force-terminated." };
+        }
     }
 
     private static object SystemManagerTerminateProcess(JsonElement args)
@@ -1242,24 +1488,24 @@ public sealed partial class AgentHostBridge
             throw new InvalidDataException("A process start timestamp from the process listing is required to prevent PID-reuse termination.");
         Process process;
         try { process = Process.GetProcessById(pid); }
-        catch (ArgumentException) { return new { terminated = false, reason = "already-exited", processId = pid }; }
+        catch (ArgumentException) { return new { success = true, accepted = false, completed = true, verified = true, action = "terminate-process", target = pid.ToString(CultureInfo.InvariantCulture), requestedState = "exited", actualState = "exited", message = "The process has already exited." }; }
         using (process)
         {
-        if (process.HasExited) return new { terminated = false, reason = "already-exited", processId = pid };
-        if (string.IsNullOrWhiteSpace(expectedName) || !string.Equals(process.ProcessName, expectedName, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The process identity changed since confirmation; termination was cancelled.");
-        DateTimeOffset actualStart;
-        try { actualStart = new DateTimeOffset(process.StartTime.ToUniversalTime()); }
-        catch { throw new UnauthorizedAccessException("RunMind cannot verify this process start time; termination was blocked."); }
-        if (Math.Abs((actualStart - expectedStart).TotalSeconds) > 1) throw new InvalidOperationException("The PID now belongs to a different process instance; termination was cancelled.");
-        string? actualPath = null; try { actualPath = process.MainModule?.FileName; } catch { }
-        if (!string.IsNullOrWhiteSpace(expectedPath) && !string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The executable path changed since confirmation; termination was cancelled.");
-        var protectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "svchost", "dwm", "fontdrvhost" };
-        if (protectedNames.Contains(process.ProcessName)) throw new UnauthorizedAccessException("RunMind will not terminate a protected Windows process.");
-        if (!ConfirmSystemManagerAction("terminateProcesses", "RunMind · Terminate process", $"Process: {process.ProcessName}\nPID: {pid}\nStarted: {actualStart:O}\nExecutable: {actualPath ?? "Unavailable"}\n\nThis action terminates the process immediately and may cause unsaved work to be lost.", alwaysAsk: true))
-            return new { terminated = false, cancelled = true, reason = "user-declined", processId = pid };
-        process.Kill(entireProcessTree: false);
-        var exited = process.WaitForExit(5000);
-        return new { terminated = exited, processId = pid, processName = expectedName, executablePath = actualPath, reason = exited ? "terminated" : "termination-requested-process-still-exiting" };
+            if (process.HasExited) return new { success = true, accepted = false, completed = true, verified = true, action = "terminate-process", target = pid.ToString(CultureInfo.InvariantCulture), requestedState = "exited", actualState = "exited", message = "The process has already exited." };
+            if (string.IsNullOrWhiteSpace(expectedName) || !string.Equals(process.ProcessName, expectedName, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The process identity changed since confirmation; termination was cancelled.");
+            DateTimeOffset actualStart;
+            try { actualStart = new DateTimeOffset(process.StartTime.ToUniversalTime()); }
+            catch { throw new UnauthorizedAccessException("RunMind cannot verify this process start time; termination was blocked."); }
+            if (Math.Abs((actualStart - expectedStart).TotalSeconds) > 1) throw new InvalidOperationException("The PID now belongs to a different process instance; termination was cancelled.");
+            string? actualPath = null; try { actualPath = process.MainModule?.FileName; } catch { }
+            if (!string.IsNullOrWhiteSpace(expectedPath) && !string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The executable path changed since confirmation; termination was cancelled.");
+            var protectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "svchost", "dwm", "fontdrvhost" };
+            if (protectedNames.Contains(process.ProcessName)) throw new UnauthorizedAccessException("RunMind will not terminate a protected Windows process.");
+            if (!ConfirmSystemManagerAction("terminateProcesses", "RunMind · Terminate process", $"Process: {process.ProcessName}\nPID: {pid}\nStarted: {actualStart:O}\nExecutable: {actualPath ?? "Unavailable"}\n\nThis action terminates the process immediately and may cause unsaved work to be lost.", alwaysAsk: true))
+                return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, action = "terminate-process", target = pid.ToString(CultureInfo.InvariantCulture), requestedState = "exited", actualState = "running", message = "The user declined process termination." };
+            process.Kill(entireProcessTree: false);
+            var exited = process.WaitForExit(5000);
+            return new { success = exited, accepted = true, completed = exited, verified = exited, action = "terminate-process", target = pid.ToString(CultureInfo.InvariantCulture), requestedState = "exited", actualState = exited ? "exited" : "running", processName = expectedName, executablePath = actualPath, message = exited ? "The process terminated and exit was verified." : "Termination was requested, but the process is still running." };
         }
     }
 
@@ -1280,6 +1526,17 @@ public sealed partial class AgentHostBridge
             data["osArchitecture"] = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString();
             data["framework"] = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription;
             data["workingSetBytes"] = Environment.WorkingSet;
+            data["uptimeMilliseconds"] = Environment.TickCount64;
+            data["drives"] = DriveInfo.GetDrives().Take(32).Select(drive =>
+            {
+                try
+                {
+                    if (!drive.IsReady) return null;
+                    var total = drive.TotalSize; var available = drive.AvailableFreeSpace;
+                    return new { name = drive.Name, format = drive.DriveFormat, type = drive.DriveType.ToString(), totalBytes = total, availableBytes = available, usedBytes = total - available };
+                }
+                catch { return null; }
+            }).Where(drive => drive is not null).ToArray();
         }
         if ((bool?)capabilities?["environmentInformation"] == true)
         {
@@ -1295,7 +1552,9 @@ public sealed partial class AgentHostBridge
             {
                 name = adapter.Name, description = adapter.Description, type = adapter.NetworkInterfaceType.ToString(),
                 status = adapter.OperationalStatus.ToString(), speedBitsPerSecond = adapter.Speed,
-                addresses = adapter.GetIPProperties().UnicastAddresses.Take(20).Select(item => item.Address.ToString()).ToArray()
+                addresses = adapter.GetIPProperties().UnicastAddresses.Take(20).Select(item => item.Address.ToString()).ToArray(),
+                gateways = adapter.GetIPProperties().GatewayAddresses.Take(10).Select(item => item.Address.ToString()).ToArray(),
+                dnsServers = adapter.GetIPProperties().DnsAddresses.Take(10).Select(item => item.ToString()).ToArray()
             }).ToArray();
             var properties = IPGlobalProperties.GetIPGlobalProperties();
             data["network"] = new { hostName = properties.HostName, domainName = properties.DomainName, adapters, activeTcpConnections = properties.GetActiveTcpConnections().Take(200).Select(item => new { local = item.LocalEndPoint.ToString(), remote = item.RemoteEndPoint.ToString(), state = item.State.ToString() }).ToArray(), tcpListeners = properties.GetActiveTcpListeners().Take(100).Select(item => item.ToString()).ToArray() };

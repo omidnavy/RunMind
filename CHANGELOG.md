@@ -1,16 +1,27 @@
-## Phase 1 semantic JavaScript increment
+## Phase 1 semantic JavaScript and System Manager increments
 
-- Upgrade the project-index schema/key to v3 and force re-indexing of prior records.
-- Resolve JavaScript identifier references against lexical bindings, including nested block shadowing, function parameters, imports, and declarations; retain source positions and unresolved names.
-- Record named/default exports and import bindings, then statically match relative module imports to indexed files and exported names.
-- Add the `project_symbol_graph` agent tool for inspecting declarations, references, module edges, resolved imports, and unresolved imports.
-- Keep Acorn bundled/offline. TypeScript, TSX, JSX, package aliases, conditional exports, and compiler-grade semantics remain outside this increment.
+- Upgrade the project-index schema/key to v4 and force re-indexing of prior records.
+- Resolve JavaScript lexical references, classify reads/writes, and record direct/member/constructor call sites with statically linked local declaration positions where possible.
+- Extend the symbol graph with bounded circular relative-module dependency detection.
+- Expand process inventory with parent PID and gated CPU/memory/thread/handle/priority/responsiveness details; add identity-checked graceful close without force termination.
+- Expand Windows service inspection to configuration/dependents and restart with mandatory confirmation and final-state polling.
+- Expand Podman/Docker inventory to stats, images, volumes, networks, and health inspection; mutating actions are not read-only and are followed by state verification.
+- Add uptime, disk capacity, network gateway, and DNS information to read-only diagnostics.
+- TypeScript/TSX/JSX parsing, complete Node module resolution, and compiler-grade semantics remain outstanding.
 
 # RunMind Changelog
 
 ## Unreleased — Phase 1 Developer Workbench & System Manager hardening
 
-- Bundle Acorn 8.15.0 (MIT) for offline JavaScript AST parsing; resolve lexical references, record exports/import bindings, and statically link relative imports to indexed exports. The index schema/key is v3. Add the `project_symbol_graph` inspection tool. TypeScript, TSX, JSX, and other languages retain explicit heuristic fallback.
+- Upgrade the persistent JavaScript project index to schema/key v4. Record AST-derived direct/member/constructor call sites, local declaration links, and bounded circular module dependency cycles; expose call sites and cycles through `project_symbol_graph`.
+- Expand Windows process inspection with parent PID, working/private memory, cumulative CPU time, thread/handle counts, priority, responsiveness, executable path, and start time (detail fields remain capability-gated). Add an identity-checked graceful process-close request that never force-kills.
+- Expand Windows service queries with configuration and dependent-service inspection, plus restart. Start/stop/restart always require fresh native confirmation and poll the actual service state; accepted/completed/verified are reported separately.
+- Expand Podman/Docker inventory with stats, images, volumes, and networks. State-changing container actions are no longer classified as read-only and are followed by an inspect-based state check.
+- Add uptime, logical-drive capacity, network gateway, and DNS information to the individually enabled read-only diagnostics.
+- Add read-only Windows startup inventory across per-user/machine Run/RunOnce registry keys and Startup folders; no startup modification is exposed.
+- Extend static Node module resolution to relative imports, workspace package `exports`, package `imports` (`#` aliases), common Node built-ins, and workspace re-exports. External dependencies are surfaced separately. TypeScript path mappings, installed dependency resolution, custom loaders, and full Node runtime resolution remain outstanding.
+- Bundle Acorn 8.15.0 (MIT) for offline JavaScript AST parsing; TypeScript, TSX, and JSX parsing remain on heuristic fallback.
+- Harden JavaScript reference analysis: `var` declarations bind to the nearest function/module scope, shorthand AST nodes are deduplicated by source position, and identifier occurrences report read, write, or read-write access (including compound assignments and updates).
 
 - Extend the persistent project index with package-manager and lockfile detection across Node.js, Python, Rust, Go, PHP, and Ruby ecosystems.
 - Detect npm, pnpm, Yarn, and Bun using package metadata/lockfiles; expose only script commands backed by declared `package.json` scripts. Suggestions are informational and are not executed by indexing or static validation.

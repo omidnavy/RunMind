@@ -1,6 +1,6 @@
     'use strict';
 
-    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v3.';
+    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v4.';
     const PROJECT_INDEX_LIMITS = Object.freeze({ files: 10000, entries: 50000, depth: 10, fileBytes: 256 * 1024, totalBytes: 24 * 1024 * 1024 });
     const PROJECT_INDEX_SKIP_DIRS = new Set(['.git','.hg','.svn','.runmind-backups','.cache','node_modules','vendor','bin','obj','dist','build','out','target','.next','.nuxt','.venv','venv','__pycache__','coverage','.idea','.vs','.gradle','.terraform','.npm','.nuget','.cargo','.docker','.pypoetry','.conda','secret','secrets','credential','credentials','.ssh','.aws','.azure','.gnupg']);
     const PROJECT_INDEX_SKIP_FILES = /^(?:\.env(?:\..*)?|(?:.*\.(?:pem|key|p12|pfx|keystore|jks|kdbx|sqlite|db|wasm|dll|exe|so|dylib|bin|lockb)|.*(?:secret|credential).*)|id_(?:rsa|ed25519)|credentials?(?:\..*)?|secrets?(?:\..*)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|nuget\.config|pip\.conf|\.dockercfg|known_hosts)$/i;
@@ -75,32 +75,131 @@
         }).filter(Boolean))]
       };
     }
-    function projectIndexLocalImportGraph(files) {
+    function projectIndexLocalImportGraph(files, manifests = []) {
       const known = new Set(files.map(file => file.path.replace(/\\/g,'/')));
-      const edges = [];
+      const normalizePath = value => {
+        const parts=[];
+        for(const part of String(value||'').replace(/\\/g,'/').split('/')) {
+          if(!part||part==='.')continue;
+          if(part==='..'){if(parts.length)parts.pop();else parts.push('..');continue;}
+          parts.push(part);
+        }
+        return parts.join('/');
+      };
+      const manifestRecords = [];
+      for(const manifest of manifests) {
+        if(manifest.path.split('/').pop().toLowerCase()!=='package.json')continue;
+        try { const data=JSON.parse(manifest.text); if(data&&typeof data==='object')manifestRecords.push({path:manifest.path,dir:manifest.path.split('/').slice(0,-1).join('/'),data}); } catch(_) {}
+      }
+      const packages = new Map();
+      for(const record of manifestRecords)if(typeof record.data.name==='string')packages.set(record.data.name,{...record, name:record.data.name});
+      const resolveFile = baseValue => {
+        const base=normalizePath(baseValue);
+        const candidates=[base,...['.js','.mjs','.cjs','.jsx','.ts','.tsx','.json','.py'].map(ext=>base+ext),...['index.js','index.mjs','index.cjs','index.jsx','index.ts','index.tsx','index.json','__init__.py'].map(name=>`${base.replace(/\/$/,'')}/${name}`)];
+        return candidates.find(candidate=>known.has(candidate))||null;
+      };
+      const collectTargets = (value, wildcard='') => {
+        if(typeof value==='string')return [value.replace(/\*/g,wildcard)];
+        if(Array.isArray(value))return value.flatMap(item=>collectTargets(item,wildcard));
+        if(value&&typeof value==='object') {
+          const keys=Object.keys(value), preferred=['import','require','node','browser','default'];
+          const ordered=[...preferred.filter(key=>keys.includes(key)),...keys.filter(key=>!preferred.includes(key)&&!key.startsWith('.'))];
+          return ordered.flatMap(key=>collectTargets(value[key],wildcard));
+        }
+        return [];
+      };
+      const mapSubpath = (mapping, subpath, wildcard='') => {
+        if(typeof mapping==='string'||Array.isArray(mapping))return subpath==='.'?collectTargets(mapping,wildcard):[];
+        if(!mapping||typeof mapping!=='object')return [];
+        const keys=Object.keys(mapping), hasSubpathKeys=keys.some(key=>key.startsWith('.')||key.startsWith('#'));
+        if(Object.prototype.hasOwnProperty.call(mapping,subpath))return collectTargets(mapping[subpath],wildcard);
+        if(!hasSubpathKeys)return subpath==='.'?collectTargets(mapping,wildcard):[];
+        for(const key of keys) {
+          if(!key.startsWith('.')&&!key.startsWith('#'))continue;
+          const star=key.indexOf('*'); if(star<0)continue;
+          const prefix=key.slice(0,star), suffix=key.slice(star+1);
+          if(subpath.startsWith(prefix)&&subpath.endsWith(suffix)&&subpath.length>=prefix.length+suffix.length) {
+            const value=subpath.slice(prefix.length,subpath.length-suffix.length||undefined);
+            return collectTargets(mapping[key],value);
+          }
+        }
+        return [];
+      };
+      const packageTargets = (record, subpath) => {
+        const data=record.data;
+        if(data.exports!==undefined) return mapSubpath(data.exports,subpath);
+        if(subpath!=='.')return [`./${subpath.slice(2)}`];
+        return [data.module,data.main,data.browser,'./index.js'].filter(value=>typeof value==='string').map(value=>value.startsWith('./')?value:`./${value.replace(/^\.\//,'')}`);
+      };
+      const nearestPackage = filePath => manifestRecords.filter(item=>!item.dir||filePath.startsWith(item.dir+'/')||filePath===item.path).sort((a,b)=>b.dir.length-a.dir.length)[0]||null;
+      const resolveSpecifier = (file, specifier) => {
+        const source=String(specifier||'');
+        if(source.startsWith('.')) {
+          const base=file.path.split('/').slice(0,-1).join('/');
+          return resolveFile(`${base?base+'/':''}${source}`);
+        }
+        if(source.startsWith('#')) {
+          const owner=nearestPackage(file.path); if(!owner||!owner.data.imports)return null;
+          const targets=mapSubpath(owner.data.imports,source);
+          for(const target of targets)if(target.startsWith('./')){const found=resolveFile(`${owner.dir?owner.dir+'/':''}${target}`);if(found)return found;}
+          return null;
+        }
+        const parts=source.split('/');
+        const packageName=source.startsWith('@')?parts.slice(0,2).join('/'):parts[0];
+        const record=packages.get(packageName); if(!record)return null;
+        const subpath=parts.length>(source.startsWith('@')?2:1)?`./${parts.slice(source.startsWith('@')?2:1).join('/')}`:'.';
+        for(const target of packageTargets(record,subpath)) {
+          if(!target.startsWith('./'))continue;
+          const found=resolveFile(`${record.dir?record.dir+'/':''}${target}`); if(found)return found;
+        }
+        return null;
+      };
+      const edges = [], externalImports=[];
+      const nodeBuiltins = new Set(['assert','async_hooks','buffer','child_process','cluster','console','constants','crypto','dgram','diagnostics_channel','dns','domain','events','fs','http','http2','https','inspector','module','net','os','path','perf_hooks','process','punycode','querystring','readline','repl','stream','string_decoder','sys','timers','tls','trace_events','tty','url','util','v8','vm','wasi','worker_threads','zlib','test','sqlite']);
       for (const file of files) {
         if (!['javascript','typescript','python'].includes(file.language)) continue;
         for (const specifier of file.imports || []) {
-          if (!specifier.startsWith('.') && !(file.language==='python' && specifier.startsWith('.'))) continue;
-          const base = file.path.split('/').slice(0,-1).join('/');
-          const candidate = (base ? `${base}/${specifier}` : specifier).replace(/\\/g,'/').replace(/\/\.\//g,'/');
-          const candidates = [candidate, ...(['javascript','typescript'].includes(file.language) ? ['.js','.mjs','.cjs','.jsx','.ts','.tsx','.json'].map(ext=>candidate+ext) : ['.py'].map(ext=>candidate+ext)), ...(['index.js','index.ts','index.tsx','__init__.py'].map(name=>`${candidate.replace(/\/$/,'')}/${name}`))];
-          const target = candidates.find(path => known.has(path));
-          if (target) edges.push({from:file.path,to:target,specifier});
+          const target=resolveSpecifier(file,specifier);
+          if(target)edges.push({from:file.path,to:target,specifier});
+          else if(!specifier.startsWith('.')&&!specifier.startsWith('#')) {
+            const parts=specifier.split('/'), packageName=specifier.startsWith('@')?parts.slice(0,2).join('/'):parts[0];
+            if(!packages.has(packageName)&&!specifier.startsWith('node:')&&!nodeBuiltins.has(packageName))externalImports.push({from:file.path,specifier});
+          }
         }
       }
       const incoming = new Map();
       for (const edge of edges) incoming.set(edge.to,(incoming.get(edge.to)||0)+1);
+      const adjacency = new Map();
+      for (const edge of edges) { const list=adjacency.get(edge.from)||[]; list.push(edge.to); adjacency.set(edge.from,list); }
+      const circularDependencies = [], cycleKeys = new Set();
+      const canonicalCycle = cycle => { const body=cycle.slice(0,-1); if(!body.length)return ''; const rotations=body.map((_,index)=>body.slice(index).concat(body.slice(0,index)).join(' -> ')); return rotations.sort()[0]; };
+      let cycleVisits = 0;
+      for (const start of adjacency.keys()) {
+        if(cycleVisits>2500||circularDependencies.length>=100)break;
+        const walk=(current,path,active)=>{
+          if(path.length>24||cycleVisits++>2500||circularDependencies.length>=100)return;
+          for(const next of adjacency.get(current)||[]) {
+            if(next===start) { const cycle=[...path,start], key=canonicalCycle(cycle); if(key&&!cycleKeys.has(key)){cycleKeys.add(key);circularDependencies.push(cycle);} continue; }
+            if(active.has(next))continue;
+            active.add(next); walk(next,[...path,next],active); active.delete(next);
+          }
+        };
+        walk(start,[start],new Set([start]));
+      }
       const byPath = new Map(files.map(file=>[file.path,file]));
       const resolvedBindings = [], unresolvedBindings = [];
       for (const file of files) for (const binding of file.importBindings || []) {
         const edge=edges.find(item=>item.from===file.path&&item.specifier===binding.source), target=edge&&byPath.get(edge.to);
-        if(!target) { unresolvedBindings.push({from:file.path,source:binding.source,local:binding.local,imported:binding.imported,reason:'module-not-resolved'}); continue; }
+        if(!target) {
+          if(binding.source.startsWith('.')||binding.source.startsWith('#')||packages.has(binding.source.split('/')[0])||binding.source.startsWith('@')&&packages.has(binding.source.split('/').slice(0,2).join('/')))
+            unresolvedBindings.push({from:file.path,source:binding.source,local:binding.local,imported:binding.imported,reason:'workspace-module-not-resolved'});
+          continue;
+        }
         const exported=(target.exports||[]).find(item=>item.exported===binding.imported || (item.exported==='*'&&binding.imported==='*'));
         if(exported) resolvedBindings.push({from:file.path,to:target.path,local:binding.local,imported:binding.imported,exported:exported.exported});
         else unresolvedBindings.push({from:file.path,to:target.path,source:binding.source,local:binding.local,imported:binding.imported,reason:'export-not-found-or-not-statically-known'});
       }
-      return { localImportEdges: edges.slice(0,5000), resolvedBindings:resolvedBindings.slice(0,5000), unresolvedBindings:unresolvedBindings.slice(0,5000), filesWithIncomingImports: [...incoming].map(([path,count])=>({path,count})).sort((a,b)=>b.count-a.count||a.path.localeCompare(b.path)).slice(0,100), note:'Relative module paths are resolved against indexed files. Named export matching is static and conservative; package aliases, conditional exports, path mappings, and runtime resolution are not evaluated.' };
+      return { localImportEdges: edges.slice(0,5000), resolvedBindings:resolvedBindings.slice(0,5000), unresolvedBindings:unresolvedBindings.slice(0,5000), externalImports:externalImports.slice(0,2000), circularDependencies, filesWithIncomingImports: [...incoming].map(([path,count])=>({path,count})).sort((a,b)=>b.count-a.count||a.path.localeCompare(b.path)).slice(0,100), note:'Relative imports, workspace package imports via package.json exports, package imports (# aliases), and common Node built-ins are recognized. Conditional target selection is conservative; runtime resolution, installed dependency layout, custom loaders, and TypeScript path mappings are not evaluated.' };
     }
     function redactProjectIndexSecrets(source) {
       let text=String(source||'');
@@ -124,7 +223,7 @@
       catch (error) {
         parseError = error;
         try { ast = parser.parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true, allowReturnOutsideFunction: true }); }
-        catch (_) { return { supported: true, engine: 'acorn', parseError: { message: String(parseError.message || parseError).slice(0,300), line: parseError.loc?.line || null, column: parseError.loc?.column ?? null }, imports: [], symbols: [], symbolDetails: [], identifierOccurrences: [], references: [], exports: [], importBindings: [] }; }
+        catch (_) { return { supported: true, engine: 'acorn', parseError: { message: String(parseError.message || parseError).slice(0,300), line: parseError.loc?.line || null, column: parseError.loc?.column ?? null }, imports: [], symbols: [], symbolDetails: [], identifierOccurrences: [], references: [], calls: [], exports: [], importBindings: [] }; }
       }
       const imports = new Set(), exports = [], importBindings = [], scopes = [], scopeByNode = new WeakMap(), declarationNodes = new WeakSet(), referenceNodes = [];
       const makeScope = (parent, type, node) => { const scope={parent,type,node,bindings:new Map()}; scopes.push(scope); if(node)scopeByNode.set(node,scope); return scope; };
@@ -165,7 +264,11 @@
         if(node.type==='ExportNamedDeclaration') {
           if(node.source)imports.add(node.source.value);
           if(node.declaration) { const d=node.declaration; if(d.id)exports.push({exported:d.id.name,local:d.id.name,kind:'declaration'}); else if(d.declarations)for(const item of d.declarations)for(const id of patternNames(item.id))exports.push({exported:id.name,local:id.name,kind:'declaration'}); }
-          for(const spec of node.specifiers||[])exports.push({exported:spec.exported?.name||spec.exported?.value,local:spec.local?.name||spec.local?.value,source:node.source?.value||null,kind:'named'});
+          for(const spec of node.specifiers||[]) {
+            const exported=spec.exported?.name||spec.exported?.value, local=spec.local?.name||spec.local?.value;
+            exports.push({exported,local,source:node.source?.value||null,kind:'named'});
+            if(node.source)importBindings.push({source:node.source.value,imported:local,local:exported,kind:'re-export'});
+          }
         }
         if(node.type==='ExportDefaultDeclaration')exports.push({exported:'default',local:node.declaration?.id?.name||null,kind:'default'});
         if(node.type==='ExportAllDeclaration') { imports.add(node.source.value); exports.push({exported:'*',local:null,source:node.source.value,kind:'all'}); }
@@ -173,22 +276,60 @@
       };
       buildScopes(ast,rootScope);
       const resolve = (scope,name) => { for(let current=scope;current;current=current.parent)if(current.bindings.has(name))return current.bindings.get(name);return null; };
-      const references=[];
-      const visitReferences = (node,scope,parent=null,key='') => {
+      const references=[], calls=[], visitedReferenceNodes=new Set();
+      const classifyAccess = (node, ancestors) => {
+        let target=node;
+        for(let index=ancestors.length-1;index>=0;index--) {
+          const {node:parent,key}=ancestors[index];
+          if(parent.type==='AssignmentExpression'&&key==='left') return parent.operator==='='?{access:'write',read:false,write:true}:{access:'read-write',read:true,write:true};
+          if(parent.type==='UpdateExpression'&&key==='argument') return {access:'read-write',read:true,write:true};
+          if((parent.type==='ForInStatement'||parent.type==='ForOfStatement')&&key==='left') return {access:'write',read:false,write:true};
+          if(parent.type==='Property'&&parent.shorthand) continue;
+          if(parent.type==='ArrayPattern'||parent.type==='ObjectPattern'||parent.type==='RestElement'||parent.type==='AssignmentPattern') { target=parent; continue; }
+          if(parent.type==='MemberExpression'&&key==='object') return {access:'read',read:true,write:false};
+          if(target!==node) break;
+          break;
+        }
+        return {access:'read',read:true,write:false};
+      };
+      const visitReferences = (node,scope,ancestors=[]) => {
         if(!node||typeof node.type!=='string')return;
         const current=scopeByNode.get(node)||scope;
-        if(node.type==='Identifier'&&!declarationNodes.has(node)) {
-          const nonReference=(parent?.type==='MemberExpression'&&key==='property'&&!parent.computed)||((parent?.type==='Property'||parent?.type==='MethodDefinition'||parent?.type==='PropertyDefinition')&&key==='key'&&!parent.computed&&!parent.shorthand)||parent?.type==='LabeledStatement'||parent?.type==='BreakStatement'||parent?.type==='ContinueStatement'||parent?.type==='ImportSpecifier'||parent?.type==='ImportDefaultSpecifier'||parent?.type==='ImportNamespaceSpecifier'||(parent?.type==='ExportSpecifier'&&key==='exported');
-          if(!nonReference) { const bindings=resolve(current,node.name); references.push({name:node.name,start:node.start,end:node.end,scope:current.type,resolution:bindings?'local':'unresolved',declaration:bindings?.[0]?.start??null}); }
+        const parentEntry=ancestors.at(-1), parent=parentEntry?.node, key=parentEntry?.key;
+        if(node.type==='CallExpression'||node.type==='NewExpression') {
+          const callee=node.callee;
+          let calleeName='', receiver=null, resolution='dynamic', declaration=null;
+          if(callee?.type==='Identifier') { calleeName=callee.name; const binding=resolve(current,calleeName)?.[0]; resolution=binding?'local':'unresolved'; declaration=binding?.start??null; }
+          else if(callee?.type==='MemberExpression') { receiver=callee.object?.type==='Identifier'?callee.object.name:null; calleeName=callee.computed?(callee.property?.type==='Literal'?String(callee.property.value):'[computed]'):(callee.property?.name||''); resolution='member'; }
+          let caller=null;
+          for(let index=ancestors.length-1;index>=0;index--) {
+            const ancestor=ancestors[index].node;
+            if(ancestor.type==='FunctionDeclaration'||ancestor.type==='FunctionExpression'||ancestor.type==='ArrowFunctionExpression') {
+              caller=ancestor.id?.name||null;
+              if(!caller) { const owner=ancestors[index-1]?.node; if(owner?.type==='VariableDeclarator'&&owner.id?.type==='Identifier')caller=owner.id.name; else if(owner?.type==='Property'&&owner.key?.type==='Identifier')caller=owner.key.name; }
+              break;
+            }
+          }
+          calls.push({kind:node.type==='NewExpression'?'construct':'call',callee:calleeName,receiver,caller,start:node.start,end:node.end,argumentsCount:(node.arguments||[]).length,resolution,declaration});
         }
-        for(const [child,childKey] of childEntries(node))visitReferences(child,current,node,childKey);
+        const referenceKey=node.type==='Identifier'?`${node.start}:${node.end}:${node.name}`:'';
+        if(node.type==='Identifier'&&!declarationNodes.has(node)&&!visitedReferenceNodes.has(referenceKey)) {
+          visitedReferenceNodes.add(referenceKey);
+          const nonReference=(parent?.type==='MemberExpression'&&key==='property'&&!parent.computed)||((parent?.type==='Property'||parent?.type==='MethodDefinition'||parent?.type==='PropertyDefinition')&&key==='key'&&!parent.computed&&!parent.shorthand)||parent?.type==='LabeledStatement'||parent?.type==='BreakStatement'||parent?.type==='ContinueStatement'||parent?.type==='ImportSpecifier'||parent?.type==='ImportDefaultSpecifier'||parent?.type==='ImportNamespaceSpecifier'||(parent?.type==='ExportSpecifier'&&key==='exported');
+          if(!nonReference) {
+            const bindings=resolve(current,node.name), access=classifyAccess(node,ancestors);
+            references.push({name:node.name,start:node.start,end:node.end,scope:current.type,resolution:bindings?'local':'unresolved',declaration:bindings?.[0]?.start??null,...access});
+          }
+        }
+        const next=[...ancestors,{node,key:null}];
+        for(const [child,childKey] of childEntries(node)) { next[next.length-1].key=childKey; visitReferences(child,current,next); }
       };
       visitReferences(ast,rootScope);
       const symbolDetails=[];
-      for(const scope of scopes)for(const [name,bindings] of scope.bindings)for(const binding of bindings){const refs=references.filter(ref=>ref.name===name&&ref.resolution==='local'&&ref.declaration===binding.start);symbolDetails.push({name,kind:binding.kind,scope:scope.type,start:binding.start,referenceCount:refs.length,referenceOccurrences:refs.length,referencePositions:refs.slice(0,100).map(ref=>ref.start)});}
+      for(const scope of scopes)for(const [name,bindings] of scope.bindings)for(const binding of bindings){const refs=references.filter(ref=>ref.name===name&&ref.resolution==='local'&&ref.declaration===binding.start);symbolDetails.push({name,kind:binding.kind,scope:scope.type,start:binding.start,referenceCount:refs.length,referenceOccurrences:refs.length,readCount:refs.filter(ref=>ref.read).length,writeCount:refs.filter(ref=>ref.write).length,referencePositions:refs.slice(0,100).map(ref=>ref.start)});}
       symbolDetails.sort((a,b)=>a.name.localeCompare(b.name)||a.start-b.start);
       const identifierOccurrences=new Map(); for(const ref of references)identifierOccurrences.set(ref.name,(identifierOccurrences.get(ref.name)||0)+1);
-      return {supported:true,engine:'acorn-semantic-local',imports:[...imports].slice(0,120),symbols:[...new Set(symbolDetails.map(item=>item.name))].slice(0,120),symbolDetails:symbolDetails.slice(0,500),identifierOccurrences:[...identifierOccurrences].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)).slice(0,500),references:references.slice(0,5000),exports:exports.slice(0,500),importBindings:importBindings.slice(0,500),parseError:null};
+      return {supported:true,engine:'acorn-semantic-local',calls:calls.slice(0,5000),imports:[...imports].slice(0,120),symbols:[...new Set(symbolDetails.map(item=>item.name))].slice(0,120),symbolDetails:symbolDetails.slice(0,500),identifierOccurrences:[...identifierOccurrences].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)).slice(0,500),references:references.slice(0,5000),exports:exports.slice(0,500),importBindings:importBindings.slice(0,500),parseError:null};
     }
     function projectIndexExtract(text, language, path = '') {
       const imports = [], symbols = [];
@@ -223,7 +364,7 @@
     async function loadProjectIndex() {
       if (!agentDirectoryHandle) throw new Error('Select and authorize a project workspace first.');
       const value = await workspaceDbAction('readonly','get',undefined,projectIndexKey());
-      return value && value.version===3 && value.contextId===workspaceContext.id ? value : null;
+      return value && value.version===4 && value.contextId===workspaceContext.id ? value : null;
     }
     async function buildProjectIndex({ force=false, signal=null, onProgress=null }={}) {
       if (!agentDirectoryHandle) throw new Error('Select and authorize a project workspace first.');
@@ -256,7 +397,7 @@
             const prior=oldFiles.get(path);
             if(prior && prior.size===file.size && prior.lastModified===file.lastModified && typeof prior.text==='string' && (prior.language!=='javascript' || String(prior.analysisEngine||'').startsWith('acorn'))) {
               files.push(prior); reused++;
-              if(isManifest) manifests.push({path,text:prior.text.slice(0,16000)});
+              if(isManifest) manifests.push({path,text:prior.manifestText||prior.text.slice(0,64000)});
               if(prior.language && prior.language!=='text') technologies.add(prior.language);
               continue;
             }
@@ -264,9 +405,9 @@
             const source=await file.text(); readBytes+=file.size;
             const text=redactProjectIndexSecrets(source);
             const language=projectIndexLanguage(path), extracted=projectIndexExtract(text,language,path);
-            const record={path,size:file.size,lastModified:file.lastModified,language,analysisEngine:extracted.engine||'regex-fallback',parseError:extracted.parseError||null,imports:extracted.imports,symbols:extracted.symbols,symbolDetails:extracted.symbolDetails||[],identifierOccurrences:extracted.identifierOccurrences||[],references:extracted.references||[],exports:extracted.exports||[],importBindings:extracted.importBindings||[],text:text.slice(0,Math.min(text.length,160000)).toLowerCase()};
+            const record={path,size:file.size,lastModified:file.lastModified,language,analysisEngine:extracted.engine||'regex-fallback',parseError:extracted.parseError||null,imports:extracted.imports,symbols:extracted.symbols,symbolDetails:extracted.symbolDetails||[],identifierOccurrences:extracted.identifierOccurrences||[],references:extracted.references||[],calls:extracted.calls||[],exports:extracted.exports||[],importBindings:extracted.importBindings||[],manifestText:isManifest?text.slice(0,64000):null,text:text.slice(0,Math.min(text.length,160000)).toLowerCase()};
             files.push(record);
-            if(isManifest) manifests.push({path,text:text.slice(0,16000)});
+            if(isManifest) manifests.push({path,text:text.slice(0,64000)});
             if(language!=='text') technologies.add(language);
           } catch (_) { skipped++; }
           if(files.length%100===0) onProgress?.({files:files.length,scanned,readBytes});
@@ -279,11 +420,11 @@
       const dependencies=projectIndexDependencies(manifests);
       const frameworks=projectIndexFrameworks(dependencies);
       const toolchains=projectIndexToolchains(files,manifests,[...visitedPaths]);
-      const importGraph=projectIndexLocalImportGraph(files);
-      const index={version:3,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
+      const importGraph=projectIndexLocalImportGraph(files,manifests);
+      const index={version:4,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
       await workspaceDbAction('readwrite','put',index,projectIndexKey());
       projectIndexStatus?.(index);
-      return {root:index.rootName,files:index.stats.files,scanned,entries,readBytes,reused,removed,skipped,truncated,reason,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies.slice(0,100),toolchains:index.toolchains,importGraphSummary:{localImportEdges:index.importGraph?.localImportEdges?.length||0,resolvedBindings:index.importGraph?.resolvedBindings?.length||0,unresolvedBindings:index.importGraph?.unresolvedBindings?.length||0,mostImportedFiles:index.importGraph?.filesWithIncomingImports||[],note:index.importGraph?.note},updatedAt:index.updatedAt};
+      return {root:index.rootName,files:index.stats.files,scanned,entries,readBytes,reused,removed,skipped,truncated,reason,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies.slice(0,100),toolchains:index.toolchains,importGraphSummary:{localImportEdges:index.importGraph?.localImportEdges?.length||0,resolvedBindings:index.importGraph?.resolvedBindings?.length||0,unresolvedBindings:index.importGraph?.unresolvedBindings?.length||0,circularDependencies:index.importGraph?.circularDependencies?.length||0,externalImports:index.importGraph?.externalImports?.length||0,mostImportedFiles:index.importGraph?.filesWithIncomingImports||[],note:index.importGraph?.note},updatedAt:index.updatedAt};
     }
     async function searchProjectIndex(query,{limit=30,kind='all'}={}) {
       const index=await loadProjectIndex();
@@ -307,17 +448,20 @@
       const files=index.files.filter(file=>!path||file.path===path);
       const declarations=files.flatMap(file=>(file.symbolDetails||[]).filter(item=>!name||item.name===name).map(item=>({path:file.path,...item})));
       const references=files.flatMap(file=>(file.references||[]).filter(item=>!name||item.name===name).map(item=>({path:file.path,...item})));
+      const calls=files.flatMap(file=>(file.calls||[]).filter(item=>!name||item.callee===name||item.caller===name).map(item=>({path:file.path,...item})));
       const graph=index.importGraph||{};
       const edges=(graph.localImportEdges||[]).filter(item=>!path||item.from===path||item.to===path);
+      const circularDependencies=(graph.circularDependencies||[]).filter(cycle=>!path||cycle.includes(path));
+      const externalImports=(graph.externalImports||[]).filter(item=>!path||item.from===path);
       const resolved=(graph.resolvedBindings||[]).filter(item=>(!path||item.from===path||item.to===path)&&(!name||item.local===name||item.imported===name));
       const unresolved=(graph.unresolvedBindings||[]).filter(item=>(!path||item.from===path||item.to===path)&&(!name||item.local===name||item.imported===name));
       const maximum=Math.max(1,Math.min(1000,Number(limit)||200));
-      return {indexUpdatedAt:index.updatedAt,filters:{path:path||null,name:name||null},declarations:declarations.slice(0,maximum),references:references.slice(0,maximum),moduleEdges:edges.slice(0,maximum),resolvedImports:resolved.slice(0,maximum),unresolvedImports:unresolved.slice(0,maximum),truncated:declarations.length>maximum||references.length>maximum||edges.length>maximum||resolved.length>maximum||unresolved.length>maximum,scope:'JavaScript lexical bindings and statically-resolved relative module exports; not a complete TypeScript/compiler symbol graph.'};
+      return {indexUpdatedAt:index.updatedAt,filters:{path:path||null,name:name||null},declarations:declarations.slice(0,maximum),references:references.slice(0,maximum),calls:calls.slice(0,maximum),moduleEdges:edges.slice(0,maximum),circularDependencies:circularDependencies.slice(0,100),externalImports:externalImports.slice(0,maximum),resolvedImports:resolved.slice(0,maximum),unresolvedImports:unresolved.slice(0,maximum),truncated:declarations.length>maximum||references.length>maximum||calls.length>maximum||edges.length>maximum||circularDependencies.length>100||externalImports.length>maximum||resolved.length>maximum||unresolved.length>maximum,scope:'JavaScript lexical bindings, syntactic call sites, and statically-resolved relative module exports; not a complete TypeScript/compiler symbol graph.'};
     }
     async function getProjectIndexOverview() {
       const index=await loadProjectIndex();
       if(!index) return {indexed:false,message:'No project index has been built.'};
-      return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,toolchains:index.toolchains||null,analysis:{acornFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('acorn')).length,parseErrors:index.files.filter(item=>item.parseError).length,regexFallbackFiles:index.files.filter(item=>item.analysisEngine==='regex-fallback').length},importGraph:index.importGraph?{localImportEdges:index.importGraph.localImportEdges.length,resolvedBindings:index.importGraph.resolvedBindings?.length||0,unresolvedBindings:index.importGraph.unresolvedBindings?.length||0,filesWithIncomingImports:index.importGraph.filesWithIncomingImports,note:index.importGraph.note}:null,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
+      return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,toolchains:index.toolchains||null,analysis:{acornFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('acorn')).length,callSites:index.files.reduce((sum,item)=>sum+(item.calls?.length||0),0),parseErrors:index.files.filter(item=>item.parseError).length,regexFallbackFiles:index.files.filter(item=>item.analysisEngine==='regex-fallback').length},importGraph:index.importGraph?{localImportEdges:index.importGraph.localImportEdges.length,resolvedBindings:index.importGraph.resolvedBindings?.length||0,unresolvedBindings:index.importGraph.unresolvedBindings?.length||0,circularDependencies:index.importGraph.circularDependencies?.length||0,externalImports:index.importGraph.externalImports?.length||0,filesWithIncomingImports:index.importGraph.filesWithIncomingImports,note:index.importGraph.note}:null,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
     }
 
     let projectIndexAutoRefreshTimer = null;

@@ -35,7 +35,7 @@ Custom adapters support only `open-file`, `open-folder`, and `open-url`. Argumen
 
 ## Docker and Podman
 
-`system_manager_container_action` supports `list`, `inspect`, `start`, `stop`, `restart`, and `logs`, with runtime `auto`, `docker`, or `podman`. It invokes the detected CLI directly with argument arrays; no shell is used. Container identifiers are restricted to a conservative character set. Start/stop/restart always require native confirmation. For lifecycle changes, follow up with `inspect` or `list` to verify the resulting state.
+`system_manager_container_action` supports `list`, `inspect`, `start`, `stop`, `restart`, `logs`, `stats`, `images`, `volumes`, `networks`, and `health`, with runtime `auto`, `docker`, or `podman` (Podman is preferred when auto-detecting). It invokes the detected CLI directly with argument arrays; no shell is used. Container identifiers are restricted to a conservative character set. Start/stop/restart always require native confirmation and are followed by an inspect-based state check. Inventory/statistics actions are read-only.
 
 ## Skills
 
@@ -49,3 +49,16 @@ The current RunMind adapter supports prompt handoff through the existing `--prom
 ## RunMind conversation operations
 
 The built-in RunMind adapter supports three operations: `send-prompt` opens a RunMind window and submits a prompt, `open-session` opens an existing `.runmind` conversation file as a resumable session, and `new-conversation` opens a fresh chat window. Session files must be fully-qualified existing paths, contain a JSON object, and be no larger than 16 MB. The adapter validates the file before launch; the Standalone host validates it again before restoring the conversation. These operations launch the Standalone executable discovered by System Manager; they do not attach to or mutate an already-open window.
+
+
+## Process and service operations
+
+- Process inventory includes parent PID and basic memory usage. When process inspection is enabled, it additionally reports cumulative CPU time, private memory, thread/handle counts, priority, responsiveness, executable path, and start time. CPU time is cumulative for the process lifetime, not a sampled utilization percentage.
+- Graceful process close validates PID, process name, executable path (when available), and start time; it sends a normal main-window close request, requires fresh native confirmation, and never force-kills. A separate terminate action remains available only when explicitly enabled and confirmed.
+- Windows service actions include `list`, `inspect`, `config`, `dependents`, `start`, `stop`, and `restart`. State-changing actions always require fresh native confirmation. RunMind polls the service state and reports accepted/completed/verified separately.
+- Read-only diagnostics include uptime, logical-drive capacity, network gateways, and DNS servers when the corresponding System Manager categories are enabled.
+
+
+## Startup inventory
+
+`system_manager_list_startup_applications` is a read-only inventory of per-user and machine `Run`/`RunOnce` registry values and Windows Startup folders. It reports the entry source and resolved executable path when possible. It does not enable, disable, delete, or otherwise modify startup entries.

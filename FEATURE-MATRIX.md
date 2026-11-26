@@ -5,7 +5,7 @@
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
 | Hosts | PowerToys Command Palette | Preserved | Shared Agent Core |
-| Developer | Project index and search | Implemented with limits | Persistent bounded local index; Acorn AST parsing and lexical reference resolution for JavaScript; static relative import/export matching; `project_symbol_graph` tool; TypeScript/TSX/JSX and other languages retain heuristic fallback |
+| Developer | Project index and search | Implemented with limits | Persistent bounded local index; Acorn AST parsing, lexical reference resolution, read/write classification, syntactic call sites, relative and workspace package export/import-alias resolution, re-export matching, external dependency identification, bounded circular dependency detection; `project_symbol_graph` tool; TypeScript/TSX/JSX and other languages retain heuristic fallback | Call sites include local declaration links where statically available; this is not compiler-grade analysis or complete Node module resolution.
 | Developer | Coordinated multi-file editing | Added in integration pass | 2–20 files, one approval, snapshot checks, per-file backups, best-effort rollback; sequential writes are not atomic |
 | Developer | Static project validation | Implemented with limits | JSON/XML and selected manifest checks; test discovery; package manager/lockfile detection; no build/test execution |
 | Developer | Approved PowerShell/native execution | Implemented | Existing 2.4.0 bridge |
@@ -23,13 +23,15 @@
 | System Manager | Optional master switch | Implemented | Disabled by default; shared native settings |
 | System Manager | Group and individual capability switches | Implemented | Applications, processes, diagnostics |
 | System Manager | Permission profiles | Implemented | Restricted/Balanced/Custom; per-action launch/open permission |
+| System Manager | Startup application inventory | Added | Read-only per-user/machine Run/RunOnce registry and Startup-folder inventory; no enable/disable operation yet |
 | System Manager | Application discovery | Implemented | Ranked name/alias/executable matching across App Paths, uninstall registry, Start Menu, bounded common install locations, PATH and Windows Apps folder; bounded refresh on stale cache/search miss |
 | System Manager | Application launch | Implemented | Uses stable application IDs; revalidates executable; reuses/activates existing windows by default; distinguishes startup, activation and unverified handoff |
 | System Manager | Open files/folders/HTTPS URLs | Implemented | Windows default-handler request accepted; target application/window/focus/navigation are not verified |
-| System Manager | Process inspection | Implemented | Read-only; detail fields individually gated |
+| System Manager | Process inspection | Expanded | Parent PID, working/private memory, cumulative CPU time, threads, handles, priority, responsiveness, executable path and start time; detail fields individually gated |
+| System Manager | Graceful process close | Added | Identity-checked main-window close request; mandatory confirmation; never force-kills |
 | System Manager | Process termination | Implemented | Disabled by default; mandatory fresh confirmation and identity revalidation |
-| System Manager | OS/environment/service/network diagnostics | Implemented | Individual switches; read-only diagnostics |
-| System Manager | Windows service control | Added in integration pass | List/inspect; start/stop with mandatory native confirmation; requires serviceInformation capability |
+| System Manager | OS/environment/service/network diagnostics | Expanded | Uptime, drive capacity, gateways and DNS added; individual switches; read-only |
+| System Manager | Windows service control | Expanded | List/inspect/config/dependents; start/stop/restart with fresh confirmation and final-state verification; requires serviceInformation capability |
 | System Manager | Native command timeout | User-configurable | 0 disables automatic timeout; 1–3600 seconds; cancellation remains available |
 | System Manager | Application lifecycle | Implemented with limits | Reuse/activate, new-window allowlist, new-process, per-app preferences and graceful close; no force-kill |
 | System Manager | Packaged Windows apps | Implemented with limits | AppsFolder/AUMID activation; no generic arguments or visible-window verification |
@@ -94,7 +96,7 @@
 |---|---|
 | Windows Notepad adapter | Implemented |
 | File Explorer open-folder/select-file adapter | Implemented |
-| Docker/Podman list, inspect, start, stop, restart, logs | Implemented (native CLI; Windows runtime test required) |
+| Docker/Podman list, inspect, start, stop, restart, logs, stats, images, volumes, networks, health | Expanded (native CLI; Windows runtime test required) |
 | Coding/debugging/testing-and-quality/code-review skills | Implemented |
 | File-history and skill lifecycle skills (skill-management/create-skill/install-skill) | Implemented |
 | Dedicated adapters tab and bounded inner scrolling | Implemented |

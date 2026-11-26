@@ -29,7 +29,8 @@
 
 ## Remaining Phase 1 limitations
 
-- JavaScript now uses bundled Acorn AST parsing with lexical-scope reference resolution, declaration/reference positions, named/default export metadata, and static relative import-to-export matching. `project_symbol_graph` exposes the graph to the agent. TypeScript, TSX, JSX, package aliases, conditional exports, and compiler-backed semantics remain outstanding.
+- JavaScript uses bundled Acorn AST parsing for `.js`, `.mjs`, and `.cjs`, with lexical-scope reference resolution, read/write classification, call sites, named/default/re-export metadata, relative imports, workspace package `exports`, package `imports` aliases, common Node built-ins, and bounded cycle detection. JSX/TSX and TypeScript remain heuristic; full Node runtime resolution, TypeScript path mappings, complete cross-file call resolution, and compiler-grade semantics remain outstanding.
+- AST-aware rename/extract/import refactoring and preview/apply integration remain outstanding. The existing multi-file editor is not yet wired to symbol-aware refactoring.
 - Git operations are implemented, but complete model-driven end-to-end workflows (inspect → modify → test → review diff → stage → commit) have not been verified through all three hosts.
 - Multi-file editing is safer and recoverable, but it is not a transactional filesystem commit; the API cannot atomically replace multiple independent files.
 - The RunMind adapter now starts a new Standalone window for a saved session or new conversation. It does not attach to, enumerate, or mutate an already-running WebView session, and this behavior is not shared as an IPC session API across the PowerToys hosts.
@@ -39,10 +40,35 @@
 ## AST and semantic JavaScript increment validation
 
 - Bundled Acorn 8.15.0 and its MIT license under `Shared/ChatWindow/vendor/acorn`; loaded locally before `project-index.js`, with no network dependency.
-- Project index schema/key upgraded to v3 to force rebuilding previous records.
+- Project index schema/key upgraded to v4 to force rebuilding previous records.
 - Added tests for declarations/imports, malformed syntax locations, CommonJS script fallback, explicit TypeScript fallback, lexical shadowing, unresolved globals, export/import metadata, and relative cross-file named-export resolution.
-- Result: 7 semantic AST regression tests passed.
+- Result: 16 semantic AST regression tests passed, including `var` function-scope placement, function declaration visibility/block scope, read/write classification, shorthand destructuring deduplication, and an integration check that parses real consumer/provider modules before building the relative-import graph.
 - Result: all 17 JavaScript files under `Shared/ChatWindow/scripts` passed `node --check`; all 17 also parsed with Acorn (module-first, script fallback).
 - Result: all JSON files parsed and all 7 project XML files parsed.
-- Scope: semantic pass applies to `.js`, `.mjs`, and `.cjs`. JSX/TS/TSX and other languages remain heuristic. Relative module resolution is static and limited to indexed candidate paths; package aliases, conditional exports, declaration merging, and full compiler semantics are not implemented.
+- Scope: semantic pass applies to `.js`, `.mjs`, and `.cjs`. JSX/TS/TSX and other languages remain heuristic. Module resolution statically handles relative paths and selected workspace package metadata; it does not emulate every Node condition, package-manager install layout, custom loader, or runtime resolution rule.
 - Windows/.NET build and three-host runtime verification remain unperformed in this environment.
+
+
+## Semantic analysis reliability increment
+
+- `var` declarations are hoisted to the nearest function or module scope; block-level function declarations remain in their lexical block scope.
+- Reference occurrences now distinguish reads, writes, and read-write operations. Simple assignments are writes; compound assignments and update expressions are read-write operations.
+- Shorthand object-property identifiers are deduplicated by source span so Acorn's separate key/value nodes do not inflate reference counts. Destructuring assignment shorthand is classified as a write.
+- Relative import graph integration is tested using two source modules parsed by Acorn, not only hand-authored file metadata.
+- Result: 17/17 semantic AST tests and 9/9 static System Manager contract tests passed (26/26 total). These tests validate source contracts, not native Windows execution.
+- Scope remains intentionally limited: this is a lightweight JavaScript static pass, not a complete ECMAScript compiler or language server.
+
+
+## JavaScript call graph and System Manager expansion increment
+
+- Project index schema/key upgraded to v4 to invalidate records that predate call-site metadata. Node module resolution now handles relative paths, workspace package `exports`, package `imports` aliases, re-exports, common Node built-ins, and separately reported external dependencies; this is still not full Node runtime resolution. Acorn extraction now records direct identifier calls, member calls, constructor calls, containing function names where inferable, and local declaration positions for statically resolved callees. The symbol graph returns call sites and bounded circular relative-module dependency cycles.
+- Process inventory now includes parent PID from the Windows Toolhelp process snapshot; when process inspection is enabled it also reports cumulative CPU time, thread/handle counts, priority, responsiveness, executable path, and start time, alongside working/private memory.
+- Added identity-checked graceful process close for processes with accessible main windows. It always requests native confirmation, verifies PID/name/path/start time, and never force-terminates. Existing explicit terminate remains a separate action.
+- Windows service actions now include configuration/dependent-service inspection and restart. Start/stop/restart require fresh native confirmation and poll the actual service state. Results distinguish accepted, completed, and verified state.
+- Docker/Podman actions now include stats, images, volumes, and networks. Mutating container actions are excluded from the agent's read-only tool classification and are followed by an inspect-based state check.
+- Read-only system diagnostics now include uptime, logical-drive capacity, network gateways, and DNS servers. Startup inventory covers per-user/machine Run/RunOnce registry keys and Startup folders; it does not modify startup entries.
+- Result contract uses `success`, `accepted`, `completed`, `verified`, `requestedState`, and `actualState` where applicable.
+- Targeted semantic tests: 17/17 passed, including direct/member/constructor calls, workspace package exports, package imports aliases, and re-export resolution, local call-to-declaration links, and circular relative-import cycles. JavaScript syntax checks are reported separately below.
+- Windows/.NET compilation and live Windows service/process/Podman execution remain unverified in this environment. The native additions must be built and exercised on the target Windows machine before treating the expanded System Manager actions as runtime-validated.
+
+- Current increment validation: 17/17 shared runtime JavaScript files passed `node --check`; 2/2 JSON files parsed; 7/7 project XML files parsed; 26/26 Node tests passed.

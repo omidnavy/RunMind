@@ -55,17 +55,32 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'project_validate', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_adapters', 'system_manager_container_action', 'system_manager_list_processes', 'system_manager_diagnostics']);
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'project_validate', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_diagnostics']);
       if (name.startsWith('system_manager_')) {
         if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in the System Manager menu first.');
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
         if (name === 'system_manager_find_applications') { const query = String(args.query || '').trim(); if (!query) throw new Error('A non-empty application name is required.'); return await callAgentHost('systemManager.apps.list',{query},signal); }
+        if (name === 'system_manager_list_startup_applications') return await callAgentHost('systemManager.startup.list',{query:String(args.query||'')},signal);
         if (name === 'system_manager_list_adapters') return await callAgentHost('systemManager.adapters.list',{},signal);
-        if (name === 'system_manager_container_action') return await callAgentHost('systemManager.containers.action',{runtime:String(args.runtime||'auto'),action:String(args.action||''),container:String(args.container||'')},signal);
+        if (name === 'system_manager_container_action') {
+          const action = String(args.action || '').toLowerCase();
+          if (!['start','stop','restart'].includes(action) && !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
+            const approved = await requireAgentApproval({ title: 'Allow read-only container inspection?', subtitle: `System Manager · ${action || 'container query'}`, detail: JSON.stringify({ runtime: args.runtime || 'auto', action, container: args.container || '' }), allowForTask: true, toolName: name }, signal);
+            if (!approved) return { cancelled: true, message: 'User declined the container inspection.' };
+          }
+          return await callAgentHost('systemManager.containers.action',{runtime:String(args.runtime||'auto'),action,container:String(args.container||'')},signal);
+        }
         if (name === 'system_manager_install_adapter') return await callAgentHost('systemManager.adapters.save',{adapter:args.adapter||{}},signal);
         if (name === 'system_manager_list_processes') return await callAgentHost('systemManager.process.list',{query:String(args.query||'')},signal);
         if (name === 'system_manager_diagnostics') return await callAgentHost('systemManager.diagnostics',{},signal);
-        if (name === 'system_manager_service_action') return await callAgentHost('systemManager.services.action',{action:String(args.action||''),service:String(args.service||'')},signal);
+        if (name === 'system_manager_service_action') {
+          const action = String(args.action || '').toLowerCase();
+          if (['list','inspect','config','dependents'].includes(action) && !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
+            const approved = await requireAgentApproval({ title: 'Allow read-only Windows service inspection?', subtitle: `System Manager · ${action}`, detail: JSON.stringify({ action, service: args.service || '' }), allowForTask: true, toolName: name }, signal);
+            if (!approved) return { cancelled: true, message: 'User declined the service inspection.' };
+          }
+          return await callAgentHost('systemManager.services.action',{action,service:String(args.service||'')},signal);
+        }
         if (name === 'system_manager_launch_application') {
           return await callAgentHost('systemManager.apps.launch',{applicationId:String(args.applicationId||''),arguments:Array.isArray(args.arguments)?args.arguments:[],behavior:String(args.behavior||'')},signal);
         }
@@ -80,6 +95,9 @@
         }
         if (name === 'system_manager_open_target') {
           return await callAgentHost('systemManager.open.target',{target:String(args.target||'')},signal);
+        }
+        if (name === 'system_manager_close_process') {
+          return await callAgentHost('systemManager.process.close',{processId:args.processId,expectedName:String(args.expectedName||''),expectedPath:String(args.expectedPath||''),expectedStartedAtUtc:String(args.expectedStartedAtUtc||'')},signal);
         }
         if (name === 'system_manager_terminate_process') {
           return await callAgentHost('systemManager.process.terminate',{processId:args.processId,expectedName:String(args.expectedName||''),expectedPath:String(args.expectedPath||''),expectedStartedAtUtc:String(args.expectedStartedAtUtc||'')},signal);
