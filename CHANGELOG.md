@@ -1,3 +1,12 @@
+## [2.5.1] — System Manager Flyout & Verified Application Launch (2026-11-17)
+
+- Moved Windows System Manager into its own toolbar flyout, separate from Agent Settings.
+- Improved application discovery: resolve Start Menu shortcuts to executable targets and exclude missing or invalid targets.
+- Validate cached application paths before returning them, so stale entries are filtered and search can trigger a fresh catalog scan.
+- Launch executables directly with shell execution disabled, then verify that the matching process remains active or handed off to an existing instance.
+- Report short-lived/unverified launches as failures rather than claiming success.
+- Updated Agent tool guidance to require a verified launch result before reporting that an application opened.
+
 ## [2.5.0] — Debugging, Quality, Skills & System Manager (2026-11-17)
 
 - Added reusable developer workflows for project builds/tests, static analysis/lint, Playwright test-runner checks, API smoke testing, and dependency security audits. They rely on existing explicit PowerShell/native execution approval and report actual command results.

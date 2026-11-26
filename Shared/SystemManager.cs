@@ -23,6 +23,82 @@ public sealed partial class AgentHostBridge
     private static string SystemManagerAdaptersRoot => Path.Combine(SystemManagerRoot, "Adapters");
     private sealed record SystemApplicationRecord(string id, string name, string path, string source, string version);
 
+    private static string NormalizeExecutableCandidate(string value)
+    {
+        var candidate = Environment.ExpandEnvironmentVariables((value ?? string.Empty).Trim());
+        if (candidate.Length == 0) return string.Empty;
+        if (candidate.StartsWith('"'))
+        {
+            var closingQuote = candidate.IndexOf('"', 1);
+            if (closingQuote > 1) candidate = candidate[1..closingQuote];
+        }
+        else
+        {
+            var exeEnd = candidate.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+            if (exeEnd >= 0) candidate = candidate[..(exeEnd + 4)];
+        }
+        return candidate.Trim().Trim('"');
+    }
+
+    private static string ResolveShortcutTarget(string shortcutPath)
+    {
+        object? shell = null;
+        object? shortcut = null;
+        try
+        {
+            var shellType = Type.GetTypeFromProgID("WScript.Shell", throwOnError: false)
+                ?? throw new InvalidOperationException("Windows Script Host shortcut resolution is unavailable.");
+            shell = Activator.CreateInstance(shellType) ?? throw new InvalidOperationException("Could not create the Windows shortcut resolver.");
+            shortcut = shellType.InvokeMember("CreateShortcut", System.Reflection.BindingFlags.InvokeMethod, null, shell, new object[] { shortcutPath });
+            if (shortcut is null) throw new InvalidDataException("The Start Menu shortcut could not be opened.");
+            var target = shortcut.GetType().InvokeMember("TargetPath", System.Reflection.BindingFlags.GetProperty, null, shortcut, null) as string;
+            var normalized = NormalizeExecutableCandidate(target ?? string.Empty);
+            if (normalized.Length == 0 || !Path.IsPathFullyQualified(normalized) || !File.Exists(normalized) || !normalized.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                throw new FileNotFoundException("The Start Menu shortcut target is missing or is not an executable.", normalized);
+            return Path.GetFullPath(normalized);
+        }
+        finally
+        {
+            if (shortcut is not null && System.Runtime.InteropServices.Marshal.IsComObject(shortcut)) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut);
+            if (shell is not null && System.Runtime.InteropServices.Marshal.IsComObject(shell)) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
+        }
+    }
+
+    private static bool TryResolveApplicationExecutable(string candidate, out string executable)
+    {
+        executable = string.Empty;
+        try
+        {
+            var normalized = Environment.ExpandEnvironmentVariables(candidate.Trim().Trim('"'));
+            if (normalized.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)) normalized = ResolveShortcutTarget(normalized);
+            else normalized = NormalizeExecutableCandidate(normalized);
+            if (!Path.IsPathFullyQualified(normalized) || !normalized.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(normalized)) return false;
+            EnsureNoReparseAncestors(normalized);
+            executable = Path.GetFullPath(normalized);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private static List<int> FindRunningProcessesForExecutable(string executablePath)
+    {
+        var matches = new List<int>();
+        foreach (var candidate in Process.GetProcesses())
+        {
+            using (candidate)
+            {
+                try
+                {
+                    var candidatePath = candidate.MainModule?.FileName;
+                    if (!string.IsNullOrWhiteSpace(candidatePath) && string.Equals(Path.GetFullPath(candidatePath), executablePath, StringComparison.OrdinalIgnoreCase))
+                        matches.Add(candidate.Id);
+                }
+                catch { }
+            }
+        }
+        return matches;
+    }
+
     private static JsonObject DefaultSystemManagerSettings() => new()
     {
         ["formatVersion"] = 1,
@@ -117,7 +193,7 @@ public sealed partial class AgentHostBridge
     private static void RequireSystemCapability(string group, string capability)
     {
         var settings = ReadSystemManagerSettings();
-        if (!(bool?)settings["enabled"] ?? false) throw new UnauthorizedAccessException("Windows System Manager is disabled in RunMind Settings.");
+        if (!(bool?)settings["enabled"] ?? false) throw new UnauthorizedAccessException("Windows System Manager is disabled in the System Manager menu.");
         if (!(bool?)settings["groups"]?[group] ?? false) throw new UnauthorizedAccessException($"System Manager group '{group}' is disabled.");
         if (!(bool?)settings["capabilities"]?[capability] ?? false) throw new UnauthorizedAccessException($"System Manager capability '{capability}' is disabled.");
     }
@@ -133,7 +209,8 @@ public sealed partial class AgentHostBridge
             if (!forceRefresh && File.Exists(SystemManagerCatalogPath) && !IsReparsePoint(SystemManagerCatalogPath) && new FileInfo(SystemManagerCatalogPath).Length <= 2 * 1024 * 1024 && DateTime.UtcNow - File.GetLastWriteTimeUtc(SystemManagerCatalogPath) < TimeSpan.FromMinutes(5))
             {
                 var loaded = JsonSerializer.Deserialize<List<SystemApplicationRecord>>(File.ReadAllText(SystemManagerCatalogPath, Encoding.UTF8));
-                cached = loaded?.Where(item => item is not null && !string.IsNullOrWhiteSpace(item.id) && !string.IsNullOrWhiteSpace(item.name) && !string.IsNullOrWhiteSpace(item.path))
+                cached = loaded?.Where(item => item is not null && !string.IsNullOrWhiteSpace(item.id) && !string.IsNullOrWhiteSpace(item.name)
+                        && TryResolveApplicationExecutable(item.path, out _))
                     .GroupBy(item => item.id, StringComparer.OrdinalIgnoreCase).Select(group => group.First()).Take(1000).ToList();
             }
         }
@@ -144,7 +221,7 @@ public sealed partial class AgentHostBridge
         void Add(string name, string path, string source, string version = "")
         {
             if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path) || rows.Count >= 1000) return;
-            var normalized = Environment.ExpandEnvironmentVariables(path.Trim()).Trim('"');
+            if (!TryResolveApplicationExecutable(path, out var normalized)) return;
             var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized.ToUpperInvariant())))[..16].ToLowerInvariant();
             if (!rows.ContainsKey(id)) rows[id] = new SystemApplicationRecord(id, name.Trim(), normalized, source, version);
         }
@@ -211,7 +288,7 @@ public sealed partial class AgentHostBridge
         {
             return SystemManagerListApplications(query, forceRefresh: true);
         }
-        return new { applications = matches, count = matches.Count, catalog = "persistent local catalog with five-minute freshness and on-demand refresh", note = "Start Menu shortcuts are launched through their .lnk files; executable targets are not resolved or executed during discovery." };
+        return new { applications = matches, count = matches.Count, catalog = "persistent local catalog with five-minute freshness and on-demand refresh", note = "Start Menu shortcuts are resolved to their executable targets; missing or invalid targets are excluded from discovery." };
     }
 
     private sealed record SystemApplicationAdapter(string id, string displayName, string match, Dictionary<string, string[]> operations, bool builtIn);
@@ -344,7 +421,8 @@ public sealed partial class AgentHostBridge
         var path = ReadString(args, "path", 2048);
         if (path.Length == 0 || !Path.IsPathFullyQualified(path)) throw new InvalidDataException("A fully qualified application path from the discovered catalog is required.");
         EnsureNoReparseAncestors(path);
-        if (!File.Exists(path) || !(path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))) throw new FileNotFoundException("The selected application is no longer available.");
+        if (!TryResolveApplicationExecutable(path, out var executablePath)) throw new FileNotFoundException("The selected application executable no longer exists or its shortcut target cannot be resolved.", path);
+        path = executablePath;
         _ = SystemManagerListApplications(string.Empty);
         var catalog = File.Exists(SystemManagerCatalogPath) && !IsReparsePoint(SystemManagerCatalogPath) && new FileInfo(SystemManagerCatalogPath).Length <= 2 * 1024 * 1024
             ? JsonSerializer.Deserialize<List<SystemApplicationRecord>>(File.ReadAllText(SystemManagerCatalogPath, Encoding.UTF8))?.Where(item => item is not null && !string.IsNullOrWhiteSpace(item.path)).ToList() ?? new List<SystemApplicationRecord>()
@@ -368,19 +446,36 @@ public sealed partial class AgentHostBridge
             }
         }
         if (!catalogued) throw new UnauthorizedAccessException("The requested executable is not present in RunMind's discovered application catalog. Search the catalog first.");
-        var start = new ProcessStartInfo(path) { UseShellExecute = true };
+        var start = new ProcessStartInfo(path)
+        {
+            UseShellExecute = false,
+            WorkingDirectory = Path.GetDirectoryName(path) ?? Environment.CurrentDirectory
+        };
         if (args.TryGetProperty("arguments", out var values) && values.ValueKind == JsonValueKind.Array && values.GetArrayLength() > 0)
         {
-            if (path.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Arguments cannot be added to a Start Menu shortcut. Select its executable installation instead.");
-            start.UseShellExecute = false;
             foreach (var value in values.EnumerateArray().Take(40)) { if (value.ValueKind != JsonValueKind.String) throw new InvalidDataException("Application arguments must be strings."); start.ArgumentList.Add(value.GetString() ?? string.Empty); }
         }
         var argumentPreview = args.TryGetProperty("arguments", out var confirmArguments) && confirmArguments.ValueKind == JsonValueKind.Array
             ? string.Join(Environment.NewLine, confirmArguments.EnumerateArray().Where(value => value.ValueKind == JsonValueKind.String).Select(value => value.GetString()).Take(40))
             : "(none)";
         if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Launch application", $"Application: {Path.GetFileNameWithoutExtension(path)}\nPath: {path}\nArguments:\n{argumentPreview}")) return new { launched = false, cancelled = true, reason = "user-declined" };
+
+        var existingProcesses = FindRunningProcessesForExecutable(path);
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows did not return a process for the application launch.");
-        return new { launched = true, processId = process.Id, application = Path.GetFileNameWithoutExtension(path), path };
+        var processId = process.Id;
+        try { process.WaitForExit(1400); } catch { }
+        process.Refresh();
+        if (!process.HasExited)
+            return new { launched = true, verified = true, processId, alreadyRunning = false, application = Path.GetFileNameWithoutExtension(path), path, note = "The executable process is still running." };
+
+        var matchingProcesses = FindRunningProcessesForExecutable(path);
+        var existingInstance = matchingProcesses.FirstOrDefault(id => id != processId);
+        if (existingInstance != 0 || existingProcesses.Any(id => matchingProcesses.Contains(id)))
+            return new { launched = true, verified = true, processId = existingInstance != 0 ? existingInstance : matchingProcesses.First(), alreadyRunning = true, application = Path.GetFileNameWithoutExtension(path), path, note = "The launch request was handed to an existing application instance." };
+
+        return new { launched = false, verified = false, processId, application = Path.GetFileNameWithoutExtension(path), path,
+            reason = "process-exited", exitCode = process.ExitCode,
+            message = "The executable started but exited before a matching application process could be verified. RunMind is not reporting this as a successful launch." };
     }
 
     private static object SystemManagerOpenTarget(JsonElement args)
@@ -461,7 +556,7 @@ public sealed partial class AgentHostBridge
     private static object SystemManagerDiagnostics()
     {
         var settings = ReadSystemManagerSettings();
-        if (!(bool?)settings["enabled"] ?? false) throw new UnauthorizedAccessException("Windows System Manager is disabled in RunMind Settings.");
+        if (!(bool?)settings["enabled"] ?? false) throw new UnauthorizedAccessException("Windows System Manager is disabled in the System Manager menu.");
         if (!(bool?)settings["groups"]?["diagnostics"] ?? false) throw new UnauthorizedAccessException("System Diagnostics is disabled.");
         var capabilities = settings["capabilities"];
         if (!new[] { "systemInformation", "environmentInformation", "serviceInformation", "networkInformation" }.Any(key => (bool?)capabilities?[key] == true)) throw new UnauthorizedAccessException("No System Diagnostics capability is enabled.");

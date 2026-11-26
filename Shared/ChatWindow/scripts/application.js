@@ -277,8 +277,7 @@
       ['agentSettingsTabAgent', 'agentSettingsPageAgent'],
       ['agentSettingsTabProject', 'agentSettingsPageProject'],
       ['agentSettingsTabSkills', 'agentSettingsPageSkills'],
-      ['agentSettingsTabSecurity', 'agentSettingsPageSecurity'],
-      ['agentSettingsTabSystemManager', 'agentSettingsPageSystemManager']
+      ['agentSettingsTabSecurity', 'agentSettingsPageSecurity']
     ].map(([tabId, pageId]) => ({ tab: document.getElementById(tabId), page: document.getElementById(pageId) }));
     function selectAgentSettingsTab(index, focusTab = false) {
       const bounded = Math.max(0, Math.min(agentSettingsTabs.length - 1, index));

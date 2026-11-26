@@ -1,4 +1,4 @@
-# RunMind 2.5.0 — Build and setup
+# RunMind 2.5.1 — Build and setup
 
 This guide covers the current full-source release and retains explicitly labeled historical notes where useful.
 
@@ -86,7 +86,7 @@ A cloned repository is authorized for native Git. To use browser-based file tool
 
 ### Agent Settings layout and flyouts
 
-Agent Settings is organized into four tabs: **Agent**, **Project**, **Skills**, and **Security**. The redesign changes presentation and navigation only; existing setting controls and their save/apply/approval handlers retain their IDs and behavior. All toolbar flyouts remain attached to their trigger. A tall panel opens below when it fits, flips above only when needed, and otherwise scrolls within the larger side of the trigger rather than centering over and covering the toolbar.
+Agent Settings is organized into four tabs: **Agent**, **Project**, **Skills**, and **Security**. Windows System Manager has a separate toolbar flyout and is no longer nested inside Agent Settings. The redesign changes presentation and navigation only; existing setting controls and their save/apply/approval handlers retain their IDs and behavior. All toolbar flyouts remain attached to their trigger. A tall panel opens below when it fits, flips above only when needed, and otherwise scrolls within the larger side of the trigger rather than centering over and covering the toolbar.
 
 ### Branch Comparison
 

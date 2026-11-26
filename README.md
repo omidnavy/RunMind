@@ -15,7 +15,7 @@ RunMind is available through three Windows entry points:
 - Chat with local models hosted by Ollama or LM Studio, or connect additional OpenAI-compatible endpoints.
 - Switch between configured providers and models, including custom API keys and authentication headers.
 - Ask questions, work through code and technical problems, inspect images and documents, and use model tool-calling capabilities.
-- Use **Agent Mode** for multi-step tasks that combine web research, workspace files, data processing, artifact creation, Git operations, approved PowerShell/native execution, on-demand Agent Skills, a Global/Project Skills Manager, and organized Agent Settings for Agent, Project, Skills, Security, and the optional Windows System Manager. Tall flyouts remain anchored to their toolbar buttons.
+- Use **Agent Mode** for multi-step tasks that combine web research, workspace files, data processing, artifact creation, Git operations, approved PowerShell/native execution, on-demand Agent Skills, a Global/Project Skills Manager, and organized Agent Settings for Agent, Project, Skills, and Security, plus a dedicated Windows System Manager flyout. Tall flyouts remain anchored to their toolbar buttons.
 - Use **Deep Research** for structured investigations with editable plans, source collection, evidence notes, checkpoints, and report export.
 - Connect external **Model Context Protocol (MCP)** servers over Streamable HTTP to make their tools, resources, and prompts available to RunMind.
 - Create and manage conversation branches, compare branch responses with AI, and continue a separate discussion about a comparison without changing the original branches.
@@ -128,7 +128,7 @@ The native process tools are `select_native_workspace`, `powershell_execute`, an
 
 ### Windows System Manager (optional)
 
-System Manager is disabled by default. When enabled, users can independently enable Application Management, Process Management, and System Diagnostics, then toggle individual capabilities within each group. The settings are shared across Standalone, PowerToys Run, and Command Palette. The native bridge re-checks the master switch, group, and capability for every operation; disabled System Manager tools are not offered to the Agent.
+Open System Manager from its own toolbar flyout, separate from Agent Settings. System Manager is disabled by default. When enabled, users can independently enable Application Management, Process Management, and System Diagnostics, then toggle individual capabilities within each group. The settings are shared across Standalone, PowerToys Run, and Command Palette. The native bridge re-checks the master switch, group, and capability for every operation; disabled System Manager tools are not offered to the Agent.
 
 - **Application Management:** discover applications from Start Menu shortcuts, registered App Paths, and PATH; keep a local catalog with five-minute freshness and on-demand refresh; launch catalogued applications; open existing files/folders and HTTPS URLs.
 - **Application adapters:** built-in adapters for VS Code, Windows Terminal, Firefox, Notepad++, and Blender, plus user-defined declarative JSON adapters. Adapters use argument arrays only—no scripts, shell commands, or arbitrary executable paths. See `docs/SYSTEM-MANAGER-ADAPTERS.md`.
@@ -326,3 +326,8 @@ Standalone and PowerToys use separate WebView2 profiles. Their chat settings, cr
 ## About RunMind
 
 RunMind for Command Palette includes an About section in its extension settings. Website: [https://omid.navy](https://omid.navy).
+
+
+### System Manager (2.5.1)
+
+Windows System Manager now has a dedicated toolbar flyout, separate from Agent Settings. Application discovery resolves Start Menu shortcuts and filters missing targets. Launch requests are verified against a matching running process; short-lived launches that cannot be verified are reported as failures.

@@ -1,6 +1,6 @@
-# RunMind 2.5.0 — Feature Matrix
+# RunMind 2.5.1 — Feature Matrix
 
-| Area | Capability | Status in 2.5.0 | Notes |
+| Area | Capability | Status in 2.5.1 | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
@@ -22,8 +22,8 @@
 | System Manager | Optional master switch | Implemented | Disabled by default; shared native settings |
 | System Manager | Group and individual capability switches | Implemented | Applications, processes, diagnostics |
 | System Manager | Permission profiles | Implemented | Restricted/Balanced/Custom; per-action launch/open permission |
-| System Manager | Application discovery | Implemented | Start Menu + App Paths + PATH, local cache, on-demand refresh |
-| System Manager | Generic application launch | Implemented | Only discovered catalog entries can launch |
+| System Manager | Application discovery | Implemented | Start Menu shortcut targets resolved to existing executables; App Paths + PATH, local cache, on-demand refresh |
+| System Manager | Generic application launch | Implemented | Only discovered existing executables; direct launch plus matching-process verification |
 | System Manager | Open files/folders/HTTPS URLs | Implemented | Native default handlers |
 | System Manager | Process inspection | Implemented | Read-only; detail fields individually gated |
 | System Manager | Process termination | Implemented | Disabled by default; mandatory fresh confirmation and identity revalidation |
@@ -32,3 +32,10 @@
 | System Manager | GUI automation/admin/system changes | Not included | Explicitly out of scope |
 | Security | Skill scripts auto-execution | Not allowed | Never executed by installer |
 | Security | Native process execution | Approval required | Runs as current Windows user; not sandboxed |
+
+
+## 2.5.1 changes
+
+- System Manager configuration is exposed through its own toolbar flyout.
+- Application discovery resolves Start Menu shortcut targets and filters missing executable paths.
+- Launch success is reported only when the matching process remains active or the request is handed off to an existing instance.

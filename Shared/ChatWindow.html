@@ -277,7 +277,6 @@
               <button type="button" class="agent-settings-tab" id="agentSettingsTabProject" role="tab" aria-controls="agentSettingsPageProject" aria-selected="false" tabindex="-1"><span aria-hidden="true">02</span> Project</button>
               <button type="button" class="agent-settings-tab" id="agentSettingsTabSkills" role="tab" aria-controls="agentSettingsPageSkills" aria-selected="false" tabindex="-1"><span aria-hidden="true">03</span> Skills</button>
               <button type="button" class="agent-settings-tab" id="agentSettingsTabSecurity" role="tab" aria-controls="agentSettingsPageSecurity" aria-selected="false" tabindex="-1"><span aria-hidden="true">04</span> Security</button>
-              <button type="button" class="agent-settings-tab" id="agentSettingsTabSystemManager" role="tab" aria-controls="agentSettingsPageSystemManager" aria-selected="false" tabindex="-1"><span aria-hidden="true">05</span> System Manager</button>
             </div>
 
             <section class="agent-settings-page" id="agentSettingsPageAgent" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabAgent">
@@ -378,9 +377,32 @@
               </section>
             </section>
 
-            <section class="agent-settings-page" id="agentSettingsPageSystemManager" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabSystemManager" hidden>
+            <section class="agent-settings-page" id="agentSettingsPageSecurity" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabSecurity" hidden>
               <section class="agent-settings-card">
-                <div class="agent-settings-card-heading"><div><h3>Windows System Manager</h3><p>Optional native Windows capabilities. When disabled, System Manager tools are withheld from the Agent and the native bridge rejects all operations.</p></div></div>
+                <div class="agent-settings-card-heading"><div><h3>Conversation permissions</h3><p>These policies are saved with this conversation and can be reused in a Project Profile. Destructive Git operations always require fresh approval.</p></div></div>
+                <div class="agent-settings-permissions">
+                  <div class="agent-settings-permission-row"><div><label for="permissionGitRead">Git read operations</label><small>Status, diffs, history and repository inspection.</small></div><select id="permissionGitRead"><option value="allow">Allow</option><option value="ask">Ask</option></select></div>
+                  <div class="agent-settings-permission-row"><div><label for="permissionGitWrite">Git local changes</label><small>Stage, commit, branch, merge and stash.</small></div><select id="permissionGitWrite"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select></div>
+                  <div class="agent-settings-permission-row"><div><label for="permissionGitRemote">Git remote operations</label><small>Fetch, pull, push and clone.</small></div><select id="permissionGitRemote"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select></div>
+                  <div class="agent-settings-permission-row"><div><label for="permissionDownloads">Downloads</label><small>Network downloads and destination writes.</small></div><select id="permissionDownloads"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select></div>
+                </div>
+                <div class="agent-settings-actions"><button type="button" class="button primary" id="savePermissionPolicy">Save conversation policy</button></div>
+              </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Always-approved tools</h3><p>Persistent read-only approvals for this WebView profile.</p></div></div>
+                <div id="alwaysApprovedToolsList" class="always-approved-tools"><span class="setting-note">None</span></div>
+                <div class="agent-settings-actions"><button type="button" class="setting-reset danger-text" id="clearAlwaysApprovedTools">Clear all approvals</button></div>
+              </section>
+            </section>
+          </div>
+        </details>
+        <details class="toolbar-menu" id="systemManagerMenu">
+          <summary class="toolbar-icon" title="Windows System Manager" aria-label="Windows System Manager"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/><path d="M7 7.5h.01M17 7.5h.01M7 16.5h.01M17 16.5h.01"/></svg></summary>
+          <div class="toolbar-panel system-manager-panel" role="group" aria-label="Windows System Manager">
+            <header class="agent-settings-header"><div><h2>Windows System Manager</h2><p class="panel-note">Manage native Windows capabilities and permissions independently from Agent settings.</p></div></header>
+            <section class="agent-settings-page" id="systemManagerSettingsPage">
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Core permissions</h3><p>Optional native Windows capabilities. When disabled, System Manager tools are withheld from the Agent and the native bridge rejects all operations.</p></div></div>
                 <label class="agent-settings-checkbox" for="systemManagerEnabled"><input id="systemManagerEnabled" type="checkbox"><span>Enable System Manager</span></label>
                 <p class="agent-settings-status" id="systemManagerStatus" aria-live="polite">Loading native settings…</p>
                 <div class="setting-field"><label for="systemManagerProfile">Permission profile</label><select id="systemManagerProfile"><option value="restricted">Restricted · ask before actions</option><option value="balanced">Balanced · allow configured ordinary actions</option><option value="custom">Custom · individual settings</option></select></div>
@@ -416,23 +438,6 @@
                   <label class="agent-settings-checkbox"><input id="systemManagerServiceInformation" type="checkbox"><span>Windows service inspection</span></label>
                   <label class="agent-settings-checkbox"><input id="systemManagerNetworkInformation" type="checkbox"><span>Network diagnostics</span></label>
                 </div>
-              </section>
-            </section>
-            <section class="agent-settings-page" id="agentSettingsPageSecurity" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabSecurity" hidden>
-              <section class="agent-settings-card">
-                <div class="agent-settings-card-heading"><div><h3>Conversation permissions</h3><p>These policies are saved with this conversation and can be reused in a Project Profile. Destructive Git operations always require fresh approval.</p></div></div>
-                <div class="agent-settings-permissions">
-                  <div class="agent-settings-permission-row"><div><label for="permissionGitRead">Git read operations</label><small>Status, diffs, history and repository inspection.</small></div><select id="permissionGitRead"><option value="allow">Allow</option><option value="ask">Ask</option></select></div>
-                  <div class="agent-settings-permission-row"><div><label for="permissionGitWrite">Git local changes</label><small>Stage, commit, branch, merge and stash.</small></div><select id="permissionGitWrite"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select></div>
-                  <div class="agent-settings-permission-row"><div><label for="permissionGitRemote">Git remote operations</label><small>Fetch, pull, push and clone.</small></div><select id="permissionGitRemote"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select></div>
-                  <div class="agent-settings-permission-row"><div><label for="permissionDownloads">Downloads</label><small>Network downloads and destination writes.</small></div><select id="permissionDownloads"><option value="allow">Allow</option><option value="ask">Ask</option><option value="always-ask">Always ask</option></select></div>
-                </div>
-                <div class="agent-settings-actions"><button type="button" class="button primary" id="savePermissionPolicy">Save conversation policy</button></div>
-              </section>
-              <section class="agent-settings-card">
-                <div class="agent-settings-card-heading"><div><h3>Always-approved tools</h3><p>Persistent read-only approvals for this WebView profile.</p></div></div>
-                <div id="alwaysApprovedToolsList" class="always-approved-tools"><span class="setting-note">None</span></div>
-                <div class="agent-settings-actions"><button type="button" class="setting-reset danger-text" id="clearAlwaysApprovedTools">Clear all approvals</button></div>
               </section>
             </section>
           </div>

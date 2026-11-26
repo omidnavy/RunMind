@@ -1,6 +1,6 @@
 # RunMind System Manager — Application Adapters
 
-System Manager is optional and disabled by default. Enable it in Agent Settings before adapter tools are exposed.
+System Manager is optional and disabled by default. Enable it from the dedicated System Manager toolbar flyout before adapter tools are exposed.
 
 ## Built-in adapters
 

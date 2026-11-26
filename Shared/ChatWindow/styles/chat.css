@@ -105,6 +105,7 @@
     .toolbar-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
     .toolbar-panel { position: absolute; z-index: 25; top: calc(100% + 8px); left: 0; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; overscroll-behavior: contain; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
     #agentSettingsMenu .toolbar-panel { width: min(500px, calc(100vw - 24px)); padding: 15px; }
+    #systemManagerMenu .toolbar-panel { width: min(500px, calc(100vw - 24px)); padding: 15px; }
     .agent-settings-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 13px; }
     .agent-settings-header h2 { margin: 0 0 4px; font-size: 15px; line-height: 1.25; }
     .agent-settings-header .panel-note { margin: 0; max-width: 420px; }
@@ -152,7 +153,7 @@
     .agent-settings-permissions + .agent-settings-actions { justify-content: flex-end; }
     .danger-text { color: var(--color-danger) !important; }
     @media (max-width: 520px) {
-      #agentSettingsMenu .toolbar-panel { width: min(500px, calc(100vw - 16px)); padding: 12px; }
+      #agentSettingsMenu .toolbar-panel, #systemManagerMenu .toolbar-panel { width: min(500px, calc(100vw - 16px)); padding: 12px; }
       .agent-settings-tabs { top: -12px; margin-left: -1px; margin-right: -1px; }
       .agent-settings-tab { gap: 4px; font-size: 10px; }
       .agent-settings-page-footer { margin-left: -12px; margin-right: -12px; margin-bottom: -12px; padding-left: 12px; padding-right: 12px; }

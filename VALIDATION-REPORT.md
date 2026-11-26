@@ -1,43 +1,39 @@
-# RunMind 2.5.0.2 build-hotfix validation report
+# RunMind 2.5.1 — Validation Report
 
-## Release
+**Release:** 2.5.1 — System Manager Flyout & Verified Application Launch  
+**Base:** RunMind 2.5.0.2 complete source bundle  
+**Validation date:** 2026-11-17
 
-**RunMind 2.5.0 — Debugging, Quality, Skills & System Manager**
+## Changes in this bundle
 
-Hotfix bundle: **2.5.0.2** (source/product version remains 2.5.0). This hotfix explicitly qualifies the WPF `System.Windows.MessageBox.Show` call in `Shared/SystemManager.cs`, complementing the earlier WPF qualification of `System.Windows.Application`. This resolves the Forms/WPF `MessageBox` name collision reported by the Windows solution build.
+- Moved Windows System Manager into its own toolbar flyout, separate from Agent Settings. Existing settings control IDs, shared native settings storage, capability switches, permission profiles, and native enforcement are retained.
+- Reduced Agent Settings navigation to its four remaining sections: Agent, Project, Skills, and Security.
+- Application discovery now resolves Start Menu `.lnk` files to their executable targets and excludes shortcuts whose targets are missing or invalid.
+- Registry/App Paths values are normalized to executable paths; stale catalog entries are filtered against the current filesystem before being returned.
+- Application launch uses the resolved executable directly with shell execution disabled, validates it still exists, and waits for process startup.
+- A launch is reported as successful only when the matching executable process remains active or the request is handed off to an existing instance. If the process exits without a matching running instance, the result is `launched: false`, `verified: false`, with the exit code and reason.
+- Agent tool instructions now explicitly prohibit claiming that an app opened unless the native result has both `launched: true` and `verified: true`.
 
-Source baseline: verified `RunMind-2.4.0-Developer-Workbench-Native-Automation.zip`.
+## Static validation
 
-## Checks performed
+| Check | Result |
+|---|---|
+| JavaScript syntax (`node --check`) for all ChatWindow scripts | Passed |
+| JSON parsing | Passed |
+| XML parsing for project files, XAML, and MSIX manifest | Passed |
+| HTML element ID uniqueness | Passed |
+| Dedicated System Manager flyout exists; old Agent Settings tab references removed | Passed |
+| Existing System Manager control IDs retained | Passed |
+| Version synchronization across all three hosts and MSIX manifest | Passed — 2.5.1 / 2.5.1.0 |
+| Shared `SystemManager.cs` included by all three host projects | Passed |
+| C# lexical delimiter scan for `SystemManager.cs` and `AgentHostBridge.cs` | Passed |
+| ZIP archive integrity | Passed |
+| SHA-256 checksum verification | Passed |
 
-| Check | Result | Notes |
-|---|---|---|
-| JavaScript syntax | Passed | `node --check` run for every JavaScript file in `Shared/ChatWindow/scripts`. |
-| HTML structure and IDs | Passed | Parsed `ChatWindow.html`; no duplicate IDs; new Settings page and Skill URL controls exist. |
-| Project JSON | Passed | All `.json` files parsed successfully. |
-| Project XML | Passed | All `.csproj` files and the Command Palette MSIX manifest parsed successfully. |
-| Version synchronization | Passed | Standalone, Command Palette, PowerToys Run plugin, plugin metadata, and MSIX manifest report 2.5.0 / 2.5.0.0 consistently. |
-| System Manager tool wiring | Passed | Verified conditional tool definitions, JS executor routes, native dispatch entries, shared source inclusion in all three host projects, and settings gating. |
-| Skill installer wiring | Passed | Verified URL preview/content install dispatch, URL and pasted-content UI flows, frontmatter validation route, and Global/Project scope handlers. |
-| WPF/Windows Forms namespace collision | Passed (source inspection) | `Application` and `MessageBox` are explicitly qualified as `System.Windows.Application` and `System.Windows.MessageBox`; this specifically addresses both reported CS0104 collisions. A Windows compiler run is still required to confirm. |
-| C# lexical delimiter check | Passed | Braces, parentheses, and brackets balance in `AgentHostBridge.cs` and `SystemManager.cs` after ignoring comments and string literals. This is not a compiler check. |
-| Workflow definitions | Passed | Build, test, static analysis, Playwright CLI, API smoke-test, and dependency audit workflows are present in the shared developer workflow catalog. |
-| Source count | Passed | 133 files in the release source tree; all three host projects and shared source directories retained. |
-| Windows/.NET compilation | Not run | `dotnet`, `csc`, and `mcs` are unavailable in this environment. No compile success is claimed. |
-| Live WebView2 / Windows testing | Not run | Requires Windows. Native confirmation dialogs, registry/Start Menu/PATH discovery, process enumeration/termination, `sc.exe`, network diagnostics, PowerShell and all three host integrations require target-machine testing. |
+## Not performed
 
-## Implementation boundaries
+- No Windows/.NET compilation was performed in this environment (`dotnet`, `csc`, and `mcs` are unavailable).
+- No live Windows UI or application launch tests were performed.
+- The Start Menu COM shortcut resolver, Firefox Developer Edition discovery/launch, Steam single-instance handoff, and all three host flyouts require runtime validation on Windows.
 
-- System Manager is disabled by default. The native bridge independently checks the master switch, group, and individual capability for every System Manager operation. The Agent tool definitions are refreshed before each user turn so another host's settings changes are reflected.
-- Application discovery is bounded to registered App Paths, Start Menu shortcuts, and top-level executable entries in a bounded set of PATH directories. A local catalog is reused for five minutes and refreshed on a search miss. Launch requires a catalogued executable/shortcut.
-- Application adapters use argument arrays only. Built-in adapters are provided for VS Code, Windows Terminal, Firefox, Notepad++, and Blender. User adapters are declarative JSON manifests; they cannot contain scripts, shell commands, executable paths, or arbitrary code. Adapter installation requires native confirmation.
-- Launch/open operations use native confirmation unless the user explicitly chooses Allow automatically under Balanced or Custom. Restricted always asks. Process termination always shows a native Windows confirmation, revalidates PID/name/start time and executable path when available, and refuses selected protected process names.
-- System diagnostics are read-only. Service status is collected through the Windows `sc.exe query` command; no service control is implemented. Network information is read-only.
-- Skill URL imports require HTTPS, reject local/private network destinations, limit `SKILL.md` to 128 KB, validate `name` and `description` frontmatter, and require a preview/confirmation before install. GitHub/GitLab folder URLs are resolved to a raw `SKILL.md`. Direct URL and pasted-content imports currently install `SKILL.md` only; linked resources and archive imports are not included.
-- Pasted valid Skill content is detected before normal message submission. Accepting the preview installs it; declining leaves the text to be sent as a normal chat message. Skill scripts are never executed.
-- Playwright support is a workflow that invokes a project's already-installed Playwright CLI through approved PowerShell. It is not an embedded browser automation runtime. API checks are workflow-guided PowerShell requests, not a dedicated API-client UI.
-- PowerShell/native process execution is inherited from 2.4.0. Processes run with current-user privileges and are not sandboxed. Every native process invocation still requires the existing explicit approval path.
-
-## Remaining validation
-
-A Windows/.NET build and live tests are required before treating the release as production-verified. In particular, verify WPF confirmation behavior in each host, Windows App Paths/Start Menu discovery, service/network diagnostics, and end-to-end Skill installation with representative public sources.
+This is a complete source bundle with static validation, not a claim of a compiled binary release. Please build the complete Release x64 solution on Windows and test both installed and missing applications before relying on the new launch verification behavior.

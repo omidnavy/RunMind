@@ -1,8 +1,8 @@
 # RunMind Roadmap
 
-## Current release: 2.5.0 — Debugging, Quality, Skills & System Manager
+## Current release: 2.5.1 — System Manager Flyout & Verified Application Launch
 
-This release extends the shared Agent Core with stronger developer workflows, automatic Skill-content recognition and preview-confirmed installation, HTTPS Skill source import, and an optional Windows System Manager. Standalone, PowerToys Run, and PowerToys Command Palette remain supported.
+This release extends the shared Agent Core with stronger developer workflows, automatic Skill-content recognition and preview-confirmed installation, HTTPS Skill source import, and an optional Windows System Manager. Version 2.5.1 gives System Manager its own toolbar flyout and verifies application process startup. Standalone, PowerToys Run, and PowerToys Command Palette remain supported.
 
 ### Included in this source bundle
 
