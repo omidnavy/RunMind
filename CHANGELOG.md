@@ -1,3 +1,11 @@
+## Unreleased — Phase 2 Playwright Browser Integration
+
+- Add `playwright_run` to the existing shared Agent Core and native bridge across Standalone, PowerToys Run, and PowerToys Command Palette. The bundled runner resolves the project-installed `playwright` package; it does not add a NuGet dependency, bundle browsers, or install project packages.
+- Support bounded structured navigation, locator interactions, waits, text/URL/title/visibility assertions, text reads, element counts, and viewport screenshots. Return per-step results plus console errors, page exceptions, failed requests, and HTTP error responses.
+- Require fresh approval for each run and disable the capability in Deep Research and delegated sub-agent tasks. Use a fresh ephemeral context, block service workers and downloads, reject non-HTTP(S) navigation and embedded URL credentials, and expose no arbitrary page JavaScript evaluation.
+- Bound workflows to 30 actions and 300 seconds; cap input/output, screenshot size, and local artifact retention. Close the browser/context after every run.
+- Add deterministic runner tests and host-wiring contracts. These tests use a Playwright test double and do not claim real-browser or Windows C# compilation validation.
+
 # RunMind Changelog
 
 ## Unreleased — Phase 2 Native Node.js Debugger foundation (2026-11-21)
@@ -14,7 +22,7 @@
 
 ### Phase 2 status
 - Implemented in this increment: Native Node.js Debugger foundation.
-- Not yet implemented: CPU/heap profiling, Playwright browser automation, dedicated API/backend testing, and development-server lifecycle management.
+- At this initial debugger-only stage, CPU/heap profiling, Playwright browser automation, dedicated API/backend testing, and development-server lifecycle management were still pending; subsequent Phase 2 increments are recorded below.
 - Validation available here: Node.js integration and source-contract tests. C# compilation and runtime validation for all three Windows hosts must still be run on Windows.
 
 
@@ -174,7 +182,7 @@
 - Added local application catalog discovery from Start Menu shortcuts, registered App Paths and PATH; generic application launch, file/folder/HTTPS URL opening, built-in and user-authored declarative application adapters, process listing/termination, and read-only OS/environment/service/network diagnostics.
 - Process termination requires a native Windows confirmation, revalidates PID/name/start time and executable identity when available, and blocks selected critical Windows processes. Application launch/open permissions are enforced by the native bridge.
 - Preserved Standalone, PowerToys Run, PowerToys Command Palette, and the shared Agent Core.
-- Limitations: URL Skill import currently imports `SKILL.md` only; archive import and recursive download of linked Skill resources are not included. Playwright is invoked through the project's installed CLI, not an embedded browser runtime.
+- Limitations: URL Skill import currently imports `SKILL.md` only; archive import and recursive download of linked Skill resources are not included. The original Playwright workflow invokes the project's installed CLI; the later Phase 2 browser integration adds structured automation through the shared native runner and project-local Playwright package.
 
 ## [2.4.0] — Developer Workbench & Native Automation (2026-11-17)
 

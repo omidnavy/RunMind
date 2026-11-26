@@ -12,7 +12,7 @@
 | Developer | Approved PowerShell/native execution | Implemented | Existing 2.4.0 bridge |
 | Developer | Build/test workflows | Implemented with limits | Workflow-guided approved PowerShell/native execution; commands are selected from project evidence and require fresh approval |
 | Developer | Static analysis/lint workflow | Implemented | Discovers configured tools; read-only checks first |
-| Developer | Playwright test-runner workflow | Implemented | Uses project-installed Playwright CLI; no embedded browser runtime |
+| Developer | Playwright test-runner workflow | Implemented | Workflow-guided project CLI commands remain available |
 | Developer | API smoke-test workflow | Implemented | Uses approved PowerShell; no dedicated API client UI |
 | Developer | Dependency audit workflow | Implemented | Ecosystem-specific commands require approval |
 | Skills | Local folder install | Implemented | Existing installer retained |
@@ -57,12 +57,12 @@
 | Debugger | Expression evaluation | Implemented with limits | Separate fresh approval; V8 side-effect check; not a sandbox |
 | Debugger | Events and process output | Implemented with limits | Exceptions, console, script and pause events; bounded 256 events, 64 KB stdout/stderr each |
 | Debugger | Multiple sessions | Implemented with limits | Maximum eight sessions per host; attached processes are never terminated by RunMind |
-| Runtime quality | Runtime diagnostics | Implemented in working bundle; Windows build pending | V8 heap usage and session state through the shared Node Inspector session |
-| Runtime quality | CPU profiling | Implemented in working bundle; Windows build pending | V8 sampling profile; `.cpuprofile` export; top sampled self-time frames; 32 MB artifact cap |
-| Runtime quality | Heap snapshots | Implemented in working bundle; Windows build pending | Streamed `.heapsnapshot` output; 128 MB cap; fresh approval; incomplete snapshots discarded |
-| Runtime quality | Memory-over-time sampling | Implemented in working bundle; Windows build pending | Timestamped V8 heap samples; 1–60 second interval; 5–600 second duration; 120-sample ring |
+| Runtime quality | Runtime diagnostics | Implemented; Windows build/runtime verified by user | V8 heap usage and session state through the shared Node Inspector session |
+| Runtime quality | CPU profiling | Implemented; Windows build/runtime verified by user | V8 sampling profile; `.cpuprofile` export; top sampled self-time frames; 32 MB artifact cap |
+| Runtime quality | Heap snapshots | Implemented; Windows build/runtime verified by user | Streamed `.heapsnapshot` output; 128 MB cap; fresh approval; incomplete snapshots discarded |
+| Runtime quality | Memory-over-time sampling | Implemented; Windows build/runtime verified by user | Timestamped V8 heap samples; 1–60 second interval; 5–600 second duration; 120-sample ring |
 | Runtime quality | Heap dominator/leak UI | Not included | Open exported V8 snapshots in Chrome/Edge DevTools; native analysis UI is a later candidate |
-| Browser quality | Playwright browser automation | Not yet implemented | Planned after runtime profiling |
+| Browser quality | Structured Playwright automation | Implemented in working bundle; Windows build pending | Shared native runner; Chromium/Firefox/WebKit; 1–30 structured actions; fresh approval per run; ephemeral contexts; assertions, console/network diagnostics and screenshots; project-installed package required |
 | API quality | Dedicated HTTP/API test client | Not yet implemented | Planned after browser automation |
 | Development servers | Start/readiness/log/health/stop lifecycle | Not yet implemented | Planned after API testing |
 

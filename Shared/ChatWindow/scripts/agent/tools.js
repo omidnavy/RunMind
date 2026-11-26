@@ -137,6 +137,16 @@
       };
       const debuggerTools = new Set(['node_debugger_launch','node_debugger_attach','node_debugger_list_sessions','node_debugger_command','node_debugger_events','node_debugger_stop']);
       const runtimeTools = new Set(['node_runtime_diagnostics','node_runtime_cpu_profile','node_runtime_heap_snapshot','node_runtime_memory_monitor']);
+      if (name === 'playwright_run') {
+        if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('Playwright browser automation is disabled in Deep Research and delegated sub-agent tasks. Run it from the primary Agent session with explicit approval.');
+        const actions = Array.isArray(args.actions) ? args.actions.slice(0, 30) : [];
+        if (!actions.length || actions.length > 30) throw new Error('Provide between 1 and 30 structured Playwright actions.');
+        const browser = ['chromium','firefox','webkit'].includes(String(args.browser || 'chromium').toLowerCase()) ? String(args.browser || 'chromium').toLowerCase() : 'chromium';
+        const preview = actions.map((item, index) => `${index + 1}. ${String(item.action || 'unknown')}${item.selector ? ` · ${String(item.selector).slice(0, 160)}` : ''}${item.value ? ` · ${String(item.value).slice(0, 240)}` : ''}`).join('\n');
+        const approved = await requireAgentApproval({ title: 'Run this Playwright browser test?', subtitle: `${browser} · isolated temporary browser context`, detail: `Project workspace: ${workspaceContext.folderName || '(native workspace selected separately)'}\nWorking directory: ${String(args.working_directory || '(workspace root)')}\nTimeout: ${Math.max(15, Math.min(300, Number(args.timeout_seconds) || 120))} seconds\n\nActions:\n${preview}\n\nWeb pages execute their own code and may perform network or application-side effects. RunMind uses a fresh ephemeral context, does not persist cookies or login state, and exposes no arbitrary JavaScript evaluation. Screenshots are saved locally. Every run is separately approved.`, risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true, message: 'Playwright browser run was declined.' };
+        return await callAgentHost('playwright.run', { browser, actions, working_directory: String(args.working_directory || ''), timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(30000, Math.min(315000, (Number(args.timeout_seconds) || 120) * 1000 + 15000)));
+      }
       if ((debuggerTools.has(name) || runtimeTools.has(name)) && (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth))
         throw new Error('Node.js debugger and runtime profiling access is disabled in Deep Research and delegated sub-agent tasks. Use the primary Agent session with explicit approval.');
       if (name === 'node_runtime_diagnostics')

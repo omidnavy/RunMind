@@ -79,6 +79,7 @@
     <Compile Include="..\Shared\ThemeCatalog.cs" Link="Shared\ThemeCatalog.cs" />
     <Compile Include="..\Shared\WindowThemeSynchronizer.cs" Link="Shared\WindowThemeSynchronizer.cs" />
     <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
+    <Content Include="..\Shared\PlaywrightRunner.cjs" Link="PlaywrightRunner.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
     <Compile Include="..\Shared\NodeDebuggerBridge.cs" Link="Shared\NodeDebuggerBridge.cs" />
     <Compile Include="..\Shared\SystemManager.cs" Link="Shared\SystemManager.cs" />

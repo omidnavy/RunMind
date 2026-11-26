@@ -1,9 +1,18 @@
+## Phase 2 — Playwright Browser Integration — 2026-11-21
+
+- Added the shared `playwright_run` Agent tool and native bridge operation for all three hosts. The bundled CommonJS runner resolves the project-installed `playwright` dependency and runs structured workflows in ephemeral headless browser contexts.
+- Supported actions: HTTP/HTTPS navigation, click/fill/press/check/uncheck/select, locator waits, text/URL/title/visibility assertions, text reads, element counts, and viewport screenshots. Results include per-step status, console errors, page exceptions, failed requests, and HTTP error responses.
+- Every run requires fresh approval. Deep Research and delegated sub-agents are blocked. No persistent browser profile, cookies, downloads, service workers, arbitrary page JavaScript evaluation, or automatic dependency installation.
+- Complete portable Node suite: **84/84 passed**. The Playwright runner is tested with deterministic test doubles; no real browser was launched here.
+- JavaScript syntax checks and all three host project XML checks passed. Native C# compilation and real Windows browser runtime validation have not been run in this environment.
+- Setup and limits: `docs/PHASE2-PLAYWRIGHT-BROWSER-INTEGRATION.md`. Run `Validate-Phase1-Windows.ps1` on Windows to compile all three hosts.
+
 ## Phase 2 — Runtime Diagnostics & Profiling — 2026-11-21
 
 - Added Node runtime heap diagnostics, V8 CPU profiling with `.cpuprofile` export, streamed heap snapshots, and bounded timestamped heap sampling to the existing shared Node debugger session.
 - Complete portable Node test suite: **72/72 passed**; runtime Inspector tests verify heap usage, CPU profile samples, and valid streamed heap snapshot JSON.
 - JavaScript syntax checks passed for the changed Agent tool definitions and new integration test.
-- Native C# compilation and Windows runtime validation have not been run in this environment. Build all three hosts on Windows with `Validate-Phase1-Windows.ps1` before treating this increment as verified.
+- Native C# compilation was not run in this environment. The user subsequently confirmed the increment works across all three Windows hosts.
 - Details: `docs/PHASE2-RUNTIME-DIAGNOSTICS-PROFILING.md` and `VALIDATION-REPORT-PHASE2-NODE-DEBUGGER.md`.
 
 ## Windows Release x64 compiler-error correction — 2026-11-21
