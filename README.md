@@ -41,6 +41,39 @@ Example theme header:
 
 For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
 
+## RunMind 3.1.0 — P4 Agent Capabilities (P0–P3 retained)
+
+RunMind 3.1.0 strengthens the shared Agent Core across Standalone, PowerToys Run and PowerToys Command Palette. It retains P0 reliability, P1 Project Intelligence/Mission Control, P2 System Manager Intelligence and P3 Developer Infrastructure.
+
+P4 adds eight Agent capabilities:
+
+- **MCP resource discovery:** paginated tool/resource/resource-template/prompt catalogues, server metadata/capabilities, metadata search, bounded pagination, exact URI-template expansion and honest incomplete/error reporting. Reading resource contents, retrieving prompts and running remote MCP tools remain separately approved.
+- **Multi-tool orchestration:** independent read-only calls can run concurrently (configurable 1–4); duplicate calls, writes, approval-gated actions, MCP calls and delegated agents remain serialized barriers. Dependency layers and operation outcomes appear in the existing Workflow panel.
+- **Task checkpoints and recovery:** bounded redacted per-chat checkpoints, plan/progress and operation links. Interrupted operations are marked unknown; resume is user-initiated, requires the same workspace and inspects uncertain external outcomes before any retry. No automatic replay.
+- **Tool-result summarization:** bounded/redacted structured results for model context and local operation history, excluding raw request/response bodies, HTML and binary/base64 content.
+- **Skills and project context:** bounded project instructions, package metadata, project-index coverage/architecture and relevance-ranked Skill metadata are included as context. Skills remain explicitly loaded guidance; neither Skills nor project files grant permissions.
+- **Change Impact Explorer:** explicit JS/TS changed paths and symbols, direct/transitive importer and test candidates, HTML/CSS/SVG asset consumers, plus unknown/unanalysed paths. It does not infer Git changes or execute tests.
+- **Development Session Timeline:** chronological checkpoint, tool-operation/dependency-layer and sub-agent events shown in Workflow and exposed as a read-only Agent tool.
+- **Artifact Verification:** structural checks and SHA-256 over exact artifact bytes, optional independently supplied expected digest comparison and a bounded receipt. A matching digest is not proof of provenance or signature authenticity.
+
+P4 adds no package/runtime dependency. Project analysis remains JavaScript, TypeScript, JSX/TSX, HTML and CSS, with SVG as a vector asset. See `P4-RELEASE-NOTES.md`, `docs/AGENT-CAPABILITIES-P4.md` and `docs/P4-IMPLEMENTATION-AUDIT.md`. Windows/.NET certification remains a target-machine gate; complete `docs/P4-WINDOWS-ACCEPTANCE.md` alongside the P0–P3 checklists before calling the three Windows hosts certified.
+
+## RunMind 3.0.0 — P3 Developer Infrastructure (P0 + P1 + P2 retained)
+
+RunMind 3.0.0 adds the P3 Developer Infrastructure workbench to the same shared Agent Core and native bridge used by Standalone, PowerToys Run and PowerToys Command Palette. It retains the P0 reliability foundation, P1 Project Intelligence/Mission Control and all seven P2 System Manager intelligence capabilities.
+
+P3 adds five focused areas:
+
+- **Podman/Docker Development Workbench:** fixed-argument Podman/Docker CLI integration for runtime/container/image/volume/network inspection, exact container inspect/logs/stats/start/stop/restart, and Compose config/ps/up/down/build/logs. Every operation requires fresh approval. Compose down preserves volumes; arbitrary shell commands, prune, image deletion and volume deletion are not exposed. Command completion does not imply container health; state changes require a subsequent inspection/health check.
+- **SQLite workbench:** Node.js built-in `node:sqlite` for existing workspace-contained `.db`, `.sqlite` and `.sqlite3` files. Supports integrity inspection, tables, schema/foreign keys, parameterized read-only queries and query plans. One DML/DDL statement can be executed transactionally after fresh approval. Database file creation, deletion and migration tooling are not included. The Node 24 `node:sqlite` API is currently a release-candidate API; see the [Node.js SQLite API documentation](https://nodejs.org/api/sqlite.html).
+- **API contract and OpenAPI testing:** bounded OpenAPI 3.0/3.1 operation generation from explicit examples/defaults/enums; local JSON Pointer references; response status and status-specific JSON Schema validation. JSON specs work without an extra dependency; YAML needs an already-installed `yaml` or `js-yaml` parser. The user supplies an explicit base URL; specification server entries never select the target. POST/PUT/PATCH/DELETE are excluded unless explicitly enabled and freshly approved.
+- **Runtime/log correlation:** an ephemeral timeline for exact RunMind-owned development-server and Node Inspector sessions plus explicitly supplied Playwright/API event slices. It correlates trace/request/correlation/Journey IDs, distinguishes source timestamps from read-time timestamps, redacts common credentials and does not create a persistent log store or infer causality.
+- **Advanced browser debugging:** expanded Playwright console/page-error diagnostics, source locations, request/response timing, failed-request and HTTP-error inspection, screenshots and optional local trace ZIP artifacts. Browser contexts are temporary; trace capture needs fresh approval and may contain sensitive page content. Arbitrary page JavaScript evaluation and live source-level browser breakpoints are deliberately not exposed.
+
+The five P3 developer workflows are available through the existing workflow manager. MySQL and PostgreSQL support are deliberately deferred to a later milestone; P3 ships SQLite only. Project language-aware code analysis remains JavaScript, TypeScript, JSX/TSX, HTML and CSS, with SVG as a first-class vector asset rather than a programming language.
+
+P3 implementation details, limitations and target-Windows validation steps are documented in `docs/DEVELOPER-INFRASTRUCTURE-P3.md`, `docs/P3-IMPLEMENTATION-AUDIT.md` and `docs/P3-WINDOWS-ACCEPTANCE.md`. Portable tests and source contracts do not certify the Windows-native hosts or the installed Podman/Docker runtime. Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete the P0, P1, P2 and P3 acceptance checklists before calling the release Windows-certified.
+
 ## RunMind 2.9.0 — P2 System Manager Intelligence (P0 + P1 retained)
 
 RunMind 2.9.0 adds seven optional Windows System Manager intelligence capabilities while retaining the complete P0 reliability foundation and P1 Project Intelligence/Mission Control implementation. All three Windows hosts share the same native System Manager bridge, Agent Core tools, settings and capability checks.

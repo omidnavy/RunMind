@@ -1,4 +1,29 @@
+## 3.1.0 — P4 Agent Capabilities
+
+- Expand MCP discovery to protocol/server metadata, paginated tools/resources/resource templates/prompts, safe template expansion, metadata search and accurate discovery completeness; remote reads/tool calls still require fresh approval.
+- Improve multi-tool orchestration with bounded parallel independent read-only groups, serialized side-effect/approval/MCP/delegation barriers, duplicate-call serialization, dependency layers and operation graph metadata.
+- Add bounded, redacted per-chat task checkpoints with explicit same-workspace resume and unknown-operation recovery guidance; no automatic replay of interrupted operations.
+- Add structured tool-result summarization with credential redaction, depth/item/property budgets and large body/binary omission.
+- Add bounded project instruction, package metadata, project index and relevance-ranked Skill context; instructions and Skills remain untrusted guidance and do not grant permissions.
+- Add the Change Impact Explorer for explicit JS/TS changed paths/symbols, direct/transitive dependencies, tests and HTML/CSS/SVG asset consumers.
+- Add the Development Session Timeline to the Workflow panel and Agent tool, with local checkpoint/operation/sub-agent events.
+- Extend artifact verification with exact-byte SHA-256, optional expected-digest comparison and verification receipts; digest equality is not provenance validation.
+- Add P4-focused regression tests; retain P0–P3 regression coverage. No new package/runtime dependency added.
+- Windows/.NET compilation and live acceptance remain pending on the target Windows machine.
+
 # RunMind Changelog
+
+## 3.0.0 — P3 Developer Infrastructure
+
+- Preserve P0 reliability, P1 Project Intelligence/Mission Control, P2 Windows System Manager Intelligence and SVG local-reference mapping in all three Windows hosts.
+- Add a Podman/Docker workbench using fixed ProcessStartInfo argument lists (never a shell): runtime and resource inventory, exact container inspect/logs/stats/start/stop/restart, and Compose config/ps/up/down/build/logs. Operations require fresh approval; outputs are bounded and common credential fields are redacted. Compose down never removes volumes; state-changing command success is not reported as independently verified health.
+- Add an existing-file SQLite workbench using Node.js built-in `node:sqlite`: integrity checks, table/schema/foreign-key inspection, parameterized read-only query/EXPLAIN and one approved transactional DML/DDL statement. Enforce workspace containment, no symlink paths, database size/SQL/parameter/row/output limits, and block ATTACH/DETACH/VACUUM/transaction-control/PRAGMA writes/virtual tables. No database create/delete/migration engine.
+- Add OpenAPI 3.0/3.1 contract testing from JSON (built-in) or YAML (only when a YAML parser is already installed). Generate only bounded operations supported by explicit examples/defaults/enums; resolve local JSON Pointer references only; use explicit user-selected base URL and same-origin redirects; exclude mutations by default; validate status-specific JSON Schemas on the actual returned status.
+- Improve runtime/log correlation to combine exact RunMind-owned development-server and Node Inspector sessions with bounded user-supplied browser/API event slices. Extract trace/request/correlation/Journey IDs, label timestamp quality and redact common credentials. Keep correlation ephemeral; do not infer causality or create a persistent log store.
+- Expand Playwright browser diagnostics with console/page errors, source locations, request/response timing, failed requests, HTTP errors, screenshots and optional locally saved trace ZIP artifacts. Require approval and keep temporary contexts; no arbitrary page JavaScript evaluation or live browser-source breakpoints.
+- Add five P3 built-in developer workflows and compile/copy the shared native bridge and runners into Standalone, PowerToys Run and Command Palette.
+- Keep MySQL/PostgreSQL support deferred; SQLite is the only P3 database integration. Preserve language-aware project analysis scope: JavaScript/TypeScript/JSX/TSX/HTML/CSS, with SVG as an asset format.
+- Portable tests and source checks are reported in `BUILD-STATUS.md`. Windows/.NET builds and live Podman/Docker acceptance remain pending target-machine validation.
 
 ## 2.9.0 — P2 System Manager Intelligence + SVG asset understanding
 

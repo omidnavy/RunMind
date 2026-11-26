@@ -1,4 +1,4 @@
-# RunMind 2.9.0 — P2 Windows acceptance checklist
+# RunMind 3.1.0 — P2 regression acceptance (carried into P3)
 
 Run on a Windows 11 machine with Node.js 24+ and .NET 10. Use the same source tree for Standalone, PowerToys Run and PowerToys Command Palette. This checklist supplements P0/P1 acceptance; it does not replace it.
 
@@ -7,7 +7,7 @@ Run on a Windows 11 machine with Node.js 24+ and .NET 10. Use the same source tr
 - [ ] Run `node --version` and confirm Node.js 24 or later.
 - [ ] Run `dotnet --info` and confirm .NET 10 SDK.
 - [ ] Run `.\Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64`
-- [ ] Confirm all three host projects build and package versions are 2.9.0; Command Palette package version is 2.9.0.0.
+- [ ] Confirm all three host projects build and package versions are 3.1.0; Command Palette package version is 3.1.0.0.
 - [ ] Complete `docs/P0-WINDOWS-ACCEPTANCE.md` and `docs/P1-WINDOWS-ACCEPTANCE.md`.
 
 ## Settings and native capability checks — each host

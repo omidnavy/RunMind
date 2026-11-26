@@ -124,6 +124,60 @@
       if (file.size > maxBytes) throw new Error(`File exceeds the ${maxBytes.toLocaleString()} byte read limit.`);
       return { file, handle, source: 'workspace' };
     }
+    async function buildAgentProjectContext(signal, userRequest = '') {
+      const result = { workspace: '', instructions: [], skills: [], loadedSkills: [], index: null, limitations: [] };
+      if (!agentDirectoryHandle) return result;
+      const candidates = ['AGENTS.md', '.agents/AGENTS.md', '.github/copilot-instructions.md', 'package.json'];
+      let budget = 24000;
+      for (const relative of candidates) {
+        if (signal?.aborted) throw new DOMException('Project context discovery cancelled.', 'AbortError');
+        try {
+          const { file } = await readTaskFile(relative, Math.min(10000, budget));
+          if (!budget) break;
+          const content = RunMindP4.redactText(await file.text(), Math.min(10000, budget));
+          if (relative === 'package.json') {
+            try {
+              const pkg = JSON.parse(content);
+              result.workspace = JSON.stringify({ name: pkg.name || '', version: pkg.version || '', type: pkg.type || '', packageManager: pkg.packageManager || '', scripts: Object.keys(pkg.scripts || {}).slice(0, 30), dependencies: Object.keys(pkg.dependencies || {}).slice(0, 40), devDependencies: Object.keys(pkg.devDependencies || {}).slice(0, 40) });
+            } catch (_) { result.workspace = 'package.json exists but could not be parsed for bounded project metadata.'; }
+          } else if (content.trim()) result.instructions.push({ path: relative, content });
+          budget -= content.length;
+        } catch (error) {
+          if (error?.name === 'AbortError') throw error;
+          if (!/not found|could not resolve|does not exist|not an attached filename/i.test(String(error?.message || error))) result.limitations.push(`${relative}: ${RunMindP4.redactText(error?.message || error, 200)}`);
+        }
+      }
+      try {
+        if (typeof loadProjectIndex === 'function') {
+          const index = await loadProjectIndex();
+          if (index) {
+            const languages = Object.entries(index.stats?.languages || {}).slice(0, 12).map(([name,count]) => `${name}:${count}`);
+            const understanding = typeof projectIndexBuildUnderstanding === 'function' ? projectIndexBuildUnderstanding(index) : null;
+            result.index = {
+              root: String(index.rootName || '').slice(0, 120), updatedAt: String(index.updatedAt || ''),
+              files: Number(index.stats?.files) || 0, scanned: Number(index.stats?.scanned) || 0,
+              skipped: Number(index.stats?.skipped) || 0, truncated: !!index.stats?.truncated,
+              languages, entryPoints: (understanding?.entryPoints || []).slice(0, 8).map(item => item.path),
+              modules: (understanding?.modules || []).slice(0, 12).map(item => ({ directory: item.directory, files: item.files }))
+            };
+          }
+        }
+      } catch (error) { result.limitations.push(`Project index context unavailable: ${RunMindP4.redactText(error?.message || error, 200)}`); }
+      try {
+        if (typeof discoverAgentSkills === 'function') {
+          const discovered = await discoverAgentSkills(signal);
+          const terms = new Set(String(userRequest || '').toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 2).slice(0, 80));
+          const ranked = discovered.map(skill => {
+            const text = `${skill.name || ''} ${skill.description || ''}`.toLowerCase();
+            const score = [...terms].reduce((total, word) => total + (text.includes(word) ? 1 : 0), 0) + (workspaceContext?.enabledSkills?.includes(skill.name) ? 10 : 0);
+            return { name: String(skill.name || '').slice(0, 64), description: RunMindP4.redactText(skill.description || '', 500), scope: String(skill.scope || 'unknown').slice(0, 20), relevance: score, loaded: workspaceContext?.enabledSkills?.includes(skill.name) === true };
+          }).sort((a,b) => b.relevance - a.relevance || a.name.localeCompare(b.name));
+          result.skills = ranked.slice(0, 8).map(({ name, description, scope, relevance }) => ({ name, description, scope, relevance }));
+          result.loadedSkills = ranked.filter(item => item.loaded).slice(0, 20).map(item => item.name);
+        }
+      } catch (error) { if (error?.name === 'AbortError') throw error; result.limitations.push(`Skill discovery unavailable: ${RunMindP4.redactText(error?.message || error, 200)}`); }
+      return result;
+    }
     async function readWorkspaceText(path, maxBytes = 2 * 1024 * 1024) {
       const result = await readTaskFile(path, maxBytes);
       if (['application/pdf', 'application/zip'].includes(String(result.file.type || '').toLowerCase())) throw new Error(`'${path}' is a binary attachment. Use the PDF or ZIP tool for this file.`);

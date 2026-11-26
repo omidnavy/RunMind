@@ -192,7 +192,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.19' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '3.1.0' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -210,28 +210,40 @@
     }
     async function mcpConnect(config, token = '') {
       const savedToken = String(token || config.token || '').trim();
-      const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], prompts: [] };
+      const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], resourceTemplates: [], prompts: [], serverInfo: null, serverCapabilities: null, discovery: {} };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '1.10.19' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '3.1.0' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
+      runtime.serverInfo = init.serverInfo && typeof init.serverInfo === 'object' ? { name: String(init.serverInfo.name || '').slice(0, 160), version: String(init.serverInfo.version || '').slice(0, 80) } : null;
+      runtime.serverCapabilities = init.capabilities && typeof init.capabilities === 'object' ? Object.keys(init.capabilities).slice(0, 30) : [];
       runtime.initialized = true;
       await mcpNotify(runtime, 'notifications/initialized');
       runtime.tools = await mcpListAll(runtime, 'tools/list', 'tools');
-      try { runtime.resources = await mcpListAll(runtime, 'resources/list', 'resources'); } catch (_) { runtime.resources = []; }
-      try { runtime.prompts = await mcpListAll(runtime, 'prompts/list', 'prompts'); } catch (_) { runtime.prompts = []; }
+      try { runtime.resources = await mcpListAll(runtime, 'resources/list', 'resources'); } catch (error) { runtime.discovery.resourcesError = String(error?.message || error).slice(0, 240); runtime.resources = []; }
+      try { runtime.resourceTemplates = await mcpListAll(runtime, 'resources/templates/list', 'resourceTemplates'); } catch (error) { runtime.discovery.resourceTemplatesError = String(error?.message || error).slice(0, 240); runtime.resourceTemplates = []; }
+      try { runtime.prompts = await mcpListAll(runtime, 'prompts/list', 'prompts'); } catch (error) { runtime.discovery.promptsError = String(error?.message || error).slice(0, 240); runtime.prompts = []; }
       mcpRuntime.set(config.id, runtime);
-      const saved = { ...config, token: savedToken, connected: true, toolCount: runtime.tools.length, resourceCount: runtime.resources.length, promptCount: runtime.prompts.length };
+      runtime.discovery = { ...runtime.discovery, toolsTruncated: !!runtime.tools.truncated, resourcesTruncated: !!runtime.resources.truncated, resourceTemplatesTruncated: !!runtime.resourceTemplates.truncated, promptsTruncated: !!runtime.prompts.truncated, discoveredAt: new Date().toISOString() };
+      const saved = { ...config, token: savedToken, connected: true, toolCount: runtime.tools.length, resourceCount: runtime.resources.length, resourceTemplateCount: runtime.resourceTemplates.length, promptCount: runtime.prompts.length };
       mcpServers.set(config.id, saved); saveMcpServerConfigs(); renderMcpServers();
       return saved;
     }
     async function mcpListAll(runtime, method, key) {
-      const all = []; let cursor;
+      const all = []; const seenCursors = new Set(); let cursor = ''; let truncated = false;
       for (let page = 0; page < 20; page++) {
         const result = await mcpRpc(runtime, method, cursor ? { cursor } : {});
-        if (Array.isArray(result?.[key])) all.push(...result[key]);
-        cursor = result?.nextCursor; if (!cursor) break;
+        if (!Array.isArray(result?.[key])) throw new Error(`MCP ${method} did not return an array named '${key}'.`);
+        const remaining = Math.max(0, 2000 - all.length);
+        if (result[key].length > remaining) truncated = true;
+        all.push(...result[key].slice(0, remaining));
+        const nextCursor = String(result?.nextCursor || '');
+        if (!nextCursor) { cursor = ''; break; }
+        if (seenCursors.has(nextCursor)) { truncated = true; cursor = nextCursor; break; }
+        seenCursors.add(nextCursor); cursor = nextCursor;
+        if (page === 19 || all.length >= 2000) truncated = true;
       }
+      Object.defineProperty(all, 'truncated', { value: truncated || !!cursor, enumerable: false });
       return all;
     }
     function renderMcpServers() {
@@ -263,9 +275,11 @@
           mcpToolRoutes.set(name, { serverId, toolName: tool.name });
         }
       }
-      if (enabledRuntimes.some(([, runtime]) => runtime.resources.length || runtime.prompts.length)) {
-        definitions.push({ type: 'function', function: { name: 'mcp_list_knowledge', description: 'List tools, resources, and prompts exposed by connected MCP knowledge servers. Use this to discover available knowledge resources.', parameters: { type: 'object', properties: {}, additionalProperties: false } } });
-        if (enabledRuntimes.some(([, runtime]) => runtime.resources.length)) definitions.push({ type: 'function', function: { name: 'mcp_read_resource', description: 'Read a resource by its exact server ID and URI, as discovered through mcp_list_knowledge.', parameters: { type: 'object', properties: { server_id: { type: 'string' }, uri: { type: 'string' } }, required: ['server_id','uri'], additionalProperties: false } } });
+      if (enabledRuntimes.length) {
+        definitions.push({ type: 'function', function: { name: 'mcp_list_knowledge', description: 'List bounded MCP tools, resources, resource templates and prompts with server identity, protocol metadata, pagination completeness and discovery errors.', parameters: { type: 'object', properties: {}, additionalProperties: false } } });
+        definitions.push({ type: 'function', function: { name: 'mcp_search_knowledge', description: 'Search the names and descriptions of discovered MCP tools, resources, resource templates and prompts across enabled connected servers. Does not read resource content or execute tools.', parameters: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 300 }, limit: { type: 'integer', minimum: 1, maximum: 50 } }, required: ['query'], additionalProperties: false } } });
+        if (enabledRuntimes.some(([, runtime]) => runtime.resources.length)) definitions.push({ type: 'function', function: { name: 'mcp_read_resource', description: 'Read a resource by its exact server ID and URI as discovered through MCP metadata. Reading requires separate approval.', parameters: { type: 'object', properties: { server_id: { type: 'string' }, uri: { type: 'string' } }, required: ['server_id','uri'], additionalProperties: false } } });
+        if (enabledRuntimes.some(([, runtime]) => runtime.resourceTemplates.length)) definitions.push({ type: 'function', function: { name: 'mcp_read_resource_template', description: 'Expand one exact advertised MCP resource URI template using scalar parameters and read the resulting resource. Only simple {variable} placeholders are supported; reading requires separate approval.', parameters: { type: 'object', properties: { server_id: { type: 'string' }, uri_template: { type: 'string' }, arguments: { type: 'object', additionalProperties: { type: 'string' } } }, required: ['server_id','uri_template','arguments'], additionalProperties: false } } });
       }
       if (enabledRuntimes.some(([, runtime]) => runtime.prompts.length)) {
         definitions.push({ type: 'function', function: { name: 'mcp_get_prompt', description: 'Retrieve a named prompt from an MCP server. Supply arguments required by that prompt.', parameters: { type: 'object', properties: { server_id: { type: 'string' }, name: { type: 'string' }, arguments: { type: 'object' } }, required: ['server_id','name'], additionalProperties: false } } });
@@ -448,8 +462,66 @@
       return promise;
     }
 
+    function expandMcpResourceTemplate(uriTemplate, parameters) {
+      const template = String(uriTemplate || '');
+      if (!template || template.length > 2048 || /[\r\n\0]/.test(template)) throw new Error('MCP resource template URI is invalid or too long.');
+      const values = parameters && typeof parameters === 'object' && !Array.isArray(parameters) ? parameters : {};
+      const names = [...template.matchAll(/\{([^{}]+)\}/g)].map(match => match[1]);
+      if (!names.length) throw new Error('The advertised resource template contains no simple {variable} placeholders.');
+      if (template.replace(/\{[A-Za-z][A-Za-z0-9_]*\}/g, '').includes('{') || template.replace(/\{[A-Za-z][A-Za-z0-9_]*\}/g, '').includes('}')) throw new Error('Only simple {variable} URI template placeholders are supported.');
+      const unique = [...new Set(names)];
+      const supplied = Object.keys(values);
+      for (const name of unique) if (!Object.prototype.hasOwnProperty.call(values, name)) throw new Error(`Missing resource template parameter '${name}'.`);
+      for (const name of supplied) if (!unique.includes(name)) throw new Error(`Unexpected resource template parameter '${name}'.`);
+      return template.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (_, name) => {
+        const value = values[name];
+        if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) throw new Error(`Resource template parameter '${name}' must be a string, number or boolean.`);
+        const text = String(value);
+        if (!text || text.length > 512 || /[\r\n\0]/.test(text)) throw new Error(`Resource template parameter '${name}' is empty, too long or contains control characters.`);
+        return encodeURIComponent(text);
+      });
+    }
+    function mcpDiscoveryIsComplete(discovery) {
+      if (!discovery || typeof discovery !== 'object' || Array.isArray(discovery)) return false;
+      return !Object.entries(discovery).some(([key, value]) =>
+        (key.endsWith('Error') && !!value) || (key.endsWith('Truncated') && value === true)
+      );
+    }
+    function searchMcpKnowledge(query, limit = 20) {
+      const terms = String(query || '').toLowerCase().split(/[^a-z0-9_./:-]+/).filter(Boolean).slice(0, 12);
+      if (!terms.length) throw new Error('Provide a non-empty MCP knowledge search query.');
+      const results = []; let catalogueTruncated = false;
+      for (const [id, runtime] of mcpRuntime.entries()) {
+        const config = mcpServers.get(id); if (!config?.enabled) continue;
+        const sets = [
+          ['tool', runtime.tools, item => item.name, item => item.description],
+          ['resource', runtime.resources, item => item.name, item => `${item.uri || ''} ${item.description || ''} ${item.mimeType || ''}`],
+          ['resource-template', runtime.resourceTemplates || [], item => item.name, item => `${item.uriTemplate || ''} ${item.description || ''} ${item.mimeType || ''}`],
+          ['prompt', runtime.prompts, item => item.name, item => item.description]
+        ];
+        for (const [kind, rows, getName, getDescription] of sets) for (const item of rows || []) {
+          if (results.length >= 10000) { catalogueTruncated = true; break; }
+          const name = String(getName(item) || ''), description = String(getDescription(item) || '');
+          const haystack = `${name} ${description}`.toLowerCase();
+          let score = 0; const matchedTerms = [];
+          for (const term of terms) if (haystack.includes(term)) { score += name.toLowerCase().includes(term) ? 5 : 2; matchedTerms.push(term); }
+          if (score) results.push({ server_id: id, server: String(config.name || '').slice(0, 120), kind, name: name.slice(0, 180), description: description.slice(0, 700), uri: kind === 'resource' ? String(item.uri || '').slice(0, 2048) : undefined, uriTemplate: kind === 'resource-template' ? String(item.uriTemplate || '').slice(0, 2048) : undefined, matchedTerms, score });
+        }
+      }
+      results.sort((a,b) => b.score-a.score || a.server.localeCompare(b.server) || a.name.localeCompare(b.name));
+      return { query: String(query).slice(0, 300), results: results.slice(0, Math.max(1, Math.min(50, Number(limit) || 20))), totalMatches: results.length, catalogueTruncated, note: 'Search covers advertised metadata only. Resource bodies are not fetched and MCP tools are not executed.' };
+    }
     async function executeMcpTool(name, args, signal) {
-      if (name === 'mcp_list_knowledge') return [...mcpRuntime.entries()].filter(([id]) => mcpServers.get(id)?.enabled).map(([id, runtime]) => ({ server_id: id, server: mcpServers.get(id)?.name, tools: runtime.tools.map(t => ({ name: t.name, description: t.description })), resources: runtime.resources.map(r => ({ name: r.name, uri: r.uri, description: r.description, mimeType: r.mimeType })), prompts: runtime.prompts.map(p => ({ name: p.name, description: p.description, arguments: p.arguments })) }));
+      if (name === 'mcp_list_knowledge') return [...mcpRuntime.entries()].filter(([id]) => mcpServers.get(id)?.enabled).map(([id, runtime]) => ({ server_id: id, server: mcpServers.get(id)?.name, serverInfo: runtime.serverInfo, protocolVersion: runtime.protocolVersion, capabilities: runtime.serverCapabilities || [], tools: runtime.tools.map(t => ({ name: t.name, description: t.description })), resources: runtime.resources.map(r => ({ name: r.name, uri: r.uri, description: r.description, mimeType: r.mimeType })), resourceTemplates: (runtime.resourceTemplates || []).map(r => ({ name: r.name, uriTemplate: r.uriTemplate, description: r.description, mimeType: r.mimeType })), prompts: runtime.prompts.map(p => ({ name: p.name, description: p.description, arguments: p.arguments })), discovery: runtime.discovery || {}, discoveryComplete: mcpDiscoveryIsComplete(runtime.discovery), resourceContentsFetched: false }));
+      if (name === 'mcp_search_knowledge') return searchMcpKnowledge(args.query, args.limit);
+      if (name === 'mcp_read_resource_template') {
+        const id = String(args.server_id || ''), runtime = mcpRuntime.get(id); if (!runtime || !mcpServers.get(id)?.enabled) throw new Error('MCP server is not connected/enabled.');
+        const template = String(args.uri_template || '');
+        if (!(runtime.resourceTemplates || []).some(item => item.uriTemplate === template)) throw new Error('That URI template was not advertised by this MCP server.');
+        const uri = expandMcpResourceTemplate(template, args.arguments || {});
+        if (!await requireAgentApproval({ title: 'Read MCP resource template?', subtitle: mcpServers.get(id).name, detail: `${template}\n\nExpanded URI: ${uri}`, toolName: name, allowForTask: false }, signal)) throw new Error('User declined MCP resource-template access.');
+        return { uri, result: await mcpRpc(runtime, 'resources/read', { uri }, signal) };
+      }
       if (name === 'mcp_read_resource') {
         const runtime = mcpRuntime.get(String(args.server_id)); if (!runtime || !mcpServers.get(String(args.server_id))?.enabled) throw new Error('MCP server is not connected/enabled.');
         if (!runtime.resources.some(r => r.uri === args.uri)) throw new Error('That resource URI was not advertised by this server.');

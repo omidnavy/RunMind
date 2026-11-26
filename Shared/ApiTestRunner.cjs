@@ -60,6 +60,13 @@ function validateRequest(input) {
       if (!['exists','equals','contains','type','one_of','greater_than'].includes(String(assertion.operator || 'exists')))
         throw new Error(`Request ${index + 1} has an unsupported JSON assertion operator.`);
     }
+    const schema = expect.schema === undefined ? null : expect.schema;
+    if (schema !== null && (!schema || typeof schema !== 'object' || Array.isArray(schema))) throw new Error(`Request ${index + 1} response schema must be a JSON Schema object.`);
+    const responseSchemas = expect.responseSchemas === undefined ? null : expect.responseSchemas;
+    if (responseSchemas !== null) {
+      if (!responseSchemas || typeof responseSchemas !== 'object' || Array.isArray(responseSchemas) || Object.keys(responseSchemas).length > 10) throw new Error(`Request ${index + 1} responseSchemas must map at most 10 HTTP status codes to schemas.`);
+      for (const [status, rule] of Object.entries(responseSchemas)) if (!/^2\d\d$/.test(status) || !rule || typeof rule !== 'object' || Array.isArray(rule)) throw new Error(`Request ${index + 1} has an invalid response schema status mapping.`);
+    }
     const headerAssertions = Array.isArray(expect.headers) ? expect.headers : [];
     if (headerAssertions.length > 10) throw new Error(`Request ${index + 1} may define at most 10 header assertions.`);
     for (const assertion of headerAssertions) {
@@ -68,7 +75,7 @@ function validateRequest(input) {
     }
     if (expect.body_contains !== undefined && (typeof expect.body_contains !== 'string' || expect.body_contains.length > 4000))
       throw new Error(`Request ${index + 1} body_contains must be a string up to 4,000 characters.`);
-    return { name, method, path: requestPath, headers, body_json: raw.body_json, body_text: raw.body_text, expect: { statuses, json, headers: headerAssertions, body_contains: expect.body_contains } };
+    return { name, method, path: requestPath, headers, body_json: raw.body_json, body_text: raw.body_text, expect: { statuses, json, headers: headerAssertions, body_contains: expect.body_contains, schema, responseSchemas } };
   });
   return { baseUrl: base.href, timeoutSeconds, requests };
 }
@@ -92,6 +99,67 @@ function getJsonPath(value, expression) {
     current = current[part];
   }
   return { exists: true, value: current };
+}
+
+function validateJsonSchema(value, schema, options = {}) {
+  const errors = [];
+  const maxDepth = options.maxDepth ?? 12;
+  function visit(actual, rule, currentPath, depth) {
+    if (!rule || typeof rule !== 'object' || Array.isArray(rule)) { errors.push(`${currentPath || '$'}: invalid schema`); return; }
+    if (depth > maxDepth) { errors.push(`${currentPath || '$'}: schema depth limit exceeded`); return; }
+    if (rule.$ref) { errors.push(`${currentPath || '$'}: unresolved $ref '${String(rule.$ref).slice(0, 160)}'`); return; }
+    for (const key of ['allOf','anyOf','oneOf']) {
+      if (rule[key] === undefined) continue;
+      if (!Array.isArray(rule[key]) || rule[key].length < 1 || rule[key].length > 20) { errors.push(`${currentPath || '$'}: invalid ${key} schema`); continue; }
+      const outcomes = rule[key].map(child => validateJsonSchema(actual, child, { maxDepth: maxDepth - depth }));
+      const validCount = outcomes.filter(item => item.valid).length;
+      const accepted = key === 'allOf' ? validCount === outcomes.length : key === 'anyOf' ? validCount > 0 : validCount === 1;
+      if (!accepted) errors.push(`${currentPath || '$'}: ${key} constraint failed`);
+    }
+    if (rule.nullable === true && actual === null) return;
+    if (Array.isArray(rule.enum) && !rule.enum.some(item => isDeepStrictEqual(item, actual))) errors.push(`${currentPath || '$'}: value is not in enum`);
+    if (Object.prototype.hasOwnProperty.call(rule, 'const') && !isDeepStrictEqual(rule.const, actual)) errors.push(`${currentPath || '$'}: value does not match const`);
+    const types = rule.type === undefined ? [] : Array.isArray(rule.type) ? rule.type : [rule.type];
+    const actualType = actual === null ? 'null' : Array.isArray(actual) ? 'array' : Number.isInteger(actual) ? 'integer' : typeof actual;
+    const typeMatches = type => type === actualType || (type === 'number' && actualType === 'integer') || (type === 'object' && actual !== null && typeof actual === 'object' && !Array.isArray(actual));
+    if (types.length && !types.some(typeMatches)) { errors.push(`${currentPath || '$'}: expected ${types.join('|')}, received ${actualType}`); return; }
+    if (typeof actual === 'string') {
+      if (Number.isInteger(rule.minLength) && actual.length < rule.minLength) errors.push(`${currentPath || '$'}: string shorter than minLength ${rule.minLength}`);
+      if (Number.isInteger(rule.maxLength) && actual.length > rule.maxLength) errors.push(`${currentPath || '$'}: string exceeds maxLength ${rule.maxLength}`);
+      if (rule.pattern) {
+        if (String(rule.pattern).length > 512) errors.push(`${currentPath || '$'}: schema pattern exceeds limit`);
+        else { try { if (!(new RegExp(rule.pattern)).test(actual)) errors.push(`${currentPath || '$'}: string does not match pattern`); } catch { errors.push(`${currentPath || '$'}: schema pattern is invalid`); }
+        }
+      }
+    }
+    if (typeof actual === 'number') {
+      if (Number.isFinite(rule.minimum) && actual < rule.minimum) errors.push(`${currentPath || '$'}: number below minimum ${rule.minimum}`);
+      if (Number.isFinite(rule.maximum) && actual > rule.maximum) errors.push(`${currentPath || '$'}: number above maximum ${rule.maximum}`);
+    }
+    if (Array.isArray(actual)) {
+      if (Number.isInteger(rule.minItems) && actual.length < rule.minItems) errors.push(`${currentPath || '$'}: array shorter than minItems ${rule.minItems}`);
+      if (Number.isInteger(rule.maxItems) && actual.length > rule.maxItems) errors.push(`${currentPath || '$'}: array exceeds maxItems ${rule.maxItems}`);
+      if (rule.uniqueItems === true && actual.length <= 200) {
+        for (let index = 0; index < actual.length; index++) for (let next = index + 1; next < actual.length; next++) if (isDeepStrictEqual(actual[index], actual[next])) { errors.push(`${currentPath || '$'}: array contains duplicate items`); index = actual.length; break; }
+      }
+      if (rule.items && typeof rule.items === 'object') actual.slice(0, 200).forEach((item, index) => visit(item, rule.items, `${currentPath || '$'}[${index}]`, depth + 1));
+    }
+    if (actual !== null && typeof actual === 'object' && !Array.isArray(actual)) {
+      const required = Array.isArray(rule.required) ? rule.required.slice(0, 100) : [];
+      for (const key of required) if (typeof key === 'string' && !Object.prototype.hasOwnProperty.call(actual, key)) errors.push(`${currentPath || '$'}: missing required property '${key.slice(0, 100)}'`);
+      const properties = rule.properties && typeof rule.properties === 'object' && !Array.isArray(rule.properties) ? rule.properties : {};
+      const propertyEntries = Object.entries(properties).slice(0, 200);
+      for (const [key, child] of propertyEntries) if (Object.prototype.hasOwnProperty.call(actual, key)) visit(actual[key], child, `${currentPath || '$'}.${key}`, depth + 1);
+      if (Object.keys(actual).length > 200) errors.push(`${currentPath || '$'}: object exceeds 200 properties`);
+      if (Number.isInteger(rule.minProperties) && Object.keys(actual).length < rule.minProperties) errors.push(`${currentPath || '$'}: object has fewer than minProperties ${rule.minProperties}`);
+      if (Number.isInteger(rule.maxProperties) && Object.keys(actual).length > rule.maxProperties) errors.push(`${currentPath || '$'}: object exceeds maxProperties ${rule.maxProperties}`);
+      const unknownKeys = Object.keys(actual).filter(key => !Object.prototype.hasOwnProperty.call(properties, key));
+      if (rule.additionalProperties === false) for (const key of unknownKeys) errors.push(`${currentPath || '$'}: unexpected property '${key.slice(0, 100)}'`);
+      else if (rule.additionalProperties && typeof rule.additionalProperties === 'object') for (const key of unknownKeys.slice(0, 200)) visit(actual[key], rule.additionalProperties, `${currentPath || '$'}.${key}`, depth + 1);
+    }
+  }
+  visit(value, schema, '$', 0);
+  return { valid: errors.length === 0, errors: errors.slice(0, 20) };
 }
 
 function redact(value, key = '') {
@@ -235,6 +303,11 @@ async function run(input, dependencies = {}) {
         assertions.push({ kind: 'json', path: check.path, operator, passed, actual: found.exists ? redact(found.value, check.path.split('.').at(-1)) : '[MISSING]' });
       }
       if (step.expect.body_contains !== undefined) assertions.push({ kind: 'body_contains', passed: text.includes(step.expect.body_contains), expected: step.expect.body_contains });
+      const responseSchema = step.expect.responseSchemas?.[String(response.status)] || step.expect.schema;
+      if (responseSchema) {
+        const validation = isJson ? validateJsonSchema(json, responseSchema) : { valid: false, errors: ['Response content is not valid JSON.'] };
+        assertions.push({ kind: 'json_schema', status: response.status, passed: validation.valid, errors: validation.errors });
+      }
       const passed = assertions.every(item => item.passed);
       if (!passed) failed = true;
       const safeHeaders = {};
@@ -268,4 +341,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = { validateRequest, parseInputJson, run, getJsonPath, MAX_REQUESTS, MAX_RESPONSE_BYTES, MAX_OUTPUT_BYTES };
+module.exports = { validateRequest, parseInputJson, run, getJsonPath, validateJsonSchema, MAX_REQUESTS, MAX_RESPONSE_BYTES, MAX_OUTPUT_BYTES };

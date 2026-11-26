@@ -323,12 +323,31 @@
       return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>:root{color-scheme:light dark}*{box-sizing:border-box}body{margin:0;padding:32px;font:15px/1.5 system-ui,sans-serif;background:#f4f6f8;color:#202833}main{max-width:1500px;margin:auto}h1{margin:0 0 24px}.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px}figure{margin:0;padding:10px;background:white;border:1px solid #d7dee7;border-radius:12px;box-shadow:0 3px 14px #17212b12}img{display:block;width:100%;height:220px;object-fit:contain;background:#eef1f5;border-radius:7px}figcaption{padding:10px 3px 2px;overflow-wrap:anywhere;color:#465364}@media(prefers-color-scheme:dark){body{background:#202326;color:#eee}figure{background:#2c3034;border-color:#454b52}img{background:#191c1f}figcaption{color:#d3d8df}}@media(max-width:560px){body{padding:18px}.gallery{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}img{height:160px}}</style></head><body><main><h1>${title}</h1><div class="gallery">${cards.join('')}</div></main></body></html>`;
     }
 
-    async function verifyWorkspaceArtifact(path, requestedFormat = 'auto', signal, requestedDelimiter = '') {
+    async function verifyWorkspaceArtifact(path, requestedFormat = 'auto', signal, requestedDelimiter = '', expectedSha256 = '') {
       const { file } = await readTaskFile(path, 50 * 1024 * 1024);
+      const expected = String(expectedSha256 || '').trim().toLowerCase();
+      if (expected && !/^[a-f0-9]{64}$/.test(expected)) throw new Error('Expected SHA-256 must contain exactly 64 hexadecimal characters.');
+      let sha256 = '';
+      if (signal?.aborted) throw new DOMException('Artifact verification cancelled.', 'AbortError');
+      if (globalThis.crypto?.subtle) {
+        const digest = await globalThis.crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+        sha256 = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      } else if (expected) throw new Error('SHA-256 verification is unavailable in this host; the supplied expected digest was not checked.');
+      if (signal?.aborted) throw new DOMException('Artifact verification cancelled.', 'AbortError');
+      const hashMatches = expected ? !!sha256 && sha256 === expected : null;
+      const finishReceipt = (structuralValid, note, checks) => {
+        const finalChecks = [...checks];
+        if (sha256) finalChecks.push({ name: 'SHA-256 digest', passed: true, detail: sha256 });
+        if (expected) finalChecks.push({ name: 'Expected SHA-256 match', passed: hashMatches === true, detail: hashMatches ? 'The exact artifact bytes match the supplied digest.' : 'The artifact bytes do not match the supplied digest.' });
+        const valid = structuralValid === true && (expected ? hashMatches === true : true);
+        const verifiedAt = new Date().toISOString();
+        return { valid, format, size: file.size, checks: finalChecks, file: { path: String(path).slice(0, 1024), size: file.size, lastModified: file.lastModified || null, mimeType: String(file.type || '').slice(0, 120) }, sha256: sha256 || null, integrity: { algorithm: 'SHA-256', computed: !!sha256, expectedSha256: expected || null, matched: hashMatches }, assurance: sha256 ? expected ? 'structural-and-content-hash-match' : 'structural-and-content-hash' : 'structural-only', verificationReceipt: { schema: 'runmind.artifact-verification.v1', verifiedAt, format, size: file.size, sha256: sha256 || null, expectedSha256: expected || null, hashMatches, structuralValid: structuralValid === true }, note: `${note}${expected && !hashMatches ? ' Expected SHA-256 mismatch: the file bytes differ from the supplied digest.' : ''}` };
+      };
       const extension = String(path).split('.').pop().toLowerCase();
       const format = requestedFormat && requestedFormat !== 'auto' ? requestedFormat : ({ docx: 'docx', xlsx: 'xlsx', pdf: 'pdf', svg: 'svg', html: 'html', htm: 'html', json: 'json', csv: 'csv', tsv: 'tsv', mmd: 'mermaid', md: 'markdown' })[extension] || 'binary';
       const checks = [];
       const pass = (name, detail) => checks.push({ name, passed: true, detail });
+      try {
       if (format === 'docx' || format === 'xlsx') {
         const archive = await parseWorkspaceZip({ path }, signal);
         const entries = new Map(archive.entries.map(entry => [entry.path, entry]));
@@ -346,7 +365,7 @@
         }
         if (format === 'xlsx' && !xmlParts.some(entry => /^xl\/worksheets\/sheet\d+\.xml$/i.test(entry.path))) throw new Error('XLSX workbook contains no worksheet XML.');
         pass('ZIP structure', `${archive.entryCount} entries, CRC-32 checked for every XML/relationship part`);
-        return { valid: true, format, size: file.size, checks, note: 'Structural validation only; this does not prove visual layout or every Office application feature.' };
+        return finishReceipt(true, 'Structural validation only; this does not prove visual layout or every Office application feature.', checks);
       }
       if (format === 'pdf') {
         const bytes = new Uint8Array(await file.arrayBuffer());
@@ -381,7 +400,12 @@
       } else {
         pass('File readability', 'File exists and is readable; no format-specific validator is available.');
       }
-      return { valid: true, format, size: file.size, checks, note: 'Structural validation only; content correctness remains a separate review.' };
+      return finishReceipt(true, 'Structural validation only; content correctness and provenance remain separate reviews.', checks);
+      } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw new DOMException('Artifact verification cancelled.', 'AbortError');
+        checks.push({ name: 'Structural validation', passed: false, detail: RunMindP4.redactText(error?.message || error, 800) });
+        return finishReceipt(false, 'Artifact bytes were hashed, but structural validation failed.', checks);
+      }
     }
 
     async function saveGeneratedArtifact(path, blob, format, title, detail, signal) {

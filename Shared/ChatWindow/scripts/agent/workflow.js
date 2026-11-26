@@ -6,15 +6,147 @@
       'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_search', 'project_index_overview', 'project_validate', 'project_understanding', 'project_diagnostics', 'project_mission_control', 'project_test_impact', 'project_release_readiness', 'validate_json',
       'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders',
       'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap',
-      'read_rss_feed', 'page_to_markdown', 'compare_webpages'
+      'read_rss_feed', 'page_to_markdown', 'compare_webpages', 'project_change_impact', 'development_session_timeline'
     ]);
     const WORKFLOW_READ_APPROVAL_TOOLS = new Set([
       'fetch_webpage','web_search','research_topic','list_files','read_file','search_files','file_info','checksum_file',
       'compare_files','project_overview','project_search','project_index_overview','project_validate','project_understanding','project_diagnostics','project_mission_control','project_test_impact','project_release_readiness','validate_json','validate_json_schema','validate_dataset','verify_artifact','read_pdf','inspect_archive',
       'infer_dataset_schema','analyze_csv','compare_datasets','generate_statistics','compare_folders','read_image',
       'image_metadata','extract_links','extract_metadata','extract_tables','read_sitemap','read_rss_feed',
-      'page_to_markdown','check_links','compare_webpages','crawl_website'
+      'page_to_markdown','check_links','compare_webpages','crawl_website','project_change_impact','development_session_timeline'
     ]);
+    let agentTaskCheckpoints = [];
+    let activeAgentCheckpointId = '';
+    let pendingResumeCheckpointId = '';
+    const AGENT_TASK_CHECKPOINT_LIMIT = 20;
+    function agentTaskCheckpointStorageKey() { return `${workflowStorageKey}.task-checkpoints.v1`; }
+    function loadAgentTaskCheckpoints() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(agentTaskCheckpointStorageKey()) || '[]');
+        agentTaskCheckpoints = (Array.isArray(stored) ? stored : []).map(item => RunMindP4.normalizeCheckpoint(item)).filter(Boolean).slice(-AGENT_TASK_CHECKPOINT_LIMIT);
+        for (const item of agentTaskCheckpoints) if (item.status === 'running') { item.status = 'interrupted'; item.stage = 'interrupted'; item.summary = 'RunMind closed while this task was active. Operations without recorded results must be inspected before retrying.'; item.updatedAt = new Date().toISOString(); }
+        persistAgentTaskCheckpoints();
+      } catch (_) { agentTaskCheckpoints = []; }
+    }
+    function persistAgentTaskCheckpoints() {
+      try { localStorage.setItem(agentTaskCheckpointStorageKey(), JSON.stringify(agentTaskCheckpoints.slice(-AGENT_TASK_CHECKPOINT_LIMIT).map(item => RunMindP4.normalizeCheckpoint(item)).filter(Boolean))); }
+      catch (_) { /* Checkpoints are a recovery aid; storage failure must never block an Agent run. */ }
+    }
+    function createAgentTaskCheckpoint(request, selection, resumedFrom = '') {
+      const now = new Date().toISOString();
+      const checkpoint = { id: crypto.randomUUID(), task: RunMindP4.redactText(request, 1800), workspaceId: String(workspaceContext?.id || ''), status: 'running', stage: 'starting', summary: 'Task accepted; no tool operations recorded yet.', plan: [], operationIds: [], resumedFrom, provider: String(selection?.provider || ''), model: String(selection?.model || '').slice(0, 120), createdAt: now, updatedAt: now, completedAt: '' };
+      agentTaskCheckpoints.push(checkpoint); agentTaskCheckpoints = agentTaskCheckpoints.slice(-AGENT_TASK_CHECKPOINT_LIMIT);
+      activeAgentCheckpointId = checkpoint.id; persistAgentTaskCheckpoints(); renderAgentTaskCheckpoints();
+      return checkpoint;
+    }
+    function updateAgentTaskCheckpoint(id, patch = {}) {
+      const item = agentTaskCheckpoints.find(row => row.id === id); if (!item) return null;
+      if (patch.stage != null) item.stage = RunMindP4.redactText(patch.stage, 100);
+      if (patch.summary != null) item.summary = RunMindP4.redactText(patch.summary, 1400);
+      if (patch.plan) item.plan = RunMindP4.normalizeCheckpoint({ ...item, plan: patch.plan }).plan;
+      if (patch.operationIds) item.operationIds = [...new Set([...item.operationIds, ...patch.operationIds])].slice(-60);
+      if (patch.status) item.status = patch.status;
+      item.updatedAt = new Date().toISOString();
+      if (['completed','cancelled','needs_recovery'].includes(item.status)) item.completedAt = item.updatedAt;
+      if (item.status === 'completed' && item.resumedFrom) {
+        const source = agentTaskCheckpoints.find(row => row.id === item.resumedFrom);
+        if (source && ['interrupted','needs_recovery'].includes(source.status)) {
+          source.status = 'completed'; source.stage = 'recovered';
+          source.summary = `Recovery completed in checkpoint ${item.id}. Review the new checkpoint for the resumed execution record.`;
+          source.updatedAt = item.updatedAt; source.completedAt = item.updatedAt;
+        }
+      }
+      persistAgentTaskCheckpoints(); renderAgentTaskCheckpoints(); return item;
+    }
+    function recordAgentCheckpointPlan(title, steps) {
+      if (!activeAgentCheckpointId) return;
+      updateAgentTaskCheckpoint(activeAgentCheckpointId, { stage: 'planned', summary: `Plan: ${RunMindP4.redactText(title, 120)}`, plan: steps });
+    }
+    function renderAgentTaskCheckpoints() {
+      if (!workflowCheckpoints) return;
+      workflowCheckpoints.replaceChildren();
+      const items = agentTaskCheckpoints.slice(-10).reverse();
+      if (!items.length) { const note = document.createElement('span'); note.className = 'research-note'; note.textContent = 'No resumable task checkpoints yet.'; workflowCheckpoints.appendChild(note); return; }
+      for (const item of items) {
+        const card = document.createElement('article'); card.className = 'workflow-checkpoint-card'; card.dataset.state = item.status;
+        const heading = document.createElement('div'); heading.className = 'workflow-op-top';
+        const title = document.createElement('strong'); title.textContent = item.task.slice(0, 160) || 'Agent task';
+        const status = document.createElement('span'); status.className = 'workflow-op-state'; status.textContent = item.status; heading.append(title, status);
+        const meta = document.createElement('div'); meta.className = 'workflow-op-meta'; meta.textContent = `${item.stage} · updated ${item.updatedAt || item.createdAt}`;
+        const summary = document.createElement('p'); summary.className = 'research-note'; summary.textContent = item.summary || 'No progress summary recorded.';
+        const actions = document.createElement('div'); actions.className = 'workflow-checkpoint-actions';
+        if (['interrupted','needs_recovery'].includes(item.status)) { const resume = document.createElement('button'); resume.type = 'button'; resume.className = 'button'; resume.textContent = 'Review & resume'; resume.dataset.checkpointResume = item.id; actions.appendChild(resume); }
+        if (item.status !== 'running') { const discard = document.createElement('button'); discard.type = 'button'; discard.className = 'button'; discard.textContent = 'Discard checkpoint'; discard.dataset.checkpointDiscard = item.id; actions.appendChild(discard); }
+        card.append(heading, meta, summary, actions); workflowCheckpoints.appendChild(card);
+      }
+    }
+    function resumeAgentTaskCheckpoint(id) {
+      if (activeController) { showToast('Wait for the current task to finish before resuming another checkpoint.'); return; }
+      const item = agentTaskCheckpoints.find(row => row.id === id && ['interrupted','needs_recovery'].includes(row.status));
+      if (!item) return;
+      if (String(item.workspaceId || '') !== String(workspaceContext?.id || '')) { showToast('Reconnect the same workspace context before resuming this task. No operation was dispatched.'); return; }
+      if (!selectedModel()) { showToast('Select an available model before resuming this task.'); return; }
+      const operations = workflowOperationHistory.filter(row => row.checkpointId === item.id || item.operationIds.includes(row.id)).map(row => `${row.name}: ${row.status}${row.error ? ` (${row.error})` : ''}`).slice(-40);
+      const progress = [
+        'Resume the following previously checkpointed task. The original user request remains the goal.',
+        `Original request:\n${item.task}`,
+        `Last recorded stage: ${item.stage}`,
+        `Recorded progress: ${item.summary}`,
+        `Recorded plan:\n${item.plan.map(step => `- [${step.status}] ${step.step}`).join('\n') || '(no plan recorded)'}`,
+        `Prior operation outcomes:\n${operations.join('\n') || '(no operation outcomes recorded)'}`,
+        'Recovery rules: outcomes of operations marked running/interrupted are UNKNOWN. Inspect the current state before retrying any uncertain operation. Never repeat writes, commits, deployments, service changes, database mutations, or other non-idempotent actions merely because the checkpoint was interrupted. Ask for fresh approval where required. Do not claim prior steps succeeded unless their recorded results confirm that.'
+      ].join('\n\n');
+      pendingResumeCheckpointId = item.id;
+      promptInput.value = progress; promptInput.dispatchEvent(new Event('input', { bubbles: true }));
+      sendButton.click();
+    }
+    workflowCheckpoints?.addEventListener('click', event => {
+      const resume = event.target.closest('[data-checkpoint-resume]');
+      if (resume) { resumeAgentTaskCheckpoint(resume.dataset.checkpointResume); return; }
+      const discard = event.target.closest('[data-checkpoint-discard]');
+      if (discard) { agentTaskCheckpoints = agentTaskCheckpoints.filter(item => item.id !== discard.dataset.checkpointDiscard); persistAgentTaskCheckpoints(); renderAgentTaskCheckpoints(); }
+    });
+    function buildDevelopmentSessionTimeline({ checkpointId = '', limit = 100 } = {}) {
+      const maximum = Math.max(1, Math.min(200, Number(limit) || 100));
+      const selected = checkpointId ? agentTaskCheckpoints.filter(item => item.id === checkpointId) : agentTaskCheckpoints.slice(-1);
+      if (checkpointId && !selected.length) return { available: false, message: 'The requested checkpoint ID is not present in this local chat profile.' };
+      const ids = new Set(selected.map(item => item.id));
+      const operationRows = workflowOperationHistory.filter(row => ids.size ? ids.has(row.checkpointId) : true).map(row => ({ type: 'tool-operation', id: row.id, checkpointId: row.checkpointId || '', name: row.name, status: row.status, layer: row.batchSequence, group: row.parallelGroupId || '', executionMode: row.executionMode, startedAt: row.startedAt, finishedAt: row.finishedAt, durationMs: row.durationMs, summary: RunMindP4.redactText(row.error || row.resultPreview || '', 900) }));
+      const checkpointRows = selected.flatMap(item => [{ type: 'task-checkpoint', id: item.id, status: item.status, stage: item.stage, timestamp: item.createdAt, summary: item.summary }, { type: 'checkpoint-update', id: item.id, status: item.status, stage: item.stage, timestamp: item.updatedAt, summary: item.summary }]);
+      const subagentRows = workflowSubagentHistory.filter(item => !ids.size || item.checkpointId === [...ids][0]).map(item => ({ type: 'sub-agent', id: item.id, role: item.role, status: item.status, timestamp: item.completedAt || item.startedAt, summary: RunMindP4.redactText(item.summary || item.error || '', 900) }));
+      const events = [...operationRows, ...checkpointRows, ...subagentRows].filter(item => item.timestamp || item.startedAt || item.finishedAt).sort((a,b) => Date.parse(a.timestamp || a.startedAt || a.finishedAt || 0) - Date.parse(b.timestamp || b.startedAt || b.finishedAt || 0));
+      return { available: true, checkpoint: selected.map(item => ({ id: item.id, task: item.task, status: item.status, stage: item.stage, plan: item.plan })), events: events.slice(-maximum), summary: { checkpoints: selected.length, operations: operationRows.length, subagents: subagentRows.length, eventsReturned: Math.min(maximum, events.length) }, limitations: ['Timeline is local to this chat profile and only includes recorded RunMind events.', 'Interrupted operations may have unknown external outcomes.', 'Timeline matching does not prove causality and does not read arbitrary project logs.'] };
+    }
+    function renderDevelopmentSessionTimeline() {
+      if (!workflowTimeline) return;
+      workflowTimeline.replaceChildren();
+      const timeline = buildDevelopmentSessionTimeline({ limit: 40 });
+      if (!timeline.available) {
+        const note = document.createElement('span'); note.className = 'research-note'; note.textContent = timeline.message || 'Timeline is unavailable.'; workflowTimeline.appendChild(note); return;
+      }
+      const meta = document.createElement('div'); meta.className = 'research-note';
+      meta.textContent = `${timeline.summary.eventsReturned} events · ${timeline.summary.operations} tool operations · ${timeline.summary.subagents} sub-agent records`;
+      workflowTimeline.appendChild(meta);
+      if (!timeline.events.length) {
+        const note = document.createElement('span'); note.className = 'research-note'; note.textContent = 'No recorded events for the latest checkpoint yet.'; workflowTimeline.appendChild(note); return;
+      }
+      for (const event of timeline.events) {
+        const card = document.createElement('article'); card.className = 'workflow-timeline-event'; card.dataset.state = String(event.status || 'recorded');
+        const head = document.createElement('div'); head.className = 'workflow-op-top';
+        const title = document.createElement('strong');
+        title.textContent = event.type === 'tool-operation' ? event.name : event.type === 'sub-agent' ? `Sub-agent · ${event.role || 'task'}` : event.type === 'task-checkpoint' ? 'Task checkpoint created' : 'Checkpoint updated';
+        const status = document.createElement('span'); status.className = 'workflow-op-state'; status.textContent = String(event.status || 'recorded'); head.append(title, status);
+        const stamp = event.timestamp || event.startedAt || event.finishedAt || '';
+        const metaLine = document.createElement('div'); metaLine.className = 'workflow-op-meta';
+        const date = Date.parse(stamp);
+        metaLine.textContent = `${Number.isFinite(date) ? new Date(date).toLocaleString() : 'Time unavailable'}${event.layer ? ` · layer ${event.layer}` : ''}${event.executionMode ? ` · ${event.executionMode}` : ''}${event.durationMs ? ` · ${event.durationMs} ms` : ''}`;
+        const summary = document.createElement('p'); summary.className = 'research-note'; summary.textContent = RunMindP4.redactText(event.summary || event.stage || '', 900);
+        card.append(head, metaLine, summary); workflowTimeline.appendChild(card);
+      }
+      const limitation = document.createElement('span'); limitation.className = 'research-note';
+      limitation.textContent = 'Local recorded events only. Interrupted external operations may have unknown outcomes; timeline order does not prove causality.';
+      workflowTimeline.appendChild(limitation);
+    }
     function workflowParallelLimit() {
       const selected = Number(workflowParallelism?.value || localStorage.getItem('runmind.workflow-parallelism.v1') || 3);
       return Number.isFinite(selected) ? Math.max(1, Math.min(4, Math.floor(selected))) : 3;
@@ -44,9 +176,10 @@
       return true;
     }
     function loadWorkflowState() {
+      workflowOperationHistory = []; workflowSubagentHistory = []; workflowToolPriorityOrder = []; workflowBatchSequence = 0; workflowLastBatchByLane.clear(); workflowAnalyticsState = { tools: {}, providers: {}, totals: { invocations: 0, succeeded: 0, failed: 0, cancelled: 0, parallelGroups: 0, providerRequests: 0, providerSucceeded: 0, providerFailed: 0, providerLatencyMs: 0, providerTokens: 0, providerTokenReports: 0 } };
       try {
         const stored = JSON.parse(localStorage.getItem(workflowStorageKey) || 'null');
-        if (!stored || typeof stored !== 'object') return;
+        if (!stored || typeof stored !== 'object') { loadAgentTaskCheckpoints(); return; }
         workflowOperationHistory = Array.isArray(stored.operations) ? stored.operations.slice(-100) : [];
         for (const operation of workflowOperationHistory) {
           if (operation.status === 'running') {
@@ -60,6 +193,7 @@
           }
         }
         workflowSubagentHistory = Array.isArray(stored.subagents) ? stored.subagents.slice(-30) : [];
+        for (const item of workflowSubagentHistory) if (item?.status === 'running') { item.status = 'interrupted'; item.error = 'The WebView closed while this delegated task was active; its outcome is unknown.'; item.completedAt = new Date().toISOString(); }
         workflowToolPriorityOrder = Array.isArray(stored.priorityOrder)
           ? [...new Set(stored.priorityOrder.filter(name => WORKFLOW_PARALLEL_SAFE_TOOLS.has(name)))].slice(0, WORKFLOW_PARALLEL_SAFE_TOOLS.size)
           : [];
@@ -71,6 +205,7 @@
             totals: { ...workflowAnalyticsState.totals, providerSucceeded: 0, providerFailed: 0, ...(totals && typeof totals === 'object' ? totals : {}) }
           };
         }
+        loadAgentTaskCheckpoints();
         workflowBatchSequence = workflowOperationHistory.reduce((max, item) => Math.max(max, Number(item.batchSequence) || 0), 0);
         workflowLastBatchByLane.clear();
         for (const item of workflowOperationHistory) {
@@ -79,23 +214,23 @@
           if (!previous.includes(item.id)) previous.push(item.id);
           workflowLastBatchByLane.set(item.lane, previous.slice(-16));
         }
-      } catch (_) { /* Corrupt or unavailable local analytics starts fresh. */ }
+      } catch (_) { /* Corrupt or unavailable local analytics starts fresh. */ loadAgentTaskCheckpoints(); }
     }
     function persistWorkflowState() {
       try {
         const payload = {
-          version: 2,
+          version: 3,
           priorityOrder: workflowToolPriorityOrder.slice(0, WORKFLOW_PARALLEL_SAFE_TOOLS.size),
-          operations: workflowOperationHistory.slice(-100).map(item => ({ ...item, args: sanitizeWorkflowArguments(item.args || {}), argsPreview: String(item.argsPreview || '').slice(0, 900), resultPreview: String(item.resultPreview || '').slice(0, 1200) })),
+          operations: workflowOperationHistory.slice(-100).map(item => ({ ...item, args: sanitizeWorkflowArguments(item.args || {}), argsPreview: RunMindP4.redactText(item.argsPreview || '', 900), resultPreview: RunMindP4.redactText(item.resultPreview || '', 1200), error: RunMindP4.redactText(item.error || '', 500) })),
           subagents: workflowSubagentHistory.slice(-30).map(item => ({
-            ...item, task: String(item.task || '').slice(0, 1000), summary: String(item.summary || '').slice(0, 4000),
+            ...item, task: RunMindP4.redactText(item.task || '', 1000), summary: RunMindP4.redactText(item.summary || '', 4000),
             structuredResult: item.structuredResult ? {
               role: String(item.structuredResult.role || item.role || '').slice(0, 40),
               summary: String(item.structuredResult.summary || '').slice(0, 1500),
-              findings: (item.structuredResult.findings || []).slice(0, 8).map(value => typeof value === 'string' ? value.slice(0, 700) : sanitizeWorkflowArguments(value)),
-              sources: (item.structuredResult.sources || []).slice(0, 8).map(value => typeof value === 'string' ? value.slice(0, 700) : sanitizeWorkflowArguments(value)),
-              uncertainties: (item.structuredResult.uncertainties || []).slice(0, 8).map(value => typeof value === 'string' ? value.slice(0, 700) : sanitizeWorkflowArguments(value)),
-              limitations: (item.structuredResult.limitations || []).slice(0, 8).map(value => typeof value === 'string' ? value.slice(0, 700) : sanitizeWorkflowArguments(value)),
+              findings: (item.structuredResult.findings || []).slice(0, 8).map(value => typeof value === 'string' ? RunMindP4.redactText(value, 700) : sanitizeWorkflowArguments(value)),
+              sources: (item.structuredResult.sources || []).slice(0, 8).map(value => typeof value === 'string' ? RunMindP4.redactText(value, 700) : sanitizeWorkflowArguments(value)),
+              uncertainties: (item.structuredResult.uncertainties || []).slice(0, 8).map(value => typeof value === 'string' ? RunMindP4.redactText(value, 700) : sanitizeWorkflowArguments(value)),
+              limitations: (item.structuredResult.limitations || []).slice(0, 8).map(value => typeof value === 'string' ? RunMindP4.redactText(value, 700) : sanitizeWorkflowArguments(value)),
               structured: !!item.structuredResult.structured
             } : undefined
           })),
@@ -153,7 +288,7 @@
     function sanitizeWorkflowArguments(value, depth = 0) {
       if (depth > 4) return '[nested value omitted]';
       if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
-      if (typeof value === 'string') return value.slice(0, 2000);
+      if (typeof value === 'string') return RunMindP4.redactText(value, 2000);
       if (Array.isArray(value)) return value.slice(0, 20).map(item => sanitizeWorkflowArguments(item, depth + 1));
       if (!value || typeof value !== 'object') return String(value).slice(0, 200);
       const result = {};
@@ -170,7 +305,7 @@
       const record = {
         id: crypto.randomUUID(), batchId, batchSequence, lane, name: String(call?.name || 'unknown').slice(0, 120), args,
         argsPreview: (() => { try { return JSON.stringify(args).slice(0, 900); } catch (_) { return '[arguments unavailable]'; } })(),
-        resultPreview: '', status: 'pending', executionMode, dependencies: [...dependencies],
+        resultPreview: '', status: 'pending', executionMode, dependencies: [...dependencies], checkpointId: activeAgentCheckpointId || '', dependencyLayer: batchSequence, parallelGroupId: '',
         startedAt: '', finishedAt: '', durationMs: 0, error: ''
       };
       workflowOperationHistory.push(record);
@@ -188,6 +323,9 @@
       const signatures = rows.map(call => `${call?.name || ''}:${(() => { try { return JSON.stringify(call?.arguments || {}); } catch (_) { return ''; } })()}`);
       const duplicate = new Set(signatures.filter((value, index) => signatures.indexOf(value) !== index));
       const records = rows.map(call => createWorkflowOperation(call, batchId, batchSequence, lane, dependencies, 'serialized'));
+      const executionPlan = RunMindP4.planToolBatchExecution(rows, rows.map((call, index) => workflowToolCanRunParallel(call, { deepResearch }) && !new Set(signatures.filter((value, position) => signatures.indexOf(value) !== position)).has(signatures[index])), workflowParallelLimit());
+      for (const group of executionPlan.groups) for (const index of group.indexes) { records[index].executionMode = group.mode; records[index].parallelGroupId = group.mode === 'parallel' ? `${batchId}-${group.id}` : ''; }
+      if (options.checkpointId) for (const record of records) record.checkpointId = options.checkpointId;
       const results = new Array(rows.length);
       const canRunParallel = rows.map((call, index) => workflowToolCanRunParallel(call, { deepResearch }) && !duplicate.has(signatures[index]));
       const startOne = async index => {
@@ -208,13 +346,13 @@
           const errorText = value?.result?.error || value?.error;
           const cancelled = value?.cancelled || (signal?.aborted && errorText);
           record.status = cancelled ? 'cancelled' : errorText ? 'failed' : 'completed';
-          record.resultPreview = (() => { try { return JSON.stringify(value?.result ?? value).slice(0, 1200); } catch (_) { return String(value?.result ?? value).slice(0, 1200); } })();
-          if (errorText) record.error = String(errorText).slice(0, 500);
+          record.resultPreview = RunMindP4.summarizeToolResultForContext(record.name, value?.result ?? value, 1200);
+          if (errorText) record.error = RunMindP4.redactText(errorText, 500);
           results[index] = { call, ...(value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'result') ? value : { result: value }), operation: record };
         } catch (error) {
           const cancelled = error?.name === 'AbortError' || signal?.aborted;
           record.status = cancelled ? 'cancelled' : 'failed';
-          record.error = String(error?.message || error).slice(0, 500);
+          record.error = RunMindP4.redactText(error?.message || error, 500);
           record.resultPreview = JSON.stringify({ error: record.error });
           results[index] = { call, result: { error: record.error }, error, operation: record };
         } finally {
@@ -224,33 +362,23 @@
           if (options.onComplete) { try { options.onComplete(call, results[index], record); } catch (_) {} }
         }
       };
-      let cursor = 0;
-      while (cursor < rows.length) {
-        if (signal?.aborted) {
-          for (; cursor < rows.length; cursor++) await startOne(cursor);
-          break;
-        }
-        if (canRunParallel[cursor] && workflowParallelLimit() > 1) {
-          const group = [];
-          while (cursor < rows.length && canRunParallel[cursor]) group.push(cursor++);
-          if (group.length > 1) {
-            workflowAnalyticsState.totals.parallelGroups += 1;
-            for (const index of group) records[index].executionMode = 'parallel';
-            const startOrder = group.slice().sort((left, right) => workflowToolPriorityRank(rows[left]?.name) - workflowToolPriorityRank(rows[right]?.name) || left - right);
-            const limit = Math.min(workflowParallelLimit(), startOrder.length);
-            let next = 0;
-            const workers = Array.from({ length: limit }, async () => {
-              while (next < startOrder.length) { const position = next++; await startOne(startOrder[position]); }
-            });
-            await Promise.all(workers);
-          } else await startOne(group[0]);
+      for (const group of executionPlan.groups) {
+        const indexes = group.indexes;
+        if (signal?.aborted) { for (const index of indexes) await startOne(index); continue; }
+        if (group.mode === 'parallel' && indexes.length > 1) {
+          workflowAnalyticsState.totals.parallelGroups += 1;
+          const startOrder = indexes.slice().sort((left, right) => workflowToolPriorityRank(rows[left]?.name) - workflowToolPriorityRank(rows[right]?.name) || left - right);
+          let next = 0;
+          const workers = Array.from({ length: Math.min(group.concurrency, startOrder.length) }, async () => {
+            while (next < startOrder.length) { const position = next++; await startOne(startOrder[position]); }
+          });
+          await Promise.all(workers);
         } else {
-          const index = cursor++;
-          records[index].executionMode = 'serialized';
-          await startOne(index);
+          for (const index of indexes) { records[index].executionMode = 'serialized'; await startOne(index); }
         }
       }
       workflowLastBatchByLane.set(lane, records.map(item => item.id));
+      if (options.checkpointId) updateAgentTaskCheckpoint(options.checkpointId, { stage: 'tools-recorded', summary: `${records.filter(item => item.status === 'completed').length}/${records.length} tool operation(s) completed in dependency layer ${batchSequence}.`, operationIds: records.map(item => item.id) });
       persistWorkflowState(); renderWorkflowView();
       return results;
     }
@@ -330,6 +458,8 @@
     });
     function renderWorkflowView() {
       if (!workflowGraph) return;
+      renderAgentTaskCheckpoints();
+      renderDevelopmentSessionTimeline();
       const totals = workflowStatTotal();
       const setValue = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = String(value); };
       setValue('workflowTotal', totals.invocations); setValue('workflowSucceeded', totals.succeeded); setValue('workflowFailed', totals.failed); setValue('workflowParallel', totals.parallelGroups);
@@ -359,7 +489,7 @@
             const meta = document.createElement('div'); meta.className = 'workflow-op-meta';
             const priorityRank = workflowToolPriorityRank(item.name);
             const priorityText = priorityEligible ? ` · ${priorityRank === Number.MAX_SAFE_INTEGER ? 'default priority' : `start priority ${priorityRank + 1}`}` : '';
-            meta.textContent = `${item.durationMs ? `${item.durationMs} ms` : item.status === 'running' ? 'In progress' : 'Not started'} · ${item.executionMode}${priorityText}`;
+            meta.textContent = `${item.durationMs ? `${item.durationMs} ms` : item.status === 'running' ? 'In progress' : 'Not started'} · layer ${item.dependencyLayer || item.batchSequence} · ${item.executionMode}${item.parallelGroupId ? ` · ${item.parallelGroupId.split('-').slice(-1)[0]}` : ''}${priorityText}`;
             const details = document.createElement('details'); details.className = 'workflow-op-details';
             const summary = document.createElement('summary'); summary.textContent = item.error ? `Error: ${item.error}` : 'Inspect inputs and outputs';
             const args = document.createElement('pre'); args.textContent = `Input\n${item.argsPreview || '{}'}\n\nOutput\n${item.resultPreview || 'Pending'}`;
@@ -391,7 +521,7 @@
         meta.textContent = `${item.toolCalls || 0} tool calls${elapsed ? ` · ${elapsed.toLocaleString()} ms` : ''}`;
         const details = document.createElement('details'); details.className = 'workflow-op-details';
         const summary = document.createElement('summary'); summary.textContent = 'Inspect assignment and result';
-        const output = item.structuredResult ? JSON.stringify(item.structuredResult, null, 2) : (item.summary || item.error || 'Working…');
+        const output = item.structuredResult ? JSON.stringify(RunMindP4.compactValue(item.structuredResult), null, 2) : RunMindP4.redactText(item.summary || item.error || 'Working…', 6000);
         const task = document.createElement('pre'); task.textContent = `Task\n${item.task || ''}\n\nResult\n${String(output).slice(0, 10000)}`;
         details.append(summary, task); card.append(title, meta, details); workflowSubagents.appendChild(card);
       }
@@ -462,7 +592,7 @@
       if (taskContext.subAgentDepth) throw new Error('Sub-agents cannot delegate additional sub-agents.');
       if (!taskContext.selection) throw new Error('The selected model context is unavailable for delegation.');
       const id = crypto.randomUUID();
-      const record = { id, role: role.replace('_',' '), task, status: 'running', summary: '', startedAt: new Date().toISOString() };
+      const record = { id, checkpointId: taskContext.checkpointId || '', role: role.replace('_',' '), task: RunMindP4.redactText(task, 1800), status: 'running', summary: '', startedAt: new Date().toISOString() };
       workflowSubagentHistory.push(record); workflowSubagentHistory = workflowSubagentHistory.slice(-30); renderWorkflowView(); persistWorkflowState();
       const childTools = (taskContext.tools || []).filter(tool => WORKFLOW_PARALLEL_SAFE_TOOLS.has(tool?.function?.name)).slice(0, 24);
       const childContext = { ...taskContext, tools: childTools, subAgentDepth: 1, onProgress: event => { if (event?.type === 'tool_call') { record.summary = `Using ${event.toolCalls?.map(item => item.name).join(', ') || 'read-only tools'}…`; renderWorkflowView(); } } };
@@ -488,7 +618,7 @@
           record.toolCalls = (record.toolCalls || 0) + turn.calls.length;
           persistWorkflowState(); renderWorkflowView();
           const childResults = await runToolBatch(turn.calls, {
-            signal, lane: `subagent:${id}`,
+            signal, lane: `subagent:${id}`, checkpointId: taskContext.checkpointId || '',
             execute: async call => {
               if (!childTools.some(tool => tool.function.name === call.name)) return { error: `Sub-agent tool '${call.name}' is not authorized.` };
               if (taskContext.deepResearch && isResearchTaskActive()) {
@@ -509,7 +639,7 @@
             }
           });
           for (const output of childResults) {
-            const summary = JSON.stringify(output?.result ?? { error: output?.error?.message || 'No result' }).slice(0, 5000);
+            const summary = RunMindP4.summarizeToolResultForContext(output.call.name, output?.result ?? { error: output?.error?.message || 'No result' }, 6500);
             childConversation.push(taskContext.selection.provider === 'ollama'
               ? { role: 'tool', name: output.call.name, content: summary }
               : { role: 'tool', tool_call_id: output.call.id, content: summary });
@@ -517,7 +647,7 @@
         }
         if (!finalText) finalText = 'The delegated task reached its step limit before returning a final summary.';
         const structuredResult = normalizeSubAgentResult(finalText, role);
-        record.status = 'completed'; record.summary = finalText; record.structuredResult = structuredResult; record.completedAt = new Date().toISOString();
+        record.status = 'completed'; record.summary = RunMindP4.redactText(finalText, 6000); record.structuredResult = structuredResult; record.completedAt = new Date().toISOString();
         persistWorkflowState(); renderWorkflowView();
         return { delegated: true, role, task, result: structuredResult, toolCalls: childConversation.filter(item => item.role === 'tool').length, note: 'Sub-agent used only the provided read-only tool subset; final conclusions remain subject to parent review.' };
       } catch (error) {

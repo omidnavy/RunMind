@@ -1,10 +1,18 @@
-# RunMind 2.9.0 — Feature Matrix (P0 foundation + P1 Project Intelligence + P2 System Manager Intelligence)
+# RunMind 3.1.0 — Feature Matrix (P0 foundation + P1 Project Intelligence + P2 System Manager Intelligence + P3 Developer Infrastructure + P4 Agent Capabilities)
 
-| Area | Capability | Status in current 2.9.0 source bundle | Notes |
+| Area | Capability | Status in current 3.1.0 source bundle | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
 | Hosts | PowerToys Command Palette | Preserved | Shared Agent Core |
+| Agent / MCP | MCP resource discovery | Implemented in P4 | Server metadata/capabilities; paginated tools/resources/resource templates/prompts; metadata search; 20-page/2,000-item bounds; repeated-cursor, error and truncation reporting; exact URI templates; resource/prompt/tool reads remain approval-gated |
+| Agent orchestration | Multi-tool execution | Improved in P4 | Independent read-only allow-list, 1–4 bounded workers, duplicate-call serialization, side-effect/approval/MCP/delegation barriers, dependency layers and operation graph |
+| Agent reliability | Task checkpoints and recovery | Implemented in P4 | Bounded/redacted per-chat task/plan/progress/operation records; interrupted outcomes unknown; explicit same-workspace resume; inspect before retry; no auto-replay |
+| Agent context | Tool-result summarization | Implemented in P4 | Bounded structured summaries, secret redaction, depth/item/property limits and omission of raw body/HTML/binary payloads |
+| Agent context | Skills and project context | Improved in P4 | Bounded project instructions/package/index context; relevance-ranked Skill metadata; Skills explicitly loaded and untrusted; never grant permissions |
+| Developer | Change Impact Explorer | Implemented in P4 | Explicit JS/TS paths/symbols; direct/transitive import dependents; test candidates; HTML/CSS/SVG asset consumers; unknown/unanalysed paths |
+| Agent observability | Development Session Timeline | Implemented in P4 | Chronological local checkpoints, tool operations/dependency groups and sub-agent evidence in Workflow UI and read-only Agent tool |
+| Artifact integrity | Artifact Verification | Expanded in P4 | Structural checks, exact-byte SHA-256, optional trusted expected digest comparison, bounded receipt; digest is not provenance proof |
 | Developer | Project index and search | Implemented with limits | Persistent incremental index; Acorn JS analysis; TypeScript compiler API for JS/JSX/TS/TSX semantic references; HTML/CSS project understanding; root tsconfig paths; static module graph; `project_symbol_graph` | Language-aware code analysis is intentionally scoped to JavaScript, TypeScript, JSX/TSX, HTML and CSS. SVG is indexed separately as a vector asset with local-reference analysis, not as a programming language. Compiler checker bounded to 500 source files and 12 MB; no default libs/full diagnostic pass; external installed packages use native Node resolver tool.
 | Developer workflow | Project Understanding | Expanded | Uses the persistent index, symbol graph, AST/checker references and source tracing to map architecture and execution paths; does not execute commands or modify files |
 | Developer workflow | Project Diagnostics | Added | Separate operational readiness workflow for manifests, lockfiles, toolchains, scripts, build/test configuration and optional approval-gated live checks; read-only by default |
@@ -26,6 +34,12 @@
 | System Manager | Windows security posture | Implemented in P2; opt-in | Defender, firewall profiles, system-volume BitLocker, Secure Boot, TPM and UAC; snapshot only, not malware scan or compliance certification |
 | System Manager | Targeted network diagnostics | Implemented in P2; opt-in | One hostname/IP, DNS, best-effort selected local route/interface/next-hop and optional one TCP port; bounded DNS/route/TCP phases, TCP addresses attempted disclosed and fresh confirmation; no scans/ranges |
 | Developer | SVG project assets | Implemented in P2 scope refinement | Indexed as vector assets; normalized local refs from HTML/CSS and SVG `href`/`xlink:href`; surfaced in Project Understanding and Mission Control |
+| Developer infrastructure | Podman/Docker workbench | Implemented in P3 | Fixed-argument CLI workbench; runtime, container/image/volume/network inventory; exact container inspect/logs/stats/start/stop/restart; Compose config/ps/up/down/build/logs; fresh approval for every action; no prune/remove-volume/image-delete or arbitrary CLI surface |
+| Developer infrastructure | SQLite workbench | Implemented in P3 | Existing workspace-contained `.db`, `.sqlite`, `.sqlite3`; integrity/table/schema/foreign-key inspection; parameterized read-only SQL and EXPLAIN; one approved transactional DML/DDL statement; bounded rows/output; no database creation/migration/deletion |
+| Developer infrastructure | API contract / OpenAPI testing | Implemented in P3 | OpenAPI 3.0/3.1 JSON built in; optional existing YAML parser; example-based bounded operations; local JSON Pointer refs; status-specific response schemas; explicit base URL, same-origin redirects; mutations excluded by default |
+| Developer infrastructure | Runtime/log correlation | Implemented in P3 | Ephemeral timeline from exact RunMind-owned server and Node Inspector sessions plus explicitly supplied browser/API event slices; trace/request/correlation/Journey ID extraction; source-time quality labels and redaction; no persistent log store or causality inference |
+| Browser debugging | Advanced Playwright diagnostics | Expanded in P3 | Page/ARIA inspection, console and exception source locations, request/response timing, failed requests/HTTP errors, full-page screenshots and opt-in trace ZIP; ephemeral context, bounded artifacts, no arbitrary page JS evaluation or live source breakpoints |
+| Developer workflows | P3 infrastructure workflows | Implemented in P3 | Built-in container workbench, SQLite workbench, OpenAPI contract testing, runtime/log correlation and advanced browser-debugging workflows |
 | Browser quality | Expected policy-block classification | Implemented in P0 | CORS/CSP/mixed-content events remain visible; explicitly expected policy events are separated from application errors and correlated transport failures |
 | Developer | Coordinated multi-file editing | Added in integration pass | 2–20 files, one approval, snapshot checks, per-file backups, best-effort rollback; sequential writes are not atomic |
 | Developer | Node runtime module resolution | Implemented with limits | Fresh-approved fixed script invokes Node ESM `import.meta.resolve` and CommonJS `createRequire().resolve`; no target modules are executed; native workspace must match project workspace |
@@ -89,7 +103,7 @@
 
 ## 2.6.1 changes
 
-| Area | Capability | Status in current 2.9.0 source bundle | Notes |
+| Area | Capability | Status in current 3.1.0 source bundle | Notes |
 |---|---|---|---|
 | System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
 | System Manager | First-party RunMind adapter | Extended | Sends prompts, opens a validated `.runmind` session, or starts a fresh Standalone conversation |
@@ -188,4 +202,4 @@
 
 ## Developer language scope
 
-RunMind project understanding and project-specific developer workflows are intentionally focused on JavaScript, TypeScript, JSX/TSX, HTML, CSS and SVG. SVG is indexed as a vector asset with local references, not a programming language. No additional language parsers, semantic engines, debuggers or language-specific build/test workflows are introduced in 2.9.0. Existing generic package-manifest/lockfile recognition may observe other ecosystem metadata but does not imply language support.
+RunMind project understanding and project-specific developer workflows are intentionally focused on JavaScript, TypeScript, JSX/TSX, HTML, CSS and SVG. SVG is indexed as a vector asset with local references, not a programming language. No additional language parsers, semantic engines, debuggers or language-specific build/test workflows are introduced in 3.1.0. Existing generic package-manifest/lockfile recognition may observe other ecosystem metadata but does not imply language support.

@@ -8,7 +8,7 @@
 	<UseWindowsForms>true</UseWindowsForms>
 	<RootNamespace>Community.PowerToys.Run.Plugin.RunMind</RootNamespace>
 	<AssemblyName>Community.PowerToys.Run.Plugin.RunMind</AssemblyName>
-	<Version>2.9.0</Version>
+	<Version>3.1.0</Version>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
@@ -26,7 +26,10 @@
     <Compile Include="..\Shared\NativePageReader.cs" Link="Shared\NativePageReader.cs" />
     <Content Include="..\Shared\PlaywrightRunner.cjs" Link="PlaywrightRunner.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\Shared\ApiTestRunner.cjs" Link="ApiTestRunner.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Shared\SqliteRunner.cjs" Link="SqliteRunner.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Shared\OpenApiTestRunner.cjs" Link="OpenApiTestRunner.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Compile Include="..\Shared\AgentHostBridge.cs" Link="Shared\AgentHostBridge.cs" />
+    <Compile Include="..\Shared\DeveloperInfrastructure.cs" Link="Shared\DeveloperInfrastructure.cs" />
     <Compile Include="..\Shared\WorkspaceFileBridge.cs" Link="Shared\WorkspaceFileBridge.cs" />
     <Compile Include="..\Shared\DevelopmentServerManager.cs" Link="Shared\DevelopmentServerManager.cs" />
     <Compile Include="..\Shared\NodeDebuggerBridge.cs" Link="Shared\NodeDebuggerBridge.cs" />

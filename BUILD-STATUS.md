@@ -1,48 +1,39 @@
-# RunMind 2.9.0 — P2 System Manager Intelligence Build Status
+# RunMind 3.1.0 — P4 Agent Capabilities Build Status
 
 ## Current source bundle
 
-This source tree contains the P0 foundation, complete P1 Project Intelligence/Mission Control implementation, and P2 System Manager Intelligence source for all three Windows hosts: Standalone, PowerToys Run and PowerToys Command Palette. P1 reuses the persistent project index and canonical workspace. P2 adds seven separately opt-in native Windows investigations: Event Logs, crash correlation, finite resource sampling, Scheduled Task inventory/confirmed state control, storage health, security posture, and targeted DNS/route/TCP diagnostics.
+This source tree contains P0 Foundation & Reliability, P1 Project Intelligence/Mission Control, P2 System Manager Intelligence, P3 Developer Infrastructure and P4 Agent Capabilities for all three Windows hosts: RunMind Standalone, PowerToys Run and PowerToys Command Palette. All three share the same Agent Core, native bridge, canonical workspace, project index, approval model and capability enforcement.
 
-Language-aware project analysis and project-specific tooling remain limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. SVG is indexed as a first-class vector asset with bounded local-reference analysis; it is not a programming language. Other source files may be read/searched as generic text only.
+P4 includes enhanced MCP resource discovery, bounded multi-tool orchestration, per-chat checkpoints and explicit recovery, bounded/redacted tool-result summaries, project/Skills context, Change Impact Explorer, Development Session Timeline and exact-byte artifact SHA-256 verification receipts. No new package/runtime dependency was added.
+
+Project-specific language-aware analysis remains JavaScript, TypeScript, JSX/TSX, HTML and CSS. SVG is a first-class vector asset with bounded local-reference analysis, not a programming language. Other source files remain generic text for reading/search only.
 
 ## Validation actually performed
 
-- Node.js version used for portable validation: **v22.16.0** (the project target is Node.js 24+; run the Windows acceptance script with Node.js 24 or later).
-- Full portable suite: **192/192 passed** with `node --test --test-concurrency=1`.
-- JavaScript/CJS/MJS syntax: **44/44 passed** with `node --check`.
-- Repository JSON: **4/4 parsed**.
-- Project/property/XAML/AppxManifest XML-family files: **6/6 parsed**.
-- Standalone, PowerToys Run, Command Palette and Appx package versions agree on **2.9.0 / 2.9.0.0**.
-- ZIP CRC/integrity and SHA-256 are verified in the final release bundle.
-- C# compilation and Windows runtime behavior were not run in this environment because the .NET SDK, C# compiler and PowerShell are unavailable. P0/P1/P2 Windows acceptance remains pending.
+- Portable test runtime: **Node.js v22.16.0**. The intended target remains **Node.js 24+** and .NET 10.
+- Full portable suite: **224/224 passed** with `node --test --test-concurrency=1` after P4 integration, version synchronization, MCP discovery-completeness correction and Timeline UI integration.
+- P4 focused suite: **10/10 passed**.
+- JavaScript/CJS/MJS syntax: **51/51 passed** with `node --check`; repository JSON: **4/4 parsed**; project/property/XAML/AppxManifest XML-family files: **7/7 parsed**. ZIP integrity, extracted-bundle test results and final SHA-256 are recorded after release packaging.
+- Standalone, PowerToys Run and Command Palette source package versions are **3.1.0**; Command Palette Appx identity is **3.1.0.0**.
+- C# compilation and live Windows runtime behavior were not run in this environment because the .NET SDK, C# compiler, Windows PowerShell and WebView2/PowerToys hosts are unavailable. MCP server integration, Windows-native acceptance and real project/container/runtime operations require target-machine validation.
 
-## P1 capability boundaries
+## P4 behavior and boundaries
 
-- Project Understanding is static/index-based; important call paths and architectural claims require source inspection.
-- Project Diagnostics is read-only static analysis. Environment probes, builds, tests and dependency audits require separate explicit approval and actual execution.
-- Project Mission Control is a structured evidence report over the existing index; it incrementally refreshes stale index data when possible, prioritizes findings and displays supporting paths. It does not maintain a separate database or run project commands. See `docs/PROJECT-MISSION-CONTROL.md` for report fields, status semantics, freshness behavior and safety boundaries.
-- Test Impact Analysis accepts explicit changed paths, follows static reverse imports, and reports confidence. It does not infer Git changes or execute tests.
-- Release Readiness is static only. Git cleanliness, live vulnerability results, actual builds/tests, artifact signatures, SBOM, package creation and publication remain unverified until separately checked.
-
-## P2 implementation and safety boundaries
-
-- Each new P2 capability is default-off, persisted through native settings, and checked again by the native dispatcher. Enabling the global System Manager and Diagnostics group is also required.
-- Event Log reads are restricted to Application/System/Setup, 1–720 hours, and at most 200 returned events; message text is truncated.
-- Crash correlation covers event IDs 1000, 1001, 1026, 7031 and 7034 over at most 30 days/200 results. Results are event-based indicators, not proven diagnoses.
-- Resource sampling is a finite request of at most 60 seconds, with up to 60 samples and 1,000 process records per snapshot; no service or persistent monitor is installed.
-- Scheduled Task inventory is read-only. Enable/disable/start/stop reject truncated, malformed or path-ambiguous identities and require always-on native confirmation plus post-action verification. Task creation, deletion and definition/trigger editing are unsupported.
-- Storage health is best-effort; missing SMART/reliability counters are unknown/unavailable, not healthy.
-- Security posture is a read-only Defender/Firewall/BitLocker/Secure Boot/TPM/UAC snapshot, not a compliance certification or malware scan.
-- Network diagnostics are limited to one host/IP, a best-effort selected local route, one optional TCP port and bounded DNS/route/TCP phases; TCP attempts disclose attempted resolved addresses and require fresh native confirmation. No network scanning or port ranges.
-- SVG assets are first-class in the project index and Mission Control. Local references are collected from HTML/CSS and SVG `href`/`xlink:href`; SVG is not treated as executable source.
+- **MCP discovery:** protocol/server metadata and paginated tools/resources/resource templates/prompts, with 20-page/2,000-item bounds, repeated-cursor detection, metadata search and accurate error/truncation reporting. Metadata search does not fetch resource contents or execute tools. Resource reads, template reads, prompt retrieval and remote tools require fresh approval.
+- **Orchestration:** only explicitly classified independent read-only operations are parallelized, with 1–4 workers. Duplicate calls are serialized. Writes, approvals, MCP and delegated operations are barriers. Execution graph records dependency layers and operation links. No speculative dependency inference or parallel approval dialogs.
+- **Checkpoints:** maximum 20 bounded/redacted records per chat. Checkpoints store task/plan/progress and operation IDs, not raw conversations or request/response bodies. Interrupted operations are marked unknown; resume is explicit and requires the same workspace. No automatic operation replay or external rollback.
+- **Tool-result summaries:** bounded depth/node/property/array budgets, common credential redaction, valid JSON truncation and omission of raw bodies/HTML/binary/base64 fields. Summaries are not full-fidelity data exports.
+- **Skills/project context:** bounded AGENTS.md/project instruction/package/project-index context and relevance-ranked Skill metadata. Skills remain explicitly loaded guidance; untrusted files and Skills cannot grant permissions or override RunMind policy.
+- **Change Impact Explorer:** explicit paths/symbols, static JS/TS reverse dependencies/test candidates and HTML/CSS/SVG asset consumers. Unknown/unanalysed paths are disclosed. Dynamic/runtime relationships may be missed. No implicit Git diff or test execution.
+- **Development Session Timeline:** chronological local checkpoint, tool operation/dependency and sub-agent events shown in Workflow UI and through a read-only Agent tool. It is chat-profile scoped and is not a persistent log warehouse or causal tracing system.
+- **Artifact Verification:** exact-byte SHA-256 plus supported structural checks and optional comparison to an independently supplied expected digest. A matching digest does not establish provenance, signer identity or trust.
 
 ## Windows certification remains pending
 
-This environment does not contain the .NET SDK or Windows runtime. Run on Windows with Node.js 24+ and .NET 10:
+Run on the target Windows machine with Node.js 24+ and .NET 10:
 
 ```powershell
 .\Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64
 ```
 
-Then complete `docs/P0-WINDOWS-ACCEPTANCE.md`, `docs/P1-WINDOWS-ACCEPTANCE.md` and `docs/P2-WINDOWS-ACCEPTANCE.md` in Standalone, PowerToys Run and Command Palette. Do not describe this source bundle as Windows-certified until the build and all acceptance gates pass.
+Then complete `docs/P0-WINDOWS-ACCEPTANCE.md`, `docs/P1-WINDOWS-ACCEPTANCE.md`, `docs/P2-WINDOWS-ACCEPTANCE.md`, `docs/P3-WINDOWS-ACCEPTANCE.md` and `docs/P4-WINDOWS-ACCEPTANCE.md` in Standalone, PowerToys Run and PowerToys Command Palette. Validate the real MCP servers and Windows tools you intend to use. Do not describe the bundle as Windows-certified until all applicable builds and acceptance gates pass.

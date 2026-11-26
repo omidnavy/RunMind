@@ -80,7 +80,7 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'project_understanding', 'project_diagnostics', 'project_mission_control', 'project_test_impact', 'project_release_readiness', 'node_debugger_list_sessions', 'node_debugger_events', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_find_port_owner', 'system_manager_diagnostics', 'system_manager_read_event_log', 'system_manager_investigate_crashes', 'system_manager_resource_monitor', 'system_manager_storage_health', 'system_manager_security_posture', 'system_manager_targeted_network_diagnostics']);
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'project_understanding', 'project_diagnostics', 'project_mission_control', 'project_test_impact', 'project_change_impact', 'project_release_readiness', 'node_debugger_list_sessions', 'node_debugger_events', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_find_port_owner', 'system_manager_diagnostics', 'system_manager_read_event_log', 'system_manager_investigate_crashes', 'system_manager_resource_monitor', 'system_manager_storage_health', 'system_manager_security_posture', 'system_manager_targeted_network_diagnostics', 'runtime_log_correlation', 'development_session_timeline']);
       if (name.startsWith('system_manager_')) {
         if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in the System Manager menu first.');
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
@@ -159,6 +159,91 @@
           return await callAgentHost('systemManager.process.terminate',{processId:args.processId,expectedName:String(args.expectedName||''),expectedPath:String(args.expectedPath||''),expectedStartedAtUtc:String(args.expectedStartedAtUtc||'')},signal);
         }
       }
+      if (name === 'runtime_log_correlation') {
+        if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('Runtime log correlation is disabled in Deep Research and delegated sub-agent tasks.');
+        const serverIds = Array.isArray(args.server_ids) ? args.server_ids.slice(0, 8).map(value => String(value || '').trim()).filter(Boolean) : [];
+        const debuggerIds = Array.isArray(args.debugger_session_ids) ? args.debugger_session_ids.slice(0, 8).map(value => String(value || '').trim()).filter(Boolean) : [];
+        const browserEvents = Array.isArray(args.browser_events) ? args.browser_events.slice(0, 100) : [];
+        const apiEvents = Array.isArray(args.api_events) ? args.api_events.slice(0, 100) : [];
+        if (!serverIds.length && !debuggerIds.length && !browserEvents.length && !apiEvents.length) throw new Error('Provide exact RunMind server/debugger IDs or bounded browser/API event slices. Correlation never sweeps every workspace or process.');
+        for (const [label, rows] of [['browser_events', browserEvents], ['api_events', apiEvents]]) for (const row of rows) if (!row || typeof row !== 'object' || Array.isArray(row) || JSON.stringify(row).length > 8000) throw new Error(`${label} entries must be structured objects no larger than 8 KB each.`);
+        for (const id of [...serverIds, ...debuggerIds]) if (id.length > 80 || /[\r\n\0]/.test(id)) throw new Error('Session identifiers must be bounded exact IDs without control characters.');
+        if (!loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
+          const approved = await requireAgentApproval({ title: 'Read selected runtime logs and debugger events?', subtitle: `${serverIds.length} development server(s) · ${debuggerIds.length} debugger session(s)`, detail: `Server IDs: ${serverIds.join(', ') || '(none)'}\nDebugger session IDs: ${debuggerIds.join(', ') || '(none)'}\n\nThis reads only the exact RunMind-owned server sessions and debugger sessions you named. Debugger events are drained from their bounded in-memory queue. The resulting timeline and correlation identifiers exist only for this response; no log database or persistent join table is created.`, allowForTask: true, toolName: name }, signal);
+          if (!approved) return { cancelled: true, message: 'Runtime log correlation was declined.' };
+        }
+        const timeline = [];
+        const tokenMap = new Map();
+        const addTokens = (source, text, ref) => {
+          const regex = /\b(?:traceparent|trace[_-]?id|request[_-]?id|correlation[_-]?id|journey[_-]?id|x-request-id|x-correlation-id)\b[\s"'=:\[]+([A-Fa-f0-9._:-]{4,128})/ig;
+          for (const match of String(text || '').matchAll(regex)) {
+            const token = match[1];
+            if (!token) continue;
+            if (!tokenMap.has(token)) tokenMap.set(token, []);
+            tokenMap.get(token).push({ source, reference: ref });
+          }
+        };
+        for (const id of serverIds) {
+          const result = await callAgentHost('developmentServer.manage', { action: 'logs', server_id: id }, signal, 20000);
+          for (const line of (Array.isArray(result?.logs) ? result.logs : [])) {
+            const text = String(line || '').slice(0, 4000);
+            const match = text.match(/^(\d{4}-\d\d-\d\dT[^ ]+)\s+\[(stdout|stderr)\]\s+(.*)$/i);
+            const timestamp = match?.[1] || null;
+            const safeText = (match?.[3] || text).replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]').replace(/((?:token|secret|password|passwd|api[_-]?key|authorization|client[_-]?secret)\s*[:=]\s*)[^\s,;&}]+/gi, '$1[REDACTED]').replace(/([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^\/@\s:]+:[^\/@\s]+@/g, '$1[REDACTED]@');
+            timeline.push({ timestamp, timestampQuality: timestamp ? 'captured-at-source' : 'unknown', source: 'development-server', sessionId: id, stream: match?.[2] || 'unknown', message: safeText.slice(0, 4000) });
+            addTokens('development-server', text, id);
+          }
+        }
+        const safeRuntimeUrl = value => {
+          try {
+            const raw = String(value || '');
+            const url = new URL(raw, 'http://runmind-relative.invalid');
+            url.username = ''; url.password = '';
+            for (const key of [...url.searchParams.keys()]) if (/(?:token|secret|password|api[_-]?key|authorization|credential|session|^code$)/i.test(key)) url.searchParams.set(key, '[REDACTED]');
+            if (url.hash) url.hash = '#[REDACTED]';
+            return (url.origin === 'http://runmind-relative.invalid' ? `${url.pathname}${url.search}` : url.href).slice(0, 2000);
+          } catch { return String(value || '').slice(0, 1000).replace(/((?:token|secret|password|passwd|api[_-]?key|authorization)\s*=)[^&\s]+/gi, '$1[REDACTED]'); }
+        };
+        const addExternalEvents = (source, rows) => {
+          for (const row of rows) {
+            const timestampValue = row.timestamp || row.startedAt || '';
+            const timestamp = /^\d{4}-\d\d-\d\dT/.test(String(timestampValue)) ? String(timestampValue).slice(0, 40) : null;
+            const message = String(row.message || row.error || '').slice(0, 1600).replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]').replace(/((?:token|secret|password|api[_-]?key|authorization)\s*[:=]\s*)[^\s,;&}]+/gi, '$1[REDACTED]');
+            const url = safeRuntimeUrl(row.url || row.path || '');
+            const line = `${String(row.method || '').slice(0, 12)} ${url} ${Number.isInteger(row.status) ? row.status : ''} ${message}`.trim();
+            timeline.push({ timestamp, timestampQuality: timestamp ? 'supplied-source-time' : 'unknown', source, message: line.slice(0, 2200) });
+            addTokens(source, `${line} ${JSON.stringify({ request_id: row.request_id, trace_id: row.trace_id, correlation_id: row.correlation_id, journey_id: row.journey_id })}`, 'supplied-event');
+          }
+        };
+        addExternalEvents('browser', browserEvents);
+        addExternalEvents('api', apiEvents);
+        const debuggerReadAt = new Date().toISOString();
+        for (const id of debuggerIds) {
+          const result = await callAgentHost('debugger.sessions.events', { session_id: id, maximum: 100 }, signal, 20000);
+          const events = Array.isArray(result?.events) ? result.events : [];
+          for (const event of events) {
+            const method = String(event?.method || 'inspector-event').slice(0, 100);
+            const params = event?.params || {};
+            const exception = params?.exceptionDetails?.exception?.description || params?.exceptionDetails?.text || params?.reason || '';
+            const safeException = String(exception).slice(0, 1200).replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]').replace(/((?:token|secret|password|passwd|api[_-]?key|authorization)\s*[:=]\s*)[^\s,;&}]+/gi, '$1[REDACTED]');
+            const text = `${method} ${safeException}`;
+            timeline.push({ timestamp: debuggerReadAt, timestampQuality: 'captured-at-read-not-source', source: 'node-inspector', sessionId: id, event: method, message: text.slice(0, 1400) });
+            addTokens('node-inspector', JSON.stringify(event).slice(0, 8000), id);
+          }
+          for (const stream of ['stdout','stderr']) {
+            const output = String(result?.[stream] || '').slice(-12000);
+            const safeOutput = output
+              .replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]')
+              .replace(/((?:token|secret|password|passwd|api[_-]?key|authorization|client[_-]?secret)\s*[:=]\s*)[^\s,;&}]+/gi, '$1[REDACTED]')
+              .replace(/([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^\/@\s:]+:[^\/@\s]+@/g, '$1[REDACTED]@')
+              .replace(/([?&](?:token|secret|password|api[_-]?key|authorization|credential|session|code)=)[^&#\s]+/gi, '$1[REDACTED]');
+            if (safeOutput) { timeline.push({ timestamp: debuggerReadAt, timestampQuality: 'captured-at-read-not-source', source: `node-${stream}`, sessionId: id, message: safeOutput }); addTokens(`node-${stream}`, safeOutput, id); }
+          }
+        }
+        timeline.sort((a,b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+        const correlations = [...tokenMap.entries()].filter(([, rows]) => new Set(rows.map(row => row.source)).size > 1).map(([id, sources]) => ({ id, sources }));
+        return { success: true, timeline: timeline.slice(-500), timelineCount: timeline.length, correlations, sources: { developmentServers: serverIds.length, debuggerSessions: debuggerIds.length, browserEvents: browserEvents.length, apiEvents: apiEvents.length }, note: 'Correlation identifiers are extracted heuristically from selected server logs, Inspector events and explicitly supplied browser/API event slices. Inspector events are timestamped at read time unless a source timestamp exists. Matching identifiers show shared context, not causality. No persistent join table is created.' };
+      }
       if (name.startsWith('mcp_')) return await executeMcpTool(name, args, signal);
       const gitRoutes = {
         git_status: ['status','gitRead'], git_diff: ['diff','gitRead'], git_log: ['log','gitRead'], git_show: ['show','gitRead'], git_branches: ['branches','gitRead'], git_remotes: ['remotes','gitRead'],
@@ -211,6 +296,42 @@ RunMind will terminate the process tree only if this host originally launched an
         }
         return await callAgentHost('developmentServer.manage', payload, signal, action === 'start' ? 110000 : 20000);
       }
+      if (name === 'container_workbench') {
+        if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('Container development operations are disabled in Deep Research and delegated sub-agent tasks.');
+        const action = String(args.action || '').toLowerCase();
+        const allowed = ['runtime_info','ps','images','volumes','networks','container_inspect','container_logs','container_stats','container_start','container_stop','container_restart','compose_config','compose_ps','compose_up','compose_down','compose_build','compose_logs'];
+        if (!allowed.includes(action)) throw new Error('Unsupported container workbench action.');
+        const runtime = ['auto','podman','docker'].includes(String(args.runtime || 'auto').toLowerCase()) ? String(args.runtime || 'auto').toLowerCase() : 'auto';
+        const compose = action.startsWith('compose_');
+        if (compose && !String(args.compose_file || '').trim()) throw new Error('Provide the workspace-relative compose_file returned by your project inspection.');
+        const mutating = ['compose_up','compose_down','compose_build','container_start','container_stop','container_restart'].includes(action);
+        const containerAction = action.startsWith('container_');
+        if (containerAction && !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(String(args.container_id || ''))) throw new Error('Provide one exact container_id or container name.');
+        const approved = await requireAgentApproval({ title: mutating ? 'Change this Podman/Docker container state?' : 'Inspect this Podman/Docker development environment?', subtitle: `${runtime} · ${action}`, detail: `Selected workspace: ${workspaceContext.folderName || '(native workspace selected separately)'}\nCompose file: ${args.compose_file || '(not applicable)'}\nService: ${args.service || '(all services)'}\nContainer ID: ${args.container_id || '(not applicable)'}\nTail lines: ${Math.max(1, Math.min(500, Number(args.tail_lines) || 100))}\n\nRunMind invokes a fixed Docker/Podman CLI argument list, never a shell command. Build operations can execute Containerfile/Dockerfile instructions. Compose up/down can create or stop services. Compose down never removes named or anonymous volumes. Container logs/config can contain application data; common credential assignments are redacted, but review output before sharing.`, risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true, message: 'Container workbench operation was declined.' };
+        return await callAgentHost('containers.workbench', { ...args, runtime, action, contextId: workspaceContext.id, working_directory: String(args.working_directory || '') }, signal, Math.max(30000, Math.min(210000, (Number(args.timeout_seconds) || 60) * 1000 + 15000)));
+      }
+      if (name === 'sqlite_workbench') {
+        if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('SQLite workbench operations are disabled in Deep Research and delegated sub-agent tasks.');
+        const action = String(args.action || '').toLowerCase();
+        if (!['inspect','tables','schema','query','execute'].includes(action)) throw new Error('SQLite action must be inspect, tables, schema, query or execute.');
+        if (!String(args.database_path || '').trim()) throw new Error('Provide an existing workspace-relative SQLite database path.');
+        if (action === 'execute' || !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
+          const approved = await requireAgentApproval({ title: action === 'execute' ? 'Execute this SQLite statement?' : 'Inspect this SQLite database?', subtitle: `${action} · ${String(args.database_path).slice(0, 160)}`, detail: `Database: ${String(args.database_path).slice(0, 500)}\nSQL: ${String(args.sql || '(generated read-only metadata query)').slice(0, 4000)}\nParameters: ${Array.isArray(args.parameters) ? args.parameters.length : 0}\n\nDatabase paths are restricted to the selected workspace. Query mode opens the database read-only and accepts one SELECT/WITH/EXPLAIN or allowlisted read-only PRAGMA statement. Execute mode runs exactly one parameterized statement in an immediate transaction and requires fresh approval. No migrations, schema creation or automatic file creation are performed.`, risky: action === 'execute', alwaysAsk: action === 'execute', allowForTask: action !== 'execute', toolName: name }, signal);
+          if (!approved) return { cancelled: true, message: 'SQLite operation was declined.' };
+        }
+        return await callAgentHost('sqlite.run', { ...args, contextId: workspaceContext.id, working_directory: String(args.working_directory || '') }, signal, action === 'execute' ? 60000 : 45000);
+      }
+      if (name === 'openapi_contract_test') {
+        if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('OpenAPI contract testing is disabled in Deep Research and delegated sub-agent tasks.');
+        if (!String(args.spec_path || '').trim() || !String(args.base_url || '').trim()) throw new Error('Provide both a workspace-relative OpenAPI specification path and an explicit HTTP(S) base_url.');
+        const base = new URL(String(args.base_url));
+        if (!['http:','https:'].includes(base.protocol) || base.username || base.password || base.hash || base.search) throw new Error('base_url must be HTTP/HTTPS without credentials, query or fragment.');
+        const includeMutations = args.include_mutations === true;
+        const approved = await requireAgentApproval({ title: 'Run OpenAPI contract tests against this API?', subtitle: `${base.origin}${base.pathname} · ${String(args.spec_path).slice(0, 160)}`, detail: `OpenAPI document: ${String(args.spec_path).slice(0, 500)}\nTarget base URL: ${base.href}\nMutating methods included: ${includeMutations ? 'YES (POST/PUT/PATCH/DELETE)' : 'NO (GET/HEAD/OPTIONS only)'}\nMaximum generated operations: ${Math.max(1, Math.min(20, Number(args.max_operations) || 20))}\n\nRunMind uses the explicit base_url, not the server URL embedded in the specification. Only local JSON Pointer references are supported. OpenAPI 3.0/3.1 JSON is built in; YAML requires an already-installed yaml or js-yaml package. Request operations are generated only when required parameters and request bodies have explicit examples/defaults/enums. Every HTTP operation is live; even GET may have application side effects. Responses remain on the approved base URL origin.`, risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true, message: 'OpenAPI contract test was declined.' };
+        return await callAgentHost('openapi.test.run', { ...args, contextId: workspaceContext.id, base_url: base.href, working_directory: String(args.working_directory || '') }, signal, 210000);
+      }
       if (name === 'playwright_run') {
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('Playwright browser automation is disabled in Deep Research and delegated sub-agent tasks. Run it from the primary Agent session with explicit approval.');
         const actions = Array.isArray(args.actions) ? args.actions.slice(0, 30) : [];
@@ -235,9 +356,9 @@ RunMind will terminate the process tree only if this host originally launched an
         const browser = ['chromium','firefox','webkit'].includes(String(args.browser || 'chromium').toLowerCase()) ? String(args.browser || 'chromium').toLowerCase() : 'chromium';
         const channel = ['auto','bundled','msedge','chrome'].includes(String(args.channel || 'auto').toLowerCase()) ? String(args.channel || 'auto').toLowerCase() : 'auto';
         const preview = actions.map((item, index) => `${index + 1}. ${String(item.action || 'unknown')}${item.selector ? ` · ${String(item.selector).slice(0, 160)}` : ''}${item.value ? ` · ${String(item.value).slice(0, 240)}` : ''}`).join('\n');
-        const approved = await requireAgentApproval({ title: 'Run this Playwright browser test?', subtitle: `${browser} · ${channel} browser channel · isolated temporary context`, detail: `Project workspace: ${workspaceContext.folderName || '(native workspace selected separately)'}\nWorking directory: ${String(args.working_directory || '(workspace root)')}\nTimeout: ${Math.max(15, Math.min(300, Number(args.timeout_seconds) || 120))} seconds\n\nActions:\n${preview}\nExpected browser policy blocks: ${expectedPolicyBlocks.length ? JSON.stringify(expectedPolicyBlocks) : '(none)'}\n\nWeb pages execute their own code and may perform network or application-side effects. RunMind uses a fresh ephemeral context, does not persist cookies or login state, and exposes no arbitrary JavaScript evaluation. Screenshots are saved locally. Every run is separately approved.`, risky: true, alwaysAsk: true }, signal);
+        const approved = await requireAgentApproval({ title: 'Run this Playwright browser test?', subtitle: `${browser} · ${channel} browser channel · isolated temporary context`, detail: `Project workspace: ${workspaceContext.folderName || '(native workspace selected separately)'}\nWorking directory: ${String(args.working_directory || '(workspace root)')}\nTimeout: ${Math.max(15, Math.min(300, Number(args.timeout_seconds) || 120))} seconds\n\nActions:\n${preview}\nExpected browser policy blocks: ${expectedPolicyBlocks.length ? JSON.stringify(expectedPolicyBlocks) : '(none)'}\n\nWeb pages execute their own code and may perform network or application-side effects. RunMind uses a fresh ephemeral context, does not persist cookies or login state, and exposes no arbitrary JavaScript evaluation. Screenshots are saved locally. ${args.capture_trace === true ? 'A Playwright trace with DOM snapshots and screenshots will also be saved locally; it may contain page content and should be treated as sensitive.' : 'Trace capture is disabled.'} Every run is separately approved.`, risky: true, alwaysAsk: true }, signal);
         if (!approved) return { cancelled: true, message: 'Playwright browser run was declined.' };
-        return await callAgentHost('playwright.run', { browser, channel, actions, expected_policy_blocks: expectedPolicyBlocks, working_directory: String(args.working_directory || ''), timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(30000, Math.min(315000, (Number(args.timeout_seconds) || 120) * 1000 + 15000)));
+        return await callAgentHost('playwright.run', { browser, channel, actions, expected_policy_blocks: expectedPolicyBlocks, capture_trace: args.capture_trace === true, working_directory: String(args.working_directory || ''), timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(30000, Math.min(315000, (Number(args.timeout_seconds) || 120) * 1000 + 15000)));
       }
       if (name === 'api_test_run') {
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('API/backend testing is disabled in Deep Research and delegated sub-agent tasks. Run it from the primary Agent session with explicit approval.');
@@ -493,6 +614,7 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
           const title = String(args.title || 'Task plan').slice(0, 160);
           const steps = (Array.isArray(args.steps) ? args.steps : []).slice(0, 12).map(item => ({ step: String(item?.step || '').slice(0, 240), status: ['pending','in_progress','completed'].includes(item?.status) ? item.status : 'pending' })).filter(item => item.step);
           if (!steps.length) throw new Error('A plan must contain at least one step.');
+          recordAgentCheckpointPlan(title, steps);
           const marker = '\n\n### Task plan\n';
           const existingAt = assistantMessage?.content?.indexOf(marker) ?? -1;
           const base = existingAt >= 0 ? assistantMessage.content.slice(0, existingAt) : (assistantMessage?.content || '');
@@ -989,6 +1111,18 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
           if (!index) throw new Error('Build or refresh the project index before analyzing test impact.');
           return projectIndexAnalyzeTestImpact(index, args.changed_paths || []);
         }
+        case 'project_change_impact': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const index = await loadProjectIndex();
+          if (!index) throw new Error('Build or refresh the project index before exploring change impact.');
+          const result = projectIndexAnalyzeChangeImpact(index, args.changed_paths || [], args.changed_symbols || []);
+          const limit = Math.max(1, Math.min(500, Math.floor(Number(args.max_results) || 200)));
+          return { ...result, directDependents: result.directDependents.slice(0, limit), transitiveDependents: result.transitiveDependents.slice(0, limit), impactedModules: result.impactedModules.slice(0, limit), symbolConsumers: result.symbolConsumers.slice(0, limit), assetConsumers: result.assetConsumers.slice(0, limit) };
+        }
+        case 'development_session_timeline': {
+          if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('Development Session Timeline is available only in the primary Agent session.');
+          return buildDevelopmentSessionTimeline({ checkpointId: String(args.checkpoint_id || ''), limit: args.limit });
+        }
         case 'project_release_readiness': {
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');
           const index = await loadProjectIndex();
@@ -1180,7 +1314,7 @@ Path traversal, symlinks, encrypted files and unsupported compression are reject
           return { path: args.path, mode: args.mode, content: transformed.slice(0, 100000), characters: transformed.length, truncated: transformed.length > 100000 };
         }
         case 'validate_dataset': return await validateDataset(args);
-        case 'verify_artifact': return await verifyWorkspaceArtifact(args.path, args.format || 'auto', signal, args.delimiter || '');
+        case 'verify_artifact': return await verifyWorkspaceArtifact(args.path, args.format || 'auto', signal, args.delimiter || '', args.expected_sha256 || '');
         case 'analyze_csv': {
           const { text } = await readWorkspaceText(args.path, 10 * 1024 * 1024);
           const delimiter = resolveCsvDelimiter(args.path, args.delimiter, text);

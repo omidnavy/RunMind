@@ -624,6 +624,7 @@
         try { await retireConversationSession(previousSessionId); } catch (_) {}
         createNewChatSessionId();
         configureWindowScopedStorage();
+        loadWorkflowState(); renderWorkflowView();
         researchSessionClosing = false;
         await touchConversationSession();
       }

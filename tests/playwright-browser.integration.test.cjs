@@ -7,17 +7,31 @@ const os = require('node:os');
 const path = require('node:path');
 const childProcess = require('node:child_process');
 const vm = require('node:vm');
-const { validateRequest, parseInputJson, run, MAX_ACTIONS } = require('../Shared/PlaywrightRunner.cjs');
+const { validateRequest, parseInputJson, run, safeBrowserUrl, redactBrowserText, MAX_ACTIONS } = require('../Shared/PlaywrightRunner.cjs');
 
 function makeFakePlaywright(options = {}) {
   const failChannels = new Set(options.failChannels || []);
   const calls = [];
   const handlers = new Map();
+  const emit = (name, event) => { for (const handler of handlers.get(name) || []) handler(event); };
   const page = {
     setDefaultTimeout(value) { calls.push(['setDefaultTimeout', value]); },
     setDefaultNavigationTimeout(value) { calls.push(['setDefaultNavigationTimeout', value]); },
-    on(name, callback) { handlers.set(name, callback); },
-    async goto(url) { calls.push(['goto', url]); page.currentUrl = url; for (const event of options.consoleEvents || []) handlers.get('console')?.({ type: () => event.type || 'error', text: () => event.text }); for (const request of options.failedRequests || []) handlers.get('requestfailed')?.({ url: () => request.url, failure: () => ({ errorText: request.error || 'net::ERR_FAILED' }) }); },
+    on(name, callback) { if (!handlers.has(name)) handlers.set(name, []); handlers.get(name).push(callback); },
+    async goto(url) {
+      calls.push(['goto', url]); page.currentUrl = url;
+      for (const event of options.consoleEvents || []) emit('console', { type: () => event.type || 'error', text: () => event.text, location: () => event.location || { url: 'https://example.test/app.js?token=console-secret', lineNumber: 7, columnNumber: 3 } });
+      for (const request of options.networkEvents || []) {
+        const requestObject = { url: () => request.url, method: () => request.method || 'GET', resourceType: () => request.resourceType || 'fetch', timing: () => ({ startTime: 1, requestStart: 2, responseStart: 8, responseEnd: 10 }), failure: () => ({ errorText: request.error || 'net::ERR_FAILED' }) };
+        emit('request', requestObject);
+        if (request.status != null) {
+          const response = { request: () => requestObject, status: () => request.status, statusText: () => request.statusText || 'OK', headers: () => request.headers || { 'content-type': 'application/json', 'content-length': '32', 'cache-control': 'no-store' }, url: () => request.url };
+          emit('response', response);
+        }
+        emit(request.failed ? 'requestfailed' : 'requestfinished', requestObject);
+      }
+      for (const request of options.failedRequests || []) emit('requestfailed', { url: () => request.url, failure: () => ({ errorText: request.error || 'net::ERR_FAILED' }) });
+    },
     url() { return page.currentUrl || 'about:blank'; },
     async title() { return 'RunMind Test Page'; },
     locator(selector) {
@@ -36,7 +50,7 @@ function makeFakePlaywright(options = {}) {
   };
   let closed = false;
   const routes = [];
-  const context = { async route(pattern, handler) { routes.push({ pattern, handler }); }, async newPage() { return page; }, async close() { calls.push(['context.close']); } };
+  const context = { async route(pattern, handler) { routes.push({ pattern, handler }); }, async newPage() { return page; }, tracing: { async start(settings) { calls.push(['trace.start', settings]); }, async stop(settings) { calls.push(['trace.stop', settings]); if (settings?.path) fs.writeFileSync(settings.path, Buffer.from('fake-trace-zip')); } }, async close() { calls.push(['context.close']); } };
   const browser = { async newContext(options) { calls.push(['newContext', options]); return context; }, async close() { closed = true; calls.push(['browser.close']); } };
   return { calls, handlers, routes, browser, page, get closed() { return closed; }, playwright: { chromium: { async launch(launchOptions) { calls.push(['launch', launchOptions]); const channel = launchOptions.channel || 'bundled'; if (failChannels.has(channel)) { const error = new Error(`Executable doesn't exist for ${channel}`); error.code = 'ENOENT'; throw error; } return browser; } }, firefox: {}, webkit: {} } };
 }
@@ -411,10 +425,47 @@ test('Agent exposes Playwright as a structured, approval-gated primary-agent too
   const providers = fs.readFileSync(path.join(root, 'Shared/ChatWindow/scripts/providers.js'), 'utf8');
   const tools = fs.readFileSync(path.join(root, 'Shared/ChatWindow/scripts/agent/tools.js'), 'utf8');
   assert.match(providers, /name: 'playwright_run'/);
-  assert.match(providers, /'goto','inspect_page','click','fill','press','check','uncheck','select_option'/);
+  assert.match(providers, /'goto','inspect_page','inspect_console','inspect_network','click','fill','press','check','uncheck','select_option'/);
   assert.match(providers, /auto prefers installed Microsoft Edge, then Google Chrome/);
   assert.match(tools, /name === 'playwright_run'/);
   assert.match(tools, /alwaysAsk: true/);
   assert.match(tools, /subAgentDepth/);
   assert.match(tools, /playwright\.run/);
+});
+
+
+test('Playwright advanced inspector captures console/network metadata and an explicitly approved trace', async () => {
+  const fake = makeFakePlaywright({
+    consoleEvents: [{ type: 'warning', text: 'Request completed with a warning' }],
+    networkEvents: [{ url: 'https://user:password@api.example.test/items?access_token=browser-secret&view=compact#session=private', method: 'GET', resourceType: 'fetch', status: 200 }]
+  });
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'runmind-playwright-advanced-'));
+  try {
+    const result = await run({ capture_trace: true, actions: [
+      { action: 'goto', selector: '', value: 'http://127.0.0.1:4320/' },
+      { action: 'inspect_console', selector: '', value: '' },
+      { action: 'inspect_network', selector: '', value: '' },
+      { action: 'screenshot_full_page', selector: '', value: '', name: 'full-page' }
+    ] }, { playwright: fake.playwright, artifactDirectory: directory });
+    assert.equal(result.success, true);
+    const consoleStep = result.steps[1].result;
+    assert.equal(consoleStep.warnings.length, 1);
+    assert.doesNotMatch(JSON.stringify(result), /browser-secret|password@|session=private/);
+    const networkStep = result.steps[2].result;
+    assert.equal(networkStep.requests[0].status, 200);
+    assert.equal(networkStep.requests[0].contentType, 'application/json');
+    assert.deepEqual(networkStep.requests[0].timing, { startTime: 1, requestStart: 2, responseStart: 8, responseEnd: 10 });
+    assert.match(networkStep.requests[0].url, /access_token=%5BREDACTED%5D/);
+    assert.equal(result.traceArtifact.captured, true);
+    assert.equal(fs.existsSync(result.traceArtifact.artifact), true);
+    assert.ok(fake.calls.some(call => call[0] === 'trace.start'));
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('Playwright URL and text redaction removes credential material from browser diagnostics', () => {
+  const safe = safeBrowserUrl('https://user:pass@example.test/path?token=abc&view=compact#access=fragment-secret');
+  assert.doesNotMatch(safe, /user|pass|token=abc|fragment-secret/);
+  assert.match(safe, /view=compact/);
+  assert.match(redactBrowserText('Authorization: Bearer abc.def.ghi'), /Bearer \[REDACTED\]/);
+  assert.doesNotMatch(redactBrowserText('password=supersecret'), /supersecret/);
 });

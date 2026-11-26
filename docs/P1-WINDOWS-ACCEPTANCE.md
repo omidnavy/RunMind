@@ -1,11 +1,11 @@
-# RunMind 2.9.0 — P1 regression acceptance (carried into P2)
+# RunMind 3.1.0 — P1 regression acceptance (carried into P3)
 
 Run after the P0 Windows acceptance checklist. Use the same canonical workspace in all three hosts.
 
 ## Build gate
 
 - [ ] Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10.
-- [ ] Confirm Standalone, PowerToys Run and Command Palette compile and package versions agree on 2.9.0; Command Palette Appx version is 2.9.0.0.
+- [ ] Confirm Standalone, PowerToys Run and Command Palette compile and package versions agree on 3.1.0; Command Palette Appx version is 3.1.0.0.
 
 ## Project index and understanding
 

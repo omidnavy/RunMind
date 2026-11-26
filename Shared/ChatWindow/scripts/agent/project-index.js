@@ -1166,6 +1166,61 @@
       const selected = [...directTests, ...transitiveTests, ...nameCandidates].slice(0, 200);
       return { available: true, changedPaths: changed, matchedChangedPaths: existing, analyzedChangedPaths: analyzed, unanalysedChangedPaths: unanalysed, unknownChangedPaths: unknown, impactedModules: [...impacted].slice(0, 500), impactedModuleCount: impacted.size, tests: selected, summary: { analyzedChanges: analyzed.length, unanalysedChanges: unanalysed.length, unknownChanges: unknown.length, highConfidence: directTests.length, mediumConfidence: transitiveTests.length, lowConfidence: nameCandidates.length, recommendedTests: selected.length }, executionPerformed: false, note: 'Impact is derived only for JavaScript/TypeScript changed files from the indexed static import graph. Other indexed file types are reported as unanalysed. Dynamic imports, runtime-generated dependencies, test discovery conventions outside the indexed patterns, and external test harness behavior may be missed. No tests were executed.' };
     }
+    function projectIndexAnalyzeChangeImpact(index, changedPaths = [], changedSymbols = []) {
+      if (!index) return { available: false, message: 'Build the project index before exploring change impact.' };
+      const normalize = value => projectIndexNormalizePath(String(value || '').trim());
+      const changed = [...new Set((Array.isArray(changedPaths) ? changedPaths : [changedPaths]).map(normalize).filter(Boolean))].slice(0, 100);
+      if (!changed.length) throw new Error('Provide one or more workspace-relative changed_paths. Git changes are not inferred.');
+      const files = Array.isArray(index.files) ? index.files : [];
+      const filesByPath = new Map(files.map(file => [file.path, file]));
+      const matched = changed.filter(path => filesByPath.has(path));
+      const unknown = changed.filter(path => !filesByPath.has(path));
+      const supported = matched.filter(path => ['javascript','typescript'].includes(filesByPath.get(path)?.language));
+      const unanalysed = matched.filter(path => !['javascript','typescript','html','css','svg'].includes(filesByPath.get(path)?.language));
+      const graph = index.importGraph || {};
+      const edges = Array.isArray(graph.localImportEdges) ? graph.localImportEdges : [];
+      const reverse = new Map();
+      for (const edge of edges) { const rows = reverse.get(edge.to) || []; rows.push(edge.from); reverse.set(edge.to, rows); }
+      const direct = new Set(), transitive = new Set(), distance = new Map();
+      const queue = matched.filter(path => ['javascript','typescript'].includes(filesByPath.get(path)?.language)).map(path => ({ path, depth: 0 }));
+      for (const row of queue) distance.set(row.path, 0);
+      while (queue.length && distance.size < 3000) {
+        const current = queue.shift();
+        for (const importer of reverse.get(current.path) || []) {
+          if (distance.has(importer)) continue;
+          distance.set(importer, current.depth + 1);
+          if (current.depth === 0) direct.add(importer); else transitive.add(importer);
+          queue.push({ path: importer, depth: current.depth + 1 });
+        }
+      }
+      const understanding = projectIndexBuildUnderstanding(index);
+      const changedSet = new Set(matched);
+      const assetReferences = Array.isArray(understanding.assetReferences) ? understanding.assetReferences : [];
+      const assetConsumers = assetReferences.filter(item => changedSet.has(item.to)).map(item => ({ path: item.from, changedAsset: item.to, kind: item.kind, indexed: !!item.targetIndexed }));
+      const requestedSymbols = (Array.isArray(changedSymbols) ? changedSymbols : []).slice(0, 100).map(item => ({ path: normalize(item?.path), name: String(item?.name || '').trim().slice(0, 160) })).filter(item => item.path && item.name && matched.includes(item.path));
+      const resolvedBindings = Array.isArray(graph.resolvedBindings) ? graph.resolvedBindings : [];
+      const symbolConsumers = [];
+      for (const item of requestedSymbols) {
+        const consumers = resolvedBindings.filter(binding => binding.to === item.path && (binding.imported === item.name || binding.exported === item.name));
+        for (const binding of consumers.slice(0, 200)) symbolConsumers.push({ changedPath: item.path, symbol: item.name, importer: binding.from, localName: binding.local, importedName: binding.imported, resolution: binding.compiler ? 'typescript-compiler' : 'static-export-binding' });
+      }
+      const impacted = [...new Set([...direct, ...transitive])];
+      const supportedChanges = supported.length ? projectIndexAnalyzeTestImpact(index, supported) : null;
+      const moduleRecords = impacted.slice(0, 500).map(path => ({ path, relationship: direct.has(path) ? 'direct-importer' : 'transitive-importer', distance: distance.get(path) ?? null, language: filesByPath.get(path)?.language || 'unknown' }));
+      const confidence = graph.compilerAnalysis?.supported && !graph.compilerAnalysis?.truncated ? 'compiler-assisted-static-graph' : 'bounded-static-graph';
+      return {
+        available: true, root: index.rootName, indexedAt: index.updatedAt, analysisMethod: confidence,
+        changedPaths: changed, matchedChangedPaths: matched, analyzedCodeChanges: supported,
+        unknownChangedPaths: unknown, unanalysedChangedPaths: unanalysed,
+        directDependents: moduleRecords.filter(item => item.relationship === 'direct-importer'),
+        transitiveDependents: moduleRecords.filter(item => item.relationship === 'transitive-importer'),
+        impactedModules: moduleRecords, impactedModuleCount: impacted.length,
+        symbolConsumers: symbolConsumers.slice(0, 1000), assetConsumers: assetConsumers.slice(0, 500),
+        summary: { suppliedChanges: changed.length, matchedChanges: matched.length, analyzedCodeChanges: supported.length, unknownChanges: unknown.length, unanalysedChanges: unanalysed.length, directDependents: direct.size, transitiveDependents: transitive.size, symbolConsumers: symbolConsumers.length, assetConsumers: assetConsumers.length, recommendedTests: supportedChanges?.summary?.recommendedTests || 0 },
+        limitations: [graph.note || 'Static import graph only.', 'Dynamic imports, runtime-generated references, conditional runtime behavior and external package internals may be missed.', 'Symbol-consumer results are included only for explicitly supplied changed_symbols.', 'HTML/CSS/SVG asset links are path-based references, not runtime rendering validation.', 'No files were changed and no tests were executed.']
+      };
+    }
+
     function projectIndexBuildReleaseReadiness(index, diagnostics = null) {
       if (!index) return { available: false, message: 'Build the project index before assessing release readiness.' };
       const diagnostic = diagnostics || projectIndexBuildDiagnostics(index);

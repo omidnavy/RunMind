@@ -1,6 +1,6 @@
 # RunMind Roadmap
 
-## Current source baseline: 2.9.0 — P2 System Manager Intelligence
+## Current source baseline: 3.1.0 — P4 Agent Capabilities
 
 ## Completed milestone: P0 — Foundation & Reliability
 
@@ -39,14 +39,59 @@ P2 extends the native System Manager across the same three hosts with individual
 - Targeted network diagnostics resolve one hostname/IP, report Windows-selected route/interface/next-hop when available, and optionally attempt one TCP port with bounded phases and fresh confirmation; no scans/ranges.
 - SVG is a first-class vector asset in Project Understanding and Mission Control, including normalized local references from HTML, CSS and SVG `href`/`xlink:href`.
 
-## Next milestone candidates
 
-1. **Development Session Timeline:** correlate owned server sessions, Node debugger events, API tests, Playwright requests and logs without adding duplicate event stores.
-2. **Podman Development Workbench:** Compose/Containerfile inspection, build logs, container-health and service/port/volume/network relationships.
-3. **Database Development Workbench:** start with PostgreSQL and SQLite; schema inspection, read-only query execution, query plans and migration validation.
-4. **Advanced Agent/MCP reliability:** stronger checkpoints, resource discovery and structured recovery.
+## Completed milestone: P3 — Developer Infrastructure
 
-These are candidates, not claims of existing implementation. Keep the current codebase compact: reuse the shared Agent Core, native bridge, project index, approval system and existing runners. Avoid adding a new engine when an existing subsystem can be extended.
+P3 extends the existing shared Agent Core/native bridge; it does not introduce a separate developer-infrastructure runtime.
+
+- **Podman/Docker Development Workbench:** fixed-command runtime/resource inventory, exact container inspect/logs/stats/start/stop/restart and Compose config/ps/up/down/build/logs. Each call is freshly approved; state-changing actions are not represented as independently health-verified. No shell passthrough, prune or volume/image deletion.
+- **SQLite workbench:** integrity, table/schema/foreign-key inspection, parameterized read-only query/EXPLAIN and one approved transactional DML/DDL statement on an existing workspace-contained SQLite file. SQLite only; MySQL/PostgreSQL later.
+- **OpenAPI contract tests:** bounded OpenAPI 3.0/3.1 JSON/YAML input, explicit base URL, local references, example-driven request generation, status-specific response schema validation, same-origin redirect restrictions and mutation opt-in.
+- **Runtime/log correlation:** ephemeral event timeline across selected owned development-server and Node Inspector sessions plus explicitly supplied Playwright/API event slices. IDs are correlation hints, not causal proof.
+- **Advanced browser debugging:** Playwright console/page-error/request diagnostics, source locations, resource timings, screenshots and optional trace ZIP. No arbitrary JS evaluation or browser-source breakpoints.
+- Five corresponding built-in developer workflows are available. See `docs/DEVELOPER-INFRASTRUCTURE-P3.md`.
+
+### P3 validation boundaries
+
+- Portable tests exercise Node runners, mocked browser behavior and source/native-host contracts. They do not establish that Podman/Docker is installed, that the Windows engine/WSL backend is healthy, or that all real Windows operations work.
+- C# compilation and all three Windows-host acceptance remain pending until run on the user's Windows machine with .NET 10 and Node.js 24+.
+- SQLite uses Node's built-in `node:sqlite`; no SQLite native package, DB file creator or migration system is introduced. MySQL/PostgreSQL integrations are not included.
+- OpenAPI YAML needs an existing `yaml` or `js-yaml` dependency. JSON is built in. The schema validator intentionally supports a bounded subset and does not execute remote `$ref` requests.
+- Browser traces may contain page text/screenshots and must be handled as sensitive local artifacts. No arbitrary browser JavaScript execution or live DevTools source stepping is exposed.
+- Runtime correlation is an in-memory/response-only view; no persistent log warehouse, clock synchronization or causal inference is implied.
+
+## Completed milestone: P4 — Agent Capabilities
+
+P4 completes the named Agent capability milestone on top of P0–P3. It strengthens MCP discovery, multi-tool execution, checkpoint recovery, tool-result context, Skills/project context, Change Impact Explorer, Development Session Timeline and Artifact Verification. See `docs/AGENT-CAPABILITIES-P4.md` and `docs/P4-IMPLEMENTATION-AUDIT.md`.
+
+- **MCP discovery:** paginated server/tool/resource/resource-template/prompt metadata, discovery completeness and search; exact template expansion; resource/prompt/tool access remains separately approved.
+- **Multi-tool orchestration:** 1–4 bounded workers for independent read-only operations; serial barriers for duplicate calls, writes, approval gates, MCP and delegated work; dependency-layer and execution-graph records.
+- **Task checkpoints/recovery:** bounded redacted per-chat task/plan/progress/operation records; interruption marks uncertain outcomes; explicit same-workspace Resume and inspect-before-retry policy; no automatic replay.
+- **Tool summarization:** bounded/depth-limited, credential-redacted structured summaries; body, HTML and binary/base64 payloads are omitted from Agent context and local previews.
+- **Skills/project context:** bounded project instructions, package metadata, project index and ranked Skill metadata; Skill content is explicitly loaded and untrusted; no instruction grants tools or permission.
+- **Change Impact Explorer:** explicit changed paths/symbols to JS/TS direct/transitive importers and test candidates, with HTML/CSS/SVG asset consumers and unknown/unanalysed paths.
+- **Development Session Timeline:** local chronological checkpoint/tool/dependency/sub-agent records in Workflow UI and a read-only Agent tool.
+- **Artifact Verification:** structural checks, exact-byte SHA-256, optional expected digest comparison and verification receipt; digest equality is not provenance/signature verification.
+
+### P4 validation boundaries
+
+- MCP pagination is bounded to 20 pages/2,000 entries per discovered catalogue; remote resource/prompt/tool calls remain approved operations.
+- Read-only concurrency is restricted to an explicit allow-list; approval-gated, mutating, duplicate, MCP and delegated calls are barriers.
+- Checkpoints are local to the chat's WebView profile, bounded to 20 entries and do not restore raw conversation transcripts or external state.
+- Change impact is static/index-based and can miss runtime-generated/dynamic dependencies.
+- Session timeline contains only RunMind-recorded events; it is not a log warehouse or causal tracing engine.
+- Artifact digest checks establish byte equality only, not trusted provenance.
+- Windows/.NET certification remains pending until the P0–P4 acceptance checklists pass on target Windows.
+
+## Future expansion candidates (not part of P4)
+
+- Optional MySQL/PostgreSQL adapters after SQLite proves its long-term interface and Windows runtime integration.
+- Signed artifact and provenance verification through trusted signing identities, certificate policy and reproducible build evidence.
+- Deeper browser source stepping through a separate Chromium/CDP debugging security model.
+- External OpenTelemetry/log integrations only where existing log ownership and user-controlled retention are respected.
+- Approval-gated release automation for build/test/package/sign/SBOM, backed by independently verifiable evidence.
+
+Keep the current codebase compact: reuse the shared Agent Core, native bridge, project index, approval system and existing runners. Avoid adding a new engine when an existing subsystem can be extended.
 
 ### Compatibility and security principles
 

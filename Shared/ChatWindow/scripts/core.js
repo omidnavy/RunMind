@@ -100,6 +100,8 @@
     const workflowGraphMeta = $('#workflowGraphMeta');
     const workflowSubagents = $('#workflowSubagents');
     const workflowAnalytics = $('#workflowAnalytics');
+    const workflowCheckpoints = $('#workflowCheckpoints');
+    const workflowTimeline = $('#workflowTimeline');
     const conversationBranchToggle = $('#conversationBranchToggle');
     const conversationBranchCount = $('#conversationBranchCount');
     const conversationBranchClose = $('#conversationBranchClose');

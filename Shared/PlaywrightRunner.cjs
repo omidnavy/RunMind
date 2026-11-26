@@ -17,6 +17,28 @@ const MAX_OUTPUT_TEXT = 12000;
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 const MAX_INSPECTED_ELEMENTS = 80;
 
+function safeBrowserUrl(value) {
+  const raw = String(value || '').slice(0, 2000);
+  try {
+    const url = new URL(raw);
+    url.username = '';
+    url.password = '';
+    for (const key of [...url.searchParams.keys()]) {
+      if (/(?:token|secret|password|passwd|api[_-]?key|authorization|credential|session|auth[_-]?code|^code$)/i.test(key)) url.searchParams.set(key, '[REDACTED]');
+    }
+    if (url.hash) url.hash = '#[REDACTED]';
+    return url.href.slice(0, 2000);
+  } catch { return raw.replace(/(?:Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]'); }
+}
+
+function redactBrowserText(value) {
+  return String(value || '').slice(0, 2000)
+    .replace(/(\bauthorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;&}]+/gi, '$1Bearer [REDACTED]')
+    .replace(/((?:access[_-]?token|refresh[_-]?token|token|secret|password|passwd|api[_-]?key|client[_-]?secret|credential)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&}]+)/gi, '$1[REDACTED]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]')
+    .replace(/\bBasic\s+[A-Za-z0-9+/=]+/gi, 'Basic [REDACTED]');
+}
+
 function validateRequest(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('A Playwright request object is required.');
   const browser = String(input.browser || 'chromium').toLowerCase();
@@ -25,7 +47,7 @@ function validateRequest(input) {
   if (!['auto', 'bundled', 'msedge', 'chrome'].includes(channel)) throw new Error('Browser channel must be auto, bundled, msedge, or chrome.');
   if (browser !== 'chromium' && !['auto', 'bundled'].includes(channel)) throw new Error('Installed Edge/Chrome channels are available only with Chromium.');
   if (!Array.isArray(input.actions) || input.actions.length < 1 || input.actions.length > MAX_ACTIONS) throw new Error(`Provide between 1 and ${MAX_ACTIONS} browser actions.`);
-  const allowed = new Set(['goto','inspect_page','click','fill','press','check','uncheck','select_option','wait_for','expect_text','expect_url','expect_title','expect_visible','expect_hidden','read_text','count','screenshot']);
+  const allowed = new Set(['goto','inspect_page','inspect_console','inspect_network','click','fill','press','check','uncheck','select_option','wait_for','expect_text','expect_url','expect_title','expect_visible','expect_hidden','read_text','count','screenshot','screenshot_full_page']);
   const expectedPolicyBlocks = Array.isArray(input.expected_policy_blocks) ? input.expected_policy_blocks.slice(0, 12).map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`Expected policy block ${index + 1} must be an object.`);
     const type = String(item.type || '').toLowerCase();
@@ -58,7 +80,8 @@ function validateRequest(input) {
     if (action === 'screenshot' && raw.name != null && !/^[a-zA-Z0-9_-]{1,60}$/.test(String(raw.name))) throw new Error(`Action ${index + 1} screenshot name may contain only letters, numbers, underscores, and hyphens.`);
     return { action, selector, value, state: String(raw.state || 'visible'), match: String(raw.match || 'contains'), name: String(raw.name || `step-${index + 1}`) };
   });
-  return { browser, channel, actions, expectedPolicyBlocks };
+  if (input.capture_trace !== undefined && typeof input.capture_trace !== 'boolean') throw new Error('capture_trace must be a boolean.');
+  return { browser, channel, actions, expectedPolicyBlocks, captureTrace: input.capture_trace === true };
 }
 
 function createArtifactDirectory(env = process.env) {
@@ -204,8 +227,14 @@ async function run(input, dependencies = {}) {
   }
   if (!browser) throw new Error(`Could not launch ${request.browser}. ${launchErrors.map(item => `${item.channel}: ${String(item.error?.message || item.error).slice(0, 300)}`).join(' | ')}`);
   let context;
+  let tracingStarted = false;
+  let traceArtifact = null;
   try {
     context = await browser.newContext({ acceptDownloads: false, serviceWorkers: 'block' });
+    if (request.captureTrace) {
+      await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
+      tracingStarted = true;
+    }
     await context.route('**/*', async route => {
       const request = route.request();
       let url;
@@ -229,6 +258,27 @@ async function run(input, dependencies = {}) {
     const rawFailedRequests = [];
     const failedRequests = [];
     const httpErrors = [];
+    const networkEvents = [];
+    const requestRecords = new WeakMap();
+    page.on('request', request => {
+      const record = { startedAt: new Date().toISOString(), startedMs: Date.now(), method: request.method(), url: safeBrowserUrl(request.url()), resourceType: request.resourceType(), status: null, durationMs: null, failed: false, error: null };
+      requestRecords.set(request, record); if (networkEvents.length < 200) networkEvents.push(record);
+    });
+    page.on('response', response => {
+      const record = requestRecords.get(response.request());
+      if (record) {
+        record.status = response.status();
+        record.statusText = redactBrowserText(response.statusText()).slice(0, 120);
+        const headers = response.headers();
+        record.contentType = String(headers['content-type'] || '').slice(0, 160);
+        const contentLength = Number(headers['content-length']);
+        record.contentLength = Number.isFinite(contentLength) && contentLength >= 0 ? Math.min(contentLength, Number.MAX_SAFE_INTEGER) : null;
+        record.cacheControl = String(headers['cache-control'] || '').slice(0, 200);
+        record.timing = requestRecords.get(response.request()) ? response.request().timing() : null;
+      }
+    });
+    page.on('requestfinished', request => { const record = requestRecords.get(request); if (record) record.durationMs = Math.max(0, Date.now() - record.startedMs); });
+    page.on('requestfailed', request => { const record = requestRecords.get(request); if (record) { record.durationMs = Math.max(0, Date.now() - record.startedMs); record.failed = true; record.error = redactBrowserText(request.failure()?.errorText || 'request failed').slice(0, 500); } });
     const classifyPolicyBlock = text => {
       const value = String(text || '');
       if (/blocked by CORS policy|cross.origin.*(?:CORS|blocked)|CORS request did not succeed|Access-Control-Allow-Origin|Cross-Origin Request Blocked|Same Origin Policy.*remote resource|CORS error/i.test(value)) return 'cors';
@@ -238,19 +288,19 @@ async function run(input, dependencies = {}) {
     };
     const extractPolicyUrls = text => { const matches = String(text || '').match(/https?:\/\/[^\s'"<>),]+/gi) || []; return [...new Set(matches.map(value => value.replace(/[.!?]+$/, '').slice(0, 2000)))].slice(0, 8); };
     page.on('console', message => {
-      const text = String(message.text() || '').slice(0, 1000);
-      if (consoleMessages.length < 100) consoleMessages.push({ type: message.type(), text });
+      const text = redactBrowserText(message.text() || '').slice(0, 1000);
+      if (consoleMessages.length < 100) { const location = message.location(); consoleMessages.push({ type: message.type(), text: redactBrowserText(text), url: safeBrowserUrl(location?.url || ''), lineNumber: Number.isInteger(location?.lineNumber) ? location.lineNumber : null, columnNumber: Number.isInteger(location?.columnNumber) ? location.columnNumber : null }); }
       const policyType = classifyPolicyBlock(text);
       if (policyType) {
-        if (policyBlocks.length < 50) policyBlocks.push({ type: policyType, message: text, urls: extractPolicyUrls(text), expected: false });
+        if (policyBlocks.length < 50) policyBlocks.push({ type: policyType, message: redactBrowserText(text), urls: extractPolicyUrls(text).map(safeBrowserUrl), expected: false });
         return;
       }
-      if (message.type() === 'error' && consoleErrors.length < 50) consoleErrors.push(text);
-      else if (message.type() === 'warning' && consoleWarnings.length < 50) consoleWarnings.push(text);
+      if (message.type() === 'error' && consoleErrors.length < 50) consoleErrors.push(redactBrowserText(text));
+      else if (message.type() === 'warning' && consoleWarnings.length < 50) consoleWarnings.push(redactBrowserText(text));
     });
-    page.on('pageerror', error => { if (pageErrors.length < 50) pageErrors.push(String(error.message || error).slice(0, 1000)); });
-    page.on('requestfailed', request => { if (rawFailedRequests.length < 100) rawFailedRequests.push({ url: request.url().slice(0, 2000), error: String(request.failure()?.errorText || 'request failed').slice(0, 500) }); });
-    page.on('response', response => { if (response.status() >= 400 && httpErrors.length < 50) httpErrors.push({ status: response.status(), url: response.url().slice(0, 2000) }); });
+    page.on('pageerror', error => { if (pageErrors.length < 50) pageErrors.push(redactBrowserText(error.message || error).slice(0, 1000)); });
+    page.on('requestfailed', request => { if (rawFailedRequests.length < 100) rawFailedRequests.push({ url: safeBrowserUrl(request.url()), error: redactBrowserText(request.failure()?.errorText || 'request failed').slice(0, 500) }); });
+    page.on('response', response => { if (response.status() >= 400 && httpErrors.length < 50) httpErrors.push({ status: response.status(), url: safeBrowserUrl(response.url()) }); });
     const results = [];
     let failed = false;
     for (let index = 0; index < request.actions.length; index++) {
@@ -260,8 +310,10 @@ async function run(input, dependencies = {}) {
         let result;
         const locator = step.selector ? page.locator(step.selector) : null;
         switch (step.action) {
-          case 'goto': await page.goto(step.value, { waitUntil: 'domcontentloaded' }); result = { url: page.url().slice(0, 4000) }; break;
+          case 'goto': await page.goto(step.value, { waitUntil: 'domcontentloaded' }); result = { url: safeBrowserUrl(page.url()).slice(0, 2000) }; break;
           case 'inspect_page': result = await inspectPage(page); break;
+          case 'inspect_console': result = { messages: consoleMessages.slice(-100), errors: consoleErrors.slice(-50), warnings: consoleWarnings.slice(-50), pageErrors: pageErrors.slice(-50) }; break;
+          case 'inspect_network': result = { requests: networkEvents.slice(-100), counts: { total: networkEvents.length, failed: networkEvents.filter(item => item.failed).length, httpErrors: httpErrors.length, byResourceType: Object.fromEntries([...new Set(networkEvents.map(item => item.resourceType))].map(type => [type, networkEvents.filter(item => item.resourceType === type).length])) }, truncated: networkEvents.length >= 200 }; break;
           case 'click': await locator.click(); result = { clicked: step.selector }; break;
           case 'fill': await locator.fill(step.value); result = { filled: step.selector }; break;
           case 'press': await locator.press(step.value); result = { pressed: step.value }; break;
@@ -277,8 +329,8 @@ async function run(input, dependencies = {}) {
             break;
           }
           case 'expect_url': {
-            const actual = page.url(); const passed = step.match === 'exact' ? actual === step.value : actual.includes(step.value);
-            result = { passed, actual: actual.slice(0, 4000) }; if (!passed) throw new Error(`Expected URL ${step.match} '${step.value}', received '${actual}'.`); break;
+            const actual = page.url(); const safeActual = safeBrowserUrl(actual); const passed = step.match === 'exact' ? actual === step.value : actual.includes(step.value);
+            result = { passed, actual: safeActual }; if (!passed) throw new Error(`Expected URL ${step.match} '${step.value}', received '${safeActual}'.`); break;
           }
           case 'expect_title': {
             const actual = await page.title(); const passed = step.match === 'exact' ? actual === step.value : actual.includes(step.value);
@@ -288,9 +340,10 @@ async function run(input, dependencies = {}) {
           case 'expect_hidden': await locator.waitFor({ state: 'hidden' }); result = { hidden: true }; break;
           case 'read_text': result = { text: (await locator.innerText()).slice(0, MAX_OUTPUT_TEXT) }; break;
           case 'count': result = { count: await locator.count() }; break;
-          case 'screenshot': {
+          case 'screenshot':
+          case 'screenshot_full_page': {
             const file = path.join(artifactDirectory, `${Date.now()}-${process.pid}-${index + 1}-${step.name}.png`);
-            await page.screenshot({ path: file, fullPage: false, animations: 'disabled' });
+            await page.screenshot({ path: file, fullPage: step.action === 'screenshot_full_page', animations: 'disabled' });
             const stat = fs.statSync(file);
             if (stat.size > MAX_SCREENSHOT_BYTES) { fs.rmSync(file, { force: true }); throw new Error('Screenshot exceeded the 5 MB artifact limit.'); }
             trimArtifacts(artifactDirectory);
@@ -301,7 +354,7 @@ async function run(input, dependencies = {}) {
         results.push({ index: index + 1, action: step.action, ok: true, durationMs: Date.now() - started, result });
       } catch (error) {
         failed = true;
-        results.push({ index: index + 1, action: step.action, ok: false, durationMs: Date.now() - started, error: String(error.message || error).slice(0, 2000) });
+        results.push({ index: index + 1, action: step.action, ok: false, durationMs: Date.now() - started, error: redactBrowserText(error.message || error).slice(0, 2000) });
         break;
       }
     }
@@ -323,6 +376,16 @@ async function run(input, dependencies = {}) {
       });
       if (!explainedByPolicy && failedRequests.length < 50) failedRequests.push(failedRequest);
     }
+    if (tracingStarted) {
+      const tracePath = path.join(artifactDirectory, `${Date.now()}-${process.pid}-playwright-trace.zip`);
+      try {
+        await context.tracing.stop({ path: tracePath });
+        tracingStarted = false;
+        const traceStat = fs.statSync(tracePath);
+        if (traceStat.size > 25 * 1024 * 1024) { fs.rmSync(tracePath, { force: true }); traceArtifact = { captured: false, error: 'Playwright trace exceeded the 25 MB artifact limit.' }; }
+        else { traceArtifact = { captured: true, artifact: tracePath, sizeBytes: traceStat.size, contains: 'screenshots and DOM snapshots; sources and cookies are not explicitly exported' }; trimArtifacts(artifactDirectory); }
+      } catch (error) { try { fs.rmSync(tracePath, { force: true }); } catch { } traceArtifact = { captured: false, error: String(error.message || error).slice(0, 500) }; }
+    }
     const expectedPolicyBlocks = policyBlocks.filter(item => item.expected);
     const unexpectedPolicyBlocks = policyBlocks.filter(item => !item.expected);
     const missingExpectedPolicyBlocks = request.expectedPolicyBlocks.filter(expected => !policyBlocks.some(block => block.expectedRules?.some(rule => rule.type === expected.type
@@ -334,8 +397,9 @@ async function run(input, dependencies = {}) {
       expectedPolicyBlockCount: expectedPolicyBlocks.length, unexpectedPolicyBlockCount: unexpectedPolicyBlocks.length,
       missingExpectedPolicyBlockCount: missingExpectedPolicyBlocks.length
     };
-    return { success, browser: request.browser, url: page.url().slice(0, 4000), title: (await page.title().catch(() => '')).slice(0, 1000), steps: results, completedSteps: results.filter(item => item.ok).length, totalSteps: request.actions.length, consoleErrors, consoleWarnings, consoleMessages, pageErrors, failedRequests, httpErrors, policyBlocks, expectedPolicyBlocks, unexpectedPolicyBlocks, missingExpectedPolicyBlocks, diagnostics, artifactDirectory };
+    return { success, browser: request.browser, url: safeBrowserUrl(page.url()).slice(0, 2000), title: (await page.title().catch(() => '')).slice(0, 1000), steps: results, completedSteps: results.filter(item => item.ok).length, totalSteps: request.actions.length, consoleErrors, consoleWarnings, consoleMessages, pageErrors, failedRequests, httpErrors, networkRequests: networkEvents.slice(-200), policyBlocks, expectedPolicyBlocks, unexpectedPolicyBlocks, missingExpectedPolicyBlocks, traceArtifact, diagnostics, artifactDirectory };
   } finally {
+    if (context && tracingStarted) await context.tracing.stop().catch(() => {});
     if (context) await context.close().catch(() => {});
     await browser.close().catch(() => {});
   }
@@ -360,4 +424,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = { validateRequest, parseInputJson, inspectPage, run, MAX_ACTIONS, MAX_INPUT_BYTES };
+module.exports = { validateRequest, parseInputJson, inspectPage, run, safeBrowserUrl, redactBrowserText, MAX_ACTIONS, MAX_INPUT_BYTES };
