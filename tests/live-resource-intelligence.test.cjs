@@ -1,4 +1,4 @@
-const test = require('node:test');
+﻿const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -92,6 +92,9 @@ test('native telemetry remains bounded and does not persist samples', () => {
   assert.match(start, /storage = "volatile-memory-only"/);
   assert.match(start, /not persisted/);
   assert.match(sample, /Take\(8\)/);
+  assert.match(sample, /processEntries/);
+  assert.match(sample, /OrderByDescending\(item => item\.WorkingSetBytes\)\.Take\(100\)/);
+  assert.match(sample, /DistinctBy\(item => item\.ProcessId\)/);
   assert.match(sample, /first 1,000 processes/);
   assert.match(sample, /85% CPU, 90% memory/);
   assert.doesNotMatch(start + sample, /File\.WriteAllText|FileStream|Directory\.CreateDirectory|Registry\./);
@@ -148,7 +151,8 @@ test('live monitoring survives tab changes and flyout closure but stops on expli
 test('charts and process ranking are rendered without an external chart library', () => {
   assert.match(application, /function liveResourceChartPoints/);
   assert.match(application, /setAttribute\('d', path\.trim\(\)\)/);
-  assert.match(application, /liveResourceProcessSort === 'memory' \? latest\.processes\?\.topMemory/);
+  assert.match(application, /liveResourceProcessSort === 'memory'/);
+  assert.match(application, /liveResourceProcessFilter/);
   assert.match(application, /liveResourceSortMemory.*addEventListener\('click'/);
   assert.match(application, /new Blob\(\[rows\.join/);
   assert.match(styles, /\.live-resource-chart-card svg/);
@@ -172,4 +176,65 @@ test('Windows acceptance and implementation audit document the real measurement 
   assert.match(audit, /not physical-disk-only I\/O/i);
   assert.match(guide, /Samples are held in WebView memory only/);
   assert.match(guide, /not learned anomaly detection/);
+});
+
+
+test('Process Intelligence exposes a bounded selectable list with on-demand native details', () => {
+  for (const id of [
+    'liveResourceProcessSearch','liveResourceProcesses','liveResourceProcessDetails','liveResourceProcessTitle',
+    'liveResourceProcessParent','liveResourceProcessStarted','liveResourceProcessOwner','liveResourceProcessSession',
+    'liveResourceProcessSecurity','liveResourceProcessPath','liveResourceProcessWorkingDirectory','liveResourceProcessCommandLine',
+    'liveResourceProcessFile','liveResourceProcessSignature','liveResourceProcessChildren','liveResourceProcessServices',
+    'liveResourceProcessReveal','liveResourceProcessCopyPath','liveResourceProcessCopyCommand','liveResourceProcessClose',
+    'liveResourceProcessTerminate','liveResourceProcessRestart'
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(application, /callAgentHost\('systemManager\.process\.inspect'/);
+  assert.match(application, /callAgentHost\(selected\[0\], identity/);
+  assert.match(application, /slice\(0, 100\)/);
+  assert.match(html, /Command lines may contain passwords, tokens or other secrets/);
+  assert.match(application, /serviceInventoryAvailable === true/);
+  assert.match(application, /serviceInventoryAvailable && !serviceHosted/);
+  assert.match(native, /entries = processEntries/);
+  assert.match(native, /processId = item\.ProcessId/);
+  assert.match(native, /startedAtUtc = item\.StartedAtTicks > 0/);
+});
+
+test('native process inspection verifies PID, process name and creation time before returning details', () => {
+  assert.match(bridge, /"systemManager\.process\.inspect"\s*=>\s*Task\.Run\(\(\)\s*=>\s*SystemManagerInspectProcess\(args\)/);
+  const inspect = native.slice(native.indexOf('private static object SystemManagerInspectProcess'), native.indexOf('private static object SystemManagerRevealProcess'));
+  assert.match(inspect, /RequireSystemCapability\("processes", "inspectProcesses"\)/);
+  assert.match(inspect, /ReadExpectedProcessStart\(args\)/);
+  assert.match(inspect, /VerifyProcessIdentity\(process, args, expectedStart\)/);
+  assert.match(native, /The PID now belongs to a different process instance/);
+  assert.match(inspect, /ReadProcessCimDetails\(pid\)/);
+  assert.match(inspect, /ReadProcessTokenDetails\(process\)/);
+  assert.match(inspect, /parentProcessId/);
+  assert.match(inspect, /children/);
+  assert.match(inspect, /signatureStatus/);
+  assert.match(inspect, /workingDirectoryNote/);
+  assert.match(inspect, /serviceInventoryAvailable/);
+  assert.match(inspect, /not persisted by RunMind/);
+});
+
+test('process actions are native-confirmed and service-hosted processes are protected', () => {
+  assert.match(bridge, /"systemManager\.process\.reveal"\s*=>\s*Task\.FromResult\(SystemManagerRevealProcess\(args\)\)/);
+  assert.match(bridge, /"systemManager\.process\.restart"\s*=>\s*Task\.Run\(\(\)\s*=>\s*SystemManagerRestartProcess\(args\)/);
+  const restart = native.slice(native.indexOf('private static object SystemManagerRestartProcess'), native.indexOf('private static object SystemManagerCloseProcess'));
+  assert.match(restart, /RequireSystemCapability\("processes", "inspectProcesses"\)/);
+  assert.match(restart, /RequireSystemCapability\("processes", "terminateProcesses"\)/);
+  assert.match(restart, /JsonHasServiceRows\(details\)/);
+  assert.match(restart, /serviceInventoryVerified/);
+  assert.match(restart, /could not verify whether this process hosts Windows services/i);
+  assert.match(restart, /WindowsIdentity\.GetCurrent\(\)\.Name/);
+  assert.match(restart, /process\.SessionId != Process\.GetCurrentProcess\(\)\.SessionId/);
+  assert.match(native, /CommandLineToArgvW/);
+  assert.match(restart, /SplitWindowsCommandLine\(commandLine\)/);
+  assert.match(restart, /separate confirmation is required before force termination/);
+  assert.match(restart, /WorkingDirectory = Path\.GetDirectoryName\(path\)/);
+  const close = native.slice(native.indexOf('private static object SystemManagerCloseProcess'), native.indexOf('private static object SystemManagerTerminateProcess'));
+  const terminate = native.slice(native.indexOf('private static object SystemManagerTerminateProcess'), native.indexOf('[StructLayout(LayoutKind.Sequential)]\n    private struct NativeFileTime'));
+  assert.match(close, /BlockProcessLevelServiceActions\(pid\)/);
+  assert.match(terminate, /BlockProcessLevelServiceActions\(pid\)/);
+  assert.match(native, /dedicated Windows service controls instead/);
+  assert.match(native, /protected Windows process/);
 });

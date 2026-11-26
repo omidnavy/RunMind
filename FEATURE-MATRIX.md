@@ -114,9 +114,12 @@ The capabilities below are already implemented across P1–P6 and are retained i
 | System Manager | Application discovery | Implemented | Ranked name/alias/executable matching across App Paths, uninstall registry, Start Menu, bounded common install locations, PATH and Windows Apps folder; bounded refresh on stale cache/search miss |
 | System Manager | Application launch | Implemented | Uses stable application IDs; revalidates executable; reuses/activates existing windows by default; distinguishes startup, activation and unverified handoff |
 | System Manager | Open files/folders/HTTPS URLs | Implemented | Windows default-handler request accepted; target application/window/focus/navigation are not verified |
-| System Manager | Process inspection | Expanded | Parent PID, working/private memory, cumulative CPU time, threads, handles, priority, responsiveness, executable path and start time; detail fields individually gated |
-| System Manager | Graceful process close | Added | Identity-checked main-window close request; mandatory confirmation; never force-kills |
-| System Manager | Process termination | Implemented | Disabled by default; mandatory fresh confirmation and identity revalidation |
+| System Manager | Process inventory and live selection | Expanded | Live Monitor list is the bounded top-100 CPU/top-100 working-set union; filter by name/PID and sort by CPU or memory |
+| System Manager | Process inspection | Expanded | On-demand executable/command line, owner/session, token elevation/integrity, parent/observed children, hosted services, file metadata and Authenticode status; PID/name/start-time revalidation; live working directory and per-process GPU attribution unavailable |
+| System Manager | Executable and command-line actions | Added | Open executable location and copy path/command line; command-line values are sensitive and not persisted by Process Intelligence |
+| System Manager | Graceful process close | Added | Identity-checked main-window close request; mandatory native confirmation; never force-kills |
+| System Manager | Process termination | Implemented | Disabled by default; mandatory fresh confirmation, identity revalidation, service-host and protected-process safeguards; no automatic tree termination |
+| System Manager | Process restart | Added with limits | Same-account/current-session only; reuses parsed original arguments, current RunMind token and executable-folder working-directory fallback; separate confirmation before force termination |
 | System Manager | OS/environment/service/network diagnostics | Expanded | Uptime, drive capacity, gateways and DNS added; individual switches; read-only |
 | System Manager | Windows service control | Expanded | List/inspect/config/dependents; start/stop/restart with fresh confirmation and final-state verification; requires serviceInformation capability |
 | System Manager | Native command timeout | User-configurable | 0 disables automatic timeout; 1–3600 seconds; cancellation remains available |

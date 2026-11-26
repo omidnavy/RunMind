@@ -1,4 +1,4 @@
-<h1 align="center">RunMind</h1>
+﻿<h1 align="center">RunMind</h1>
 
 <p align="center">
   <strong>Understand your projects. Take control of your systems.</strong><br>
@@ -55,7 +55,7 @@ Deep Research builds an editable plan, gathers sources, keeps evidence notes and
 
 The optional **System Manager** brings application and process management together with Windows diagnostics. Depending on the capabilities you enable, it can inspect services, events, crashes, network connections, storage, security posture, applications, and processes. Actions that change system state use separate native permission checks and confirmation.
 
-**Live Resource Intelligence** adds an explicitly started, bounded monitor with CPU, memory, GPU utilization, dedicated/shared GPU-memory, network, and process-I/O charts. It includes process ranking and CSV export. Monitoring continues when the flyout is closed and ends when stopped, when its session expires, or when the RunMind window closes. Samples are held in memory for the session; there is no always-on monitoring service or persistent raw telemetry store. GPU readings depend on the counters exposed by the installed Windows graphics driver.
+**Live Resource Intelligence** adds an explicitly started, bounded monitor with CPU, memory, GPU utilization, dedicated/shared GPU-memory, network, and process-I/O charts. Its integrated **Process Intelligence** view lets you filter and rank live processes, inspect executable/command-line, owner, security, parent/child and signature details, open the executable location, copy details, close gracefully, force-terminate or restart eligible processes. Service-hosted and protected processes are guarded; restart is limited to reconstructable same-user processes and cannot restore their original token or working directory. Per-process GPU attribution and the live working directory are not available from the supported Windows sources. Monitoring continues when the flyout is closed and ends when stopped, when its session expires, or when the RunMind window closes. Samples remain in memory for the session; there is no always-on monitoring service or persistent raw telemetry store. GPU readings depend on the counters exposed by the installed Windows graphics driver.
 
 ### Create useful deliverables
 
@@ -138,6 +138,8 @@ For other OpenAI-compatible services, configure the endpoint's CORS policy to al
 | [Project Understanding & Diagnostics](docs/PROJECT-UNDERSTANDING-AND-DIAGNOSTICS.md) | Project indexing, architecture understanding, diagnostics, and Mission Control. |
 | [Development Intelligence](docs/DEVELOPMENT-INTELLIGENCE.md) | Developer tools and evidence-driven workflows. |
 | [Live Resource Intelligence](docs/LIVE-RESOURCE-INTELLIGENCE.md) | Live monitoring behavior, metrics, bounds, and telemetry limitations. |
+| [Process Intelligence](docs/PROCESS-INTELLIGENCE.md) | Process details, permissions, actions, restart constraints, and safeguards. |
+| [Process Intelligence Windows acceptance](docs/PROCESS-INTELLIGENCE-WINDOWS-ACCEPTANCE.md) | Target-machine validation for process inspection and actions. |
 | [System Manager health intelligence](docs/SYSTEM-MANAGER-HEALTH-INTELLIGENCE.md) | Windows health reports, event correlation, services, network, and storage. |
 | [Runner implementation](docs/RUNNER-IMPLEMENTATION.md) | Runner architecture, plugins, and the Quick Host boundary. |
 | [Build and setup](BUILD-AND-SETUP.md) | Build prerequisites, packaging, and host deployment. |

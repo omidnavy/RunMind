@@ -1,4 +1,4 @@
-# Live Resource Intelligence
+﻿# Live Resource Intelligence
 
 ## Purpose
 
@@ -8,7 +8,7 @@ Live Resource Intelligence adds a user-started, read-only Windows telemetry sess
 
 Open **Windows System Manager → Live Monitor**. Enable the System Manager master switch in Settings. Choose a session duration and sampling interval, then explicitly select **Start monitoring**. The Start action is the explicit user authorization for this read-only session; the separate `resourceMonitoring` capability checkbox is not required for the UI monitor and remains in effect for the finite Agent resource-report tool. Use **Stop** to end early. The dashboard shows current values, rolling charts, process rankings and a CSV export.
 
-Supported UI durations are 1, 5 and 15 minutes. Native validation accepts 30–900 seconds. Supported intervals are 1, 2 and 5 seconds. The browser retains at most 900 accepted samples. The native bridge retains only the current session's previous process/system/network baselines; it does not write telemetry to disk.
+Supported UI durations are 1, 5 and 15 minutes. Native validation accepts 30–900 seconds. Supported intervals are 1, 2 and 5 seconds. The browser retains at most 900 accepted samples. The native bridge retains only the current session's previous process/system/network baselines; it does not write telemetry to disk. The Process Intelligence card uses this existing live process inventory and adds on-demand details and guarded process actions; see [Process Intelligence](PROCESS-INTELLIGENCE.md).
 
 ## Data sources and semantics
 
@@ -24,7 +24,7 @@ Supported UI durations are 1, 5 and 15 minutes. Native validation accepts 30–9
 | GPU memory | Windows PDH `GPU Adapter Memory(*)\Dedicated Usage` and `Shared Usage` counters | Dedicated and shared memory usage in bytes, summed across observed adapters; the counters do not provide a reliable total capacity, so no usage percentage is inferred |
 | Physical disk | Existing finite resource report | Not sampled in the live session; Windows performance provider remains optional/possibly unavailable |
 
-Missing measurements remain `null`/unavailable and are never substituted with zero. Process identity is matched using both PID and process start time to reduce PID-reuse misattribution. The process inventory is capped at 1,000. Top process lists are capped at eight and can be ranked by CPU or memory.
+Missing measurements remain `null`/unavailable and are never substituted with zero. Process identity is matched using both PID and process start time to reduce PID-reuse misattribution. The telemetry sampler's process inventory is capped at 1,000. Its dashboard Process Intelligence list is a bounded union of up to 100 CPU and 100 memory candidates, and the UI displays at most 100 entries at once. Selection requires a process start timestamp; see the dedicated guide for details/actions and safety constraints.
 
 ## Thresholds and interpretation
 
@@ -40,7 +40,7 @@ The live view exposes fixed display indicators at 85% host CPU and 90% physical-
 - Switching tabs or closing the System Manager flyout only hides the UI; sampling and chart history continue in the same WebView session. The user can reopen the flyout to see current readings and the accumulated trace. Explicit Stop, duration expiry, page/WebView teardown, RunMind window close or native-host disposal ends the session.
 - There is no background service, scheduled collector or silent startup collection.
 - Samples are held in WebView memory only, capped at 900, and may be exported by the user to CSV. RunMind does not persist the samples.
-- No remote endpoint, port scan, process termination or state-changing operation is part of this feature.
+- The telemetry session itself is read-only and does not automatically change process state. Process Intelligence actions are separate, explicitly invoked native operations with separate permission checks and fresh confirmations; service-hosted and protected processes are blocked. See [Process Intelligence](PROCESS-INTELLIGENCE.md).
 
 ## Architecture
 

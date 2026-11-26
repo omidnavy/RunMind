@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -44,6 +45,92 @@ public sealed partial class AgentHostBridge
     [DllImport("kernel32.dll", EntryPoint = "Process32FirstW", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool Process32FirstW(IntPtr snapshot, ref NativeProcessEntry32 entry);
     [DllImport("kernel32.dll", EntryPoint = "Process32NextW", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool Process32NextW(IntPtr snapshot, ref NativeProcessEntry32 entry);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport("shell32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern IntPtr CommandLineToArgvW(string commandLine, out int argumentCount);
+    [DllImport("advapi32.dll", SetLastError = true)] private static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+    [DllImport("advapi32.dll", SetLastError = true)] private static extern bool GetTokenInformation(IntPtr tokenHandle, int tokenInformationClass, IntPtr tokenInformation, uint tokenInformationLength, out uint returnLength);
+    [DllImport("advapi32.dll", SetLastError = true)] private static extern IntPtr GetSidSubAuthorityCount(IntPtr sid);
+    [DllImport("advapi32.dll", SetLastError = true)] private static extern IntPtr GetSidSubAuthority(IntPtr sid, uint subAuthority);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeSidAndAttributes
+    {
+        public IntPtr Sid;
+        public uint Attributes;
+    }
+
+    private sealed record ProcessTokenDetails(bool? Elevated, string? IntegrityLevel);
+
+    private static ProcessTokenDetails ReadProcessTokenDetails(Process process)
+    {
+        const uint TokenQuery = 0x0008;
+        const int TokenElevationInformation = 20;
+        const int TokenIntegrityLevelInformation = 25;
+        IntPtr token;
+        try { if (!OpenProcessToken(process.Handle, TokenQuery, out token)) return new ProcessTokenDetails(null, null); }
+        catch { return new ProcessTokenDetails(null, null); }
+        try
+        {
+            bool? elevated = null;
+            var elevationBuffer = Marshal.AllocHGlobal(sizeof(uint));
+            try
+            {
+                if (GetTokenInformation(token, TokenElevationInformation, elevationBuffer, sizeof(uint), out _))
+                    elevated = Marshal.ReadInt32(elevationBuffer) != 0;
+            }
+            finally { Marshal.FreeHGlobal(elevationBuffer); }
+
+            string? integrity = null;
+            _ = GetTokenInformation(token, TokenIntegrityLevelInformation, IntPtr.Zero, 0, out var required);
+            if (required >= (uint)Marshal.SizeOf<NativeSidAndAttributes>() && required <= 4096)
+            {
+                var buffer = Marshal.AllocHGlobal((int)required);
+                try
+                {
+                    if (GetTokenInformation(token, TokenIntegrityLevelInformation, buffer, required, out _))
+                    {
+                        var label = Marshal.PtrToStructure<NativeSidAndAttributes>(buffer);
+                        if (label.Sid != IntPtr.Zero)
+                        {
+                            var countPointer = GetSidSubAuthorityCount(label.Sid);
+                            var count = countPointer == IntPtr.Zero ? 0 : Marshal.ReadByte(countPointer);
+                            if (count > 0)
+                            {
+                                var ridPointer = GetSidSubAuthority(label.Sid, (uint)(count - 1));
+                                if (ridPointer != IntPtr.Zero)
+                                {
+                                    var rid = unchecked((uint)Marshal.ReadInt32(ridPointer));
+                                    integrity = rid < 0x1000 ? "Untrusted" : rid < 0x2000 ? "Low" : rid < 0x3000 ? "Medium" : rid < 0x4000 ? "High" : rid < 0x5000 ? "System" : "Protected";
+                                }
+                            }
+                        }
+                    }
+                }
+                finally { Marshal.FreeHGlobal(buffer); }
+            }
+            return new ProcessTokenDetails(elevated, integrity);
+        }
+        catch { return new ProcessTokenDetails(null, null); }
+        finally { _ = CloseHandle(token); }
+    }
+
+    private static string[] SplitWindowsCommandLine(string commandLine)
+    {
+        if (string.IsNullOrWhiteSpace(commandLine)) return Array.Empty<string>();
+        var pointer = CommandLineToArgvW(commandLine, out var count);
+        if (pointer == IntPtr.Zero || count <= 0 || count > 4096) return Array.Empty<string>();
+        try
+        {
+            var values = new string[count];
+            for (var index = 0; index < count; index++)
+            {
+                var valuePointer = Marshal.ReadIntPtr(pointer, index * IntPtr.Size);
+                values[index] = Marshal.PtrToStringUni(valuePointer) ?? string.Empty;
+            }
+            return values;
+        }
+        finally { _ = LocalFree(pointer); }
+    }
     private static Dictionary<int, int> ReadProcessParentIds()
     {
         var result = new Dictionary<int, int>();
@@ -1896,6 +1983,294 @@ public sealed partial class AgentHostBridge
         return new { success = true, accepted = true, action = "list-processes", completed = true, verified = true, processes = rows, count = rows.Count, truncated = rows.Count >= 500, detailFieldsEnabled = includeDetails, message = $"Retrieved {rows.Count} process records." };
     }
 
+    private static int ReadExpectedProcessId(JsonElement args)
+    {
+        if (!args.TryGetProperty("processId", out var pidElement) || !pidElement.TryGetInt32(out var pid) || pid <= 0)
+            throw new InvalidDataException("A valid process ID is required.");
+        return pid;
+    }
+
+    private static DateTimeOffset ReadExpectedProcessStart(JsonElement args)
+    {
+        var value = ReadString(args, "expectedStartedAtUtc", 80);
+        if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+            throw new InvalidDataException("A process start timestamp is required to protect against PID reuse.");
+        return parsed;
+    }
+
+    private static void VerifyProcessIdentity(Process process, JsonElement args, DateTimeOffset expectedStart)
+    {
+        var expectedName = ReadString(args, "expectedName", 260);
+        if (string.IsNullOrWhiteSpace(expectedName) || !string.Equals(process.ProcessName, expectedName, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The process identity changed since it was selected; the operation was cancelled.");
+        DateTimeOffset actualStart;
+        try { actualStart = new DateTimeOffset(process.StartTime.ToUniversalTime()); }
+        catch { throw new UnauthorizedAccessException("RunMind cannot verify this process start time; the operation was blocked."); }
+        if (Math.Abs((actualStart - expectedStart).TotalSeconds) > 1)
+            throw new InvalidOperationException("The PID now belongs to a different process instance; the operation was cancelled.");
+        var expectedPath = ReadString(args, "expectedPath", 2048);
+        if (!string.IsNullOrWhiteSpace(expectedPath))
+        {
+            string? actualPath = null;
+            try { actualPath = process.MainModule?.FileName; } catch { }
+            if (!string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The executable path changed since the process was selected; the operation was cancelled.");
+        }
+    }
+
+    private static JsonElement ReadProcessCimDetails(int processId)
+    {
+        const string script = """
+$target = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId = " + [int]$request.processId) -ErrorAction Stop
+if ($null -eq $target) { throw 'The process no longer exists in the Windows process inventory.' }
+$owner = $null
+try { $ownerResult = Invoke-CimMethod -InputObject $target -MethodName GetOwner -ErrorAction Stop; if ($ownerResult.ReturnValue -eq 0) { $owner = [pscustomobject]@{ domain=[string]$ownerResult.Domain; name=[string]$ownerResult.User } } } catch { }
+$services = @(); $serviceInventoryAvailable = $false
+try { $services = @(Get-CimInstance -ClassName Win32_Service -Filter ("ProcessId = " + [int]$request.processId) -ErrorAction Stop | Select-Object -First 12 Name,DisplayName,State,StartMode); $serviceInventoryAvailable = $true } catch { }
+$signatureStatus = $null; $signatureSubject = $null
+$path = [string]$target.ExecutablePath
+if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path -PathType Leaf)) {
+  try { $signature = Get-AuthenticodeSignature -LiteralPath $path -ErrorAction Stop; $signatureStatus = [string]$signature.Status; if ($signature.SignerCertificate) { $signatureSubject = [string]$signature.SignerCertificate.Subject } } catch { $signatureStatus = 'Unavailable' }
+}
+$result = [pscustomobject]@{
+  executablePath=$path
+  commandLine=([string]$target.CommandLine).Substring(0,[Math]::Min(16384,([string]$target.CommandLine).Length))
+  parentProcessId=[int]$target.ParentProcessId
+  owner=$owner
+  services=@($services | ForEach-Object { [pscustomobject]@{ name=[string]$_.Name; displayName=[string]$_.DisplayName; state=[string]$_.State; startMode=[string]$_.StartMode } })
+  serviceInventoryAvailable=$serviceInventoryAvailable
+  signatureStatus=$signatureStatus
+  signatureSubject=$signatureSubject
+}
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 5 -Compress))
+""";
+        return RunPowerShellJson(script, new { processId }, 20000);
+    }
+
+    private static string? JsonStringOrNull(JsonElement value, string property)
+        => value.ValueKind == JsonValueKind.Object && value.TryGetProperty(property, out var field) && field.ValueKind == JsonValueKind.String ? field.GetString() : null;
+
+    private static string? JsonNestedStringOrNull(JsonElement value, string parent, string property)
+        => value.ValueKind == JsonValueKind.Object && value.TryGetProperty(parent, out var nested) ? JsonStringOrNull(nested, property) : null;
+
+    private static bool JsonHasServiceRows(JsonElement details)
+        => details.ValueKind == JsonValueKind.Object && details.TryGetProperty("services", out var services) && services.ValueKind == JsonValueKind.Array && services.GetArrayLength() > 0;
+
+    private static bool ProcessHostsWindowsServices(int processId)
+    {
+        const string script = """
+$rows = @()
+$rows = @(Get-CimInstance -ClassName Win32_Service -Filter ("ProcessId = " + [int]$request.processId) -ErrorAction Stop | Select-Object -First 12 Name,DisplayName,State)
+$result = [pscustomobject]@{ services=@($rows) }
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 3 -Compress))
+""";
+        var result = RunPowerShellJson(script, new { processId }, 12000);
+        return JsonHasServiceRows(result);
+    }
+
+    private static void BlockProcessLevelServiceActions(int processId)
+    {
+        if (ProcessHostsWindowsServices(processId))
+            throw new UnauthorizedAccessException("This process hosts one or more Windows services. RunMind blocks process-level close/termination; use the dedicated Windows service controls instead.");
+    }
+
+    private static object SystemManagerInspectProcess(JsonElement args)
+    {
+        RequireSystemCapability("processes", "inspectProcesses");
+        var pid = ReadExpectedProcessId(args);
+        var expectedStart = ReadExpectedProcessStart(args);
+        Process process;
+        try { process = Process.GetProcessById(pid); }
+        catch (ArgumentException) { throw new InvalidOperationException("The selected process has already exited."); }
+        using (process)
+        {
+            if (process.HasExited) throw new InvalidOperationException("The selected process has already exited.");
+            VerifyProcessIdentity(process, args, expectedStart);
+            var processName = process.ProcessName;
+            var parentIds = ReadProcessParentIds();
+            var parentId = parentIds.TryGetValue(pid, out var observedParent) ? observedParent : 0;
+            string? executablePath = null;
+            try { executablePath = process.MainModule?.FileName; } catch { }
+            JsonElement inventory;
+            try { inventory = ReadProcessCimDetails(pid); }
+            catch { inventory = default; }
+            var inventoryPath = JsonStringOrNull(inventory, "executablePath");
+            if (!string.IsNullOrWhiteSpace(inventoryPath)) executablePath = inventoryPath;
+            var actualStart = new DateTimeOffset(process.StartTime.ToUniversalTime());
+            var token = ReadProcessTokenDetails(process);
+            JsonElement serviceRows = default;
+            var serviceInventoryAvailable = inventory.ValueKind == JsonValueKind.Object
+                && inventory.TryGetProperty("serviceInventoryAvailable", out var serviceInventoryFlag)
+                && serviceInventoryFlag.ValueKind == JsonValueKind.True
+                && inventory.TryGetProperty("services", out serviceRows)
+                && serviceRows.ValueKind == JsonValueKind.Array;
+            var sessionId = process.SessionId;
+            var threadCount = 0; var handleCount = 0; long workingSet = 0; long privateMemory = 0;
+            try { threadCount = process.Threads.Count; } catch { }
+            try { handleCount = process.HandleCount; } catch { }
+            try { workingSet = process.WorkingSet64; } catch { }
+            try { privateMemory = process.PrivateMemorySize64; } catch { }
+            string? parentName = null;
+            if (parentId > 0) { try { using var parent = Process.GetProcessById(parentId); parentName = parent.ProcessName; } catch { } }
+            var children = parentIds.Where(pair => pair.Value == pid).Select(pair =>
+            {
+                string? name = null;
+                try { using var child = Process.GetProcessById(pair.Key); name = child.ProcessName; } catch { }
+                return new { processId = pair.Key, name };
+            }).Take(50).ToArray();
+            object? file = null;
+            if (!string.IsNullOrWhiteSpace(executablePath))
+            {
+                try
+                {
+                    var fileInfo = new FileInfo(executablePath);
+                    var version = FileVersionInfo.GetVersionInfo(executablePath);
+                    file = new
+                    {
+                        exists = fileInfo.Exists,
+                        sizeBytes = fileInfo.Exists ? fileInfo.Length : (long?)null,
+                        lastWriteTimeUtc = fileInfo.Exists ? fileInfo.LastWriteTimeUtc : (DateTime?)null,
+                        fileVersion = version.FileVersion,
+                        productVersion = version.ProductVersion,
+                        productName = version.ProductName,
+                        companyName = version.CompanyName,
+                        originalFilename = version.OriginalFilename
+                    };
+                }
+                catch { file = new { exists = false, note = "Executable file metadata is inaccessible." }; }
+            }
+            return new
+            {
+                success = true,
+                process = new
+                {
+                    name = processName,
+                    processId = pid,
+                    parentProcessId = parentId > 0 ? parentId : (int?)null,
+                    parentName,
+                    children,
+                    startedAtUtc = actualStart,
+                    sessionId,
+                    ownerDomain = JsonNestedStringOrNull(inventory, "owner", "domain"),
+                    owner = JsonNestedStringOrNull(inventory, "owner", "name"),
+                    elevated = token.Elevated,
+                    integrityLevel = token.IntegrityLevel,
+                    executablePath,
+                    commandLine = JsonStringOrNull(inventory, "commandLine"),
+                    workingDirectory = (string?)null,
+                    workingDirectoryNote = "Windows process inventory does not expose the live working directory through the supported metadata query.",
+                    file,
+                    signatureStatus = JsonStringOrNull(inventory, "signatureStatus"),
+                    signatureSubject = JsonStringOrNull(inventory, "signatureSubject"),
+                    services = serviceInventoryAvailable ? (object)serviceRows : Array.Empty<object>(),
+                    serviceInventoryAvailable,
+                    threadCount,
+                    handleCount,
+                    workingSetBytes = workingSet,
+                    privateMemoryBytes = privateMemory,
+                    gpuAttribution = "Per-process GPU utilization and GPU memory attribution are not available from the current Windows counters."
+                },
+                metadataComplete = inventory.ValueKind == JsonValueKind.Object,
+                note = "Command-line arguments can contain credentials or other secrets. Details are read on demand and are not persisted by RunMind."
+            };
+        }
+    }
+
+    private static object SystemManagerRevealProcess(JsonElement args)
+    {
+        RequireSystemCapability("processes", "inspectProcesses");
+        var pid = ReadExpectedProcessId(args);
+        var expectedStart = ReadExpectedProcessStart(args);
+        using var process = Process.GetProcessById(pid);
+        VerifyProcessIdentity(process, args, expectedStart);
+        string? path = null;
+        try { path = process.MainModule?.FileName; } catch { }
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || !File.Exists(path))
+            throw new InvalidOperationException("The executable path is unavailable; RunMind cannot reveal its location.");
+        var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+        var start = new ProcessStartInfo(explorer) { UseShellExecute = true, Arguments = "/select,\"" + path.Replace("\"", string.Empty, StringComparison.Ordinal) + "\"" };
+        _ = Process.Start(start) ?? throw new InvalidOperationException("Windows Explorer did not start.");
+        return new { success = true, accepted = true, completed = true, verified = File.Exists(path), message = "The executable location was opened in Windows Explorer." };
+    }
+
+    private static object SystemManagerRestartProcess(JsonElement args)
+    {
+        RequireSystemCapability("processes", "inspectProcesses");
+        RequireSystemCapability("processes", "terminateProcesses");
+        var pid = ReadExpectedProcessId(args);
+        var expectedStart = ReadExpectedProcessStart(args);
+        Process process;
+        try { process = Process.GetProcessById(pid); }
+        catch (ArgumentException) { throw new InvalidOperationException("The selected process has already exited; there is nothing to restart."); }
+        using (process)
+        {
+            if (process.HasExited) throw new InvalidOperationException("The selected process has already exited; there is nothing to restart.");
+            VerifyProcessIdentity(process, args, expectedStart);
+            var details = ReadProcessCimDetails(pid);
+            var serviceInventoryVerified = details.ValueKind == JsonValueKind.Object
+                && details.TryGetProperty("serviceInventoryAvailable", out var serviceInventoryFlag)
+                && serviceInventoryFlag.ValueKind == JsonValueKind.True;
+            if (!serviceInventoryVerified) throw new UnauthorizedAccessException("RunMind could not verify whether this process hosts Windows services. Restart was blocked; retry when the Windows service inventory is available.");
+            if (JsonHasServiceRows(details)) throw new UnauthorizedAccessException("This process hosts one or more Windows services. RunMind will not restart a service-host process as an ordinary process; use the Services controls instead.");
+            var ownerDomain = details.TryGetProperty("owner", out var owner) ? JsonStringOrNull(owner, "domain") : null;
+            var ownerName = details.TryGetProperty("owner", out owner) ? JsonStringOrNull(owner, "name") : null;
+            var ownerFullName = string.IsNullOrWhiteSpace(ownerName) ? string.Empty : (string.IsNullOrWhiteSpace(ownerDomain) ? ownerName : ownerDomain + "\\" + ownerName);
+            var currentUser = WindowsIdentity.GetCurrent().Name;
+            if (string.IsNullOrWhiteSpace(ownerFullName) || !string.Equals(ownerFullName, currentUser, StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("Restart is limited to processes owned by the current Windows account. The original process token cannot be safely reproduced.");
+            if (process.SessionId != Process.GetCurrentProcess().SessionId)
+                throw new UnauthorizedAccessException("Restart is limited to processes in the current interactive Windows session.");
+            var path = JsonStringOrNull(details, "executablePath");
+            var expectedPath = ReadString(args, "expectedPath", 2048);
+            if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || !File.Exists(path) || !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The executable path is unavailable or no longer exists; RunMind cannot safely reconstruct this process.");
+            if (string.IsNullOrWhiteSpace(expectedPath) || !string.Equals(path, expectedPath, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The executable path no longer matches the inspected process identity; restart was blocked.");
+            var commandLine = JsonStringOrNull(details, "commandLine");
+            if (string.IsNullOrWhiteSpace(commandLine)) throw new InvalidOperationException("The original command line is unavailable; restart was blocked rather than guessing arguments.");
+            var parsedArguments = SplitWindowsCommandLine(commandLine);
+            if (parsedArguments.Length == 0) throw new InvalidOperationException("Windows could not safely parse the original command line.");
+            var protectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "svchost", "dwm", "fontdrvhost" };
+            if (protectedNames.Contains(process.ProcessName)) throw new UnauthorizedAccessException("RunMind will not restart a protected Windows process.");
+            var argsText = commandLine.Length > 500 ? commandLine[..500] + "…" : commandLine;
+            if (!ConfirmSystemManagerAction("terminateProcesses", "RunMind · Restart process", $"Process: {process.ProcessName}\nPID: {pid}\nExecutable: {path}\nCommand line: {argsText}\n\nRunMind will request a graceful close first. If the process does not exit, a separate confirmation is required before force termination. The replacement starts as the current RunMind user, not with the original process token/elevation. Its working directory defaults to the executable folder because the original working directory is unavailable.", alwaysAsk: true))
+                return new { success = false, accepted = false, cancelled = true, completed = false, verified = false, message = "Restart was declined." };
+
+            var exited = false;
+            var gracefulRequested = false;
+            try
+            {
+                if (process.MainWindowHandle != IntPtr.Zero)
+                {
+                    gracefulRequested = process.CloseMainWindow();
+                    exited = gracefulRequested && process.WaitForExit(5000);
+                }
+            }
+            catch { }
+            if (!exited && !process.HasExited)
+            {
+                if (!ConfirmSystemManagerAction("terminateProcesses", "RunMind · Force termination for restart", $"Process: {process.ProcessName}\nPID: {pid}\n\nThe process did not close gracefully (or has no accessible main window). Force termination can lose unsaved work. Continue?", alwaysAsk: true))
+                    return new { success = false, accepted = true, cancelled = true, completed = false, verified = false, oldProcessState = "running", message = "The process is still running. Restart stopped because force termination was declined." };
+                process.Kill(entireProcessTree: false);
+                exited = process.WaitForExit(5000);
+            }
+            if (!exited && !process.HasExited)
+                return new { success = false, accepted = true, completed = false, verified = false, oldProcessState = "running", message = "The original process is still running; RunMind did not start a duplicate." };
+
+            var launch = new ProcessStartInfo(path) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(path) ?? Environment.CurrentDirectory };
+            foreach (var argument in parsedArguments.Skip(1)) launch.ArgumentList.Add(argument);
+            try
+            {
+                using var replacement = Process.Start(launch) ?? throw new InvalidOperationException("Windows did not return a process for the restart request.");
+                return new { success = true, accepted = true, completed = true, verified = replacement.Id > 0, oldProcessState = "exited", newProcessId = replacement.Id, executablePath = path, workingDirectory = launch.WorkingDirectory, message = gracefulRequested ? "The original process exited and a replacement process was started." : "The original process was terminated with confirmation and a replacement process was started." };
+            }
+            catch (Exception error)
+            {
+                return new { success = false, accepted = true, completed = true, verified = true, oldProcessState = "exited", restartStarted = false, executablePath = path, message = "The original process exited, but the replacement could not be started: " + Limit(error.Message, 300) };
+            }
+        }
+    }
+
     private static object SystemManagerCloseProcess(JsonElement args)
     {
         RequireSystemCapability("processes", "terminateProcesses");
@@ -1918,6 +2293,7 @@ public sealed partial class AgentHostBridge
             if (Math.Abs((actualStart - expectedStart).TotalSeconds) > 1) throw new InvalidOperationException("The PID now belongs to a different process instance; close was cancelled.");
             string? actualPath = null; try { actualPath = process.MainModule?.FileName; } catch { }
             if (!string.IsNullOrWhiteSpace(expectedPath) && !string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The executable path changed since discovery; close was cancelled.");
+            BlockProcessLevelServiceActions(pid);
             var protectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "svchost", "dwm", "fontdrvhost" };
             if (protectedNames.Contains(process.ProcessName)) throw new UnauthorizedAccessException("RunMind will not send a close request to a protected Windows process.");
             if (process.MainWindowHandle == IntPtr.Zero) return new { success = false, accepted = false, action = "close-process", target = pid.ToString(CultureInfo.InvariantCulture), completed = false, verified = false, requestedState = "closed", actualState = "running-no-main-window", message = "This process has no accessible main window. RunMind did not terminate it." };
@@ -1951,6 +2327,7 @@ public sealed partial class AgentHostBridge
             if (Math.Abs((actualStart - expectedStart).TotalSeconds) > 1) throw new InvalidOperationException("The PID now belongs to a different process instance; termination was cancelled.");
             string? actualPath = null; try { actualPath = process.MainModule?.FileName; } catch { }
             if (!string.IsNullOrWhiteSpace(expectedPath) && !string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The executable path changed since confirmation; termination was cancelled.");
+            BlockProcessLevelServiceActions(pid);
             var protectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "System", "Idle", "Registry", "csrss", "wininit", "winlogon", "services", "lsass", "smss", "svchost", "dwm", "fontdrvhost" };
             if (protectedNames.Contains(process.ProcessName)) throw new UnauthorizedAccessException("RunMind will not terminate a protected Windows process.");
             if (!ConfirmSystemManagerAction("terminateProcesses", "RunMind · Terminate process", $"Process: {process.ProcessName}\nPID: {pid}\nStarted: {actualStart:O}\nExecutable: {actualPath ?? "Unavailable"}\n\nThis action terminates the process immediately and may cause unsaved work to be lost.", alwaysAsk: true))
@@ -2583,6 +2960,19 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
                 machineCpuSharePercent = cpuShareByProcess.TryGetValue(item.ProcessId, out var memoryRowCpuShare) ? memoryRowCpuShare : (double?)null,
                 startedAtUtc = item.StartedAtTicks > 0 ? new DateTimeOffset(item.StartedAtTicks, TimeSpan.Zero) : (DateTimeOffset?)null
             }).ToArray();
+            var processEntries = currentProcesses.Values
+                .OrderByDescending(item => cpuShareByProcess.TryGetValue(item.ProcessId, out var cpuShare) ? cpuShare : 0d).Take(100)
+                .Concat(currentProcesses.Values.OrderByDescending(item => item.WorkingSetBytes).Take(100))
+                .DistinctBy(item => item.ProcessId)
+                .Select(item => new
+                {
+                    processId = item.ProcessId,
+                    name = item.Name,
+                    machineCpuSharePercent = cpuShareByProcess.TryGetValue(item.ProcessId, out var entryCpuShare) ? entryCpuShare : (double?)null,
+                    workingSetBytes = item.WorkingSetBytes,
+                    privateMemoryBytes = item.PrivateMemoryBytes,
+                    startedAtUtc = item.StartedAtTicks > 0 ? new DateTimeOffset(item.StartedAtTicks, TimeSpan.Zero) : (DateTimeOffset?)null
+                }).ToArray();
 
             var currentNetwork = ReadNetworkByteSnapshot();
             double? receiveBytesPerSecond = null;
@@ -2668,7 +3058,8 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
                     totalWorkingSetBytes = totalWorkingSet,
                     totalPrivateMemoryBytes = totalPrivateMemory,
                     topCpu = orderedCpu,
-                    topMemory
+                    topMemory,
+                    entries = processEntries
                 },
                 alerts = new
                 {

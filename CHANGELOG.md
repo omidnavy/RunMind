@@ -1,3 +1,12 @@
+﻿## Process Intelligence follow-up — 2026-11-25
+
+- Extend Live Resource Intelligence with an integrated selectable Process Intelligence list, bounded to the live top-CPU/top-memory candidate union and filterable/sortable in the UI.
+- Add on-demand native inspection of executable path, original command line, owner, session, token elevation/integrity, parent/observed children, hosted services, file metadata, Authenticode signer/status and live CPU/memory.
+- Add Explorer reveal, copy path/command line, confirmed graceful close, separately confirmed force termination and guarded restart. All process operations revalidate PID, name and creation time; service-hosted and protected Windows processes are blocked from process-level actions.
+- Make restart conservative: same account and interactive session only; current RunMind token; original arguments parsed with `CommandLineToArgvW`; executable-folder working-directory fallback; no promise to restore token, cwd, handles, environment or application state.
+- Fail closed when service-host inventory is unavailable. Do not infer the live working directory or per-process GPU metrics. On-demand command-line details are not persisted or exported with telemetry.
+- Add Process Intelligence implementation and Windows acceptance guides. Native .NET/Windows runtime acceptance remains required.
+
 ## P7 Live Resource Intelligence follow-up — 2026-11-25
 
 - Treat clicking **Start monitoring** as explicit authorization for the UI session; remove the extra `resourceMonitoring` checkbox requirement while retaining that capability gate for the finite Agent resource-report tool.

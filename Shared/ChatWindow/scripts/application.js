@@ -714,6 +714,11 @@
     const liveResourceHistory = [];
     const LIVE_RESOURCE_HISTORY_LIMIT = 900;
     let liveResourceProcessSort = 'cpu';
+    let liveResourceProcessFilter = '';
+    let liveResourceSelectedProcess = null;
+    let liveResourceSelectedDetails = null;
+    let liveResourceProcessActionBusy = false;
+    let liveResourceInspectSequence = 0;
     let liveResourcePollTimer = 0;
 
     function liveResourceFormatBytesPerSecond(value) {
@@ -813,20 +818,41 @@
       }
       const body = document.getElementById('liveResourceProcesses');
       if (body) {
-        const source = liveResourceProcessSort === 'memory' ? latest.processes?.topMemory : latest.processes?.topCpu;
-        const processes = Array.isArray(source) ? source : [];
+        const source = Array.isArray(latest.processes?.entries)
+          ? latest.processes.entries
+          : (liveResourceProcessSort === 'memory' ? latest.processes?.topMemory : latest.processes?.topCpu);
+        const sorted = Array.isArray(source) ? [...source] : [];
+        sorted.sort((left, right) => liveResourceProcessSort === 'memory'
+          ? (Number(right.workingSetBytes) || 0) - (Number(left.workingSetBytes) || 0)
+          : (Number(right.machineCpuSharePercent) || 0) - (Number(left.machineCpuSharePercent) || 0));
+        const filter = liveResourceProcessFilter.trim().toLowerCase();
+        const processes = sorted.filter(process => !filter || String(process.name || '').toLowerCase().includes(filter) || String(process.processId ?? '').includes(filter)).slice(0, 100);
         body.replaceChildren();
         if (!processes.length) {
-          const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 5; cell.textContent = 'No process CPU deltas are available yet; wait for another sample or check process permissions.'; row.append(cell); body.append(row);
+          const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 5; cell.textContent = filter ? 'No process in the current live list matches this filter.' : 'No process measurements are available yet; wait for another sample.'; row.append(cell); body.append(row);
         } else {
-          for (const process of processes.slice(0,8)) {
+          const canInspect = !!(systemManagerSettingsCache?.enabled && systemManagerSettingsCache?.groups?.processes && systemManagerSettingsCache?.capabilities?.inspectProcesses);
+          for (const process of processes) {
             const row = document.createElement('tr');
-            const values = [String(process.name || 'Unknown process'), String(process.processId ?? '—'), Number.isFinite(process.machineCpuSharePercent) ? `${process.machineCpuSharePercent.toFixed(2)}%` : '—', liveResourceFormatBytes(process.workingSetBytes), liveResourceFormatBytes(process.privateMemoryBytes)];
+            const selected = liveResourceSelectedProcess && Number(liveResourceSelectedProcess.processId) === Number(process.processId) && String(liveResourceSelectedProcess.startedAtUtc || '') === String(process.startedAtUtc || '');
+            if (selected) row.classList.add('selected');
+            const nameCell = document.createElement('td');
+            const select = document.createElement('button');
+            select.type = 'button'; select.className = 'live-resource-process-select';
+            select.textContent = String(process.name || 'Unknown process');
+            select.disabled = !canInspect || liveResourceProcessActionBusy || !process.startedAtUtc;
+            select.dataset.processId = String(process.processId ?? '');
+            select.dataset.processName = String(process.name || 'Unknown process');
+            select.dataset.startedAtUtc = String(process.startedAtUtc || '');
+            select.title = !process.startedAtUtc ? 'A verified process start time is unavailable; inspection and actions are blocked' : canInspect ? 'Inspect this process' : 'Enable Process Management and Inspect process details in System Manager Settings';
+            nameCell.append(select); row.append(nameCell);
+            const values = [String(process.processId ?? '—'), Number.isFinite(process.machineCpuSharePercent) ? `${process.machineCpuSharePercent.toFixed(2)}%` : '—', liveResourceFormatBytes(process.workingSetBytes), liveResourceFormatBytes(process.privateMemoryBytes)];
             for (const value of values) { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); }
             body.append(row);
           }
         }
       }
+      updateLiveSelectedProcessMetrics(latest);
       const alerts = [];
       if (latest.alerts?.highCpu) alerts.push('CPU is at or above the 85% display threshold.');
       if (latest.alerts?.highMemory) alerts.push('Physical memory is at or above the 90% display threshold.');
@@ -846,6 +872,11 @@
       }
       const progress = document.getElementById('liveResourceProgress');
       if (progress) progress.style.width = '0';
+      liveResourceInspectSequence++;
+      liveResourceSelectedProcess = null;
+      liveResourceSelectedDetails = null;
+      const detailsPanel = document.getElementById('liveResourceProcessDetails');
+      if (detailsPanel) detailsPanel.hidden = true;
       const body = document.getElementById('liveResourceProcesses');
       if (body) {
         const row = document.createElement('tr');
@@ -855,6 +886,152 @@
         row.append(cell);
         body.replaceChildren(row);
       }
+    }
+
+    function setLiveProcessActionStatus(message, warning = false) {
+      const status = document.getElementById('liveResourceProcessActionStatus');
+      if (status) { status.textContent = message; status.classList.toggle('warning', warning); }
+    }
+    function setLiveProcessDetailText(id, value, fallback = 'Unavailable') {
+      const node = document.getElementById(id);
+      if (node) node.textContent = value == null || value === '' ? fallback : String(value);
+    }
+    function liveProcessIdentityArgs() {
+      const selected = liveResourceSelectedProcess;
+      if (!selected) throw new Error('Select a process from the live list first.');
+      return {
+        processId: Number(selected.processId),
+        expectedName: String(selected.name || ''),
+        expectedPath: String(liveResourceSelectedDetails?.executablePath || ''),
+        expectedStartedAtUtc: String(selected.startedAtUtc || '')
+      };
+    }
+    function renderLiveProcessDetails(process, note = '', options = {}) {
+      liveResourceSelectedDetails = process;
+      const panel = document.getElementById('liveResourceProcessDetails');
+      if (panel) panel.hidden = false;
+      setLiveProcessDetailText('liveResourceProcessTitle', `${process.name || 'Process'} · PID ${process.processId}`);
+      setLiveProcessDetailText('liveResourceProcessSubtitle', note || 'Native Windows process inspection');
+      setLiveProcessDetailText('liveResourceProcessParent', process.parentProcessId ? `${process.parentName || 'Unknown'} · PID ${process.parentProcessId}` : 'Unavailable');
+      setLiveProcessDetailText('liveResourceProcessStarted', process.startedAtUtc ? new Date(process.startedAtUtc).toLocaleString() : 'Unavailable');
+      const owner = [process.ownerDomain, process.owner].filter(Boolean).join('\\');
+      setLiveProcessDetailText('liveResourceProcessOwner', owner);
+      setLiveProcessDetailText('liveResourceProcessSession', process.sessionId == null ? 'Unavailable' : String(process.sessionId));
+      const security = [process.integrityLevel || 'Integrity unavailable', process.elevated == null ? 'Elevation unavailable' : (process.elevated ? 'Elevated' : 'Not elevated')].join(' · ');
+      setLiveProcessDetailText('liveResourceProcessSecurity', security);
+      const latest = liveResourceHistory.at(-1);
+      const sampleEntries = latest?.processes?.entries || [];
+      const liveMetrics = sampleEntries.find(item => Number(item.processId) === Number(process.processId) && String(item.startedAtUtc || '') === String(liveResourceSelectedProcess?.startedAtUtc || ''));
+      setLiveProcessDetailText('liveResourceProcessMetrics', liveMetrics ? `${Number.isFinite(liveMetrics.machineCpuSharePercent) ? `${liveMetrics.machineCpuSharePercent.toFixed(2)}% CPU` : 'CPU unavailable'} · ${liveResourceFormatBytes(liveMetrics.workingSetBytes)} RAM` : 'Not in latest sample');
+      setLiveProcessDetailText('liveResourceProcessPath', process.executablePath, 'Executable path unavailable');
+      setLiveProcessDetailText('liveResourceProcessWorkingDirectory', process.workingDirectory || process.workingDirectoryNote, 'Unavailable');
+      setLiveProcessDetailText('liveResourceProcessCommandLine', process.commandLine, 'Command line unavailable');
+      const file = process.file;
+      const fileSummary = file ? [file.productName, file.fileVersion ? `File ${file.fileVersion}` : '', file.sizeBytes != null ? liveResourceFormatBytes(file.sizeBytes) : '', file.companyName].filter(Boolean).join(' · ') : '';
+      setLiveProcessDetailText('liveResourceProcessFile', fileSummary || file?.note, 'File metadata unavailable');
+      const signature = [process.signatureStatus, process.signatureSubject].filter(Boolean).join(' · ');
+      setLiveProcessDetailText('liveResourceProcessSignature', signature, 'Signature status unavailable');
+      const children = Array.isArray(process.children) ? process.children.map(child => `${child.name || 'Unknown'} (${child.processId})`).join(', ') : '';
+      setLiveProcessDetailText('liveResourceProcessChildren', children, 'None observed');
+      const services = Array.isArray(process.services) ? process.services.map(service => `${service.displayName || service.name} · ${service.state || 'Unknown'}`).join(', ') : '';
+      setLiveProcessDetailText('liveResourceProcessServices', process.serviceInventoryAvailable === false ? 'Service inventory unavailable; this is not proof that no services are hosted.' : services, 'None observed');
+      const canInspect = !!(systemManagerSettingsCache?.enabled && systemManagerSettingsCache?.groups?.processes && systemManagerSettingsCache?.capabilities?.inspectProcesses);
+      const canAct = !!(canInspect && systemManagerSettingsCache?.capabilities?.terminateProcesses);
+      const hasPath = !!process.executablePath;
+      const serviceInventoryAvailable = process.serviceInventoryAvailable === true;
+      const serviceHosted = Array.isArray(process.services) && process.services.length > 0;
+      for (const [id, enabled] of Object.entries({
+        liveResourceProcessReveal: hasPath && canInspect,
+        liveResourceProcessCopyPath: hasPath,
+        liveResourceProcessCopyCommand: !!process.commandLine,
+        liveResourceProcessClose: canAct && serviceInventoryAvailable && !serviceHosted,
+        liveResourceProcessTerminate: canAct && serviceInventoryAvailable && !serviceHosted,
+        liveResourceProcessRestart: canAct && serviceInventoryAvailable && !serviceHosted && hasPath && !!process.commandLine
+      })) {
+        const button = document.getElementById(id);
+        if (button) button.disabled = !enabled || liveResourceProcessActionBusy;
+      }
+      if (!options.preserveStatus) {
+        if (!serviceInventoryAvailable) setLiveProcessActionStatus('Windows could not verify whether this process hosts services. Process-level close, terminate and restart are disabled for safety.', true);
+        else if (serviceHosted) setLiveProcessActionStatus('This process hosts Windows services. Use the dedicated service controls; process-level close, terminate and restart are blocked.', true);
+        else if (!canInspect) setLiveProcessActionStatus('Enable Process Management and Inspect process details in System Manager Settings to inspect processes.', true);
+        else if (!canAct) setLiveProcessActionStatus('Inspection is available. Enable process termination in System Manager Settings to unlock close, terminate and restart actions.');
+        else setLiveProcessActionStatus('Actions are confirmed by the native Windows host. Restart uses the current RunMind token and defaults to the executable folder if the original working directory is unavailable.');
+      }
+    }
+    async function inspectLiveResourceProcess(process) {
+      if (!process || !process.startedAtUtc) { setLiveProcessActionStatus('This process does not have a verifiable start time. RunMind will not inspect or act on a PID without an identity timestamp.', true); return; }
+      const sequence = ++liveResourceInspectSequence;
+      liveResourceSelectedProcess = { processId: Number(process.processId), name: String(process.name || ''), startedAtUtc: String(process.startedAtUtc) };
+      liveResourceSelectedDetails = null;
+      const panel = document.getElementById('liveResourceProcessDetails');
+      if (panel) panel.hidden = false;
+      setLiveProcessDetailText('liveResourceProcessTitle', `${liveResourceSelectedProcess.name} · PID ${liveResourceSelectedProcess.processId}`);
+      setLiveProcessDetailText('liveResourceProcessSubtitle', 'Loading native process details…');
+      for (const id of ['liveResourceProcessParent','liveResourceProcessStarted','liveResourceProcessOwner','liveResourceProcessSession','liveResourceProcessSecurity','liveResourceProcessMetrics','liveResourceProcessPath','liveResourceProcessWorkingDirectory','liveResourceProcessCommandLine','liveResourceProcessFile','liveResourceProcessSignature','liveResourceProcessChildren','liveResourceProcessServices']) setLiveProcessDetailText(id, 'Loading…');
+      setLiveProcessActionStatus('Reading process metadata from Windows…');
+      try {
+        const result = await callAgentHost('systemManager.process.inspect', liveProcessIdentityArgs(), undefined, 30000);
+        if (sequence !== liveResourceInspectSequence) return;
+        if (!result?.success || !result.process) throw new Error(result?.message || 'The native host did not return process details.');
+        renderLiveProcessDetails(result.process, result.metadataComplete ? 'Native Windows process inspection' : 'Partial inspection · some Windows metadata was unavailable');
+      } catch (error) {
+        if (sequence !== liveResourceInspectSequence) return;
+        setLiveProcessDetailText('liveResourceProcessSubtitle', 'Inspection failed');
+        setLiveProcessActionStatus(`Could not inspect process: ${error?.message || error}`, true);
+      }
+    }
+    function updateLiveSelectedProcessMetrics(latest) {
+      if (!liveResourceSelectedProcess || !liveResourceSelectedDetails) return;
+      const entries = Array.isArray(latest?.processes?.entries) ? latest.processes.entries : [];
+      const entry = entries.find(item => Number(item.processId) === Number(liveResourceSelectedProcess.processId) && String(item.startedAtUtc || '') === String(liveResourceSelectedProcess.startedAtUtc || ''));
+      setLiveProcessDetailText('liveResourceProcessMetrics', entry ? `${Number.isFinite(entry.machineCpuSharePercent) ? `${entry.machineCpuSharePercent.toFixed(2)}% CPU` : 'CPU unavailable'} · ${liveResourceFormatBytes(entry.workingSetBytes)} RAM` : 'Not in latest sample');
+    }
+    async function runLiveProcessAction(action) {
+      if (liveResourceProcessActionBusy || !liveResourceSelectedDetails) return;
+      let identity;
+      try { identity = liveProcessIdentityArgs(); } catch (error) { setLiveProcessActionStatus(error.message, true); return; }
+      const operations = {
+        reveal: ['systemManager.process.reveal', 'Opening executable location…'],
+        close: ['systemManager.process.close', 'Requesting graceful close…'],
+        terminate: ['systemManager.process.terminate', 'Requesting force termination…'],
+        restart: ['systemManager.process.restart', 'Preparing confirmed restart…']
+      };
+      const selected = operations[action];
+      if (!selected) return;
+      liveResourceProcessActionBusy = true;
+      setLiveProcessActionStatus(selected[1]);
+      renderLiveProcessDetails(liveResourceSelectedDetails, '', { preserveStatus: true });
+      setLiveProcessActionStatus(selected[1]);
+      try {
+        const result = await callAgentHost(selected[0], identity, undefined, action === 'restart' ? 45000 : 20000);
+        const message = result?.message || (result?.success ? 'The native action completed.' : 'The native action did not complete.');
+        setLiveProcessActionStatus(message, !result?.success && !result?.cancelled);
+        if (action === 'restart' && result?.success) {
+          liveResourceSelectedProcess = null;
+          liveResourceSelectedDetails = null;
+          const panel = document.getElementById('liveResourceProcessDetails');
+          if (panel) panel.hidden = true;
+        } else if (action === 'close' || action === 'terminate') {
+          if (result?.verified || result?.actualState === 'exited') {
+            liveResourceSelectedProcess = null;
+            liveResourceSelectedDetails = null;
+            const panel = document.getElementById('liveResourceProcessDetails');
+            if (panel) panel.hidden = true;
+          }
+        }
+      } catch (error) {
+        setLiveProcessActionStatus(`${action === 'restart' ? 'Restart' : action === 'reveal' ? 'Open location' : action === 'close' ? 'Graceful close' : 'Termination'} failed: ${error?.message || error}`, true);
+      } finally {
+        liveResourceProcessActionBusy = false;
+        if (liveResourceSelectedDetails) renderLiveProcessDetails(liveResourceSelectedDetails, '', { preserveStatus: true });
+        renderLiveResourceMonitor();
+      }
+    }
+    async function copyLiveProcessValue(value, label) {
+      if (!value) return;
+      try { await navigator.clipboard.writeText(String(value)); setLiveProcessActionStatus(`${label} copied to the clipboard.`); }
+      catch (error) { setLiveProcessActionStatus(`Could not copy ${label.toLowerCase()}: ${error?.message || error}`, true); }
     }
 
     async function pollLiveResourceMonitor() {
@@ -967,6 +1144,29 @@
       $('#liveResourceSortCpu')?.setAttribute('aria-pressed', 'false');
       renderLiveResourceMonitor();
     });
+    $('#liveResourceProcessSearch')?.addEventListener('input', event => { liveResourceProcessFilter = String(event.target.value || '').slice(0,120); renderLiveResourceMonitor(); });
+    $('#liveResourceProcesses')?.addEventListener('click', event => {
+      const button = event.target instanceof Element ? event.target.closest('button[data-process-id]') : null;
+      if (!button) return;
+      const process = {
+        processId: Number(button.dataset.processId),
+        name: String(button.dataset.processName || ''),
+        startedAtUtc: String(button.dataset.startedAtUtc || '')
+      };
+      void inspectLiveResourceProcess(process);
+    });
+    $('#liveResourceProcessDetailsClose')?.addEventListener('click', () => {
+      liveResourceInspectSequence++;
+      liveResourceSelectedProcess = null; liveResourceSelectedDetails = null;
+      const panel = $('#liveResourceProcessDetails'); if (panel) panel.hidden = true;
+      renderLiveResourceMonitor();
+    });
+    $('#liveResourceProcessReveal')?.addEventListener('click', () => { void runLiveProcessAction('reveal'); });
+    $('#liveResourceProcessCopyPath')?.addEventListener('click', () => { void copyLiveProcessValue(liveResourceSelectedDetails?.executablePath, 'Executable path'); });
+    $('#liveResourceProcessCopyCommand')?.addEventListener('click', () => { void copyLiveProcessValue(liveResourceSelectedDetails?.commandLine, 'Command line'); });
+    $('#liveResourceProcessClose')?.addEventListener('click', () => { void runLiveProcessAction('close'); });
+    $('#liveResourceProcessTerminate')?.addEventListener('click', () => { void runLiveProcessAction('terminate'); });
+    $('#liveResourceProcessRestart')?.addEventListener('click', () => { void runLiveProcessAction('restart'); });
     window.addEventListener('pagehide', () => {
       if (!liveResourceSession) return;
       try { window.chrome?.webview?.postMessage({ type: 'runmind.agentHostRequest', requestId: `live-monitor-stop-${Date.now()}`, operation: 'systemManager.liveResources.stop', args: { session_id: liveResourceSession.sessionId } }); } catch (_) {}

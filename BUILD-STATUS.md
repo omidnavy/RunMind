@@ -1,16 +1,19 @@
-# P7 Live Resource Intelligence — implementation status and follow-up (2026-11-25)
+﻿# RunMind 3.4.0 — Process Intelligence source status (2026-11-25)
 
-- The System Manager flyout's Live Monitor is explicitly user-started. The Start click is the authorization; only the System Manager master switch is required. The separate `resourceMonitoring` capability still gates the finite Agent resource-report tool (maximum 60 seconds).
-- Closing the System Manager flyout or switching its tabs no longer stops sampling. The WebView keeps polling and accumulating the bounded history while the flyout is hidden; reopening displays the current readings and session trace. Explicit Stop, duration expiry, page/WebView teardown or native-host disposal ends the session.
-- Added optional Windows PDH GPU engine utilization and dedicated/shared GPU adapter-memory usage. New charts and current values are included in the dashboard and CSV export. Counters are driver-dependent; missing values stay unavailable and no GPU memory-capacity percentage is inferred.
-- Corrected the System Manager tab grid to three columns and the Deep Research tab grid to four columns.
-- Native sessions remain bounded to 30–900 seconds with 1/2/5-second polling; history remains capped at 900 in-memory samples. No new runtime dependency, background service, or persistent telemetry store was added.
-- Portable validation on Node.js v22.16.0: **321/321** full regression tests passed; **14/14** focused P7 tests passed; **62/62** JavaScript/CJS/MJS syntax checks passed; **4/4** JSON files parsed; **13/13** XML/XAML/MSBuild/manifest/SVG files parsed; **22/22** CSS files parsed with zero top-level syntax errors.
-- The updated source archive is extracted and revalidated before delivery; its SHA-256 is provided in the adjacent `.sha256` sidecar.
-- .NET 10 compilation, real Windows PDH/GPU counter behavior, telemetry overhead and interactive Windows acceptance are **not verified in this environment** because the .NET SDK/MSBuild and Windows runtime are unavailable. Complete `docs/P7-WINDOWS-ACCEPTANCE.md` on the target Windows machine.
+- Input baseline: the complete README Refresh source package, including the refreshed product-oriented README and screenshot. Existing RunMind hosts, the Live Resource Intelligence v2 work, and prior documentation are retained.
+- Integrated **Process Intelligence** into the Live Monitor card. The live list is a bounded CPU/memory candidate union with filter and sort; selecting a process performs on-demand native inspection.
+- Inspection includes PID/name/start-time identity, executable path, original command line/arguments, owner/session, token elevation/integrity, parent/observed children, hosted services, file metadata, Authenticode signer/status, thread/handle counts and live CPU/memory values where Windows permits.
+- Added open-executable-location, copy path/command line, graceful close, force terminate and guarded restart. Every state-changing operation requires fresh native confirmation. Process actions revalidate PID/name/start time; service-hosted and protected Windows processes are blocked; uncertain service inventory fails closed.
+- Restart requires both `inspectProcesses` and `terminateProcesses`, same Windows account and interactive session, reconstructable executable path/arguments, a graceful-close attempt, and a separate confirmation before force termination. The replacement uses the current RunMind token and executable-folder working directory; the original token, working directory and other process state are not reconstructed.
+- Working directory and per-process GPU attribution are explicitly unavailable. Command lines are sensitive; details are requested only on selection and are not written to telemetry or exported to CSV.
+- Added `docs/PROCESS-INTELLIGENCE.md` and `docs/PROCESS-INTELLIGENCE-WINDOWS-ACCEPTANCE.md`; refreshed README, changelog, release notes, feature matrix and Live Resource Intelligence guide.
+- Portable validation in this environment: **324/324** full Node regression tests passed; **43/43** focused Live Resource Intelligence/System Manager tests passed; **62/62** JavaScript/CJS syntax checks passed; **4/4** JSON files parsed; **11/11** XML/XAML/MSBuild/manifest files parsed; **22/22** CSS files parsed with zero syntax errors (**847** top-level rules).
+- ZIP integrity and SHA-256 sidecar verification are performed on the final archive before delivery.
+- .NET 10 compilation, native C# interop, process token/service queries, and live process actions are **not verified here**. This environment has no .NET SDK/MSBuild or Windows runtime. Complete the new Process Intelligence Windows acceptance checklist and existing `docs/P7-WINDOWS-ACCEPTANCE.md` on the target Windows machine.
 
 ---
 ---
+
 
 # RunMind 3.4.0 — Complete Runner Build Status
 
