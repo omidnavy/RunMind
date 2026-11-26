@@ -654,7 +654,7 @@ public sealed partial class AgentHostBridge
             new("notepad", "Windows Notepad", "notepad", new Dictionary<string,string[]> { ["open-file"] = new[] { "{target}" } }, true),
             new("file-explorer", "File Explorer", "explorer", new Dictionary<string,string[]> { ["open-folder"] = new[] { "{target}" }, ["select-file"] = new[] { "/select,{target}" } }, true),
             new("blender", "Blender", "blender", new Dictionary<string,string[]> { ["open-file"] = new[] { "{target}" } }, true),
-            new("runmind", "RunMind", "RunMind", new Dictionary<string,string[]> { ["send-prompt"] = new[] { "--prompt", "{target}" } }, true),
+            new("runmind", "RunMind", "RunMind", new Dictionary<string,string[]> { ["send-prompt"] = new[] { "--prompt", "{target}" }, ["open-session"] = new[] { "--session-file", "{target}" }, ["new-conversation"] = new[] { "--new-conversation" } }, true),
         };
         Directory.CreateDirectory(SystemManagerAdaptersRoot);
         EnsureNoReparseAncestors(SystemManagerAdaptersRoot);
@@ -673,7 +673,7 @@ public sealed partial class AgentHostBridge
                     var operations = new Dictionary<string,string[]>(StringComparer.Ordinal);
                     foreach (var op in ops.EnumerateObject().Take(8))
                     {
-                        if (op.Name is not ("open-file" or "open-folder" or "open-url" or "select-file" or "send-prompt")) continue;
+                        if (op.Name is not ("open-file" or "open-folder" or "open-url" or "select-file" or "send-prompt" or "open-session" or "new-conversation")) continue;
                         if (op.Value.ValueKind != JsonValueKind.Array || op.Value.GetArrayLength() is < 1 or > 20) continue;
                         var values = op.Value.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String).Select(v => v.GetString() ?? "").ToArray();
                         if (values.Any(v => v.Length > 1024 || System.Text.RegularExpressions.Regex.IsMatch(v, "\\{(?!target\\}|line\\})"))) continue;
@@ -726,7 +726,7 @@ public sealed partial class AgentHostBridge
         var operations = new JsonObject();
         foreach (var operation in operationsInput.EnumerateObject().Take(8))
         {
-            if (operation.Name is not ("open-file" or "open-folder" or "open-url") && !(builtIn is not null && operation.Name is "select-file" or "send-prompt")) throw new InvalidDataException($"Unsupported adapter operation '{operation.Name}'.");
+            if (operation.Name is not ("open-file" or "open-folder" or "open-url") && !(builtIn is not null && operation.Name is "select-file" or "send-prompt" or "open-session" or "new-conversation")) throw new InvalidDataException($"Unsupported adapter operation '{operation.Name}'.");
             if (operation.Value.ValueKind != JsonValueKind.Array || operation.Value.GetArrayLength() is < 1 or > 20) throw new InvalidDataException("Each adapter operation must contain 1–20 argument templates.");
             var values = new JsonArray();
             foreach (var argument in operation.Value.EnumerateArray())
@@ -799,7 +799,7 @@ public sealed partial class AgentHostBridge
             operations = item.operations.Keys.Select(operation => new
             {
                 name = operation,
-                required = new[] { "target" },
+                required = operation == "new-conversation" ? Array.Empty<string>() : new[] { "target" },
                 optional = operation == "open-file" ? new[] { "line" } : Array.Empty<string>(),
                 access = operation == "open-url" ? "external-navigation" : "local-file-system",
                 stateChanging = true,
@@ -828,6 +828,19 @@ public sealed partial class AgentHostBridge
         else if (operation == "send-prompt")
         {
             if (target.Length is < 1 or > 12000 || target.Any(character => char.IsControl(character) && character is not ('\r' or '\n' or '\t'))) throw new InvalidDataException("A RunMind prompt must contain 1–12,000 printable characters.");
+        }
+        else if (operation == "open-session")
+        {
+            if (!Path.IsPathFullyQualified(target) || !File.Exists(target) || !Path.GetExtension(target).Equals(".runmind", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Open-session requires an existing fully-qualified .runmind file.");
+            EnsureNoReparseAncestors(target);
+            var info = new FileInfo(target);
+            if (info.Length is < 2 or > 16 * 1024 * 1024) throw new InvalidDataException("The .runmind session file must be between 2 bytes and 16 MB.");
+            using var session = JsonDocument.Parse(File.ReadAllText(target, Encoding.UTF8));
+            if (session.RootElement.ValueKind != JsonValueKind.Object) throw new InvalidDataException("The .runmind session must contain a JSON object.");
+        }
+        else if (operation == "new-conversation")
+        {
+            if (target.Length != 0) throw new InvalidDataException("New-conversation does not accept a target.");
         }
         else
         {

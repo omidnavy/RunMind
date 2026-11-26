@@ -6,6 +6,7 @@
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
 | Hosts | PowerToys Command Palette | Preserved | Shared Agent Core |
 | Developer | Project index and search | Implemented with limits | Persistent local index; bounded scan; regex-based symbol/import extraction, not AST/compiler semantics |
+| Developer | Coordinated multi-file editing | Added in integration pass | 2–20 files, one approval, snapshot checks, per-file backups, best-effort rollback; sequential writes are not atomic |
 | Developer | Static project validation | Implemented with limits | JSON/XML and selected manifest checks; test discovery; package manager/lockfile detection; no build/test execution |
 | Developer | Approved PowerShell/native execution | Implemented | Existing 2.4.0 bridge |
 | Developer | Build/test workflows | Implemented with limits | Workflow-guided approved PowerShell/native execution; commands are selected from project evidence and require fresh approval |
@@ -33,6 +34,7 @@
 | System Manager | Application lifecycle | Implemented with limits | Reuse/activate, new-window allowlist, new-process, per-app preferences and graceful close; no force-kill |
 | System Manager | Packaged Windows apps | Implemented with limits | AppsFolder/AUMID activation; no generic arguments or visible-window verification |
 | System Manager | Application adapters | Implemented | Built-ins plus user JSON manifests with argument templates; no scripts/shell |
+| System Manager | RunMind conversation adapter | Added in integration pass | Send prompt, open validated `.runmind` session in Standalone, or start a new conversation window; no attach to already-running WebView sessions |
 | Agent | Current tool inventory | Implemented | Lists exact active Agent/MCP/host/workspace tool definitions |
 | Skills | Global discovery/loading | Implemented | Works without an authorized project folder |
 | System Manager | GUI automation/admin/system changes | Not included | Explicitly out of scope |
@@ -45,7 +47,7 @@
 | Area | Capability | Status in 2.6.1 | Notes |
 |---|---|---|---|
 | System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
-| System Manager | First-party RunMind adapter | Implemented | Sends a prompt through the existing `--prompt` startup argument |
+| System Manager | First-party RunMind adapter | Extended | Sends prompts, opens a validated `.runmind` session, or starts a fresh Standalone conversation |
 | Agent | Single leading system message | Implemented | System Manager policy merged into first message for model-template compatibility |
 | Agent | Structured application action outcomes | Implemented | Process startup, activation, handoff, window and navigation reported separately |
 

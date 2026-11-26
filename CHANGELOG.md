@@ -6,7 +6,10 @@
 - Detect npm, pnpm, Yarn, and Bun using package metadata/lockfiles; expose only script commands backed by declared `package.json` scripts. Suggestions are informational and are not executed by indexing or static validation.
 - Add a bounded, best-effort local import relationship summary for relative JavaScript/TypeScript/Python imports. It is explicitly not AST/compiler-resolved analysis.
 - Extend project validation results with toolchain evidence, script command suggestions, and import-graph summary while preserving its non-executing contract.
-- Harden Docker/Podman CLI execution with asynchronous process waiting, cancellation, a 30-second timeout, process-tree cleanup, and bounded stdout/stderr capture.
+- Harden Docker/Podman CLI execution with asynchronous process waiting, user-configurable timeout, cancellation, process-tree cleanup, and bounded stdout/stderr capture.
+- Add coordinated multi-file editing for 2–20 existing workspace files: one approval, path locking, pre-write snapshot checks, per-file recovery backups, and best-effort rollback on write failure. Writes are sequential, not filesystem-atomic.
+- Extend the built-in RunMind adapter with `open-session` for validated `.runmind` files and `new-conversation`, alongside `send-prompt`. The Standalone host restores a bounded session file as actual conversation state.
+- Retain and smoke-test the native Git workflow surface (status/diff/log/show/branches/remotes, stage/unstage/commit, branch operations, stash, remote operations, and destructive operations with fresh approval).
 - Document remaining Phase 1 limits and the integrated repository workflow validation approach.
 
 ## 2.6.3 — Developer Intelligence & System Manager

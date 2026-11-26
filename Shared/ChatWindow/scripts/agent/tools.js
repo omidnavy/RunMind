@@ -535,6 +535,61 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
             return { edited: args.path, previousBytes: currentFile.size, bytes: new Blob([content]).size, backup };
           });
         }
+        case 'edit_files': {
+          if (!agentDirectoryHandle) throw new Error('No task folder selected.');
+          const changes = Array.isArray(args.files) ? args.files : [];
+          if (changes.length < 2 || changes.length > 20) throw new Error('A multi-file edit must contain between 2 and 20 files.');
+          const paths = changes.map(item => String(item?.path || ''));
+          const normalized = paths.map(path => safeRelativePath(path).join('/').toLowerCase());
+          if (new Set(normalized).size !== normalized.length) throw new Error('The multi-file edit contains duplicate paths.');
+          const totalBytes = changes.reduce((total, item) => total + new Blob([String(item?.content ?? '')]).size, 0);
+          if (totalBytes > 8 * 1024 * 1024) throw new Error('The combined multi-file edit is limited to 8 MB.');
+          return await withWorkspaceFileMutationLocks(paths, async () => {
+            const snapshots = [];
+            for (const item of changes) {
+              const path = String(item.path);
+              const content = String(item.content ?? '');
+              if (new Blob([content]).size > 2 * 1024 * 1024) throw new Error(`'${path}' exceeds the 2 MB per-file edit limit.`);
+              const prior = await readWorkspaceText(path, 2 * 1024 * 1024);
+              if (prior.source !== 'workspace' || !prior.handle) throw new Error(`'${path}' is not an editable file in the selected workspace.`);
+              snapshots.push({ path, content, prior, backup: null });
+            }
+            const summary = snapshots.map(item => `${item.path}: ${item.prior.file.size.toLocaleString()} → ${new Blob([item.content]).size.toLocaleString()} bytes`).join('\n');
+            const approved = await requireAgentApproval({ title: `Apply ${snapshots.length} file changes?`, subtitle: 'Multi-file edit · all originals are backed up before writing', detail: `${summary}\n\nCombined new content: ${totalBytes.toLocaleString()} bytes`, risky: true }, signal);
+            if (!approved) return { cancelled: true, changed: [], backups: [] };
+
+            for (const item of snapshots) {
+              const current = await item.prior.handle.getFile();
+              if (!(await workspaceFilesMatchSnapshot(item.prior.file, current))) throw new Error(`'${item.path}' changed while approval was pending. No files were modified.`);
+            }
+            for (const item of snapshots) item.backup = await createWorkspaceBackup(item.path, item.prior.file, 'multi-edit');
+            for (const item of snapshots) {
+              const current = await item.prior.handle.getFile();
+              if (!(await workspaceFilesMatchSnapshot(item.prior.file, current))) throw new Error(`'${item.path}' changed while recovery backups were being created. No files were modified; backups were preserved.`);
+            }
+
+            const changed = [];
+            try {
+              for (const item of snapshots) {
+                const writable = await item.prior.handle.createWritable({ keepExistingData: false });
+                changed.push(item.path);
+                try { await writable.write(item.content); await writable.close(); }
+                catch (error) { try { await writable.abort(); } catch (_) {} throw error; }
+              }
+            } catch (error) {
+              const rollback = [];
+              for (const item of snapshots.filter(entry => changed.includes(entry.path)).reverse()) {
+                try {
+                  const writable = await item.prior.handle.createWritable({ keepExistingData: false });
+                  try { await writable.write(item.prior.file); await writable.close(); }
+                  catch (rollbackError) { try { await writable.abort(); } catch (_) {} throw rollbackError; }
+                } catch (rollbackError) { rollback.push({ path: item.path, error: String(rollbackError?.message || rollbackError) }); }
+              }
+              throw new Error(`Multi-file write failed: ${error?.message || error}. ${rollback.length ? `Rollback was incomplete for: ${rollback.map(item => item.path).join(', ')}.` : 'Previously written files were restored from their in-memory snapshots.'} Recovery backups were preserved.`);
+            }
+            return { edited: changed, count: changed.length, bytes: totalBytes, backups: snapshots.map(item => ({ path: item.path, ...item.backup })), rollback: 'not-needed' };
+          });
+        }
         case 'restore_file_backup': {
           const destination = String(args.path || '');
           return await withWorkspaceFileMutationLock(destination, async () => {

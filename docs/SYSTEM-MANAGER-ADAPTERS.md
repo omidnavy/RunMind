@@ -44,3 +44,8 @@ Bundled skills include `system-management`, `container-management`, `runmind-man
 ## RunMind conversation boundary
 
 The current RunMind adapter supports prompt handoff through the existing `--prompt` startup argument. Conversation sessions and branch data are stored in WebView IndexedDB/local storage; native open-existing/create/export conversation IPC is not part of this release. Use the existing in-app conversation save/open controls for `.runmind` files.
+
+
+## RunMind conversation operations
+
+The built-in RunMind adapter supports three operations: `send-prompt` opens a RunMind window and submits a prompt, `open-session` opens an existing `.runmind` conversation file as a resumable session, and `new-conversation` opens a fresh chat window. Session files must be fully-qualified existing paths, contain a JSON object, and be no larger than 16 MB. The adapter validates the file before launch; the Standalone host validates it again before restoring the conversation. These operations launch the Standalone executable discovered by System Manager; they do not attach to or mutate an already-open window.

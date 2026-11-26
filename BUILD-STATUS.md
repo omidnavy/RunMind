@@ -6,15 +6,19 @@
 - Added Node package script command suggestions based only on the declared package manager and scripts in `package.json`. Static validation does not execute them.
 - Added best-effort local import relationship summaries for relative JavaScript/TypeScript/Python imports. These are heuristic leads, not AST/compiler-resolved references.
 - Extended project validation with toolchain evidence, declared script commands, and local import graph summary.
-- Refactored Docker/Podman CLI actions to use asynchronous waiting, cancellation, a 30-second timeout, process-tree cleanup, and bounded stdout/stderr capture.
+- Refactored Docker/Podman CLI actions to use asynchronous waiting, user-configurable timeout, cancellation, process-tree cleanup, and bounded stdout/stderr capture.
+- Added coordinated multi-file editing with one approval, stable path locks, snapshot checks, per-file backups, and best-effort rollback (sequential, not atomic).
+- Extended the built-in RunMind adapter to send prompts, open bounded/validated `.runmind` session files in Standalone, and open a new conversation window.
+- Existing Git bridge exposes repository selection/clone, read operations, stage/unstage/commit, branch/stash/merge/revert/cherry-pick and remote operations; destructive operations require fresh approval.
 - Added `docs/PHASE1-INTEGRATED-VALIDATION.md` with repository-level workflows and cross-host acceptance criteria.
 
 ### Validation status for this source snapshot
 
 - JavaScript syntax: checked for all 17 shared ChatWindow script files.
-- JSON/XML: all 2 JSON files and 6 project/XAML/manifest XML files parsed successfully.
+- JSON/XML: all 2 JSON files and 7 project/XAML/manifest XML files parsed successfully.
 - Project-index helper behavior: pnpm declared-manager detection, Bun `.lockb` filename detection, and relative JS import-edge detection passed targeted Node checks.
 - Changed C# files: lexical delimiter scan passed; this is not a C# compilation.
+- Git workflow smoke: local init/status/diff/stage/unstage/commit/log/show/branch-switch/stash semantics passed.
 - .NET SDK/C# compiler: unavailable in this environment. No Windows build or runtime test is claimed.
 - ZIP integrity and SHA-256: verified in the accompanying release report.
 
