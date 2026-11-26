@@ -80,7 +80,7 @@
     }
     async function executeAgentToolInternal(name, args, signal, assistantMessage, taskContext = {}) {
       if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
-      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'project_understanding', 'project_diagnostics', 'project_mission_control', 'project_test_impact', 'project_release_readiness', 'node_debugger_list_sessions', 'node_debugger_events', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_find_port_owner', 'system_manager_diagnostics']);
+      const readOnlyTools = new Set(['current_datetime', 'calculate', 'regex_test', 'diagnose_connection', 'validate_json_schema', 'read_pdf', 'inspect_archive', 'infer_dataset_schema', 'fetch_webpage', 'web_search', 'list_files', 'read_file', 'search_files', 'file_info', 'checksum_file', 'compare_files', 'project_overview', 'project_index', 'project_search', 'project_index_overview', 'project_symbol_graph', 'javascript_refactor', 'project_validate', 'project_understanding', 'project_diagnostics', 'project_mission_control', 'project_test_impact', 'project_release_readiness', 'node_debugger_list_sessions', 'node_debugger_events', 'list_developer_workflows', 'start_developer_workflow', 'validate_json', 'transform_json', 'validate_dataset', 'verify_artifact', 'analyze_csv', 'compare_datasets', 'generate_statistics', 'compare_folders', 'find_duplicates', 'image_metadata', 'read_image', 'extract_links', 'extract_metadata', 'extract_tables', 'read_sitemap', 'read_rss_feed', 'page_to_markdown', 'check_links', 'compare_webpages', 'crawl_website', 'research_topic', 'system_manager_find_applications', 'system_manager_list_startup_applications', 'system_manager_list_adapters', 'system_manager_list_processes', 'system_manager_find_port_owner', 'system_manager_diagnostics', 'system_manager_read_event_log', 'system_manager_investigate_crashes', 'system_manager_resource_monitor', 'system_manager_storage_health', 'system_manager_security_posture', 'system_manager_targeted_network_diagnostics']);
       if (name.startsWith('system_manager_')) {
         if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in the System Manager menu first.');
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
@@ -111,6 +111,24 @@
         }
         
         if (name === 'system_manager_diagnostics') return await callAgentHost('systemManager.diagnostics',{},signal);
+        if (name === 'system_manager_read_event_log') return await callAgentHost('systemManager.eventLog',{log_name:String(args.log_name||'Application'),hours:args.hours,max_events:args.max_events,event_id:args.event_id,query:String(args.query||'')},signal);
+        if (name === 'system_manager_investigate_crashes') return await callAgentHost('systemManager.crashes',{days:args.days,max_events:args.max_events},signal);
+        if (name === 'system_manager_resource_monitor') return await callAgentHost('systemManager.resources',{duration_seconds:args.duration_seconds,interval_seconds:args.interval_seconds},signal);
+        if (name === 'system_manager_scheduled_tasks') {
+          const action=String(args.action||'list').toLowerCase();
+          if (action==='list' && !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
+            const approved=await requireAgentApproval({title:'Allow read-only Scheduled Task inventory?',subtitle:'System Manager · Scheduled Tasks',detail:JSON.stringify({query:args.query||'',max_results:args.max_results||100}),allowForTask:true,toolName:name},signal);
+            if(!approved) return {cancelled:true,message:'Scheduled Task inventory was declined.'};
+          }
+          return await callAgentHost('systemManager.scheduledTasks',{action,query:String(args.query||''),max_results:args.max_results,task_name:String(args.task_name||''),task_path:String(args.task_path||'')},signal);
+        }
+        if (name === 'system_manager_storage_health') return await callAgentHost('systemManager.storage',{},signal);
+        if (name === 'system_manager_security_posture') return await callAgentHost('systemManager.security',{},signal);
+        if (name === 'system_manager_targeted_network_diagnostics') {
+          const host=String(args.host||'').trim();
+          if(!host) throw new Error('A hostname or IP address is required.');
+          return await callAgentHost('systemManager.networkProbe',{host,port:args.port,timeout_seconds:args.timeout_seconds},signal);
+        }
         if (name === 'system_manager_service_action') {
           const action = String(args.action || '').toLowerCase();
           if (['list','inspect','config','dependents'].includes(action) && !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {

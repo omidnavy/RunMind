@@ -1,11 +1,11 @@
-# RunMind 2.8.1 — P1 Windows acceptance
+# RunMind 2.9.0 — P1 regression acceptance (carried into P2)
 
 Run after the P0 Windows acceptance checklist. Use the same canonical workspace in all three hosts.
 
 ## Build gate
 
 - [ ] Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10.
-- [ ] Confirm Standalone, PowerToys Run and Command Palette compile and package versions agree on 2.8.1.
+- [ ] Confirm Standalone, PowerToys Run and Command Palette compile and package versions agree on 2.9.0; Command Palette Appx version is 2.9.0.0.
 
 ## Project index and understanding
 
@@ -13,6 +13,7 @@ Run after the P0 Windows acceptance checklist. Use the same canonical workspace 
 - [ ] Confirm the index remains local to the workspace and refreshes incrementally.
 - [ ] Run the Project Understanding workflow; verify entry-point candidates, module boundaries, import direction, high-coupling modules and cycles against actual source.
 - [ ] Confirm Python/C#/Go/Rust/Java or other unsupported source files remain generic text and are not parsed or assigned language-specific toolchains.
+- [ ] Confirm SVG files are indexed as vector assets with local references but are not parsed as executable programming language.
 
 ## Project Diagnostics
 

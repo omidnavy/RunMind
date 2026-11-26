@@ -1,3 +1,19 @@
+# RunMind Changelog
+
+## 2.9.0 — P2 System Manager Intelligence + SVG asset understanding
+
+- Preserve the complete P0 reliability, P1 Project Intelligence and 2.8.1 Mission Control refinement source across all three Windows hosts.
+- Add separately opt-in Windows Event Log investigation, restricted to Application/System/Setup with bounded ranges and result counts.
+- Add bounded crash investigation correlating Application Error, Windows Error Reporting, .NET Runtime and Service Control Manager events.
+- Add finite system CPU/process CPU/working-set resource sampling with a 60-second request ceiling and explicit process/sample caps.
+- Add Scheduled Task read-only inventory and exact-identity enable/disable/start/stop. Mutations require always-on native confirmation and post-action verification; create/delete/definition/trigger editing is unsupported.
+- Add best-effort physical disk, storage reliability-counter and volume health inspection; unsupported health counters remain unavailable rather than healthy.
+- Add read-only Defender, Firewall, BitLocker, Secure Boot, TPM and UAC posture snapshot; no compliance certification or malware scan is claimed.
+- Add one-host DNS and optional one-port TCP diagnostic, with bounded per-phase timeouts and fresh native confirmation for TCP; no scans/ranges.
+- Add first-class SVG asset indexing and normalized local reference mapping from HTML/CSS plus SVG `href`/`xlink:href`, surfaced in Project Understanding and Mission Control. SVG remains an asset format, not a programming language.
+- Add portable tests for P2 capability persistence/defaults, Agent/native bridge routing, fixed-script PowerShell data handling, operation bounds, confirmations, verification and SVG reference mapping.
+- Windows/.NET compilation and live native acceptance remain a separate target-Windows gate.
+
 ## 2.8.1 — Project Mission Control refinement
 
 - Reworked Project Mission Control into a structured, evidence-backed report shared by Agent Core and the Agent Settings dashboard.
@@ -78,8 +94,6 @@
 - Bound workflows to 30 actions and 300 seconds; cap input/output, screenshot size, and local artifact retention. Close the browser/context after every run.
 - Add deterministic runner tests and host-wiring contracts. These tests use a Playwright test double and do not claim real-browser or Windows C# compilation validation.
 
-# RunMind Changelog
-
 ## Unreleased — Phase 2 Native Node.js Debugger foundation (2026-11-21)
 
 - Add a shared native Node Inspector bridge used by Standalone, PowerToys Run, and PowerToys Command Palette through the existing Agent Core; no separate debugger agent or additional NuGet dependency.
@@ -124,8 +138,6 @@
 - Expand Podman/Docker inventory to stats, images, volumes, networks, and health inspection; mutating actions are not read-only and are followed by state verification.
 - Add uptime, disk capacity, network gateway, and DNS information to read-only diagnostics.
 - At the time of this increment, TypeScript/TSX/JSX and native Node resolution were outstanding; the 2026-11-21 Phase 1 completion extension below adds compiler-API parsing/checker references and an approved Node ESM/CommonJS resolver.
-
-# RunMind Changelog
 
 ## Unreleased — Phase 2 Runtime Diagnostics & Profiling
 

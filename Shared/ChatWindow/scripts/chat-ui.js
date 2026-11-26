@@ -2013,7 +2013,7 @@
       const name = String(file.name || 'attachment');
       const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
       const imageTypes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
-      const image = declaredType.startsWith('image/') || Object.prototype.hasOwnProperty.call(imageTypes, extension);
+      const image = (declaredType.startsWith('image/') && declaredType !== 'image/svg+xml') || Object.prototype.hasOwnProperty.call(imageTypes, extension);
       const type = declaredType || (image ? imageTypes[extension] : '');
       const readDataUrl = async () => new Promise((resolve, reject) => {
         const reader = new FileReader();

@@ -144,6 +144,13 @@ public sealed partial class AgentHostBridge : IDisposable
             "systemManager.process.close" => Task.FromResult(SystemManagerCloseProcess(args)),
             "systemManager.process.terminate" => Task.FromResult(SystemManagerTerminateProcess(args)),
             "systemManager.diagnostics" => Task.FromResult(SystemManagerDiagnostics()),
+            "systemManager.eventLog" => Task.FromResult(SystemManagerReadEventLog(args)),
+            "systemManager.crashes" => Task.FromResult(SystemManagerInvestigateCrashes(args)),
+            "systemManager.resources" => SystemManagerSampleResourcesAsync(args, cancellationToken),
+            "systemManager.scheduledTasks" => Task.FromResult(SystemManagerScheduledTasks(args)),
+            "systemManager.storage" => Task.FromResult(SystemManagerStorageHealth()),
+            "systemManager.security" => Task.FromResult(SystemManagerSecurityPosture()),
+            "systemManager.networkProbe" => SystemManagerTargetedNetworkDiagnosticsAsync(args, cancellationToken),
             "themes.list" => Task.FromResult(ListThemes()),
             "skills.list" => Task.FromResult(ListGlobalSkills()),
             "skills.load" => Task.FromResult(LoadGlobalSkill(ReadString(args, "name", 100), ReadString(args, "scope", 20), ReadStringArray(args, "references", 10, 160))),
@@ -206,6 +213,14 @@ public sealed partial class AgentHostBridge : IDisposable
     {
         if (!value.TryGetProperty(name, out var element) || element.ValueKind != JsonValueKind.String) return string.Empty;
         return Limit(element.GetString() ?? string.Empty, maximum).Trim();
+    }
+
+    private static string ReadBoundedExactString(JsonElement value, string name, int maximum)
+    {
+        if (!value.TryGetProperty(name, out var element) || element.ValueKind != JsonValueKind.String) return string.Empty;
+        var text = element.GetString() ?? string.Empty;
+        if (text.Length > maximum) throw new InvalidDataException($"{name} exceeds the maximum length of {maximum} characters; exact values are never truncated.");
+        return text.Trim();
     }
 
     private static List<string> ReadStringArray(JsonElement value, string name, int maximumCount, int maximumLength)

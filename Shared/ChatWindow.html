@@ -456,7 +456,15 @@
                   <label class="agent-settings-checkbox"><input id="systemManagerSystemInformation" type="checkbox"><span>Operating system, hardware and driver inventory</span></label>
                   <label class="agent-settings-checkbox"><input id="systemManagerEnvironmentInformation" type="checkbox"><span>Environment information</span></label>
                   <label class="agent-settings-checkbox"><input id="systemManagerServiceInformation" type="checkbox"><span>Windows service inspection</span></label>
-                  <label class="agent-settings-checkbox"><input id="systemManagerNetworkInformation" type="checkbox"><span>Network diagnostics and TCP/UDP listener ownership</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerNetworkInformation" type="checkbox"><span>Network inventory and TCP/UDP listener ownership</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerEventLogInformation" type="checkbox"><span>Windows Event Log investigation (Application, System, Setup)</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerCrashInvestigation" type="checkbox"><span>Application and service crash investigation</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerResourceMonitoring" type="checkbox"><span>Finite CPU and process resource sampling (maximum 60 seconds)</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerScheduledTaskInformation" type="checkbox"><span>Scheduled Task inventory</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerScheduledTaskManagement" type="checkbox"><span>Enable, disable, start and stop Scheduled Tasks (always asks)</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerStorageHealth" type="checkbox"><span>Storage, volume and available drive reliability counters</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerSecurityPosture" type="checkbox"><span>Windows security posture (Defender, Firewall, BitLocker, Secure Boot, TPM, UAC)</span></label>
+                  <label class="agent-settings-checkbox"><input id="systemManagerTargetedNetworkDiagnostics" type="checkbox"><span>Targeted DNS, route and TCP endpoint diagnostics</span></label>
                   <label class="agent-settings-field setting-field"><span>Native command timeout (seconds; 0 = no automatic timeout)</span><input id="systemManagerCommandTimeout" type="number" min="0" max="3600" step="1" value="0"></label>
                 </div>
               </section>
@@ -616,7 +624,7 @@
               <button type="button" class="compose-icon" id="attachButton" title="Upload files" aria-label="Upload files">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5 19 13.5a5 5 0 0 0-7.1-7.1l-7.1 7.1a3.5 3.5 0 0 0 5 5l7.1-7.1a2 2 0 0 0-2.8-2.8L7 15.8"/></svg>
               </button>
-              <input class="file-input" type="file" id="fileInput" multiple accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,application/zip,.png,.jpg,.jpeg,.gif,.webp,.pdf,.zip,.txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.html,.htm,.css,.js,.mjs,.cjs,.ts,.tsx,.jsx,.py,.cs,.java,.c,.h,.cpp,.hpp,.rs,.go,.php,.sql,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.ps1,.bat,.cmd,.sh,.diff,.patch,.tex">
+              <input class="file-input" type="file" id="fileInput" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,application/pdf,application/zip,.png,.jpg,.jpeg,.gif,.webp,.pdf,.zip,.txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.html,.htm,.svg,.css,.js,.mjs,.cjs,.ts,.tsx,.jsx,.py,.cs,.java,.c,.h,.cpp,.hpp,.rs,.go,.php,.sql,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.ps1,.bat,.cmd,.sh,.diff,.patch,.tex">
               <button type="button" class="compose-icon" id="mcpModeButton" aria-pressed="false" title="MCP access is off in normal chat" aria-label="Toggle MCP access in normal chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v5H5zM5 14h14v5H5zM8 7.5h.01M8 16.5h.01M11 7.5h5M11 16.5h5"/></svg></button>
               <button type="button" class="compose-icon" id="deepResearchButton" aria-pressed="false" title="Deep Research mode is off" aria-label="Toggle Deep Research mode"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5M7.8 10.8h6M10.8 7.8v6"/></svg></button>
               <button type="button" class="compose-icon think-button" id="agentModeButton" aria-pressed="false" title="Agent Mode is off" aria-label="Toggle Agent Mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.5 8 8 9 4.5-1 8-4 8-9V7z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></button>

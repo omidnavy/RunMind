@@ -4,7 +4,7 @@
     const PROJECT_INDEX_LIMITS = Object.freeze({ files: 10000, entries: 50000, depth: 10, fileBytes: 256 * 1024, totalBytes: 24 * 1024 * 1024 });
     const PROJECT_INDEX_SKIP_DIRS = new Set(['.git','.hg','.svn','.runmind-backups','.cache','node_modules','vendor','bin','obj','dist','build','out','target','.next','.nuxt','.venv','venv','__pycache__','coverage','.idea','.vs','.gradle','.terraform','.npm','.nuget','.cargo','.docker','.pypoetry','.conda','secret','secrets','credential','credentials','.ssh','.aws','.azure','.gnupg']);
     const PROJECT_INDEX_SKIP_FILES = /^(?:\.env(?:\..*)?|(?:.*\.(?:pem|key|p12|pfx|keystore|jks|kdbx|sqlite|db|wasm|dll|exe|so|dylib|bin|lockb)|.*(?:secret|credential).*)|id_(?:rsa|ed25519)|credentials?(?:\..*)?|secrets?(?:\..*)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|nuget\.config|pip\.conf|\.dockercfg|known_hosts)$/i;
-    const PROJECT_INDEX_TEXT_EXTENSIONS = new Set(['.md','.mdx','.txt','.rst','.adoc','.json','.jsonc','.json5','.yaml','.yml','.toml','.ini','.cfg','.conf','.xml','.html','.htm','.css','.scss','.less','.js','.mjs','.cjs','.jsx','.ts','.tsx','.mts','.cts','.vue','.svelte','.py','.pyi','.cs','.java','.kt','.kts','.go','.rs','.c','.h','.cc','.cpp','.hpp','.hh','.php','.rb','.swift','.sh','.bash','.zsh','.ps1','.bat','.cmd','.sql','.graphql','.gql','.proto','.dockerfile','.makefile','.gradle','.properties','.lock']);
+    const PROJECT_INDEX_TEXT_EXTENSIONS = new Set(['.md','.mdx','.txt','.rst','.adoc','.json','.jsonc','.json5','.yaml','.yml','.toml','.ini','.cfg','.conf','.xml','.html','.htm','.svg','.css','.scss','.less','.js','.mjs','.cjs','.jsx','.ts','.tsx','.mts','.cts','.vue','.svelte','.py','.pyi','.cs','.java','.kt','.kts','.go','.rs','.c','.h','.cc','.cpp','.hpp','.hh','.php','.rb','.swift','.sh','.bash','.zsh','.ps1','.bat','.cmd','.sql','.graphql','.gql','.proto','.dockerfile','.makefile','.gradle','.properties','.lock']);
 
     function projectIndexKey() { return `${PROJECT_INDEX_PREFIX}${workspaceContext.id}`; }
     let projectIndexCompilerLoadPromise = null;
@@ -23,7 +23,7 @@
     }
     function projectIndexLanguage(path) {
       const ext = String(path).toLowerCase().match(/\.[^.\/]+$/)?.[0] || '';
-      const map = { '.js':'javascript','.mjs':'javascript','.cjs':'javascript','.jsx':'javascript','.ts':'typescript','.tsx':'typescript','.mts':'typescript','.cts':'typescript','.json':'json','.yaml':'yaml','.yml':'yaml','.toml':'toml','.md':'markdown','.html':'html','.htm':'html','.css':'css' };
+      const map = { '.js':'javascript','.mjs':'javascript','.cjs':'javascript','.jsx':'javascript','.ts':'typescript','.tsx':'typescript','.mts':'typescript','.cts':'typescript','.json':'json','.yaml':'yaml','.yml':'yaml','.toml':'toml','.md':'markdown','.html':'html','.htm':'html','.svg':'svg','.css':'css' };
       // Other source extensions remain available through generic file reading/search, but are not treated as supported project languages.
       return map[ext] || (['Dockerfile','Makefile'].includes(path.split('/').pop()) ? 'build' : 'text');
     }
@@ -962,7 +962,7 @@
     async function getProjectIndexOverview() {
       const index=await loadProjectIndex();
       if(!index) return {indexed:false,message:'No project index has been built.'};
-      return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,toolchains:index.toolchains||null,analysis:{acornFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('acorn')).length,typescriptCompilerFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('typescript-compiler-api')).length,typescriptProgramFiles:index.importGraph?.compilerAnalysis?.filesAnalyzed||0,typescriptCrossFileReferences:index.importGraph?.compilerAnalysis?.crossFileReferences||0,callSites:index.files.reduce((sum,item)=>sum+(item.calls?.length||0),0),parseErrors:index.files.filter(item=>item.parseError).length,regexFallbackFiles:index.files.filter(item=>item.analysisEngine==='regex-fallback').length},compilerAnalysis:index.importGraph?.compilerAnalysis||null,importGraph:index.importGraph?{localImportEdges:index.importGraph.localImportEdges.length,resolvedBindings:index.importGraph.resolvedBindings?.length||0,unresolvedBindings:index.importGraph.unresolvedBindings?.length||0,circularDependencies:index.importGraph.circularDependencies?.length||0,externalImports:index.importGraph.externalImports?.length||0,filesWithIncomingImports:index.importGraph.filesWithIncomingImports,note:index.importGraph.note}:null,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
+      return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,toolchains:index.toolchains||null,analysis:{acornFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('acorn')).length,typescriptCompilerFiles:index.files.filter(item=>String(item.analysisEngine||'').startsWith('typescript-compiler-api')).length,typescriptProgramFiles:index.importGraph?.compilerAnalysis?.filesAnalyzed||0,typescriptCrossFileReferences:index.importGraph?.compilerAnalysis?.crossFileReferences||0,callSites:index.files.reduce((sum,item)=>sum+(item.calls?.length||0),0),parseErrors:index.files.filter(item=>item.parseError).length,regexFallbackFiles:index.files.filter(item=>item.analysisEngine==='regex-fallback').length,svgFiles:index.files.filter(item=>item.language==='svg').length},compilerAnalysis:index.importGraph?.compilerAnalysis||null,importGraph:index.importGraph?{localImportEdges:index.importGraph.localImportEdges.length,resolvedBindings:index.importGraph.resolvedBindings?.length||0,unresolvedBindings:index.importGraph.unresolvedBindings?.length||0,circularDependencies:index.importGraph.circularDependencies?.length||0,externalImports:index.importGraph.externalImports?.length||0,filesWithIncomingImports:index.importGraph.filesWithIncomingImports,note:index.importGraph.note}:null,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
     }
 
     function projectIndexNormalizePath(value) {
@@ -976,6 +976,18 @@
       }
       return records;
     }
+    function projectIndexResolveLocalAsset(ownerPath, reference) {
+      const value = String(reference || '').trim().split(/[?#]/, 1)[0].replace(/\\/g, '/');
+      if (!value || /^(?:https?:|data:|blob:|\/\/|#|javascript:)/i.test(value)) return null;
+      const segments = value.startsWith('/') ? [] : String(ownerPath || '').split('/').slice(0, -1);
+      for (const segment of value.replace(/^\/+/, '').split('/')) {
+        if (!segment || segment === '.') continue;
+        if (segment === '..') { if (!segments.length) return null; segments.pop(); continue; }
+        segments.push(segment);
+      }
+      return segments.join('/');
+    }
+
     function projectIndexBuildUnderstanding(index) {
       if (!index) return { available: false, message: 'Build the project index before requesting Project Understanding.' };
       const files = Array.isArray(index.files) ? index.files : [];
@@ -988,13 +1000,14 @@
       const topLevel = new Map();
       for (const file of files) {
         const segment = file.path.includes('/') ? file.path.split('/')[0] : '(root)';
-        const row = topLevel.get(segment) || { directory: segment, files: 0, javascript: 0, typescript: 0, html: 0, css: 0 };
+        const row = topLevel.get(segment) || { directory: segment, files: 0, javascript: 0, typescript: 0, html: 0, css: 0, svg: 0 };
         row.files++;
         if (Object.hasOwn(row, file.language)) row[file.language]++;
         topLevel.set(segment, row);
       }
       const packageRecords = projectIndexPackageData(index);
       const entryPoints = [];
+      const assetReferences = [];
       for (const { path, data } of packageRecords) {
         const dir = path.split('/').slice(0, -1).join('/');
         for (const field of ['main', 'module', 'browser', 'types', 'typings']) if (typeof data[field] === 'string') entryPoints.push({ path: [dir, data[field]].filter(Boolean).join('/'), source: `${path}#${field}`, confidence: 'declared' });
@@ -1018,18 +1031,47 @@
           }
         }
       }
+      for (const file of files) {
+        if (typeof file.text !== 'string') continue;
+        if (file.language === 'html') {
+          const markupAssetPattern = /(?:\bsrc|\bhref|\bdata)\s*=\s*([\"'])([^\"']+\.svg(?:[?#][^\"']*)?)\1/gi;
+          let assetMatch;
+          while ((assetMatch = markupAssetPattern.exec(file.text)) && assetReferences.length < 500) {
+            const target = projectIndexResolveLocalAsset(file.path, assetMatch[2]);
+            if (target) assetReferences.push({ from: file.path, to: target, kind: 'HTML SVG asset reference', targetIndexed: files.some(item => item.path === target) });
+          }
+        } else if (file.language === 'css') {
+          const cssAssetPattern = /url\(\s*([\"']?)([^\"')]+\.svg(?:[?#][^\"')]*)?)\1\s*\)/gi;
+          let assetMatch;
+          while ((assetMatch = cssAssetPattern.exec(file.text)) && assetReferences.length < 500) {
+            const target = projectIndexResolveLocalAsset(file.path, assetMatch[2]);
+            if (target) assetReferences.push({ from: file.path, to: target, kind: 'CSS SVG asset reference', targetIndexed: files.some(item => item.path === target) });
+          }
+        }
+      }
+      for (const file of files) {
+        if (file.language !== 'svg' || typeof file.text !== 'string') continue;
+        const referencePattern = /(?:\bxlink:href|\bhref)\s*=\s*([\"'])(.*?)\1/gi;
+        let match;
+        while ((match = referencePattern.exec(file.text)) && assetReferences.length < 500) {
+          const reference = String(match[2] || '').trim();
+          const target = projectIndexResolveLocalAsset(file.path, reference);
+          if (!target) continue;
+          assetReferences.push({ from: file.path, to: target, kind: 'SVG local href reference', targetIndexed: files.some(item => item.path === target) });
+        }
+      }
       const uniqueEntries = [...new Map(entryPoints.map(item => [`${item.path}|${item.source}`, item])).values()].slice(0, 100);
       const modules = [...topLevel.values()].sort((a, b) => b.files - a.files || a.directory.localeCompare(b.directory)).slice(0, 100);
       const hotspots = files.map(file => ({ path: file.path, incomingImports: incoming.get(file.path) || 0, outgoingImports: outgoing.get(file.path) || 0, symbols: (file.symbols || []).length, calls: (file.calls || []).length }))
         .filter(item => item.incomingImports >= 2 || item.outgoingImports >= 8).sort((a, b) => (b.incomingImports + b.outgoingImports) - (a.incomingImports + a.outgoingImports)).slice(0, 40);
       return {
         available: true, root: index.rootName, indexedAt: index.updatedAt,
-        scope: 'Language-aware architecture analysis is limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Other source files are generic text only. HTML reference candidates come from normalized search text and must be checked in the original HTML before use.',
-        modules, entryPoints: uniqueEntries,
+        scope: 'Language-aware code analysis is limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS; SVG is indexed as a first-class vector asset and its local href/xlink:href references are inspected. Other source files are generic text only. HTML reference candidates come from normalized search text and must be checked in the original HTML before use.',
+        modules, entryPoints: uniqueEntries, assetReferences: assetReferences.slice(0, 200),
         dependencyDirection: { localImportEdges: edges.length, resolvedBindings: index.importGraph?.resolvedBindings?.length || 0, unresolvedBindings: index.importGraph?.unresolvedBindings?.length || 0, circularDependencies: index.importGraph?.circularDependencies || [], note: index.importGraph?.note || '' },
         highCouplingModules: hotspots,
         boundaries: modules.map(item => item.directory),
-        analysisCoverage: { indexedFiles: files.length, javascriptFiles: files.filter(item => item.language === 'javascript').length, typescriptFiles: files.filter(item => item.language === 'typescript').length, htmlFiles: files.filter(item => item.language === 'html').length, cssFiles: files.filter(item => item.language === 'css').length, parseErrors: files.filter(item => item.parseError).map(item => ({ path: item.path, ...item.parseError })).slice(0, 100), indexTruncated: !!index.stats?.truncated }
+        analysisCoverage: { indexedFiles: files.length, javascriptFiles: files.filter(item => item.language === 'javascript').length, typescriptFiles: files.filter(item => item.language === 'typescript').length, htmlFiles: files.filter(item => item.language === 'html').length, cssFiles: files.filter(item => item.language === 'css').length, svgFiles: files.filter(item => item.language === 'svg').length, parseErrors: files.filter(item => item.parseError).map(item => ({ path: item.path, ...item.parseError })).slice(0, 100), indexTruncated: !!index.stats?.truncated }
       };
     }
     function projectIndexBuildDiagnostics(index) {
@@ -1197,6 +1239,7 @@
         moduleBreakdown: understanding.modules.slice(0, 20),
         highCouplingModules: understanding.highCouplingModules.length,
         highCouplingExamples: understanding.highCouplingModules.slice(0, 10),
+        assetReferences: (understanding.assetReferences || []).slice(0, 200),
         circularDependencyGroups: understanding.dependencyDirection.circularDependencies.length,
         circularDependencies: understanding.dependencyDirection.circularDependencies.slice(0, 10),
         unresolvedImports: understanding.dependencyDirection.unresolvedBindings,
@@ -1208,6 +1251,7 @@
           typescriptFiles: coverage.typescriptFiles || 0,
           htmlFiles: coverage.htmlFiles || 0,
           cssFiles: coverage.cssFiles || 0,
+          svgFiles: coverage.svgFiles || 0,
           parseErrors: (coverage.parseErrors || []).slice(0, 20),
           parseErrorCount: (coverage.parseErrors || []).length,
           indexTruncated: !!coverage.indexTruncated

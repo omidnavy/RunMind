@@ -10,7 +10,7 @@ const projectIndexPath = path.join(__dirname, '..', 'Shared', 'ChatWindow', 'scr
 const source = fs.readFileSync(projectIndexPath, 'utf8');
 const context = { acorn, ts, console, AbortController, DOMException, setInterval, clearInterval };
 context.globalThis = context;
-vm.runInNewContext(`${source}\nglobalThis.__extract = projectIndexExtractJavaScript; globalThis.__extractFile = projectIndexExtract; globalThis.__graph = projectIndexLocalImportGraph; globalThis.__refactor = projectIndexRefactorJavaScript; globalThis.__crossRefs = projectIndexCrossFileReferences; globalThis.__extractTS = projectIndexExtractTypeScript; globalThis.__refactorAPI = projectIndexRefactorPublicApi; globalThis.__program = projectIndexAnalyzeTypeScriptProgram;`, context);
+vm.runInNewContext(`${source}\nglobalThis.__extract = projectIndexExtractJavaScript; globalThis.__extractFile = projectIndexExtract; globalThis.__graph = projectIndexLocalImportGraph; globalThis.__refactor = projectIndexRefactorJavaScript; globalThis.__crossRefs = projectIndexCrossFileReferences; globalThis.__extractTS = projectIndexExtractTypeScript; globalThis.__refactorAPI = projectIndexRefactorPublicApi; globalThis.__program = projectIndexAnalyzeTypeScriptProgram; globalThis.__language = projectIndexLanguage; globalThis.__understanding = projectIndexBuildUnderstanding;`, context);
 
  test('Acorn extracts declarations, imports, and identifier occurrence counts', () => {
   const code = `import thing, { value as alias } from './thing.js';
@@ -427,4 +427,25 @@ test('public API rename preserves comments inside import and re-export specifier
 test('public API rename preserves the local name when an unaliased local export is renamed', () => {
   const result = context.__refactorAPI('src/api.ts', `const oldName = () => 1; export { oldName };`, [], 'oldName', 'newName');
   assert.match(result.changes[0].content, /const oldName = \(\) => 1; export \{ oldName as newName \}/);
+});
+
+
+test('SVG is indexed as a first-class asset and local HTML/CSS/SVG references resolve relative to their owner', () => {
+  assert.equal(context.__language('assets/logo.svg'), 'svg');
+  assert.equal(context.__language('src/main.js'), 'javascript');
+  const index = { rootName: 'fixture', updatedAt: new Date().toISOString(), files: [
+    { path: 'index.html', language: 'html', text: '<img src="assets/logo.svg">' },
+    { path: 'styles/site.css', language: 'css', text: '.brand { background-image: url("../assets/logo.svg#mark"); }' },
+    { path: 'assets/logo.svg', language: 'svg', text: '<svg xmlns="http://www.w3.org/2000/svg"><use href="symbols.svg#home"/><image xlink:href="../shared/pattern.svg"/></svg>' },
+    { path: 'assets/symbols.svg', language: 'svg', text: '<svg/>' },
+    { path: 'shared/pattern.svg', language: 'svg', text: '<svg/>' }
+  ], importGraph: { localImportEdges: [], resolvedBindings: [], unresolvedBindings: [], circularDependencies: [], filesWithIncomingImports: [] } };
+  const report = context.__understanding(index);
+  assert.equal(report.analysisCoverage.svgFiles, 3);
+  assert.deepEqual(JSON.parse(JSON.stringify(report.assetReferences.map(item => [item.from,item.to,item.targetIndexed]))), [
+    ['index.html','assets/logo.svg',true],
+    ['styles/site.css','assets/logo.svg',true],
+    ['assets/logo.svg','assets/symbols.svg',true],
+    ['assets/logo.svg','shared/pattern.svg',true]
+  ]);
 });

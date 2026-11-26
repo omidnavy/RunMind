@@ -459,7 +459,15 @@
         details.append(list); architectureSection.append(details);
       }
       const coverage = architecture.analysisCoverage || {};
-      architectureSection.append(missionControlNode('p', 'mc-muted', `Language-aware coverage: ${coverage.javascriptFiles || 0} JavaScript · ${coverage.typescriptFiles || 0} TypeScript · ${coverage.htmlFiles || 0} HTML · ${coverage.cssFiles || 0} CSS. ${coverage.parseErrorCount || 0} parser errors.`));
+      architectureSection.append(missionControlNode('p', 'mc-muted', `Language-aware coverage: ${coverage.javascriptFiles || 0} JavaScript · ${coverage.typescriptFiles || 0} TypeScript · ${coverage.htmlFiles || 0} HTML · ${coverage.cssFiles || 0} CSS · ${coverage.svgFiles || 0} SVG assets. ${coverage.parseErrorCount || 0} parser errors.`));
+      const assetReferences = Array.isArray(architecture.assetReferences) ? architecture.assetReferences : [];
+      if (assetReferences.length) {
+        const details = missionControlNode('details', 'mc-expandable');
+        details.append(missionControlNode('summary', '', `SVG asset references (${assetReferences.length})`));
+        const list = missionControlNode('ul', 'mc-evidence');
+        for (const item of assetReferences.slice(0, 25)) list.append(missionControlNode('li', '', `${item.from} → ${item.to} · ${item.kind} · ${item.targetIndexed ? 'indexed' : 'not indexed'}`));
+        details.append(list); architectureSection.append(details);
+      }
       projectMissionControlElement.append(architectureSection);
 
       const diagnosticSection = missionControlSection('Project Diagnostics', 'Manifest, package-manager, test-discovery and static import-graph checks. No environment probe or build/test command was run.');

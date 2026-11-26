@@ -11,6 +11,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Win32;
 using System.Net.NetworkInformation;
+using System.Net;
+using System.Net.Sockets;
 using System.Windows;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -150,7 +152,10 @@ public sealed partial class AgentHostBridge
         {
             ["discoverApplications"] = true, ["launchApplications"] = true, ["openTargets"] = true,
             ["listProcesses"] = true, ["inspectProcesses"] = true, ["terminateProcesses"] = false,
-            ["systemInformation"] = true, ["environmentInformation"] = false, ["serviceInformation"] = false, ["networkInformation"] = false
+            ["systemInformation"] = true, ["environmentInformation"] = false, ["serviceInformation"] = false, ["networkInformation"] = false,
+            ["eventLogInformation"] = false, ["crashInvestigation"] = false, ["resourceMonitoring"] = false,
+            ["scheduledTaskInformation"] = false, ["scheduledTaskManagement"] = false, ["storageHealth"] = false,
+            ["securityPosture"] = false, ["targetedNetworkDiagnostics"] = false
         },
         ["permissions"] = new JsonObject { ["launchApplications"] = "ask", ["openTargets"] = "ask" },
         ["applicationBehaviors"] = new JsonObject(),
@@ -175,7 +180,7 @@ public sealed partial class AgentHostBridge
             defaults["profile"] = profile is "restricted" or "balanced" or "custom" ? profile : "restricted";
             foreach (var group in new[] { "applications", "processes", "diagnostics" })
                 defaults["groups"]![group] = saved["groups"]?[group]?.GetValue<bool>() ?? (bool)defaults["groups"]![group]!;
-            foreach (var capability in new[] { "discoverApplications", "launchApplications", "openTargets", "listProcesses", "inspectProcesses", "terminateProcesses", "systemInformation", "environmentInformation", "serviceInformation", "networkInformation" })
+            foreach (var capability in new[] { "discoverApplications", "launchApplications", "openTargets", "listProcesses", "inspectProcesses", "terminateProcesses", "systemInformation", "environmentInformation", "serviceInformation", "networkInformation", "eventLogInformation", "crashInvestigation", "resourceMonitoring", "scheduledTaskInformation", "scheduledTaskManagement", "storageHealth", "securityPosture", "targetedNetworkDiagnostics" })
                 defaults["capabilities"]![capability] = saved["capabilities"]?[capability]?.GetValue<bool>() ?? (bool)defaults["capabilities"]![capability]!;
             foreach (var permission in new[] { "launchApplications", "openTargets" })
             {
@@ -230,7 +235,7 @@ public sealed partial class AgentHostBridge
         }
         foreach (var group in new[] { "applications", "processes", "diagnostics" })
             if (input.TryGetProperty("groups", out var groups) && groups.ValueKind == JsonValueKind.Object && groups.TryGetProperty(group, out var groupValue) && (groupValue.ValueKind is JsonValueKind.True or JsonValueKind.False)) current["groups"]![group] = groupValue.GetBoolean();
-        foreach (var capability in new[] { "discoverApplications", "launchApplications", "openTargets", "listProcesses", "inspectProcesses", "terminateProcesses", "systemInformation", "environmentInformation", "serviceInformation", "networkInformation" })
+        foreach (var capability in new[] { "discoverApplications", "launchApplications", "openTargets", "listProcesses", "inspectProcesses", "terminateProcesses", "systemInformation", "environmentInformation", "serviceInformation", "networkInformation", "eventLogInformation", "crashInvestigation", "resourceMonitoring", "scheduledTaskInformation", "scheduledTaskManagement", "storageHealth", "securityPosture", "targetedNetworkDiagnostics" })
             if (input.TryGetProperty("capabilities", out var capabilities) && capabilities.ValueKind == JsonValueKind.Object && capabilities.TryGetProperty(capability, out var capabilityValue) && (capabilityValue.ValueKind is JsonValueKind.True or JsonValueKind.False)) current["capabilities"]![capability] = capabilityValue.GetBoolean();
         foreach (var permission in new[] { "launchApplications", "openTargets" })
             if (input.TryGetProperty("permissions", out var permissions) && permissions.ValueKind == JsonValueKind.Object && permissions.TryGetProperty(permission, out var permissionValue) && permissionValue.ValueKind == JsonValueKind.String && (permissionValue.GetString() is "allow" or "ask")) current["permissions"]![permission] = permissionValue.GetString();
@@ -720,8 +725,14 @@ public sealed partial class AgentHostBridge
             var errorTask = process.StandardError.ReadToEndAsync();
             if (!process.WaitForExit(timeoutMilliseconds)) { try { process.Kill(entireProcessTree: true); } catch { } return (-2, string.Empty); }
             var output = outputTask.GetAwaiter().GetResult();
-            _ = errorTask.GetAwaiter().GetResult();
-            return (process.ExitCode, output.Length > 1024 * 1024 ? output[..(1024 * 1024)] : output);
+            var error = errorTask.GetAwaiter().GetResult();
+            const int outputLimit = 1024 * 1024;
+            if (process.ExitCode != 0 && !string.IsNullOrWhiteSpace(error))
+            {
+                var boundedError = error.Length > 64 * 1024 ? error[..(64 * 1024)] : error;
+                output = string.IsNullOrWhiteSpace(output) ? boundedError : output + Environment.NewLine + "[stderr] " + boundedError;
+            }
+            return (process.ExitCode, output.Length > outputLimit ? output[..outputLimit] : output);
         }
         catch { return (-1, string.Empty); }
     }
@@ -1802,6 +1813,385 @@ public sealed partial class AgentHostBridge
             var exited = process.WaitForExit(5000);
             return new { success = exited, accepted = true, completed = exited, verified = exited, action = "terminate-process", target = pid.ToString(CultureInfo.InvariantCulture), requestedState = "exited", actualState = exited ? "exited" : "running", processName = expectedName, executablePath = actualPath, message = exited ? "The process terminated and exit was verified." : "Termination was requested, but the process is still running." };
         }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeFileTime
+    {
+        public uint LowDateTime;
+        public uint HighDateTime;
+        public readonly ulong Value => ((ulong)HighDateTime << 32) | LowDateTime;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetSystemTimes(out NativeFileTime idleTime, out NativeFileTime kernelTime, out NativeFileTime userTime);
+
+    private sealed record ResourceProcessSample(int ProcessId, long StartedAtTicks, long CpuTicks, long WorkingSetBytes, string Name);
+    private sealed class ResourceProcessAggregate
+    {
+        public required int ProcessId { get; init; }
+        public required long StartedAtTicks { get; init; }
+        public required string Name { get; init; }
+        public double CpuSeconds { get; set; }
+        public long WorkingSetBytes { get; set; }
+    }
+
+    private static void RequireSystemManagerCapability(string capability)
+        => RequireSystemCapability("diagnostics", capability);
+
+    // All PowerShell bodies below are shipped constants. User-supplied values are
+    // serialized as JSON, Base64-encoded, and decoded as data inside the fixed script.
+    // No user value is interpolated into executable PowerShell source.
+    private static JsonElement RunPowerShellJson(string fixedBody, object request, int timeoutMilliseconds)
+    {
+        var powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+        if (!File.Exists(powershell)) throw new FileNotFoundException("Windows PowerShell is unavailable.");
+        var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request)));
+        var source = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)\n" +
+            "$ErrorActionPreference = 'Stop'; $WarningPreference = 'SilentlyContinue'; " +
+            "$request = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + payload + "')))\n" + fixedBody;
+        var encodedCommand = Convert.ToBase64String(Encoding.Unicode.GetBytes(source));
+        var result = RunFixedDiagnosticCommand(powershell, new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodedCommand }, timeoutMilliseconds);
+        if (result.ExitCode == -2) throw new TimeoutException("The Windows diagnostic command exceeded its bounded execution time.");
+        if (result.ExitCode != 0) throw new InvalidOperationException(Limit(string.IsNullOrWhiteSpace(result.Output) ? "Windows PowerShell diagnostic failed." : result.Output, 1600));
+        if (string.IsNullOrWhiteSpace(result.Output)) throw new InvalidDataException("Windows PowerShell returned no diagnostic JSON.");
+        using var document = JsonDocument.Parse(result.Output);
+        return document.RootElement.Clone();
+    }
+
+    private static object SystemManagerReadEventLog(JsonElement args)
+    {
+        RequireSystemManagerCapability("eventLogInformation");
+        var logName = ReadString(args, "log_name", 32);
+        if (logName is not ("Application" or "System" or "Setup"))
+            throw new InvalidDataException("Event log must be Application, System, or Setup. Security and other sensitive/custom logs are not exposed by this tool.");
+        var hours = args.TryGetProperty("hours", out var hoursValue) && hoursValue.TryGetInt32(out var requestedHours) ? requestedHours : 24;
+        var maximum = args.TryGetProperty("max_events", out var maximumValue) && maximumValue.TryGetInt32(out var requestedMaximum) ? requestedMaximum : 50;
+        var eventId = args.TryGetProperty("event_id", out var eventIdValue) && eventIdValue.TryGetInt32(out var requestedId) ? requestedId : 0;
+        if (hours is < 1 or > 720) throw new InvalidDataException("Event log time range must be between 1 and 720 hours.");
+        if (maximum is < 1 or > 200) throw new InvalidDataException("Event log results must be between 1 and 200 events.");
+        if (eventId is < 0 or > 65535) throw new InvalidDataException("Event ID must be between 0 and 65535, or 0 for all IDs.");
+        var query = ReadString(args, "query", 120);
+        const string script = """
+$filter = @{ LogName = [string]$request.logName; StartTime = (Get-Date).AddHours(-[int]$request.hours) }
+if ([int]$request.eventId -gt 0) { $filter.Id = [int]$request.eventId }
+$rows = @()
+try {
+  $rows = @(Get-WinEvent -FilterHashtable $filter -MaxEvents 2000 -ErrorAction Stop | Where-Object {
+    [string]::IsNullOrWhiteSpace([string]$request.query) -or ([string]$_.ProviderName).IndexOf([string]$request.query, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.Message).IndexOf([string]$request.query, [StringComparison]::OrdinalIgnoreCase) -ge 0
+  } | Select-Object -First ([int]$request.maxEvents) | ForEach-Object {
+    [pscustomobject]@{ logName=$_.LogName; eventId=$_.Id; level=$_.LevelDisplayName; provider=$_.ProviderName; timeCreatedUtc=$_.TimeCreated.ToUniversalTime().ToString('o'); recordId=$_.RecordId; machineName=$_.MachineName; message=([string]$_.Message).Substring(0,[Math]::Min(1200,([string]$_.Message).Length)) }
+  })
+} catch {
+  if ($_.FullyQualifiedErrorId -notmatch 'NoMatchingEventsFound') { throw }
+}
+$result = [pscustomobject]@{ logName=[string]$request.logName; hours=[int]$request.hours; eventId=[int]$request.eventId; events=@($rows); count=@($rows).Count; truncated=(@($rows).Count -ge [int]$request.maxEvents) }
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 5 -Compress))
+""";
+        var report = RunPowerShellJson(script, new { logName, hours, eventId, maxEvents = maximum, query }, Math.Min(120000, Math.Max(10000, hours > 168 ? 45000 : 20000)));
+        return new { success = true, accepted = true, completed = true, verified = true, investigation = report, note = "Read-only event investigation. Only Application, System and Setup logs are queried; each event message is truncated to 1,200 characters." };
+    }
+
+    private static object SystemManagerInvestigateCrashes(JsonElement args)
+    {
+        RequireSystemManagerCapability("crashInvestigation");
+        var days = args.TryGetProperty("days", out var daysValue) && daysValue.TryGetInt32(out var requestedDays) ? requestedDays : 7;
+        var maximum = args.TryGetProperty("max_events", out var maximumValue) && maximumValue.TryGetInt32(out var requestedMaximum) ? requestedMaximum : 100;
+        if (days is < 1 or > 30) throw new InvalidDataException("Crash investigation range must be between 1 and 30 days.");
+        if (maximum is < 1 or > 200) throw new InvalidDataException("Crash investigation results must be between 1 and 200 events.");
+        const string script = """
+$since = (Get-Date).AddDays(-[int]$request.days)
+$rows = @()
+$queries = @(@{ LogName='Application'; Id=@(1000,1001,1026); StartTime=$since }, @{ LogName='System'; Id=@(7031,7034); StartTime=$since })
+foreach ($filter in $queries) {
+  try {
+    $rows += @(Get-WinEvent -FilterHashtable $filter -MaxEvents ([int]$request.maxEvents) -ErrorAction Stop | ForEach-Object {
+      $message = [string]$_.Message
+      $app = ''; $module = ''; $exception = ''
+      if ($message -match '(?im)(?:Faulting application name|Application):\s*([^,\r\n]+)') { $app = $Matches[1].Trim() }
+      if ($message -match '(?im)(?:Faulting module name|Faulting module):\s*([^,\r\n]+)') { $module = $Matches[1].Trim() }
+      if ($message -match '(?im)exception code:\s*(0x[0-9a-f]+)') { $exception = $Matches[1].Trim() }
+      [pscustomobject]@{ logName=$_.LogName; eventId=$_.Id; provider=$_.ProviderName; timeCreatedUtc=$_.TimeCreated.ToUniversalTime().ToString('o'); recordId=$_.RecordId; application=$app; faultingModule=$module; exceptionCode=$exception; message=$message.Substring(0,[Math]::Min(1400,$message.Length)) }
+    })
+  } catch { if ($_.FullyQualifiedErrorId -notmatch 'NoMatchingEventsFound') { throw } }
+}
+$ordered = @($rows | Sort-Object timeCreatedUtc -Descending | Select-Object -First ([int]$request.maxEvents))
+$patterns = @($ordered | Where-Object { $_.application -or $_.exceptionCode } | Group-Object { ($_.application.ToLowerInvariant() + '|' + $_.exceptionCode.ToLowerInvariant()) } | ForEach-Object { [pscustomobject]@{ key=$_.Name; occurrences=$_.Count; firstSeenUtc=($_.Group | Sort-Object timeCreatedUtc | Select-Object -First 1).timeCreatedUtc; lastSeenUtc=($_.Group | Sort-Object timeCreatedUtc -Descending | Select-Object -First 1).timeCreatedUtc } } | Sort-Object occurrences -Descending)
+$result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$ordered.Count; recurringPatterns=$patterns; eventSources=@('Application Error 1000','Windows Error Reporting 1001','.NET Runtime 1026','Service Control Manager 7031/7034') }
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 6 -Compress))
+""";
+        var report = RunPowerShellJson(script, new { days, maxEvents = maximum }, 30000);
+        return new { success = true, accepted = true, completed = true, verified = true, investigation = report, note = "Crash correlation is based on Windows event evidence and can miss crashes whose logging is disabled, delayed or outside the selected window. Repeated signatures are indicators, not proof of a common root cause." };
+    }
+
+    private static Dictionary<int, ResourceProcessSample> ReadResourceProcessSnapshot(out bool truncated)
+    {
+        var result = new Dictionary<int, ResourceProcessSample>();
+        var processList = Process.GetProcesses();
+        truncated = processList.Length > 1000;
+        foreach (var process in processList)
+        {
+            if (result.Count >= 1000) { process.Dispose(); continue; }
+            try
+            {
+                long started = -1;
+                try { started = process.StartTime.ToUniversalTime().Ticks; } catch { }
+                long cpu = -1;
+                try { cpu = process.TotalProcessorTime.Ticks; } catch { }
+                long memory = 0;
+                try { memory = process.WorkingSet64; } catch { }
+                result[process.Id] = new ResourceProcessSample(process.Id, started, cpu, memory, process.ProcessName);
+            }
+            catch { }
+            finally { process.Dispose(); }
+        }
+        return result;
+    }
+
+    private static (ulong Idle, ulong Kernel, ulong User)? ReadSystemCpuTimes()
+    {
+        if (!GetSystemTimes(out var idle, out var kernel, out var user)) return null;
+        return (idle.Value, kernel.Value, user.Value);
+    }
+
+    private static async Task<object> SystemManagerSampleResourcesAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        RequireSystemManagerCapability("resourceMonitoring");
+        var duration = args.TryGetProperty("duration_seconds", out var durationValue) && durationValue.TryGetInt32(out var requestedDuration) ? requestedDuration : 10;
+        var interval = args.TryGetProperty("interval_seconds", out var intervalValue) && intervalValue.TryGetInt32(out var requestedInterval) ? requestedInterval : 1;
+        if (duration is < 1 or > 60) throw new InvalidDataException("Resource sample duration must be between 1 and 60 seconds.");
+        if (interval is < 1 or > 10 || interval > duration) throw new InvalidDataException("Resource sample interval must be between 1 and 10 seconds and no longer than the requested duration.");
+        var samples = new List<object>();
+        var aggregates = new Dictionary<string, ResourceProcessAggregate>(StringComparer.OrdinalIgnoreCase);
+        var previousProcesses = ReadResourceProcessSnapshot(out _);
+        var previousSystem = ReadSystemCpuTimes();
+        var previousAt = Stopwatch.GetTimestamp();
+        var timer = Stopwatch.StartNew();
+        var sampleCount = 0;
+        while (timer.Elapsed.TotalSeconds < duration)
+        {
+            var remaining = TimeSpan.FromSeconds(duration) - timer.Elapsed;
+            var delay = TimeSpan.FromSeconds(Math.Min(interval, Math.Max(0.05, remaining.TotalSeconds)));
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var currentAt = Stopwatch.GetTimestamp();
+            var elapsed = Math.Max(0.001, (double)(currentAt - previousAt) / Stopwatch.Frequency);
+            var currentProcesses = ReadResourceProcessSnapshot(out var processListTruncated);
+            var currentSystem = ReadSystemCpuTimes();
+            double? machineCpu = null;
+            if (previousSystem.HasValue && currentSystem.HasValue)
+            {
+                var totalDelta = (currentSystem.Value.Kernel - previousSystem.Value.Kernel) + (currentSystem.Value.User - previousSystem.Value.User);
+                var idleDelta = currentSystem.Value.Idle - previousSystem.Value.Idle;
+                if (totalDelta > 0 && totalDelta >= idleDelta) machineCpu = Math.Round(Math.Clamp((double)(totalDelta - idleDelta) * 100d / totalDelta, 0, 100), 2);
+            }
+            double totalProcessCpuSeconds = 0;
+            foreach (var current in currentProcesses.Values)
+            {
+                if (current.CpuTicks < 0 || current.StartedAtTicks <= 0 || !previousProcesses.TryGetValue(current.ProcessId, out var previous) || previous.CpuTicks < 0 || previous.StartedAtTicks <= 0 || previous.StartedAtTicks != current.StartedAtTicks) continue;
+                var deltaTicks = Math.Max(0, current.CpuTicks - previous.CpuTicks);
+                var cpuSeconds = (double)deltaTicks / TimeSpan.TicksPerSecond;
+                totalProcessCpuSeconds += cpuSeconds;
+                var key = current.ProcessId.ToString(CultureInfo.InvariantCulture) + ":" + current.StartedAtTicks.ToString(CultureInfo.InvariantCulture);
+                if (!aggregates.TryGetValue(key, out var aggregate))
+                {
+                    aggregate = new ResourceProcessAggregate { ProcessId = current.ProcessId, StartedAtTicks = current.StartedAtTicks, Name = current.Name };
+                    aggregates[key] = aggregate;
+                }
+                aggregate.CpuSeconds += cpuSeconds;
+                aggregate.WorkingSetBytes = current.WorkingSetBytes;
+            }
+            var totalWorkingSet = currentProcesses.Values.Sum(item => Math.Max(0, item.WorkingSetBytes));
+            sampleCount++;
+            samples.Add(new { elapsedSeconds = Math.Round(timer.Elapsed.TotalSeconds, 2), sampledAtUtc = DateTimeOffset.UtcNow, cpuPercent = machineCpu, processCount = currentProcesses.Count, processListTruncated, totalProcessWorkingSetBytes = totalWorkingSet, measuredProcessCpuSeconds = Math.Round(totalProcessCpuSeconds, 3) });
+            previousProcesses = currentProcesses;
+            previousSystem = currentSystem;
+            previousAt = currentAt;
+            if (samples.Count >= 60) break;
+        }
+        var measuredSeconds = Math.Max(1, timer.Elapsed.TotalSeconds);
+        var topProcesses = aggregates.Values.OrderByDescending(item => item.CpuSeconds).Take(20).Select(item => new
+        {
+            processId = item.ProcessId, name = item.Name, cpuSeconds = Math.Round(item.CpuSeconds, 3), averageMachineCpuPercent = Math.Round(item.CpuSeconds * 100d / (measuredSeconds * Math.Max(1, Environment.ProcessorCount)), 2), workingSetBytes = item.WorkingSetBytes, startedAtUtc = item.StartedAtTicks > 0 ? new DateTimeOffset(item.StartedAtTicks, TimeSpan.Zero) : (DateTimeOffset?)null
+        }).ToArray();
+        return new { success = true, accepted = true, completed = true, verified = true, durationSeconds = Math.Round(timer.Elapsed.TotalSeconds, 2), requestedDurationSeconds = duration, intervalSeconds = interval, sampleCount, processorCount = Environment.ProcessorCount, samples, topProcesses, notes = new[] { "Sampling is finite and read-only; RunMind does not install a service or continue monitoring after this request.", "Process CPU values are interval deltas and may omit processes that started or exited between samples; records are limited to the first 1,000 processes returned by Windows.", "Processes with inaccessible start times are excluded from CPU aggregation to avoid PID-reuse misattribution.", "Windows system CPU sampling is unavailable when GetSystemTimes cannot be read; such samples report null rather than zero." } };
+    }
+
+    private static object SystemManagerScheduledTasks(JsonElement args)
+    {
+        var action = ReadString(args, "action", 16).Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(action)) action = "list";
+        if (action == "list")
+        {
+            RequireSystemManagerCapability("scheduledTaskInformation");
+            var query = ReadString(args, "query", 120);
+            var maximum = args.TryGetProperty("max_results", out var maxValue) && maxValue.TryGetInt32(out var requestedMaximum) ? requestedMaximum : 100;
+            if (maximum is < 1 or > 200) throw new InvalidDataException("Scheduled Task inventory is limited to 1–200 records.");
+            const string script = """
+$tasks = @(Get-ScheduledTask -ErrorAction Stop | Select-Object -First 5000 | Where-Object { [string]::IsNullOrWhiteSpace([string]$request.query) -or $_.TaskName.IndexOf([string]$request.query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or $_.TaskPath.IndexOf([string]$request.query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.Description).IndexOf([string]$request.query,[StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First ([int]$request.maxResults))
+$rows = @($tasks | ForEach-Object {
+  $info = $null; try { $info = Get-ScheduledTaskInfo -InputObject $_ -ErrorAction Stop } catch { }
+  [pscustomobject]@{ taskName=$_.TaskName; taskPath=$_.TaskPath; state=[string]$_.State; enabled=[bool]$_.Settings.Enabled; hidden=[bool]$_.Settings.Hidden; description=([string]$_.Description).Substring(0,[Math]::Min(300,([string]$_.Description).Length)); actionExecutables=@($_.Actions | ForEach-Object { $_.Execute } | Select-Object -First 5); lastRunTime=if($info){$info.LastRunTime.ToUniversalTime().ToString('o')}else{$null}; nextRunTime=if($info -and $info.NextRunTime){$info.NextRunTime.ToUniversalTime().ToString('o')}else{$null}; lastTaskResult=if($info){$info.LastTaskResult}else{$null} }
+})
+$result = [pscustomobject]@{ tasks=$rows; count=$rows.Count; truncated=($rows.Count -ge [int]$request.maxResults); readOnly=$true }
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 6 -Compress))
+""";
+            var report = RunPowerShellJson(script, new { query, maxResults = maximum }, 30000);
+            return new { success = true, accepted = true, completed = true, verified = true, inventory = report, note = "Task inventory is read-only. Action arguments are deliberately excluded because scheduled-task arguments may contain credentials or tokens." };
+        }
+        if (action is not ("enable" or "disable" or "start" or "stop")) throw new InvalidDataException("Scheduled Task action must be list, enable, disable, start, or stop.");
+        RequireSystemManagerCapability("scheduledTaskManagement");
+        var taskName = ReadBoundedExactString(args, "task_name", 260);
+        var taskPath = ReadBoundedExactString(args, "task_path", 260);
+        if (string.IsNullOrWhiteSpace(taskName) || taskName.Any(char.IsControl) || taskName.IndexOfAny(new[] { '*', '?', '[', ']', '/', '\\', ':', '<', '>', '|', '"' }) >= 0) throw new InvalidDataException("Provide an exact scheduled task name without wildcards, controls or path separators.");
+        if (string.IsNullOrWhiteSpace(taskPath) || taskPath.Any(char.IsControl) || !taskPath.StartsWith('\\') || !taskPath.EndsWith('\\') || taskPath.Contains("..", StringComparison.Ordinal) || taskPath.Contains("\\\\", StringComparison.Ordinal) || taskPath.Contains('/') || taskPath.IndexOfAny(new[] { '*', '?', '[', ']', ':' }) >= 0) throw new InvalidDataException("Provide the exact task path returned by inventory, using leading/trailing single backslashes and no traversal or wildcards.");
+        var detail = $"Task: {taskPath}{taskName}\nAction: {action}\n\nRunMind will address this exact Windows Scheduled Task. It will not create, delete, edit task definitions, or change task triggers.";
+        if (!ConfirmSystemManagerAction("scheduledTaskManagement", "RunMind · Scheduled Task action", detail, alwaysAsk: true))
+            return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, action, taskName, taskPath, message = "The user declined the Scheduled Task action." };
+        const string script = """
+$taskMatches = @(Get-ScheduledTask -TaskName ([string]$request.taskName) -TaskPath ([string]$request.taskPath) -ErrorAction Stop)
+if ($taskMatches.Count -ne 1) { throw 'The exact Scheduled Task identity was not unique.' }
+$task = $taskMatches[0]
+$before = Get-ScheduledTaskInfo -InputObject $task -ErrorAction SilentlyContinue
+$beforeLastRun = if($before){$before.LastRunTime}else{[datetime]::MinValue}
+switch ([string]$request.action) {
+  'enable' { Enable-ScheduledTask -InputObject $task -ErrorAction Stop | Out-Null }
+  'disable' { Disable-ScheduledTask -InputObject $task -ErrorAction Stop | Out-Null }
+  'start' { Start-ScheduledTask -InputObject $task -ErrorAction Stop }
+  'stop' { Stop-ScheduledTask -InputObject $task -ErrorAction Stop }
+}
+$verified = $false; $current = $null; $info = $null
+for($attempt=0;$attempt -lt 10;$attempt++) {
+  Start-Sleep -Milliseconds 500
+  $current = Get-ScheduledTask -TaskName ([string]$request.taskName) -TaskPath ([string]$request.taskPath) -ErrorAction Stop
+  $info = Get-ScheduledTaskInfo -InputObject $current -ErrorAction SilentlyContinue
+  $state = [string]$current.State
+  if ($request.action -eq 'enable' -and [bool]$current.Settings.Enabled) { $verified=$true; break }
+  if ($request.action -eq 'disable' -and -not [bool]$current.Settings.Enabled) { $verified=$true; break }
+  if ($request.action -eq 'start' -and ($state -eq 'Running' -or ($info -and $info.LastRunTime -gt $beforeLastRun))) { $verified=$true; break }
+  if ($request.action -eq 'stop' -and $state -ne 'Running') { $verified=$true; break }
+}
+$result = [pscustomobject]@{ taskName=$current.TaskName; taskPath=$current.TaskPath; action=[string]$request.action; state=[string]$current.State; enabled=[bool]$current.Settings.Enabled; verified=$verified; lastRunTime=if($info){$info.LastRunTime.ToUniversalTime().ToString('o')}else{$null}; lastTaskResult=if($info){$info.LastTaskResult}else{$null} }
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 5 -Compress))
+""";
+        var outcome = RunPowerShellJson(script, new { taskName, taskPath, action }, 15000);
+        var verified = outcome.TryGetProperty("verified", out var verifiedValue) && verifiedValue.ValueKind == JsonValueKind.True;
+        return new { success = verified, accepted = true, completed = true, verified, action, task = outcome, message = verified ? "The Scheduled Task action and resulting state were verified." : "Windows accepted the Scheduled Task action, but the requested state could not be verified." };
+    }
+
+    private static object SystemManagerStorageHealth()
+    {
+        RequireSystemManagerCapability("storageHealth");
+        const string script = """
+$warnings = @(); $physical = @(); $volumes = @(); $fallback = @()
+try {
+  $physical = @(Get-PhysicalDisk -ErrorAction Stop | ForEach-Object {
+    $reliability = $null; try { $reliability = Get-StorageReliabilityCounter -PhysicalDisk $_ -ErrorAction Stop } catch { }
+    [pscustomobject]@{ friendlyName=$_.FriendlyName; model=$_.Model; mediaType=[string]$_.MediaType; busType=[string]$_.BusType; sizeBytes=$_.Size; healthStatus=[string]$_.HealthStatus; operationalStatus=@($_.OperationalStatus | ForEach-Object { [string]$_ }); temperatureC=if($reliability){$reliability.Temperature}else{$null}; wearPercent=if($reliability){$reliability.Wear}else{$null}; powerOnHours=if($reliability){$reliability.PowerOnHours}else{$null}; readErrorsTotal=if($reliability){$reliability.ReadErrorsTotal}else{$null}; writeErrorsTotal=if($reliability){$reliability.WriteErrorsTotal}else{$null} }
+  })
+} catch { $warnings += ('Physical disk/health counters unavailable: ' + $_.Exception.Message) }
+try { $volumes = @(Get-Volume -ErrorAction Stop | Where-Object { $_.DriveLetter -or $_.FileSystemLabel } | Select-Object -First 64 | ForEach-Object { [pscustomobject]@{ driveLetter=$_.DriveLetter; fileSystemLabel=$_.FileSystemLabel; fileSystem=[string]$_.FileSystem; sizeBytes=$_.Size; freeBytes=$_.SizeRemaining; healthStatus=[string]$_.HealthStatus; operationalStatus=@($_.OperationalStatus | ForEach-Object { [string]$_ }) } }) } catch { $warnings += ('Volume health unavailable: ' + $_.Exception.Message) }
+if ($physical.Count -eq 0) { try { $fallback = @(Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Select-Object -First 32 | ForEach-Object { [pscustomobject]@{ model=$_.Model; status=$_.Status; sizeBytes=$_.Size; interfaceType=$_.InterfaceType; mediaType=$_.MediaType } }) } catch { $warnings += ('Basic disk inventory unavailable: ' + $_.Exception.Message) } }
+$result = [pscustomobject]@{ physicalDisks=$physical; volumes=$volumes; basicDiskFallback=$fallback; warnings=$warnings; reliabilityCountersAvailable=($physical.Count -gt 0 -and @($physical | Where-Object { $null -ne $_.temperatureC -or $null -ne $_.wearPercent -or $null -ne $_.powerOnHours }).Count -gt 0) }
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 6 -Compress))
+""";
+        var report = RunPowerShellJson(script, new { }, 30000);
+        return new { success = true, accepted = true, completed = true, verified = true, storage = report, note = "Storage health is best-effort and depends on controller/driver support. Missing SMART/reliability counters are reported as unavailable, never as healthy. This inspection does not run a surface scan or repair filesystem metadata." };
+    }
+
+    private static object SystemManagerSecurityPosture()
+    {
+        RequireSystemManagerCapability("securityPosture");
+        const string script = """
+$warnings = @(); $defender = $null; $firewall = @(); $bitlocker = $null; $secureBoot = $null; $tpm = $null; $uac = $null
+try { $d = Get-MpComputerStatus -ErrorAction Stop; $defender = [pscustomobject]@{ available=$true; antivirusEnabled=$d.AntivirusEnabled; antispywareEnabled=$d.AntispywareEnabled; realTimeProtectionEnabled=$d.RealTimeProtectionEnabled; behaviorMonitorEnabled=$d.BehaviorMonitorEnabled; ioavProtectionEnabled=$d.IoavProtectionEnabled; networkInspectionEnabled=$d.NISEnabled; signatureLastUpdated=if($d.AntivirusSignatureLastUpdated){$d.AntivirusSignatureLastUpdated.ToUniversalTime().ToString('o')}else{$null}; quickScanAge=$d.QuickScanAge; fullScanAge=$d.FullScanAge } } catch { $defender = [pscustomobject]@{ available=$false; warning=$_.Exception.Message }; $warnings += 'Microsoft Defender status unavailable.' }
+try { $firewall = @(Get-NetFirewallProfile -ErrorAction Stop | Select-Object Name,Enabled,DefaultInboundAction,DefaultOutboundAction | ForEach-Object { [pscustomobject]@{ name=$_.Name; enabled=$_.Enabled; defaultInboundAction=[string]$_.DefaultInboundAction; defaultOutboundAction=[string]$_.DefaultOutboundAction } }) } catch { $warnings += 'Windows Firewall profile status unavailable.' }
+try { $b = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop; $bitlocker = [pscustomobject]@{ available=$true; mountPoint=$b.MountPoint; volumeStatus=[string]$b.VolumeStatus; protectionStatus=[string]$b.ProtectionStatus; encryptionPercentage=$b.EncryptionPercentage; lockStatus=[string]$b.LockStatus } } catch { $bitlocker = [pscustomobject]@{ available=$false; warning=$_.Exception.Message }; $warnings += 'BitLocker status unavailable.' }
+try { $value = Confirm-SecureBootUEFI -ErrorAction Stop; $secureBoot = [pscustomobject]@{ available=$true; enabled=[bool]$value } } catch { $secureBoot = [pscustomobject]@{ available=$false; warning=$_.Exception.Message }; $warnings += 'Secure Boot could not be queried on this firmware/platform.' }
+try { $t = Get-Tpm -ErrorAction Stop; $tpm = [pscustomobject]@{ available=$true; present=$t.TpmPresent; ready=$t.TpmReady; enabled=$t.TpmEnabled; activated=$t.TpmActivated; manufacturerId=$t.ManufacturerId; specVersion=$t.SpecVersion } } catch { $tpm = [pscustomobject]@{ available=$false; warning=$_.Exception.Message }; $warnings += 'TPM status unavailable.' }
+try { $u = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -ErrorAction Stop; $uac = [pscustomobject]@{ available=$true; enabled=([int]$u.EnableLUA -eq 1); adminConsentPromptBehavior=$u.ConsentPromptBehaviorAdmin; secureDesktopPrompt=([int]$u.PromptOnSecureDesktop -eq 1) } } catch { $uac = [pscustomobject]@{ available=$false; warning=$_.Exception.Message }; $warnings += 'UAC configuration unavailable.' }
+$result = [pscustomobject]@{ defender=$defender; firewallProfiles=$firewall; bitlockerSystemVolume=$bitlocker; secureBoot=$secureBoot; tpm=$tpm; userAccountControl=$uac; warnings=$warnings }
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 6 -Compress))
+""";
+        var report = RunPowerShellJson(script, new { }, 30000);
+        return new { success = true, accepted = true, completed = true, verified = true, posture = report, note = "Read-only security posture snapshot. It reports availability and configured state; it is not a compliance certification, malware scan or proof that all controls are enforced." };
+    }
+
+    private static async Task<object> SystemManagerTargetedNetworkDiagnosticsAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        RequireSystemManagerCapability("targetedNetworkDiagnostics");
+        var host = ReadBoundedExactString(args, "host", 253).Trim();
+        if (host.StartsWith('[') && host.EndsWith(']')) host = host[1..^1];
+        if (string.IsNullOrWhiteSpace(host) || host.Any(character => char.IsWhiteSpace(character) || char.IsControl(character)) || host.Contains('[') || host.Contains(']') || host.Contains('/') || host.Contains('\\') || host.Contains('@') || Uri.CheckHostName(host) == UriHostNameType.Unknown)
+            throw new InvalidDataException("Provide one hostname or IP address only (no URL, path, credentials or whitespace).");
+        var hasPort = args.TryGetProperty("port", out var portValue) && portValue.ValueKind != JsonValueKind.Null;
+        var port = 0;
+        if (hasPort && (!portValue.TryGetInt32(out port) || port is < 1 or > 65535)) throw new InvalidDataException("TCP probe port must be between 1 and 65535.");
+        var timeout = args.TryGetProperty("timeout_seconds", out var timeoutValue) && timeoutValue.TryGetInt32(out var requestedTimeout) ? requestedTimeout : 5;
+        if (timeout is < 1 or > 10) throw new InvalidDataException("Network diagnostic timeout must be between 1 and 10 seconds.");
+        if (hasPort && !ConfirmSystemManagerAction("targetedNetworkDiagnostics", "RunMind · Targeted network probe", $"Target: {host}:{port}\nTimeout: {timeout} seconds\n\nRunMind will attempt one TCP connection to this endpoint. This sends traffic to the selected host and does not change its configuration.", alwaysAsk: true))
+            return new { success = false, accepted = false, completed = false, verified = false, cancelled = true, host, port, message = "The user declined the TCP probe." };
+        var dnsTimer = Stopwatch.StartNew();
+        IPAddress[] addresses;
+        try
+        {
+            using var dnsTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            dnsTimeout.CancelAfter(TimeSpan.FromSeconds(timeout));
+            if (IPAddress.TryParse(host, out var parsedAddress)) addresses = new[] { parsedAddress };
+            else addresses = await Dns.GetHostAddressesAsync(host, dnsTimeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new { success = false, accepted = true, completed = true, verified = false, host, dnsResolved = false, dnsElapsedMilliseconds = Math.Round(dnsTimer.Elapsed.TotalMilliseconds, 1), dnsError = "timeout", tcpProbe = (object?)null, message = "DNS resolution exceeded the configured timeout." };
+        }
+        catch (Exception error) when (error is SocketException or ArgumentException)
+        {
+            return new { success = false, accepted = true, completed = true, verified = true, host, dnsResolved = false, dnsElapsedMilliseconds = Math.Round(dnsTimer.Elapsed.TotalMilliseconds, 1), dnsError = Limit(error.Message, 300), tcpProbe = (object?)null, message = "DNS resolution failed; no TCP connection was attempted." };
+        }
+        var dnsElapsed = Math.Round(dnsTimer.Elapsed.TotalMilliseconds, 1);
+        object? route = null;
+        string? routeWarning = null;
+        try
+        {
+            const string routeScript = """
+$found = @(Find-NetRoute -RemoteIPAddress ([string]$request.remoteAddress) -ErrorAction Stop)
+$local = $found | Where-Object { $_.PSObject.Properties['IPAddress'] -and $_.PSObject.Properties['PrefixLength'] } | Select-Object -First 1
+$selected = $found | Where-Object { $_.PSObject.Properties['DestinationPrefix'] -and $_.PSObject.Properties['NextHop'] } | Select-Object -First 1
+$result = [pscustomobject]@{ available=($null -ne $selected); remoteAddress=[string]$request.remoteAddress; localAddress=if($local){$local.IPAddress}else{$null}; interfaceAlias=if($selected){$selected.InterfaceAlias}else{if($local){$local.InterfaceAlias}else{$null}}; interfaceIndex=if($selected){$selected.InterfaceIndex}else{if($local){$local.InterfaceIndex}else{$null}}; destinationPrefix=if($selected){$selected.DestinationPrefix}else{$null}; nextHop=if($selected){$selected.NextHop}else{$null}; routeMetric=if($selected){$selected.RouteMetric}else{$null}; warning=if($null -eq $selected){'No selected route was returned.'}else{$null} }
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 4 -Compress))
+""";
+            route = RunPowerShellJson(routeScript, new { remoteAddress = addresses[0].ToString() }, 10000);
+        }
+        catch (Exception error) { routeWarning = Limit(error.Message, 300); }
+        object? tcpProbe = null;
+        var tcpConnected = !hasPort;
+        if (hasPort)
+        {
+            var tcpTimer = Stopwatch.StartNew();
+            Exception? failure = addresses.Length == 0 ? new InvalidOperationException("DNS returned no usable IP addresses.") : null;
+            var attemptedAddresses = new List<string>();
+            foreach (var address in addresses.Take(8))
+            {
+                var remainingSeconds = timeout - tcpTimer.Elapsed.TotalSeconds;
+                if (remainingSeconds <= 0) { failure = new TimeoutException("TCP connection probe exceeded the total configured timeout."); tcpConnected = false; break; }
+                attemptedAddresses.Add(address.ToString());
+                using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                connectTimeout.CancelAfter(TimeSpan.FromSeconds(remainingSeconds));
+                try
+                {
+                    using var client = new TcpClient(address.AddressFamily);
+                    await client.ConnectAsync(address, port, connectTimeout.Token).ConfigureAwait(false);
+                    tcpConnected = true;
+                    failure = null;
+                    break;
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { failure = new TimeoutException("TCP connection timed out."); tcpConnected = false; }
+                catch (Exception error) when (error is SocketException or IOException or ArgumentException) { failure = error; tcpConnected = false; }
+                if (tcpConnected) break;
+            }
+            tcpProbe = new { host, port, connected = tcpConnected, attemptedAddresses, resolvedAddressCount = addresses.Length, addressAttemptLimit = 8, elapsedMilliseconds = Math.Round(tcpTimer.Elapsed.TotalMilliseconds, 1), error = failure is null ? null : Limit(failure.Message, 300), socketError = failure is SocketException socketError ? socketError.SocketErrorCode.ToString() : null };
+        }
+        return new { success = !hasPort || tcpConnected, accepted = true, completed = true, verified = true, host, dnsResolved = addresses.Length > 0, dnsElapsedMilliseconds = dnsElapsed, resolvedAddresses = addresses.Select(address => address.ToString()).Distinct().Take(16).ToArray(), route, routeWarning, tcpProbe, message = !hasPort ? "DNS resolution completed; route selection is included when Windows exposes it." : tcpConnected ? "DNS resolution and TCP connection succeeded." : "DNS resolution succeeded, but the TCP connection did not." };
     }
 
     private static object SystemManagerDiagnostics()

@@ -1,11 +1,11 @@
-# RunMind 2.8.1 — Feature Matrix (P0 foundation + P1 Project Intelligence + Phase 1/2 capabilities)
+# RunMind 2.9.0 — Feature Matrix (P0 foundation + P1 Project Intelligence + P2 System Manager Intelligence)
 
-| Area | Capability | Status in current 2.8.1 source bundle | Notes |
+| Area | Capability | Status in current 2.9.0 source bundle | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
 | Hosts | PowerToys Command Palette | Preserved | Shared Agent Core |
-| Developer | Project index and search | Implemented with limits | Persistent incremental index; Acorn JS analysis; TypeScript compiler API for JS/JSX/TS/TSX semantic references; HTML/CSS project understanding; root tsconfig paths; static module graph; `project_symbol_graph` | Strong semantic support is intentionally scoped to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Compiler checker bounded to 500 source files and 12 MB; no default libs/full diagnostic pass; external installed packages use native Node resolver tool.
+| Developer | Project index and search | Implemented with limits | Persistent incremental index; Acorn JS analysis; TypeScript compiler API for JS/JSX/TS/TSX semantic references; HTML/CSS project understanding; root tsconfig paths; static module graph; `project_symbol_graph` | Language-aware code analysis is intentionally scoped to JavaScript, TypeScript, JSX/TSX, HTML and CSS. SVG is indexed separately as a vector asset with local-reference analysis, not as a programming language. Compiler checker bounded to 500 source files and 12 MB; no default libs/full diagnostic pass; external installed packages use native Node resolver tool.
 | Developer workflow | Project Understanding | Expanded | Uses the persistent index, symbol graph, AST/checker references and source tracing to map architecture and execution paths; does not execute commands or modify files |
 | Developer workflow | Project Diagnostics | Added | Separate operational readiness workflow for manifests, lockfiles, toolchains, scripts, build/test configuration and optional approval-gated live checks; read-only by default |
 | Developer | Project Understanding | Expanded in P1 | Module boundaries, entry-point candidates, dependency direction, high-coupling modules, cycles, unresolved imports and analysis coverage; source verification remains required |
@@ -18,6 +18,14 @@
 | Agent reliability | Tool argument correction | Improved in P0 | Action-specific schema requirements, validation hints, retry fingerprints and no repeated identical malformed tool calls |
 | Developer | Development-server session recovery | Implemented in P0 | Persisted process identity, start/reconcile/stop locking, conservative re-adoption only on PID/start-time/executable match; stale/unknown records never terminated |
 | System Manager | Targeted port-owner lookup | Implemented in P0 | TCP/UDP local port inspection with process identity; available via process or network diagnostics capability; never terminates owners |
+| System Manager | Windows Event Log investigation | Implemented in P2; opt-in | Application/System/Setup only; 1–720 hour range; max 200 events; message truncation; no Security/custom log access |
+| System Manager | Application crash investigation | Implemented in P2; opt-in | Correlates Application Error 1000, WER 1001, .NET Runtime 1026 and SCM 7031/7034; bounded 1–30 day range; signatures are evidence, not root-cause proof |
+| System Manager | Resource sampling | Implemented in P2; opt-in | Finite 1–60 second sampling; system CPU, process CPU deltas and working set; max 1,000 sampled process records and 60 sample records; not persistent monitoring |
+| System Manager | Scheduled Tasks | Implemented in P2; opt-in | Read-only inventory; exact task name/path enable/disable/start/stop with fresh native confirmation and state verification; no task creation/deletion/definition editing |
+| System Manager | Storage health | Implemented in P2; opt-in | Physical disks, reliability counters and volumes with CIM fallback; unavailable controller/SMART data remains unknown |
+| System Manager | Windows security posture | Implemented in P2; opt-in | Defender, firewall profiles, system-volume BitLocker, Secure Boot, TPM and UAC; snapshot only, not malware scan or compliance certification |
+| System Manager | Targeted network diagnostics | Implemented in P2; opt-in | One hostname/IP, DNS, best-effort selected local route/interface/next-hop and optional one TCP port; bounded DNS/route/TCP phases, TCP addresses attempted disclosed and fresh confirmation; no scans/ranges |
+| Developer | SVG project assets | Implemented in P2 scope refinement | Indexed as vector assets; normalized local refs from HTML/CSS and SVG `href`/`xlink:href`; surfaced in Project Understanding and Mission Control |
 | Browser quality | Expected policy-block classification | Implemented in P0 | CORS/CSP/mixed-content events remain visible; explicitly expected policy events are separated from application errors and correlated transport failures |
 | Developer | Coordinated multi-file editing | Added in integration pass | 2–20 files, one approval, snapshot checks, per-file backups, best-effort rollback; sequential writes are not atomic |
 | Developer | Node runtime module resolution | Implemented with limits | Fresh-approved fixed script invokes Node ESM `import.meta.resolve` and CommonJS `createRequire().resolve`; no target modules are executed; native workspace must match project workspace |
@@ -81,7 +89,7 @@
 
 ## 2.6.1 changes
 
-| Area | Capability | Status in current 2.8.1 source bundle | Notes |
+| Area | Capability | Status in current 2.9.0 source bundle | Notes |
 |---|---|---|---|
 | System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
 | System Manager | First-party RunMind adapter | Extended | Sends prompts, opens a validated `.runmind` session, or starts a fresh Standalone conversation |
@@ -180,4 +188,4 @@
 
 ## Developer language scope
 
-RunMind project understanding and project-specific developer workflows are intentionally focused on JavaScript, TypeScript, JSX/TSX, HTML and CSS. No additional language parsers, semantic engines, debuggers or language-specific build/test workflows are introduced in 2.8.1. Existing generic package-manifest/lockfile recognition may observe other ecosystem metadata but does not imply language support.
+RunMind project understanding and project-specific developer workflows are intentionally focused on JavaScript, TypeScript, JSX/TSX, HTML, CSS and SVG. SVG is indexed as a vector asset with local references, not a programming language. No additional language parsers, semantic engines, debuggers or language-specific build/test workflows are introduced in 2.9.0. Existing generic package-manifest/lockfile recognition may observe other ecosystem metadata but does not imply language support.

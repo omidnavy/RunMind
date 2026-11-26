@@ -66,4 +66,4 @@ The release section explicitly leaves these gates unverified unless another appr
 
 ## Language boundary
 
-Language-aware project analysis remains limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Other source files can remain in the generic text index for reading/searching, but they are not semantically parsed or included in JavaScript/TypeScript test-impact dependency analysis. They are reported as unanalysed when supplied as changed paths.
+Language-aware project analysis remains limited to JavaScript, TypeScript, JSX/TSX, HTML, CSS and SVG. Other source files can remain in the generic text index for reading/searching, but they are not semantically parsed or included in JavaScript/TypeScript test-impact dependency analysis. They are reported as unanalysed when supplied as changed paths.

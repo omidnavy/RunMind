@@ -4,7 +4,7 @@ These are separate developer capabilities built on the same persistent project i
 
 ## Project Understanding
 
-Project Understanding is the codebase intelligence layer. It maps architecture, entry points, modules, dependency direction, exports, symbols, references, calls, and important execution paths. It uses the persistent index, JavaScript AST analysis, TypeScript compiler/checker analysis where supported, module-resolution evidence, and source inspection. It is intended to be reused by implementation, debugging, code review, and impact analysis.
+Project Understanding is the codebase intelligence layer. It maps architecture, entry points, modules, dependency direction, exports, symbols, references, calls, and important execution paths. It uses the persistent index, JavaScript AST analysis, TypeScript compiler/checker analysis where supported, module-resolution evidence, source inspection, and a bounded SVG asset-reference graph. SVG is indexed as a first-class vector asset; local `href`/`xlink:href` links and references from HTML/CSS are normalized relative to their owning files. SVG is not treated as a programming language. It is intended to be reused by implementation, debugging, code review, and impact analysis.
 
 It does not run build commands, install dependencies, or change project files. Import-graph heuristics are discovery hints; important relationships must be checked in source.
 

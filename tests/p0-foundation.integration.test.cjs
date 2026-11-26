@@ -103,15 +103,15 @@ test('Agent records tool outcomes and always creates an evidence-based report af
 });
 
 test('P0 Agent guidance preserves JavaScript web-stack scope and directs port conflicts to targeted diagnostics', () => {
-  assert.match(runtime, /JavaScript, TypeScript, JSX\/TSX, HTML, and CSS only/);
+  assert.match(runtime, /JavaScript, TypeScript, JSX\/TSX, HTML, CSS, and SVG only/);
   assert.match(runtime, /system_manager_find_port_owner/);
   assert.match(runtime, /never the broad system_manager_diagnostics tool/);
   assert.match(runtime, /never open a second picker/);
 });
 
-test('Project Understanding only performs language-aware analysis for the agreed JS/TS/HTML/CSS scope', () => {
+test('Project Understanding only performs language-aware analysis for the agreed JS/TS/HTML/CSS/SVG scope', () => {
   const projectIndex = read('Shared/ChatWindow/scripts/agent/project-index.js');
-  assert.match(projectIndex, /const map = \{[^}]*'\.js':'javascript'[^}]*'\.ts':'typescript'[^}]*'\.html':'html'[^}]*'\.css':'css'/);
+  assert.match(projectIndex, /const map = \{[^}]*'\.js':'javascript'[^}]*'\.ts':'typescript'[^}]*'\.html':'html'[^}]*'\.svg':'svg'[^}]*'\.css':'css'/);
   assert.doesNotMatch(projectIndex, /'\.py':'python'|'\.cs':'csharp'|'\.rs':'rust'|'\.go':'go'/);
   assert.match(projectIndex, /if \(!\['javascript','typescript'\]\.includes\(file\.language\)\) continue;/);
   assert.doesNotMatch(projectIndex, /language==='python'|language==='rust'|language==='csharp'|language==='go'/);
@@ -162,13 +162,13 @@ test('development-server metadata writes are serialized and orphan reconciliatio
   assert.match(serverManager, /ready = null/);
 });
 
-test('all published host package and Command Palette manifest versions agree at 2.8.1', () => {
+test('all published host package and Command Palette manifest versions agree at 2.9.0', () => {
   for (const project of [
     'RunMind.Standalone/RunMind.Standalone.csproj',
     'Community.PowerToys.Run.Plugin.RunMind/Community.PowerToys.Run.Plugin.RunMind.csproj',
     'RunMind.CommandPalette/RunMind.CommandPalette.csproj'
-  ]) assert.match(read(project), /<Version>2\.8\.1<\/Version>/);
-  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>2\.8\.1\.0<\/AppxPackageVersion>/);
-  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="2\.8\.1\.0"/);
-  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"2\.8\.1"/);
+  ]) assert.match(read(project), /<Version>2\.9\.0<\/Version>/);
+  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>2\.9\.0\.0<\/AppxPackageVersion>/);
+  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="2\.9\.0\.0"/);
+  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"2\.9\.0"/);
 });

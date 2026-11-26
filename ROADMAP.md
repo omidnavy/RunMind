@@ -1,12 +1,12 @@
 # RunMind Roadmap
 
-## Current source baseline: 2.8.1 — P1 Mission Control refinement
+## Current source baseline: 2.9.0 — P2 System Manager Intelligence
 
 ## Completed milestone: P0 — Foundation & Reliability
 
 P0 source implementation is retained in this release. The P0 target-Windows certification gate remains separate: build all three hosts with `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` and complete `docs/P0-WINDOWS-ACCEPTANCE.md`. This environment cannot certify Windows/.NET runtime behavior.
 
-## Active milestone: P1 — Project Intelligence
+## Completed milestone: P1 — Project Intelligence
 
 P1 extends the P0 persistent index and unified workspace. It does not create a second index, a second workspace, or a parallel execution engine.
 
@@ -22,17 +22,29 @@ P1 extends the P0 persistent index and unified workspace. It does not create a s
 
 - Static analysis uses the persistent index and is bounded by its existing file, byte, depth and parser limits.
 - Test selection depends on statically indexed imports. Dynamic imports, runtime-generated relationships and non-standard test harnesses can be missed; candidates must be reviewed.
-- Project-specific language-aware analysis and tooling remain limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. Other source files remain generic text.
+- Project-specific language-aware source analysis/tooling remains limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS. SVG is indexed as a first-class vector asset with local-reference analysis, not as a programming language. Other source files remain generic text.
 - No build, test, package install, dependency audit, Git mutation, tag, signing or publication is triggered by these P1 tools.
 - The P0 Windows certification checklist remains open until run on the target Windows machine.
+
+## Completed milestone: P2 — System Manager Intelligence
+
+P2 extends the native System Manager across the same three hosts with individually opt-in, permission-aware capabilities. See `docs/SYSTEM-MANAGER-P2.md` for supported operations and safety limits. The Windows acceptance gate is documented separately; source implementation and portable contract tests do not certify live Windows behavior.
+
+- Windows Event Log investigation limited to Application/System/Setup with bounded time ranges and result counts.
+- Crash investigation correlates Application Error, Windows Error Reporting, .NET Runtime and Service Control Manager records; grouped signatures are evidence, not proven root causes.
+- Resource sampling returns bounded system CPU/process CPU/working-set samples for a finite request of at most 60 seconds.
+- Scheduled Task inventory is read-only; exact-identity enable/disable/start/stop are explicitly confirmed and post-action verified. Creation, deletion and definition/trigger editing are not supported.
+- Storage health reports physical-disk, reliability-counter and volume data when Windows/controller drivers expose them; unavailable counters are unknown, not healthy.
+- Security posture reads Defender, firewall profiles, system-volume BitLocker, Secure Boot, TPM and UAC indicators; it is not a compliance certification or malware scan.
+- Targeted network diagnostics resolve one hostname/IP, report Windows-selected route/interface/next-hop when available, and optionally attempt one TCP port with bounded phases and fresh confirmation; no scans/ranges.
+- SVG is a first-class vector asset in Project Understanding and Mission Control, including normalized local references from HTML, CSS and SVG `href`/`xlink:href`.
 
 ## Next milestone candidates
 
 1. **Development Session Timeline:** correlate owned server sessions, Node debugger events, API tests, Playwright requests and logs without adding duplicate event stores.
-2. **System Manager diagnostics:** Windows Event Log/crash investigation, bounded resource sampling, Scheduled Task inventory, storage health, security posture and targeted DNS/TCP probes.
-3. **Podman Development Workbench:** Compose/Containerfile inspection, build logs, container-health and service/port/volume/network relationships.
-4. **Database Development Workbench:** start with PostgreSQL and SQLite; schema inspection, read-only query execution, query plans and migration validation.
-5. **Advanced Agent/MCP reliability:** stronger checkpoints, resource discovery and structured recovery.
+2. **Podman Development Workbench:** Compose/Containerfile inspection, build logs, container-health and service/port/volume/network relationships.
+3. **Database Development Workbench:** start with PostgreSQL and SQLite; schema inspection, read-only query execution, query plans and migration validation.
+4. **Advanced Agent/MCP reliability:** stronger checkpoints, resource discovery and structured recovery.
 
 These are candidates, not claims of existing implementation. Keep the current codebase compact: reuse the shared Agent Core, native bridge, project index, approval system and existing runners. Avoid adding a new engine when an existing subsystem can be extended.
 
@@ -46,7 +58,7 @@ These are candidates, not claims of existing implementation. Keep the current co
 - Browser policy events are not silently discarded; expected and unexpected blocks remain distinguishable.
 - System Manager remains optional and disabled by default.
 - Native process execution runs as the current Windows user and is not a sandbox.
-- Project language support remains JS/TS/JSX/TSX/HTML/CSS until a future explicit scope decision.
+- Project language-aware source support remains JS/TS/JSX/TSX/HTML/CSS; SVG is a first-class vector asset (not a language). Other language-specific tooling requires an explicit future scope decision.
 
 
 ## 2.6.2 — System Management Skills & Capability Contracts

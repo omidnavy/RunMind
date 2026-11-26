@@ -41,13 +41,23 @@ Example theme header:
 
 For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
 
+## RunMind 2.9.0 — P2 System Manager Intelligence (P0 + P1 retained)
+
+RunMind 2.9.0 adds seven optional Windows System Manager intelligence capabilities while retaining the complete P0 reliability foundation and P1 Project Intelligence/Mission Control implementation. All three Windows hosts share the same native System Manager bridge, Agent Core tools, settings and capability checks.
+
+P2 adds read-only Windows Event Log investigation (Application, System and Setup only), crash correlation (Application Error, Windows Error Reporting, .NET Runtime and Service Control Manager records), finite CPU/process resource sampling (maximum 60 seconds), Scheduled Task inventory plus confirmed enable/disable/start/stop actions, best-effort physical-disk and volume health, a read-only Defender/Firewall/BitLocker/Secure Boot/TPM/UAC posture snapshot, and a single-host DNS/selected-route/optional single-port TCP diagnostic. P2 capabilities are individually opt-in and remain disabled by default. Scheduled Task state changes and TCP probes require fresh native confirmation; state-changing results are verified where Windows exposes a verifiable state. The Scheduled Task adapter cannot create/delete tasks or edit definitions/triggers. None of these features is a persistent monitoring service, network scanner, malware scan or compliance certification.
+
+SVG is now a first-class indexed vector asset alongside JavaScript, TypeScript, JSX/TSX, HTML and CSS. Project Understanding records normalized local SVG references from HTML, CSS and SVG `href`/`xlink:href` attributes, and Project Mission Control displays their coverage and evidence. SVG is an asset format, not a programming language. Other programming-language source files remain generic text for reading/search only.
+
+P2 implementation details and limitations are documented in `docs/SYSTEM-MANAGER-P2.md`, `docs/P2-IMPLEMENTATION-AUDIT.md` and `docs/P2-WINDOWS-ACCEPTANCE.md`. Portable tests validate shared JS/Agent wiring and native-source contracts; they do not replace compiling and exercising the Windows native hosts. Run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete the P0, P1 and P2 acceptance checklists before calling the release Windows-certified.
+
 ## RunMind 2.8.1 — P1 Project Intelligence and Mission Control refinement
 
 RunMind 2.8.1 builds on the P0 foundation and refines the P1 project-intelligence implementation: richer Project Understanding, operational Project Diagnostics, Project Mission Control, Test Impact Analysis, and static Release Readiness. The persistent index and one canonical workspace remain shared across Standalone, PowerToys Run and Command Palette.
 
 Project Mission Control is available in Agent Settings and through Agent Mode. It reports index freshness/completeness, architecture evidence, detailed diagnostics, release criteria and prioritized recommendations; a stale index is incrementally refreshed when possible. The Settings dashboard accepts explicit changed paths for Test Impact Analysis, which uses the static JS/TS import graph to select JS/TS tests; unsupported file types are reported as unanalysed, confidence is labeled, and tests are never run automatically. Release Readiness reports static evidence separately from Git status, actual builds/tests, live dependency audits, signing, packaging and publication. These tools are read-only and do not install packages or mutate release metadata.
 
-P1 does not expand the agreed project-language scope: language-aware project analysis and project-specific tooling remain limited to **JavaScript, TypeScript, JSX/TSX, HTML and CSS**. Other source files remain available for generic reading and search only.
+At the 2.8.1 P1 release, language-aware code analysis and project-specific tooling covered **JavaScript, TypeScript, JSX/TSX, HTML and CSS**. RunMind 2.9.0 adds SVG as a first-class vector asset with local-reference analysis; it does not treat SVG as a programming language. Other source files remain available for generic reading and search only.
 
 The Mission Control report contract and freshness/safety behavior are documented in `docs/PROJECT-MISSION-CONTROL.md`. The portable suite and source checks are recorded in `BUILD-STATUS.md`. P0 target-Windows certification remains a separate gate: run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete `docs/P0-WINDOWS-ACCEPTANCE.md`. Do not treat a portable test pass as Windows certification.
 
