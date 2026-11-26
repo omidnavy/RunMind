@@ -1,6 +1,6 @@
     'use strict';
 
-    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v1.';
+    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v2.';
     const PROJECT_INDEX_LIMITS = Object.freeze({ files: 10000, entries: 50000, depth: 10, fileBytes: 256 * 1024, totalBytes: 24 * 1024 * 1024 });
     const PROJECT_INDEX_SKIP_DIRS = new Set(['.git','.hg','.svn','.runmind-backups','.cache','node_modules','vendor','bin','obj','dist','build','out','target','.next','.nuxt','.venv','venv','__pycache__','coverage','.idea','.vs','.gradle','.terraform','.npm','.nuget','.cargo','.docker','.pypoetry','.conda','secret','secrets','credential','credentials','.ssh','.aws','.azure','.gnupg']);
     const PROJECT_INDEX_SKIP_FILES = /^(?:\.env(?:\..*)?|(?:.*\.(?:pem|key|p12|pfx|keystore|jks|kdbx|sqlite|db|wasm|dll|exe|so|dylib|bin|lockb)|.*(?:secret|credential).*)|id_(?:rsa|ed25519)|credentials?(?:\..*)?|secrets?(?:\..*)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|nuget\.config|pip\.conf|\.dockercfg|known_hosts)$/i;
@@ -91,7 +91,7 @@
       }
       const incoming = new Map();
       for (const edge of edges) incoming.set(edge.to,(incoming.get(edge.to)||0)+1);
-      return { localImportEdges: edges.slice(0,5000), filesWithIncomingImports: [...incoming].map(([path,count])=>({path,count})).sort((a,b)=>b.count-a.count||a.path.localeCompare(b.path)).slice(0,100), note:'Best-effort local import links derived from source text; this is not compiler-resolved or AST-based analysis.' };
+      return { localImportEdges: edges.slice(0,5000), filesWithIncomingImports: [...incoming].map(([path,count])=>({path,count})).sort((a,b)=>b.count-a.count||a.path.localeCompare(b.path)).slice(0,100), note:'Local relative import links use AST-extracted JavaScript specifiers where Acorn parsing succeeds; path resolution remains best-effort and is not compiler-resolved.' };
     }
     function redactProjectIndexSecrets(source) {
       let text=String(source||'');
@@ -107,10 +107,96 @@
       text=text.replace(/\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[A-Z0-9]{16})\b/g,'[REDACTED TOKEN]');
       return text;
     }
-    function projectIndexExtract(text, language) {
+    function projectIndexExtractJavaScript(source, path = '') {
+      const parser = globalThis.acorn;
+      if (!parser || typeof parser.parse !== 'function') return { supported: false, error: 'Acorn parser is unavailable.' };
+      let ast;
+      let parseError = null;
+      try {
+        ast = parser.parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true });
+      } catch (error) {
+        parseError = error;
+        try { ast = parser.parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true, allowReturnOutsideFunction: true }); }
+        catch (_) { return { supported: true, parseError: { message: String(parseError.message || parseError).slice(0, 300), line: parseError.loc?.line || null, column: parseError.loc?.column ?? null }, imports: [], symbols: [], symbolDetails: [], identifierOccurrences: [] }; }
+      }
+      const imports = new Set(), declarations = new Map(), occurrences = new Map(), declarationPositions = new Set();
+      const addPattern = pattern => {
+        if (!pattern) return;
+        if (pattern.type === 'Identifier') {
+          declarations.set(pattern.name, (declarations.get(pattern.name) || 0) + 1);
+          declarationPositions.add(pattern.start);
+        } else if (pattern.type === 'RestElement') addPattern(pattern.argument);
+        else if (pattern.type === 'AssignmentPattern') addPattern(pattern.left);
+        else if (pattern.type === 'ArrayPattern') for (const item of pattern.elements) addPattern(item);
+        else if (pattern.type === 'ObjectPattern') for (const item of pattern.properties) addPattern(item.type === 'RestElement' ? item.argument : item.value);
+      };
+      const stack = [{ node: ast, parent: null, key: '' }];
+      while (stack.length) {
+        const { node, parent, key } = stack.pop();
+        if (!node || typeof node.type !== 'string') continue;
+        switch (node.type) {
+          case 'ImportDeclaration':
+          case 'ExportNamedDeclaration':
+          case 'ExportAllDeclaration':
+            if (node.source && typeof node.source.value === 'string') imports.add(node.source.value);
+            break;
+          case 'ImportExpression':
+            if (node.source?.type === 'Literal' && typeof node.source.value === 'string') imports.add(node.source.value);
+            break;
+          case 'CallExpression':
+            if (node.callee?.type === 'Identifier' && node.callee.name === 'require' && node.arguments?.[0]?.type === 'Literal' && typeof node.arguments[0].value === 'string') imports.add(node.arguments[0].value);
+            break;
+          case 'FunctionDeclaration':
+          case 'FunctionExpression':
+          case 'ArrowFunctionExpression':
+            if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') addPattern(node.id);
+            for (const parameter of node.params || []) addPattern(parameter);
+            break;
+          case 'ClassDeclaration':
+          case 'ClassExpression':
+            if (node.type === 'ClassDeclaration') addPattern(node.id);
+            break;
+          case 'VariableDeclarator':
+            addPattern(node.id);
+            break;
+          case 'ImportSpecifier':
+          case 'ImportDefaultSpecifier':
+          case 'ImportNamespaceSpecifier':
+            addPattern(node.local);
+            break;
+          case 'CatchClause':
+            addPattern(node.param);
+            break;
+          case 'Identifier': {
+            const isNonReferenceKey = (parent?.type === 'MemberExpression' && key === 'property' && !parent.computed)
+              || ((parent?.type === 'Property' || parent?.type === 'MethodDefinition' || parent?.type === 'PropertyDefinition') && key === 'key' && !parent.computed && !parent.shorthand)
+              || parent?.type === 'LabeledStatement' || parent?.type === 'BreakStatement' || parent?.type === 'ContinueStatement'
+              || parent?.type === 'ImportSpecifier' || parent?.type === 'ImportDefaultSpecifier' || parent?.type === 'ImportNamespaceSpecifier'
+              || (parent?.type === 'ExportSpecifier' && key === 'exported');
+            if (!isNonReferenceKey && !declarationPositions.has(node.start)) occurrences.set(node.name, (occurrences.get(node.name) || 0) + 1);
+            break;
+          }
+        }
+        for (const childKey of Object.keys(node)) {
+          if (childKey === 'start' || childKey === 'end' || childKey === 'loc' || childKey === 'range') continue;
+          const value = node[childKey];
+          if (Array.isArray(value)) {
+            for (let i = value.length - 1; i >= 0; i--) if (value[i] && typeof value[i].type === 'string') stack.push({ node: value[i], parent: node, key: childKey });
+          } else if (value && typeof value.type === 'string') stack.push({ node: value, parent: node, key: childKey });
+        }
+      }
+      const symbolDetails = [...declarations].map(([name, declarationCount]) => ({ name, declarationCount, referenceOccurrences: occurrences.get(name) || 0 })).sort((a,b)=>a.name.localeCompare(b.name));
+      return { supported: true, engine: 'acorn', imports: [...imports].slice(0, 120), symbols: symbolDetails.map(item=>item.name).slice(0, 120), symbolDetails: symbolDetails.slice(0, 500), identifierOccurrences: [...occurrences].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)).slice(0, 500), parseError: null };
+    }
+    function projectIndexExtract(text, language, path = '') {
       const imports = [], symbols = [];
       const addMatches = (regex, target, max=120) => { let match; while ((match=regex.exec(text)) && target.length<max) { const value=match.slice(1).filter(Boolean).at(-1)?.trim() || ''; if(value && !target.includes(value)) target.push(value); } };
       if (['javascript','typescript'].includes(language)) {
+        const ext = String(path).toLowerCase().split('.').pop();
+        if (language === 'javascript' && ['js','mjs','cjs'].includes(ext)) {
+          const parsed = projectIndexExtractJavaScript(text, path);
+          if (parsed.supported) return { ...parsed, imports: parsed.imports || [], symbols: parsed.symbols || [] };
+        }
         addMatches(/(?:^|\n)\s*(?:import\s+(?:[^'"\n]*?\s+from\s+)?|export\s+[^'"\n]*?\s+from\s+|import\s*\()(['"])([^'"\n]+)\1/g, imports);
         addMatches(/\brequire\s*\(\s*(['"])([^'"]+)\1\s*\)/g, imports);
         addMatches(/(?:^|\n)\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|var)\s+([A-Za-z_$][\w$]*)/g, symbols);
@@ -130,12 +216,12 @@
         addMatches(/(?:^|\n)\s*import\s+([\w.*]+)/g, imports);
         addMatches(/(?:^|\n)\s*(?:public\s+|private\s+|protected\s+|internal\s+|abstract\s+|final\s+)*(?:class|interface|enum|object|fun)\s+([A-Za-z_][\w]*)/g, symbols);
       }
-      return { imports: imports.slice(0,120), symbols: symbols.slice(0,120) };
+      return { imports: imports.slice(0,120), symbols: symbols.slice(0,120), symbolDetails: [], identifierOccurrences: [], parseError: null };
     }
     async function loadProjectIndex() {
       if (!agentDirectoryHandle) throw new Error('Select and authorize a project workspace first.');
       const value = await workspaceDbAction('readonly','get',undefined,projectIndexKey());
-      return value && value.version===1 && value.contextId===workspaceContext.id ? value : null;
+      return value && value.version===2 && value.contextId===workspaceContext.id ? value : null;
     }
     async function buildProjectIndex({ force=false, signal=null, onProgress=null }={}) {
       if (!agentDirectoryHandle) throw new Error('Select and authorize a project workspace first.');
@@ -166,7 +252,7 @@
             const file=await handle.getFile();
             if(file.size>PROJECT_INDEX_LIMITS.fileBytes){skipped++;continue;}
             const prior=oldFiles.get(path);
-            if(prior && prior.size===file.size && prior.lastModified===file.lastModified && typeof prior.text==='string') {
+            if(prior && prior.size===file.size && prior.lastModified===file.lastModified && typeof prior.text==='string' && (prior.language!=='javascript' || prior.analysisEngine==='acorn')) {
               files.push(prior); reused++;
               if(isManifest) manifests.push({path,text:prior.text.slice(0,16000)});
               if(prior.language && prior.language!=='text') technologies.add(prior.language);
@@ -175,8 +261,8 @@
             if(readBytes+file.size>PROJECT_INDEX_LIMITS.totalBytes){stop('aggregate text budget reached');return;}
             const source=await file.text(); readBytes+=file.size;
             const text=redactProjectIndexSecrets(source);
-            const language=projectIndexLanguage(path), extracted=projectIndexExtract(text,language);
-            const record={path,size:file.size,lastModified:file.lastModified,language,imports:extracted.imports,symbols:extracted.symbols,text:text.slice(0,Math.min(text.length,160000)).toLowerCase()};
+            const language=projectIndexLanguage(path), extracted=projectIndexExtract(text,language,path);
+            const record={path,size:file.size,lastModified:file.lastModified,language,analysisEngine:extracted.engine||'regex-fallback',parseError:extracted.parseError||null,imports:extracted.imports,symbols:extracted.symbols,symbolDetails:extracted.symbolDetails||[],identifierOccurrences:extracted.identifierOccurrences||[],text:text.slice(0,Math.min(text.length,160000)).toLowerCase()};
             files.push(record);
             if(isManifest) manifests.push({path,text:text.slice(0,16000)});
             if(language!=='text') technologies.add(language);
@@ -192,7 +278,7 @@
       const frameworks=projectIndexFrameworks(dependencies);
       const toolchains=projectIndexToolchains(files,manifests,[...visitedPaths]);
       const importGraph=projectIndexLocalImportGraph(files);
-      const index={version:1,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
+      const index={version:2,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
       await workspaceDbAction('readwrite','put',index,projectIndexKey());
       projectIndexStatus?.(index);
       return {root:index.rootName,files:index.stats.files,scanned,entries,readBytes,reused,removed,skipped,truncated,reason,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies.slice(0,100),toolchains:index.toolchains,importGraphSummary:{localImportEdges:index.importGraph?.localImportEdges?.length||0,mostImportedFiles:index.importGraph?.filesWithIncomingImports||[],note:index.importGraph?.note},updatedAt:index.updatedAt};
@@ -208,7 +294,7 @@
         if(kind!=='symbols') for(const term of terms){if(file.path.toLowerCase().includes(term)){score+=5;matches.push(`path:${term}`);} if(file.text?.includes(term)){score+=2;matches.push(`text:${term}`);}}
         if(kind==='all'||kind==='symbols') for(const symbol of file.symbols||[]) for(const term of terms) if(symbol.toLowerCase().includes(term)){score+=8;matches.push(`symbol:${symbol}`);}
         if(kind==='all') for(const imported of file.imports||[]) for(const term of terms) if(imported.toLowerCase().includes(term)){score+=3;matches.push(`import:${imported}`);}
-        if(score) hits.push({path:file.path,language:file.language,score,matches:[...new Set(matches)].slice(0,12),symbols:(file.symbols||[]).filter(symbol=>terms.some(term=>symbol.toLowerCase().includes(term))).slice(0,20),imports:(file.imports||[]).slice(0,20)});
+        if(score) hits.push({path:file.path,language:file.language,score,matches:[...new Set(matches)].slice(0,12),symbols:(file.symbols||[]).filter(symbol=>terms.some(term=>symbol.toLowerCase().includes(term))).slice(0,20),symbolDetails:(file.symbolDetails||[]).filter(symbol=>terms.some(term=>symbol.name.toLowerCase().includes(term))).slice(0,20),analysisEngine:file.analysisEngine||'regex-fallback',parseError:file.parseError||null,imports:(file.imports||[]).slice(0,20)});
       }
       hits.sort((a,b)=>b.score-a.score||a.path.localeCompare(b.path));
       return {query,kind,indexUpdatedAt:index.updatedAt,totalMatches:hits.length,results:hits.slice(0,Math.max(1,Math.min(100,limit))),note:'The persistent index is refreshed automatically when a workspace is selected and periodically while the chat is open; manual refresh remains available.'};
@@ -216,7 +302,7 @@
     async function getProjectIndexOverview() {
       const index=await loadProjectIndex();
       if(!index) return {indexed:false,message:'No project index has been built.'};
-      return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,toolchains:index.toolchains||null,importGraph:index.importGraph?{localImportEdges:index.importGraph.localImportEdges.length,filesWithIncomingImports:index.importGraph.filesWithIncomingImports,note:index.importGraph.note}:null,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
+      return {indexed:true,root:index.rootName,updatedAt:index.updatedAt,stats:index.stats,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies,toolchains:index.toolchains||null,analysis:{acornFiles:index.files.filter(item=>item.analysisEngine==='acorn').length,parseErrors:index.files.filter(item=>item.parseError).length,regexFallbackFiles:index.files.filter(item=>item.analysisEngine==='regex-fallback').length},importGraph:index.importGraph?{localImportEdges:index.importGraph.localImportEdges.length,filesWithIncomingImports:index.importGraph.filesWithIncomingImports,note:index.importGraph.note}:null,manifests:index.manifests.map(item=>item.path),topLevel:index.files.filter(item=>!item.path.includes('/')).map(item=>item.path).slice(0,100)};
     }
 
     let projectIndexAutoRefreshTimer = null;

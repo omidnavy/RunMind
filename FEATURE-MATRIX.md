@@ -1,11 +1,11 @@
 # RunMind 2.6.3 — Feature Matrix (Phase 1 + System Manager hardening work in progress)
 
-| Area | Capability | Status in 2.6.1 | Notes |
+| Area | Capability | Status in current 2.6.3 working bundle | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
 | Hosts | PowerToys Command Palette | Preserved | Shared Agent Core |
-| Developer | Project index and search | Implemented with limits | Persistent local index; bounded scan; regex-based symbol/import extraction, not AST/compiler semantics |
+| Developer | Project index and search | Implemented with limits | Persistent bounded local index; Acorn AST parsing for JavaScript; regex fallback for TypeScript/JSX and other languages; no compiler-grade cross-file resolution |
 | Developer | Coordinated multi-file editing | Added in integration pass | 2–20 files, one approval, snapshot checks, per-file backups, best-effort rollback; sequential writes are not atomic |
 | Developer | Static project validation | Implemented with limits | JSON/XML and selected manifest checks; test discovery; package manager/lockfile detection; no build/test execution |
 | Developer | Approved PowerShell/native execution | Implemented | Existing 2.4.0 bridge |
@@ -44,7 +44,7 @@
 
 ## 2.6.1 changes
 
-| Area | Capability | Status in 2.6.1 | Notes |
+| Area | Capability | Status in current 2.6.3 working bundle | Notes |
 |---|---|---|---|
 | System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
 | System Manager | First-party RunMind adapter | Extended | Sends prompts, opens a validated `.runmind` session, or starts a fresh Standalone conversation |
@@ -108,7 +108,7 @@
 |---|---|---|---|
 | Developer | Package-manager and lockfile detection | Implemented in project index | Detects npm, pnpm, Yarn, Bun, uv, Poetry, Pipenv, Cargo, Go, Composer and Bundler lockfiles; Node packageManager field takes precedence when present |
 | Developer | Declared script command suggestions | Implemented in static validation | Suggestions are derived only from detected Node package manager and scripts declared in package.json; never executed by validation |
-| Developer | Local import relationships | Heuristic | Best-effort relative imports for JS/TS/Python; not AST-based, compiler-resolved, or a complete dependency graph |
+| Developer | Local import relationships | Heuristic | JavaScript import specifiers are AST-extracted when parsing succeeds; TypeScript/JSX/Python remain heuristic; relative path resolution is best-effort, not compiler-resolved or a complete dependency graph |
 | System Manager | Container command output and timeout | Hardened | Asynchronous process wait, user-configurable timeout (0 = no automatic timeout), cancellation, process-tree termination, bounded stdout/stderr |
 | System Manager | Native confirmation and permissions | Preserved | System Manager remains disabled by default; destructive process/container operations still require native confirmation |
 
@@ -119,7 +119,7 @@
 
 ### Explicit Phase 1 gaps
 
-- True AST parsing and compiler-grade symbol/reference resolution are not included; current source indexing remains regex-based and language-limited.
+- Acorn provides syntax-tree parsing for JavaScript (.js/.mjs/.cjs), including declaration and identifier-occurrence extraction. TypeScript, JSX, and other languages still use heuristic extraction. Compiler-grade cross-file binding/reference resolution is not included.
 - Runtime build, test, lint, Playwright and dependency-audit commands are not executed by static validation. They require an explicitly selected native workspace and fresh approval.
 - Native process execution runs as the current Windows user and is not a security sandbox.
 - Multi-host Windows compilation and end-to-end execution must be validated on Windows; this environment cannot establish those results.

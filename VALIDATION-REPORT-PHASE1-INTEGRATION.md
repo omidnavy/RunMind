@@ -29,8 +29,20 @@
 
 ## Remaining Phase 1 limitations
 
-- Project symbols, imports, and references are still extracted heuristically. A true AST/compiler-backed semantic model is not implemented; this requires a supported parser/compiler integration rather than relabeling the existing regex index.
+- JavaScript now uses bundled Acorn AST parsing for declarations, static/dynamic imports, CommonJS require specifiers, and identifier occurrence counts. Syntax errors are retained with source locations. TypeScript, JSX, and other languages still use heuristic extraction; scope-resolved cross-file binding and compiler-backed semantics remain outstanding.
 - Git operations are implemented, but complete model-driven end-to-end workflows (inspect → modify → test → review diff → stage → commit) have not been verified through all three hosts.
 - Multi-file editing is safer and recoverable, but it is not a transactional filesystem commit; the API cannot atomically replace multiple independent files.
 - The RunMind adapter now starts a new Standalone window for a saved session or new conversation. It does not attach to, enumerate, or mutate an already-running WebView session, and this behavior is not shared as an IPC session API across the PowerToys hosts.
-- Phase 1 is not declared complete until AST/compiler analysis, native multi-host build/runtime verification, and integrated model-driven workflows are validated.
+- Phase 1 is not declared complete until TypeScript/JSX and other-language compiler analysis, scope-aware cross-file references, native multi-host build/runtime verification, and integrated model-driven workflows are validated.
+
+
+## AST parser increment validation
+
+- Bundled Acorn 8.15.0 and its MIT license under `Shared/ChatWindow/vendor/acorn`; loaded locally before `project-index.js`, with no network dependency.
+- Project index schema/key upgraded to v2 to avoid reusing prior regex-only JavaScript entries.
+- Added Node built-in test-runner coverage for declarations/imports/identifier occurrences, malformed syntax locations, CommonJS script fallback, and explicit TypeScript fallback.
+- Result: 4 AST regression tests passed.
+- Result: all 17 JavaScript files under `Shared/ChatWindow/scripts` passed `node --check`; all 17 also parsed with Acorn (module-first, script fallback).
+- Result: all JSON files parsed and all 4 project XML files parsed.
+- Scope: AST-backed parsing currently applies to `.js`, `.mjs`, and `.cjs`. `.jsx`, `.ts`, `.tsx`, and other languages still use the pre-existing heuristic extractor. Identifier counts are syntactic occurrences, not scope-resolved references; relative import resolution is still best-effort.
+- Windows/.NET build and three-host runtime verification remain unperformed in this environment.

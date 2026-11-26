@@ -1,10 +1,20 @@
+## Phase 1 AST analysis increment
+
+- Bundle Acorn 8.15.0 locally (MIT) and load it before the project index; no network access or runtime package installation is required.
+- Upgrade the persistent project-index schema to v2 so existing regex-only JavaScript records are rebuilt.
+- Parse JavaScript files with an ECMAScript AST; extract static imports, re-exports, dynamic imports, CommonJS `require()` specifiers, declarations, and identifier occurrence counts.
+- Record syntax errors with line/column diagnostics. TypeScript, JSX, and non-JavaScript languages explicitly retain the existing heuristic fallback.
+- Local import path resolution remains best-effort; this increment does not claim TypeScript/compiler semantics or scope-resolved cross-file references.
+
 # RunMind Changelog
 
 ## Unreleased — Phase 1 Developer Workbench & System Manager hardening
 
+- Bundle Acorn 8.15.0 (MIT) for offline ECMAScript AST parsing; extract JavaScript declarations, imports, and identifier occurrence counts, with source-located parse diagnostics. The index schema is v2 and forces existing JavaScript entries to be re-analyzed. TypeScript, JSX, and other languages retain explicit heuristic fallback.
+
 - Extend the persistent project index with package-manager and lockfile detection across Node.js, Python, Rust, Go, PHP, and Ruby ecosystems.
 - Detect npm, pnpm, Yarn, and Bun using package metadata/lockfiles; expose only script commands backed by declared `package.json` scripts. Suggestions are informational and are not executed by indexing or static validation.
-- Add a bounded, best-effort local import relationship summary for relative JavaScript/TypeScript/Python imports. It is explicitly not AST/compiler-resolved analysis.
+- Add a bounded local import relationship summary: JavaScript specifiers use Acorn AST extraction when parsing succeeds; TypeScript/JSX/Python remain heuristic, and path resolution remains best-effort.
 - Extend project validation results with toolchain evidence, script command suggestions, and import-graph summary while preserving its non-executing contract.
 - Harden Docker/Podman CLI execution with asynchronous process waiting, user-configurable timeout, cancellation, process-tree cleanup, and bounded stdout/stderr capture.
 - Add coordinated multi-file editing for 2–20 existing workspace files: one approval, path locking, pre-write snapshot checks, per-file recovery backups, and best-effort rollback on write failure. Writes are sequential, not filesystem-atomic.
