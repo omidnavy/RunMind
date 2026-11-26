@@ -14,10 +14,10 @@
 </p>
 
 <p align="center">
-  <a href="/docs/getting-started/BUILD-AND-SETUP.md">Build &amp; setup</a> ·
-  <a href="/docs/README.md">Documentation</a> ·
-  <a href="/CHANGELOG.md">Changelog</a> ·
-  <a href="/ROADMAP.md">Roadmap</a>
+  <a href="./docs/getting-started/BUILD-AND-SETUP.md">Build &amp; setup</a> ·
+  <a href="./docs/README.md">Documentation</a> ·
+  <a href="./CHANGELOG.md">Changelog</a> ·
+  <a href="./ROADMAP.md">Roadmap</a>
 </p>
 
 ---
