@@ -76,4 +76,20 @@ test('Runner and shared host sources include the Windows compile corrections', a
   assert.match(mainWindow, /SearchBox_KeyDown\(object sender, WpfKeyEventArgs e\)/);
   assert.match(mainWindow, /ResultsList_KeyDown\(object sender, WpfKeyEventArgs e\)/);
   assert.doesNotMatch(mainWindow, /\bKeyEventArgs e\)/);
+
+  const settings = await read('RunMind.Runner/RunnerSettings.cs');
+  const commands = await read('RunMind.Runner/RunnerCommandService.cs');
+  const hotkey = await read('RunMind.Runner/GlobalHotkey.cs');
+  const settingsWindowSource = await read('RunMind.Runner/RunnerSettingsWindow.xaml.cs');
+  const systemManager = await read('Shared/SystemManager.cs');
+
+  assert.match(settings, /^using System\.IO;/m);
+  assert.match(commands, /^using System\.IO;/m);
+  assert.match(settingsWindowSource, /System\.Windows\.MessageBox\.Show\(/);
+  assert.match(mainWindow, /System\.Windows\.MessageBox\.Show\(/);
+  assert.match(hotkey, /_ => 0u,/);
+  assert.match(systemManager, /private static bool WaitForProcessExit\(Process process\)/);
+  assert.match(systemManager, /process\.WaitForExit\(\);\s*return true;/);
+  assert.match(systemManager, /const string inventoryScript = """/);
+  assert.match(systemManager, /RunPowerShellJson\(inventoryScript, new \{ query, maxResults = maximum \}, 30000\)/);
 });

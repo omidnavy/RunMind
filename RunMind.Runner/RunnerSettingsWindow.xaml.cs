@@ -23,7 +23,7 @@ public partial class RunnerSettingsWindow : Window
         var hotkey = HotkeyBox.Text.Trim();
         if (hotkey.Length is < 3 or > 64)
         {
-            MessageBox.Show(this, "Enter a valid shortcut such as Ctrl+Alt+Space.",
+            System.Windows.MessageBox.Show(this, "Enter a valid shortcut such as Ctrl+Alt+Space.",
                 "RunMind Runner", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }

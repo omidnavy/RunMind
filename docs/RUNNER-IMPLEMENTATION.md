@@ -81,3 +81,8 @@ The build publishes a framework-dependent `win-x64` executable to `Release\Runne
 - Check memory/CPU footprint while idle and after the catalogue has loaded.
 
 This environment has no .NET SDK and is not Windows, so the WPF project has not been compiled or run here. Portable tests and XML/source checks do not certify the Windows executable or native hotkey/tray behavior.
+
+
+## Preview 1.2 build corrections
+
+Preview 1.2 follows the second target-machine compiler report. It adds explicit `System.IO` imports for Runner file/path operations, fully qualifies WPF message boxes in the presence of WinForms imports, fixes the global-hotkey switch expression's `uint` type, restores the shared no-timeout process wait helper, and renames the scheduled-task inventory script local to avoid C# scope shadowing. The portable source-contract suite checks these regression points. This does not replace a Release x64 build with the .NET 10 SDK on Windows.

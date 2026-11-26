@@ -1,36 +1,49 @@
-# RunMind 3.4.0 Preview 1.1 — Runner Build-Fix Status
+# RunMind 3.4.0 Preview 1.2 — Runner Build-Fix Status
 
 ## Baseline and change scope
 
-- Baseline: RunMind 3.3.1 Stabilization, SHA-256 verified before extraction and modification.
-- Follow-up: Preview 1.1 corrects the Windows Release x64 compile failures reported from the first target-machine build. See `docs/WINDOWS-BUILD-FIXES-PREVIEW-1.1.md`.
-- Added the optional native WPF `RunMind.Runner` project to the solution. Existing Standalone, PowerToys Run and Command Palette code is not modified for Agent behavior in this preview.
-- Runner is launcher-only and does not reference the Full Agent bridge, workspace bridge, WebView2, MCP or Skills.
-- Added bounded Start Menu application discovery, explicit shortcut launch, rooted path/HTTP(S) open, hotkey/tray/single-instance lifecycle, current-user settings, optional sign-in startup, installer/uninstaller and release publishing.
-- No Quick Agent or Agentic Mode integration is included yet. That is the next milestone and must be implemented once in a restricted shared Core before host adapters are added.
+- Baseline: RunMind 3.3.1 Stabilization and Runner Preview 1.1 source, extracted from the verified Preview 1.1 archive.
+- Follow-up: Preview 1.2 addresses the second target-machine Release x64 compiler report. See `docs/WINDOWS-BUILD-FIXES-PREVIEW-1.2.md`.
+- Runner remains an optional, separate native WPF executable. Standalone, PowerToys Run and Command Palette share only the existing application source; Quick Agent has not been added.
+- Runner remains launcher-only and does not reference Full Agent, workspace/project intelligence, `AgentHostBridge`, WebView2, MCP or Skills.
+- No new runtime package dependency was added.
+
+## Preview 1.2 corrections
+
+- Explicit `System.IO` imports in Runner settings and path/command operations.
+- Explicit WPF `MessageBox` qualification where WinForms is also enabled.
+- Consistent unsigned type in global hotkey modifier selection.
+- Restored the shared process wait helper for the documented no-automatic-timeout (`0`) mode.
+- Renamed the scheduled-task inventory PowerShell script local to avoid C# local-name shadowing.
+- Extended the source-contract regression test to cover these compiler failures.
 
 ## Validation environment
 
-The packaging environment is Linux with Node.js 22.16.0 and Python 3.13. No .NET SDK is installed. Therefore the new WPF project, full solution, release publish, PowerShell installer/uninstaller, Win32 hotkey registration, tray behavior and Windows registry integration have **not** been compiled or executed here. Do not treat this source preview as a Windows-certified release.
+The packaging environment is Linux with Node.js 22.16.0 and Python 3.13. No .NET SDK, MSBuild or Windows runtime is installed. Therefore the WPF projects, full Release x64 solution, publish output, PowerShell installer/uninstaller, Win32 hotkey registration, tray behavior and Windows registry integration have **not** been compiled or executed here.
 
-Portable validation: **261/261 regression tests passed** with `node --test --test-concurrency=1 tests/*.test.cjs` on Node.js 22.16.0, including six Runner source-contract tests and a regression check for the reported C# compile fixes. XML parsing and source checks are recorded with this preview. This is not a C# compile or Windows runtime test. Run the Windows acceptance checklist on the target machine before distributing it.
+Portable validation: **261/261 tests passed** with `node --test --test-concurrency=1 tests/*.test.cjs` on Node.js 22.16.0. All 11 project/XAML/manifest/config XML files parsed successfully. This is source-level regression validation, not a C# compile or Windows runtime test.
 
 ## Windows build and acceptance
 
-On Windows with .NET 10 SDK and the Desktop Runtime, run:
+On Windows with the .NET 10 SDK and Windows Desktop build components, run:
 
 ```powershell
 .\Build-Release-x64.bat
+```
+
+If the full solution builds successfully, optionally install Runner separately:
+
+```powershell
 .\Install-RunMind-Runner.ps1
 ```
 
-Then complete `docs/RUNNER-IMPLEMENTATION.md`. Verify Runner independently installs/uninstalls and leaves the three existing hosts unchanged.
+Then complete `docs/RUNNER-IMPLEMENTATION.md` and the Windows acceptance checklist. Verify Runner independently installs/uninstalls and leaves the other three hosts unchanged.
 
 ## Existing 3.3.1 gates remain open
 
 - Credential-at-rest protection with native DPAPI-backed storage and migration/rollback verification remains open for the Full Agent hosts.
 - NuGet/transitive dependency review and SBOM remain open.
-- Existing three-host Windows Release x64 and PowerToys/WebView2 acceptance remains open.
+- Windows Release x64 and PowerToys/WebView2 acceptance remains open for all hosts.
 - Accessibility, performance, upgrade, long-session and end-to-end acceptance remain open.
 
-Adding Runner does not close or waive any of these gates. Do not declare the product production-ready before they are resolved.
+Adding Runner or fixing source-level compiler errors does not close these gates. Do not declare the product production-ready before they are resolved.

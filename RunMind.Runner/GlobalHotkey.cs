@@ -93,7 +93,7 @@ internal sealed class GlobalHotkey : IDisposable
                 "alt" => ModAlt,
                 "shift" => ModShift,
                 "win" or "windows" => ModWin,
-                _ => 0,
+                _ => 0u,
             };
             if (modifierFlag == 0)
                 return false;

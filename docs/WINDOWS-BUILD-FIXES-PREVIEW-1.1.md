@@ -26,3 +26,6 @@ From the extracted source root on Windows with the .NET 10 SDK installed, run:
 ```
 
 The build must complete for all four projects: RunMind Standalone, PowerToys Run plugin, PowerToys Command Palette extension and optional RunMind Runner. If any new compiler diagnostic appears, capture the complete output and report the first source diagnostic rather than only the final solution failure line.
+
+
+Preview 1.2 continues the target-machine build feedback cycle. See `WINDOWS-BUILD-FIXES-PREVIEW-1.2.md` for the follow-up compile corrections.

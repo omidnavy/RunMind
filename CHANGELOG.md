@@ -1,3 +1,13 @@
+## 3.4.0 Preview 1.2 — Windows compile follow-up
+
+- Add explicit `System.IO` imports to Runner settings and command services so file/path APIs resolve consistently in the WPF + WinForms project.
+- Fully qualify WPF `MessageBox` calls to remove the WPF/WinForms type ambiguity.
+- Make the global-hotkey modifier switch expression consistently `uint`-typed.
+- Restore the `WaitForProcessExit` helper used by the shared bounded diagnostic process runner; a configured timeout of `0` continues to mean no automatic timeout.
+- Rename the scheduled-task inventory script local to avoid C# local-name shadowing with the action script.
+- Extend Runner source-contract regression coverage for all reported Preview 1.1 compile failures. Portable suite: 261/261 passed under Node.js 22.16.0.
+- Windows/.NET 10 compilation has not been run in this packaging environment and must be confirmed on the target Windows machine.
+
 ## 3.3.1 — Stabilization
 
 - Replace unbounded Windows diagnostic/service process stream reads with concurrent bounded stdout/stderr draining (512 KB retained per stream), finite timeout handling, process-tree termination and bounded cleanup. Preserve the user-configured no-automatic-timeout option.

@@ -12,7 +12,7 @@
     <Product>RunMind</Product>
     <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
     <RootNamespace>RunMind.Runner</RootNamespace>
-    <Version>3.4.0-preview.1</Version>
+    <Version>3.4.0-preview.1.2</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

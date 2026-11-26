@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -714,6 +714,12 @@ public sealed partial class AgentHostBridge
             if (verified) { backupKey.DeleteValue(backupName, throwOnMissingValue: false); backupKey.DeleteValue(kindName, throwOnMissingValue: false); backupKey.DeleteValue(metadataName, throwOnMissingValue: false); }
             return new { success = verified, accepted = true, completed = true, verified, action = "enable-startup", target = name, requestedState = "enabled", actualState = verified ? "enabled" : "disabled", source, recoveryStored = !verified, message = verified ? "Startup registry entry restored and verified." : "The registry write was attempted but the restored value could not be verified; recovery data was retained." };
         }
+    }
+
+    private static bool WaitForProcessExit(Process process)
+    {
+        process.WaitForExit();
+        return true;
     }
 
     private static (int ExitCode, string Output) RunFixedDiagnosticCommand(string executable, IEnumerable<string> arguments, int timeoutMilliseconds = 15000)
@@ -2221,7 +2227,7 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
             var query = ReadString(args, "query", 120);
             var maximum = args.TryGetProperty("max_results", out var maxValue) && maxValue.TryGetInt32(out var requestedMaximum) ? requestedMaximum : 100;
             if (maximum is < 1 or > 200) throw new InvalidDataException("Scheduled Task inventory is limited to 1–200 records.");
-            const string script = """
+            const string inventoryScript = """
 $tasks = @(Get-ScheduledTask -ErrorAction Stop | Select-Object -First 5000 | Where-Object { [string]::IsNullOrWhiteSpace([string]$request.query) -or $_.TaskName.IndexOf([string]$request.query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or $_.TaskPath.IndexOf([string]$request.query,[StringComparison]::OrdinalIgnoreCase) -ge 0 -or ([string]$_.Description).IndexOf([string]$request.query,[StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First ([int]$request.maxResults))
 $rows = @($tasks | ForEach-Object {
   $info = $null; try { $info = Get-ScheduledTaskInfo -InputObject $_ -ErrorAction Stop } catch { }
@@ -2230,7 +2236,7 @@ $rows = @($tasks | ForEach-Object {
 $result = [pscustomobject]@{ tasks=$rows; count=$rows.Count; truncated=($rows.Count -ge [int]$request.maxResults); readOnly=$true }
 [Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 6 -Compress))
 """;
-            var report = RunPowerShellJson(script, new { query, maxResults = maximum }, 30000);
+            var report = RunPowerShellJson(inventoryScript, new { query, maxResults = maximum }, 30000);
             return new { success = true, accepted = true, completed = true, verified = true, inventory = report, note = "Task inventory is read-only. Action arguments are deliberately excluded because scheduled-task arguments may contain credentials or tokens." };
         }
         if (action is not ("enable" or "disable" or "start" or "stop")) throw new InvalidDataException("Scheduled Task action must be list, enable, disable, start, or stop.");

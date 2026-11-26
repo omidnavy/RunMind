@@ -158,7 +158,7 @@ public partial class MainWindow : Window
         if (_globalHotkey is not null && !_globalHotkey.TryRegister(candidate.Hotkey, out var error))
         {
             _globalHotkey.TryRegister(_settings.Hotkey, out _);
-            MessageBox.Show(this, error, "RunMind Runner", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, error, "RunMind Runner", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -179,7 +179,7 @@ public partial class MainWindow : Window
             try { _settings.ApplyStartupRegistration(executablePath ?? string.Empty); }
             catch { }
             _globalHotkey?.TryRegister(_settings.Hotkey, out _);
-            MessageBox.Show(this, "Runner settings could not be saved. " + exception.Message,
+            System.Windows.MessageBox.Show(this, "Runner settings could not be saved. " + exception.Message,
                 "RunMind Runner", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
