@@ -1,18 +1,47 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using RunMind.Shared;
 using System.Windows;
 
 namespace RunMind.Standalone;
 
 public partial class App : System.Windows.Application
 {
-    protected override void OnStartup(StartupEventArgs e)
+    private readonly CancellationTokenSource _handoffServerCancellation = new();
+
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        StandalonePathStore.RememberCurrentExecutable();
+
+        RunnerHandoffPayload? runnerHandoff = null;
+        var handoffPath = ReadArgument(e.Args, "--runner-handoff-file");
+        if (RunnerHandoffStore.TryConsume(handoffPath, out var incomingHandoff)
+            && incomingHandoff is not null)
+        {
+            runnerHandoff = incomingHandoff;
+            // Only wait for another process when one is actually present. A first launch
+            // proceeds directly to creating its own Full Agent window; a second launch
+            // forwards the handoff into the already-running Standalone process.
+            if (HasOtherStandaloneProcess()
+                && await RunnerHandoffPipe.TrySendWithRetryAsync(runnerHandoff, 4000))
+            {
+                Shutdown();
+                return;
+            }
+        }
 
         var sessionPath = ReadArgument(e.Args, "--session-file");
         MainWindow window;
-        if (!string.IsNullOrWhiteSpace(sessionPath))
+        if (runnerHandoff is not null)
+        {
+            // This is the real Standalone host: Full Agent, workspace intelligence,
+            // MCP, Skills and the normal standalone provider/conversation state are enabled.
+            window = new MainWindow(runnerHandoff.Prompt, runnerHandoff.Response,
+                runnerHandoff.IsError, "Standalone");
+        }
+        else if (!string.IsNullOrWhiteSpace(sessionPath))
         {
             var fullPath = Path.GetFullPath(sessionPath);
             if (!string.Equals(Path.GetExtension(fullPath), ".runmind", StringComparison.OrdinalIgnoreCase))
@@ -35,6 +64,46 @@ public partial class App : System.Windows.Application
         }
         MainWindow = window;
         window.Show();
+        // Start the current-user-only handoff listener as soon as the first window is
+        // visible. A second launch retries briefly while this listener is coming up.
+        _ = RunnerHandoffPipe.RunServerAsync(Dispatcher, OpenHandoffConversation, _handoffServerCancellation.Token);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _handoffServerCancellation.Cancel();
+        _handoffServerCancellation.Dispose();
+        base.OnExit(e);
+    }
+
+    private static bool HasOtherStandaloneProcess()
+    {
+        var currentProcessId = Environment.ProcessId;
+        foreach (var process in Process.GetProcessesByName("RunMind"))
+        {
+            using (process)
+            {
+                try
+                {
+                    if (process.Id != currentProcessId && !process.HasExited) return true;
+                }
+                catch { }
+            }
+        }
+        return false;
+    }
+
+    private void OpenHandoffConversation(RunnerHandoffPayload payload)
+    {
+        if (MainWindow is Window existing && existing.WindowState == WindowState.Minimized)
+            existing.WindowState = WindowState.Normal;
+
+        // Preserve any existing chat by opening the handoff as a new conversation
+        // window inside the already-running Standalone process. This is the real
+        // Full Agent host, not a duplicated Runner chat surface or process.
+        var window = new MainWindow(payload.Prompt, payload.Response, payload.IsError, "Standalone");
+        window.Show();
+        window.Activate();
     }
 
     private static void EnsureNoReparseAncestors(string path)

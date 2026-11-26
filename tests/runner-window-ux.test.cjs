@@ -116,17 +116,14 @@ test('Runner removes redundant branding and renders a compact unified search fie
   assert.match(xaml, /Text="Search anything…"/);
 });
 
-test('Runner empty state provides actionable quick starts and hides results for no-match queries', async () => {
+test('Runner empty state is intentionally blank and hides the results panel until results exist', async () => {
   const xaml = await read('RunMind.Runner/MainWindow.xaml');
   const code = await read('RunMind.Runner/MainWindow.xaml.cs');
   assert.match(xaml, /x:Name="ResultsPanel"[\s\S]*?Visibility="Collapsed"/);
-  assert.match(xaml, /Text="Try something"/);
-  for (const tag of ['notepad', '12 * 8', '__runmind_suggestion__', 'https://example.com'])
-    assert.ok(xaml.includes(`Tag="${tag}"`), `missing quick-start suggestion ${tag}`);
-  assert.match(code, /ResultsPanel\.Visibility = isInitialState \|\| hasResults \? Visibility\.Visible : Visibility\.Collapsed/);
-  assert.match(code, /EmptyState\.Visibility = isInitialState \? Visibility\.Visible : Visibility\.Collapsed/);
-  assert.match(code, /Suggestion_Click/);
-  assert.match(code, /_settings\.RunMindGlobalMode[\s\S]*_settings\.RunMindActionKeyword/);
+  assert.doesNotMatch(xaml, /Try something|example\.com|__runmind_suggestion__|Suggestion_Click|Find an app|Open a website/);
+  assert.match(code, /ResultsPanel\.Visibility = hasResults \? Visibility\.Visible : Visibility\.Collapsed/);
+  assert.doesNotMatch(code, /EmptyState|Suggestion_Click/);
+  assert.match(code, /var contentHeight = visibleRows > 0 \? 16 \+ visibleRows \* 56 : 0/);
 });
 
 test('Runner expands upward when its current position is in the lower half of the monitor', async () => {

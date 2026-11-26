@@ -8,26 +8,51 @@
 - Runner is an independently installable optional WPF host. Standalone, PowerToys Run and Command Palette remain included and unchanged in product scope.
 - Quick Agentic system-management execution is not included yet. It remains the next shared milestone for all three quick hosts.
 
+## Latest source update — real Standalone handoff (2026-11-24)
+
+- Removed all empty-state sample/suggestion cards. Empty Runner remains a clean launcher shell; results stay collapsed until a plugin returns real matches.
+- Removed `RunnerChatWindow.xaml` / `.xaml.cs` and WebView2 references/assets from the Runner project.
+- Open Chat transfers prompt plus completed/partial inline response as context into a genuine Standalone Full Agent conversation. The prompt is displayed, not re-submitted.
+- When Standalone is already running, a bounded current-user-only named pipe opens a new Full Agent conversation window in that existing process without replacing its current conversation.
+- When Standalone is not running, Runner locates `RunMind.exe` through running processes, registry install metadata, a current-user Local AppData path cache written by Standalone, conventional locations or development output paths; then it launches Standalone with a bounded temporary handoff file.
+- A second Standalone process waits briefly for the existing current-user pipe when another instance is detected. If the listener is still unavailable, it proceeds with a real Full Agent window rather than losing the context.
+- The WPF launcher and plugin registry remain native; only Standalone owns the WebView2 chat/runtime, Full Agent provider settings, workspace, MCP and Skills.
+- **Deployment requirement:** Runner and Standalone must both be built/deployed from this source package for the named-pipe handoff and `--runner-handoff-file` startup contract. Installing this Runner beside an older Standalone binary that predates the handoff listener is not a supported handoff configuration. PowerToys Run and Command Palette do not need to be upgraded for this Runner handoff change.
+
+Latest portable validation on the final source tree and extracted archive:
+
+- Full Node regression suite: **290/290 passed**.
+- Runner-specific contract, window UX and handoff suite: **35/35 passed**.
+- JavaScript syntax checks: **58/58 passed**.
+- JSON files: **4/4 parsed**.
+- XML/XAML/project/manifest files: **11/11 parsed**.
+- ZIP integrity test and SHA-256 sidecar verification: passed.
+
+This environment has no .NET SDK/MSBuild or Windows runtime, so Release x64 compilation and interactive Windows handoff acceptance remain unverified.
+
 ## Complete Runner scope in this source
 
 - Internal first-party plugin registry with Applications, Files & Folders, URLs, Calculator and RunMind inline-answer providers.
 - RunMind inline generation follows the PowerToys Run `llm` action keyword. Use `llm <prompt>` to request an answer and `llm > model > prompt` to override the selected model. Ordinary launcher searches do not trigger model requests.
 - Independent Ollama-native and LM Studio inline provider profiles, model discovery, API-key/custom-header support, reasoning/generation parameters, provider-specific temperature bounds, configured request/discovery timeouts and bounded streaming.
 - DPAPI CurrentUser protection for Runner inline credentials. Credentials are separate from non-secret JSON settings and from the full-chat provider profile.
-- Lazy reuse of the canonical RunMind ChatWindow, shared theme catalog and appearance preferences. Completed and partial inline answers can be handed off to full chat.
-- Restricted Quick Host chat boundary: no workspace selection, attachments, Full Agent, MCP, Skills, developer tools, System Manager or arbitrary native tool dispatch.
-- Native launcher startup remains independent of WebView2 startup and provider network calls. App indexing is asynchronous; ChatWindow loads only when requested.
+- Open Chat hands off to the actual Standalone Full Agent application; Runner does not host a duplicate chat window or bundle WebView2.
+- Inline prompt and completed/partial answer are transferred as transcript context without automatic resubmission. Existing Standalone processes receive the handoff over a current-user-only named pipe; otherwise Runner launches the discovered Standalone executable with a bounded handoff file.
+- Standalone persists its executable path under current-user Local AppData for discovery by an independently installed Runner.
+- Runner has no workspace, MCP, Skills, developer-tool or Full Agent bridge. Those capabilities remain in Standalone.
+- The empty Runner state is intentionally blank. No sample prompts or suggestion cards are displayed, and the result panel remains hidden until there are actual results.
+- Native launcher startup remains independent of WebView2 startup and provider network calls. Application indexing is asynchronous.
 - Configurable global hotkey, tray/single-instance lifecycle, optional current-user startup and independent Runner installer/uninstaller.
 
-## Portable validation performed (latest Runner window UX update)
+## Portable validation performed (latest real Standalone handoff update)
 
 Environment: Linux container, Node.js `v22.16.0`; Python XML parsing. The latest checks ran directly against this modified source tree.
 
-- Full regression suite: **280/280 passed** using `node --test`.
-- Runner-specific contract and window UX suite: **25/25 passed** using `node --test tests/runner-contract.test.cjs tests/runner-window-ux.test.cjs`.
+- Full regression suite: **290/290 passed** using `node --test`.
+- Runner-specific contract, window UX and handoff suite: **35/35 passed** using `node --test tests/runner-contract.test.cjs tests/runner-window-ux.test.cjs tests/runner-standalone-handoff.test.cjs`.
 - XML, XAML, MSBuild project and manifest parsing: checked again after the latest edits.
 - Runner XAML named controls and code-behind bindings: checked for unique names and the new monitor, sizing, provider and ranking controls.
-- New contract tests cover WindowChrome, cursor-monitor selection, auto sizing, conditional provider settings, plugin ranking and themed control heights.
+- Contract tests cover WindowChrome, cursor-monitor selection, auto sizing, conditional provider settings, plugin ranking, themed controls, blank empty state, removal of the duplicate Runner chat host, bounded current-user IPC, executable discovery and prompt/answer handoff.
 - JavaScript syntax and JSON validation remain applicable to unchanged files and are repeated during package validation.
 
 These are portable source-level checks. They do not constitute a .NET compilation or Windows integration test.
@@ -129,7 +154,7 @@ Portable validation on the current source:
 - JavaScript syntax checks: **57/57 passed**.
 - XAML, project and manifest XML parsing: **12/12 passed**.
 - JSON parsing (BOM-aware): **4/4 passed**.
-- MainWindow, RunnerSettingsWindow and RunnerChatWindow XAML event-handler references all resolve to code-behind methods; named controls are unique.
+- MainWindow and RunnerSettingsWindow XAML event-handler references resolve to code-behind methods; the removed RunnerChatWindow is not part of the current Runner project.
 - Tests and static checks were repeated from the final extracted source archive.
 
 These checks are source-level and portable. This environment has no .NET SDK, MSBuild, Windows Desktop runtime or Windows multi-monitor desktop. Accordingly, the latest WPF/C# modifications have **not** been compiled or interactively tested here. Run `Build-Release-x64.bat` on Windows and complete `docs/RUNNER-WINDOW-UX-AND-RANKING.md` before accepting this update.
@@ -144,13 +169,13 @@ The user reported two remaining visual defects in the Runner settings/launcher U
 
 Validation on the current source: **282/282** full Node regression tests; **57/57** JavaScript syntax checks; **12/12** XML/XAML/project/manifest parse checks. The final archive is tested again after extraction. Windows/.NET compilation and interactive WPF rendering remain pending because this environment has no Windows desktop runtime or .NET SDK.
 
-## Follow-up: compact launcher, quick starts and direction-aware growth
+## Historical intermediate state: compact launcher suggestions and direction-aware growth (superseded)
 
 The latest user review requested direction-aware expansion, removal of redundant launcher labels, a more compact search input and a useful empty state. The current source now includes:
 
 - Removed the `RUNNER · QUICK AI` subtitle, the plugin inventory tagline and the `RUNMIND ↵` chip inside the search field.
 - Reduced default width to 680 DIPs. The search row is 54 DIPs high and the TextBox is 40 DIPs with 17-DIP text, transparent background and centered text/caret.
-- Empty query state shows four clickable quick-start suggestions: Notepad, Calculator, RunMind and a website. RunMind's suggestion respects the user's global-mode or configured action-keyword setting, and checks whether the RunMind plugin is enabled before populating the query.
+- An intermediate version displayed four clickable quick-start suggestions. These were removed after review; the current empty state is intentionally blank, as recorded in the latest handoff section at the beginning of this file.
 - A non-empty query with no matches collapses the results panel. A matching query shows only the unified results list without an additional Results heading/count row.
 - Dynamic height uses the current window's monitor and physical bounds. If the window center is in the lower half of the work area, it keeps the old bottom edge and expands upward; in the upper half it keeps the old top edge and expands downward. The adjusted window is clamped to the monitor work area.
 - Added source-level regression tests for these behaviors.
@@ -183,3 +208,15 @@ Portable validation on this source:
 - The incoming Compact UX archive checksum was verified before modification, and the final archive was extracted and checked after packaging.
 
 The environment still has no .NET SDK, MSBuild, Windows Desktop targeting packs or Windows runtime. Therefore this correction has **not** been compiled locally. Re-run `Build-Release-x64.bat` on Windows and confirm that Runner compiles without CS0104, CS4014 or WFO0003. Also confirm that cursor-monitor placement and resizing continue to work across mixed-DPI monitors.
+
+
+## Real Standalone handoff — Windows acceptance
+
+1. Start Runner with Standalone closed; click Open Chat with no prompt. Verify the actual RunMind Standalone executable launches and displays its Full Agent interface.
+2. Start Runner with an active `llm` query and a completed answer; click Open Chat. Verify both messages appear in the real Standalone conversation as context and the model is not asked to generate them again.
+3. Repeat while an inline generation is in progress. Verify the partial answer is transferred and the Runner generation is cancelled.
+4. Keep an unrelated Standalone conversation open, then hand off from Runner. Verify the existing conversation is preserved and a new Full Agent conversation window opens within the existing Standalone process.
+5. Start Standalone while another instance is still initializing, then hand off from Runner. Verify pipe retry routes the context to the running process when its listener becomes ready.
+6. Install Standalone in a non-default location, run it once, close it, then use Runner Open Chat. Verify the cached executable path discovers it.
+7. With Standalone absent and its cached/registered path invalid, verify Runner displays a clear not-found message and does not open a fake chat window.
+8. Confirm Runner's output/publish directory contains no WebView2 package or duplicate ChatWindow runtime, while Standalone still includes its normal WebView2/chat files.

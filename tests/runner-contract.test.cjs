@@ -6,22 +6,29 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => readFile(path.join(root, relativePath), 'utf8');
 
-test('Runner is an optional WPF host with a lazy, restricted shared ChatWindow', async () => {
+test('Runner is a lightweight native optional host and hands full chat to Standalone', async () => {
   const project = await read('RunMind.Runner/RunMind.Runner.csproj');
-  const chat = await read('RunMind.Runner/RunnerChatWindow.xaml.cs');
   const main = await read('RunMind.Runner/MainWindow.xaml.cs');
+  const standaloneApp = await read('RunMind.Standalone/App.xaml.cs');
+  const handoff = await read('Shared/RunnerHandoff.cs');
+  const locator = await read('RunMind.Runner/StandaloneLocator.cs');
   assert.match(project, /<OutputType>WinExe<\/OutputType>/);
   assert.match(project, /<UseWPF>true<\/UseWPF>/);
   assert.match(project, /<TargetFramework>net10\.0-windows/);
-  assert.match(project, /Microsoft\.Web\.WebView2/);
-  assert.match(project, /ChatWindow\.html/);
+  assert.doesNotMatch(project, /Microsoft\.Web\.WebView2|ChatWindow\.html|WebView2RuntimeBootstrapper/);
+  assert.match(project, /ChatWindow\\theme\\\*\.css/);
   assert.doesNotMatch(project, /AgentHostBridge|WorkspaceFileBridge|SystemManager\.cs|Mcp/i);
-  assert.doesNotMatch(chat, /new\s+AgentHostBridge|new\s+WorkspaceFileBridge|new\s+NativePageReader|new\s+ConversationSaveDialog|SystemManager\./i);
-  assert.match(chat, /quickHostMode\s*=\s*true/);
-  assert.match(chat, /operation == "themes\.list"/);
-  assert.match(chat, /Runner Quick Host does not expose native Agent or workspace capabilities/);
-  assert.match(main, /new RunnerChatWindow\(/);
-  assert.match(main, /new RunnerChatWindow/);
+  assert.doesNotMatch(main, /RunnerChatWindow|quickHostMode/);
+  assert.match(main, /new RunnerHandoffPayload/);
+  assert.match(main, /RunnerHandoffPipe\.TrySendAsync/);
+  assert.match(main, /StandaloneLocator\.FindExecutable/);
+  assert.match(main, /--runner-handoff-file/);
+  assert.match(standaloneApp, /new MainWindow\(runnerHandoff\.Prompt, runnerHandoff\.Response,[\s\S]{0,100}"Standalone"\)/);
+  assert.match(standaloneApp, /RunnerHandoffPipe\.RunServerAsync/);
+  assert.match(handoff, /PipeOptions\.CurrentUserOnly/);
+  assert.match(handoff, /MaximumPayloadBytes\s*=\s*256 \* 1024/);
+  assert.match(locator, /Process\.GetProcessesByName\("RunMind"\)/);
+  assert.match(locator, /RegistryHive\.CurrentUser/);
 });
 
 test('Runner catalog is bounded to Start Menu shortcuts and rejects reparse traversal', async () => {
@@ -71,7 +78,7 @@ test('launcher is plugin-driven and registers all five built-in plugins includin
   assert.match(window, /MaximumInlineDisplayCharacters/);
   assert.match(window, /CopyAnswerButton/);
   assert.match(window, /case RunnerPluginAction\.ShowInlineAnswer/);
-  assert.match(window, /private void Chat_Click[\s\S]{0,420}OpenChat\(prompt\)/);
+  assert.match(window, /private async void Chat_Click[\s\S]{0,420}OpenStandaloneChatAsync\(prompt\)/);
 });
 
 test('RunMind launcher activation mirrors the PowerToys Run llm action keyword', async () => {
@@ -128,21 +135,18 @@ test('inline credentials are protected with Windows DPAPI and not serialized int
   assert.doesNotMatch(settings, /RunnerInlineCredentialsStore|credentials\./);
 });
 
-test('Runner reuses the real theme catalog and chat UI while retaining a fast native startup path', async () => {
+test('Runner reuses the RunMind theme catalog without bundling a duplicate chat runtime', async () => {
   const theme = await read('RunMind.Runner/RunnerThemeManager.cs');
   const main = await read('RunMind.Runner/MainWindow.xaml.cs');
-  const chat = await read('RunMind.Runner/RunnerChatWindow.xaml.cs');
-  const chatXaml = await read('RunMind.Runner/RunnerChatWindow.xaml');
   const project = await read('RunMind.Runner/RunMind.Runner.csproj');
   assert.match(theme, /ThemeCatalog\.Discover/);
   assert.match(theme, /AppearancePreferenceStore/);
   assert.match(theme, /theme\?\.Palette/);
   assert.match(main, /Task\.Run\(_applicationCatalog\.Load\)/);
   assert.match(main, /new WindowThemeSynchronizer/);
-  assert.match(chat, /EnsureInstalledAsync/);
-  assert.match(chatXaml, /Loaded="Window_Loaded"/);
-  assert.match(project, /ChatWindow\\\*\*/);
+  assert.match(project, /ChatWindow\\theme\\\*\.css/);
   assert.match(project, /AppearancePreferences\.cs/);
+  assert.doesNotMatch(project, /Microsoft\.Web\.WebView2|ChatWindow\.html|ArtifactTools\.js/);
 });
 
 test('Runner settings are current-user only and startup is opt-in', async () => {
@@ -164,6 +168,8 @@ test('release and install workflow treats Runner as an independent optional comp
   assert.match(solution, /RunMind\.Runner\\RunMind\.Runner\.csproj/);
   assert.match(build, /RunMind\.Runner\\RunMind\.Runner\.csproj/);
   assert.match(build, /Release\\Runner\\win-x64\\publish/);
+  assert.match(build, /Release\\Standalone\\win-x64\\publish/);
+  assert.match(build, /Publishing RunMind Standalone for the Runner handoff/);
   assert.match(installer, /LOCALAPPDATA/);
   assert.match(installer, /RunMind\.Runner\.exe/);
   assert.match(uninstaller, /RunMind\.Runner/);
@@ -211,8 +217,12 @@ test('RunMind is a true inline launcher result and chat is a separate handoff', 
   assert.match(main, /CreateAnswerPreview\(response\)/);
   assert.match(main, /case RunnerPluginAction\.ShowInlineAnswer:[\s\S]{0,320}StatusText\.Text/);
   assert.match(xaml, /Content="Open chat" Click="Chat_Click"/);
-  assert.match(main, /new RunnerChatWindow\(contextPrompt, contextResponse/);
-  assert.doesNotMatch(main, /new RunnerChatWindow\([\s\S]{0,180}Owner = this/);
+  assert.match(main, /new RunnerHandoffPayload/);
+  assert.match(main, /Prompt = contextPrompt/);
+  assert.match(main, /Response = contextResponse/);
+  assert.match(main, /await RunnerHandoffPipe\.TrySendAsync/);
+  assert.match(main, /Process\.Start\(startInfo\)/);
+  assert.doesNotMatch(main, /RunnerChatWindow/);
 });
 
 test('Runner Quick Host blocks workspace and file attachment entry points', async () => {
@@ -326,12 +336,34 @@ test('Runner build uses explicit WPF control types, awaits dispatcher startup wo
   const project = await read('RunMind.Runner/RunMind.Runner.csproj');
   const manifest = await read('RunMind.Runner/app.manifest');
 
-  assert.match(main, /^using WpfButton = System\.Windows\.Controls\.Button;/m);
-  assert.match(main, /sender is not WpfButton \{ Tag: string tag \}/);
+  assert.doesNotMatch(main, /WpfButton|Suggestion_Click/);
   assert.match(main, /await Dispatcher\.InvokeAsync\([\s\S]{0,220}DispatcherPriority\.Loaded\);/);
   assert.doesNotMatch(main, /Dispatcher\.BeginInvoke\(new Action\(\(\) =>[\s\S]{0,220}DispatcherPriority\.Loaded\);/);
   assert.match(project, /<ApplicationHighDpiMode>PerMonitorV2<\/ApplicationHighDpiMode>/);
   assert.match(app, /Application\.SetHighDpiMode\(System\.Windows\.Forms\.HighDpiMode\.PerMonitorV2\);/);
   assert.ok(app.indexOf('SetHighDpiMode') < app.indexOf('base.OnStartup(e)'), 'DPI awareness must be set before WPF startup creates windows');
   assert.doesNotMatch(manifest, /dpiAware|dpiAwareness/);
+});
+
+
+test('Runner-to-Standalone handoff is bounded, current-user-only, and opens a full-agent conversation', async () => {
+  const shared = await read('Shared/RunnerHandoff.cs');
+  const app = await read('RunMind.Standalone/App.xaml.cs');
+  const runner = await read('RunMind.Runner/MainWindow.xaml.cs');
+  assert.match(shared, /MaximumPromptCharacters\s*=\s*12_000/);
+  assert.match(shared, /MaximumResponseCharacters\s*=\s*180_000/);
+  assert.match(shared, /CurrentUserOnly/);
+  assert.match(shared, /FirstPipeInstance/);
+  assert.match(shared, /PipeName = "RunMind\.Standalone\.Handoff\.v1"/);
+  assert.match(shared, /CreatedUtc/);
+  assert.match(shared, /StandalonePathStore/);
+  assert.match(shared, /TrySendWithRetryAsync/);
+  assert.match(app, /RunnerHandoffStore\.TryConsume/);
+  assert.match(app, /await RunnerHandoffPipe\.TrySendWithRetryAsync/);
+  assert.match(app, /HasOtherStandaloneProcess\(\)/);
+  assert.match(app, /OpenHandoffConversation/);
+  assert.match(app, /new MainWindow\(payload\.Prompt, payload\.Response, payload\.IsError, "Standalone"\)/);
+  assert.match(runner, /RunnerHandoffStore\.Write\(payload\)/);
+  assert.match(runner, /startInfo\.ArgumentList\.Add\("--runner-handoff-file"\)/);
+  assert.match(runner, /RunMind Standalone was not found/);
 });

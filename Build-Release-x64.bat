@@ -25,7 +25,7 @@ if /I "%ACTION%"=="help" goto :help
 if /I not "%ACTION%"=="build" goto :help_error
 
 echo ================================================
-echo  Building RunMind Release x64 (three existing hosts + Runner)
+echo  Building RunMind Release x64 (four hosts)
 echo ================================================
 echo.
 
@@ -67,7 +67,7 @@ for %%P in (
     )
 )
 
-echo [1/7] Preparing pinned PDF.js, Tesseract.js, English and Persian OCR resources...
+echo [1/8] Preparing pinned PDF.js, Tesseract.js, English and Persian OCR resources...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Prepare-RunMind-OCR.ps1"
 if errorlevel 1 (
     echo.
@@ -77,7 +77,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/7] Restoring the full solution and the Windows x64 runtime pack...
+echo [2/8] Restoring the full solution and the Windows x64 runtime pack...
 dotnet restore "%SOLUTION%" --runtime win-x64 -p:Configuration=Release -p:Platform=x64
 if errorlevel 1 (
     echo.
@@ -87,7 +87,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/7] Cleaning all Release x64 projects...
+echo [3/8] Cleaning all Release x64 projects...
 dotnet clean "%SOLUTION%" --configuration Release -p:Platform=x64
 if errorlevel 1 (
     echo.
@@ -97,7 +97,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/7] Building the complete Release x64 solution...
+echo [4/8] Building the complete Release x64 solution...
 echo        - RunMind Standalone
 echo        - PowerToys Run plugin
 echo        - PowerToys Command Palette extension
@@ -111,7 +111,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/7] Packaging and signing the Command Palette MSIX (not installing)...
+echo [5/8] Packaging and signing the Command Palette MSIX (not installing)...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Build-RunMind-CommandPalette.ps1" -Configuration Release -Platform x64
 if errorlevel 1 (
     echo.
@@ -121,7 +121,17 @@ if errorlevel 1 (
 )
 
 echo.
-echo [6/7] Publishing the optional RunMind Runner (framework-dependent win-x64)...
+echo [6/8] Publishing RunMind Standalone for the Runner handoff (framework-dependent win-x64)...
+dotnet publish "RunMind.Standalone\RunMind.Standalone.csproj" --configuration Release --runtime win-x64 --self-contained false --no-restore -p:Platform=x64 -o "Release\Standalone\win-x64\publish"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] RunMind Standalone publish failed. Runner handoff cannot be deployed without the updated Standalone host.
+    set "EXITCODE=1"
+    goto :finish
+)
+
+echo.
+echo [7/8] Publishing the optional RunMind Runner (framework-dependent win-x64)...
 dotnet publish "RunMind.Runner\RunMind.Runner.csproj" --configuration Release --runtime win-x64 --self-contained false --no-restore -p:Platform=x64 -o "Release\Runner\win-x64\publish"
 if errorlevel 1 (
     echo.
@@ -131,7 +141,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo [7/7] Verifying the optional Runner executable...
+echo [8/8] Verifying Standalone and Runner executables...
+if not exist "Release\Standalone\win-x64\publish\RunMind.exe" (
+    echo [ERROR] Updated RunMind Standalone executable was not produced.
+    set "EXITCODE=1"
+    goto :finish
+)
 if not exist "Release\Runner\win-x64\publish\RunMind.Runner.exe" (
     echo [ERROR] RunMind Runner executable was not produced.
     set "EXITCODE=1"
@@ -139,7 +154,9 @@ if not exist "Release\Runner\win-x64\publish\RunMind.Runner.exe" (
 )
 
 echo.
-echo [SUCCESS] All three existing RunMind hosts and the optional Runner were built for Release x64.
+echo [SUCCESS] All four RunMind hosts were built for Release x64.
+echo [SUCCESS] Standalone handoff host: "%~dp0Release\Standalone\win-x64\publish"
+echo [SUCCESS] Optional Runner: "%~dp0Release\Runner\win-x64\publish"
 echo [SUCCESS] The Command Palette MSIX and public signing certificate are in:
 echo          "%~dp0Release\CommandPalette\x64"
 echo.
@@ -153,7 +170,7 @@ echo.
 :help
 echo Usage: Build-Release-x64.bat [build^|help]
 echo.
-echo   No argument  Build all Release x64 hosts, publish Runner, and package/sign the Command Palette MSIX.
+echo   No argument  Build all Release x64 hosts, publish Standalone and Runner, and package/sign the Command Palette MSIX.
 echo   build        Same as the default action.
 echo   help         Show this help.
 if /I not "%ACTION%"=="help" set "EXITCODE=1"

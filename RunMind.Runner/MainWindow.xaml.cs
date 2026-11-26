@@ -13,7 +13,6 @@ using Forms = System.Windows.Forms;
 using RunMind.Shared;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 using WpfClipboard = System.Windows.Clipboard;
-using WpfButton = System.Windows.Controls.Button;
 
 namespace RunMind.Runner;
 
@@ -37,7 +36,6 @@ public partial class MainWindow : Window
     private GlobalHotkey? _globalHotkey;
     private Forms.NotifyIcon? _trayIcon;
     private Icon? _trayIconImage;
-    private RunnerChatWindow? _chatWindow;
     private CancellationTokenSource? _inlineGeneration;
     private bool _exitRequested;
     private bool _catalogLoaded;
@@ -117,8 +115,6 @@ public partial class MainWindow : Window
         _globalHotkey?.Dispose();
         _globalHotkey = null;
         _themeSynchronizer.Dispose();
-        _chatWindow?.Close();
-        _chatWindow = null;
         if (_trayIcon is not null)
         {
             _trayIcon.Visible = false;
@@ -205,9 +201,8 @@ public partial class MainWindow : Window
 
         var isInitialState = query.Length == 0;
         var hasResults = _results.Count > 0;
-        ResultsPanel.Visibility = isInitialState || hasResults ? Visibility.Visible : Visibility.Collapsed;
+        ResultsPanel.Visibility = hasResults ? Visibility.Visible : Visibility.Collapsed;
         ResultsList.Visibility = hasResults ? Visibility.Visible : Visibility.Collapsed;
-        EmptyState.Visibility = isInitialState ? Visibility.Visible : Visibility.Collapsed;
         ResultsList.SelectedIndex = hasResults ? 0 : -1;
 
         if (!isInitialState && !hasResults)
@@ -216,35 +211,6 @@ public partial class MainWindow : Window
             StatusText.Text = _hotkeyStatus ?? $"Esc to hide  ·  Enter to open  ·  {_settings.Hotkey} to summon";
 
         UpdateWindowHeightForResults(isInitialState);
-        if (isInitialState)
-        {
-            InlineStatusText.Text = "Inline assistant · Ollama / LM Studio";
-            InlineAnswerText.Text = "Type your question to get an inline answer.";
-            InlineAnswerText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerMuted");
-            InlineModelText.Text = string.IsNullOrWhiteSpace(_inlineSettings.Model)
-                ? "Set a model in Settings to enable inline answers"
-                : $"{(_inlineSettings.Provider == "lmstudio" ? "LM Studio" : "Ollama")} · {_inlineSettings.Model}";
-        }
-    }
-
-    private void Suggestion_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not WpfButton { Tag: string tag }) return;
-        if (tag == "__runmind_suggestion__" &&
-            (!_inlineSettings.Enabled || !_settings.EnabledPlugins.Contains("runmind", StringComparer.Ordinal)))
-        {
-            StatusText.Text = "Enable the RunMind launcher plugin in Settings to use inline answers.";
-            return;
-        }
-
-        var query = tag == "__runmind_suggestion__"
-            ? (_settings.RunMindGlobalMode
-                ? "What can you help me with?"
-                : $"{_settings.RunMindActionKeyword} What can you help me with?")
-            : tag;
-        SearchBox.Text = query;
-        SearchBox.Focus();
-        SearchBox.CaretIndex = SearchBox.Text.Length;
     }
 
     private void ScheduleInlineGeneration(string query)
@@ -432,42 +398,77 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Chat_Click(object sender, RoutedEventArgs e)
+    private async void Chat_Click(object sender, RoutedEventArgs e)
     {
         var prompt = RunMindInlinePlugin.TryExtractPrompt(SearchBox.Text, _settings.RunMindGlobalMode, _settings.RunMindActionKeyword, out var currentPrompt)
             ? currentPrompt
             : (_lastInlineQuery.Length > 0 ? _lastInlineQuery : null);
-        OpenChat(prompt);
+        await OpenStandaloneChatAsync(prompt);
     }
 
-    private void OpenChat(string? query)
+    private async Task OpenStandaloneChatAsync(string? query)
     {
         var contextPrompt = string.IsNullOrWhiteSpace(query) ? null : query.Trim();
         var wasGenerating = _inlineIsRunning;
         var partialInlineResponse = wasGenerating ? InlineAnswerText.Text : string.Empty;
         var responseMatchesPrompt = string.Equals(_lastInlineQuery, contextPrompt, StringComparison.Ordinal);
         CancelInlineGeneration();
-        if (_chatWindow is not null)
-        {
-            if (_chatWindow.IsVisible)
-            {
-                _chatWindow.Activate();
-                return;
-            }
-            _chatWindow.Close();
-            _chatWindow = null;
-        }
 
         string? contextResponse = responseMatchesPrompt ? _lastInlineResponse : null;
         if (responseMatchesPrompt && wasGenerating && !string.IsNullOrWhiteSpace(partialInlineResponse))
             contextResponse = partialInlineResponse;
         if (string.IsNullOrWhiteSpace(contextResponse)) contextResponse = null;
         var contextError = contextResponse is not null && !wasGenerating && _lastInlineError;
-        _chatWindow = new RunnerChatWindow(contextPrompt, contextResponse, contextError,
-            _inlineSettings.Provider, _inlineSettings.Model);
-        _chatWindow.Closed += (_, _) => _chatWindow = null;
-        _chatWindow.Show();
-        Hide();
+        var payload = new RunnerHandoffPayload
+        {
+            Prompt = contextPrompt,
+            Response = contextResponse,
+            IsError = contextError,
+            CreatedUtc = DateTimeOffset.UtcNow,
+        };
+
+        // Prefer the current-user-only pipe so an already-running Standalone receives
+        // the context in a new full-agent conversation window without another process.
+        if (await RunnerHandoffPipe.TrySendAsync(payload, 900))
+        {
+            Hide();
+            return;
+        }
+
+        var executable = StandaloneLocator.FindExecutable();
+        if (string.IsNullOrWhiteSpace(executable))
+        {
+            StatusText.Text = "RunMind Standalone was not found. Install or launch Standalone, then try again.";
+            System.Windows.MessageBox.Show(this,
+                "RunMind Standalone could not be found. Runner is an optional quick host; full chat and Full Agent capabilities belong to the separate RunMind Standalone application.",
+                "RunMind Standalone not found", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        string? handoffFile = null;
+        try
+        {
+            handoffFile = RunnerHandoffStore.Write(payload);
+            var startInfo = new ProcessStartInfo(executable)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetDirectoryName(executable) ?? AppContext.BaseDirectory,
+            };
+            startInfo.ArgumentList.Add("--runner-handoff-file");
+            startInfo.ArgumentList.Add(handoffFile);
+            var process = Process.Start(startInfo);
+            if (process is null)
+                throw new InvalidOperationException("Windows did not start RunMind Standalone.");
+            Hide();
+        }
+        catch (Exception exception)
+        {
+            RunnerHandoffStore.TryDelete(handoffFile);
+            StatusText.Text = "RunMind Standalone could not be opened.";
+            System.Windows.MessageBox.Show(this,
+                "RunMind Standalone could not be opened. " + exception.Message,
+                "RunMind Runner", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e)
@@ -562,7 +563,7 @@ public partial class MainWindow : Window
         try
         {
             var visibleRows = emptyQuery ? 0 : Math.Clamp(_results.Count, 0, 8);
-            var contentHeight = emptyQuery ? 150 : visibleRows > 0 ? 16 + visibleRows * 56 : 0;
+            var contentHeight = visibleRows > 0 ? 16 + visibleRows * 56 : 0;
             const double compactWindowHeight = 184;
             var targetHeight = compactWindowHeight + contentHeight;
 
@@ -666,7 +667,7 @@ public partial class MainWindow : Window
         _trayIconImage = File.Exists(iconPath) ? new Icon(iconPath) : (Icon)SystemIcons.Application.Clone();
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Open RunMind Runner", null, (_, _) => Dispatcher.BeginInvoke(new Action(ShowLauncher)));
-        menu.Items.Add("Open RunMind chat", null, (_, _) => Dispatcher.BeginInvoke(new Action(() => OpenChat(null))));
+        menu.Items.Add("Open RunMind chat", null, (_, _) => Dispatcher.BeginInvoke(new Action(async () => await OpenStandaloneChatAsync(null))));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Dispatcher.BeginInvoke(new Action(ExitRunner)));
         _trayIcon = new Forms.NotifyIcon { Icon = _trayIconImage, Text = "RunMind Runner", ContextMenuStrip = menu, Visible = true };
@@ -683,7 +684,6 @@ public partial class MainWindow : Window
     {
         if (_exitRequested) return;
         _exitRequested = true;
-        _chatWindow?.Close();
         Close();
         System.Windows.Application.Current.Shutdown();
     }

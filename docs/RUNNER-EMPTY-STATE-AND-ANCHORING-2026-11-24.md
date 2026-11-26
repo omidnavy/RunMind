@@ -25,3 +25,8 @@
 - Confirm the initial quick-start suggestions fill the query and RunMind honors the configured global/keyword mode.
 - Confirm a non-matching query hides the result card region rather than showing an empty Results panel.
 - Confirm search control remains visually balanced at 100%, 125%, 150% and 200% display scaling.
+
+
+## Superseding correction — remove illustrative suggestions
+
+The quick-start suggestion cards described in the earlier revision were removed after user review. The current Runner empty state is intentionally blank: no fake examples, no suggestion cards and no result panel until a plugin returns actual results.

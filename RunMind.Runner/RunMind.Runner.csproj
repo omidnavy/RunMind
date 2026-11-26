@@ -22,11 +22,8 @@
     <Compile Include="..\Shared\AppearancePreferences.cs" Link="Shared\AppearancePreferences.cs" />
     <Compile Include="..\Shared\ThemeCatalog.cs" Link="Shared\ThemeCatalog.cs" />
     <Compile Include="..\Shared\WindowThemeSynchronizer.cs" Link="Shared\WindowThemeSynchronizer.cs" />
-    <Compile Include="..\Shared\WebView2RuntimeBootstrapper.cs" Link="Shared\WebView2RuntimeBootstrapper.cs" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
-    <Content Include="..\Shared\ChatWindow.html" Link="ChatWindow.html" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\Shared\ArtifactTools.js" Link="ArtifactTools.js" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\Shared\ChatWindow\**\*.*" Link="ChatWindow\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Shared\ChatWindow\theme\*.css" Link="ChatWindow\theme\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Compile Include="..\Shared\RunnerHandoff.cs" Link="Shared\RunnerHandoff.cs" />
     <Resource Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" />
     <Content Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\Assets\Brand\64x64.png" Link="Assets\Brand\64x64.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
