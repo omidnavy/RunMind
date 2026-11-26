@@ -783,6 +783,7 @@
       if (!enabled || !profile) return;
       enabled.checked = !!settings?.enabled;
       profile.value = settings?.profile || 'restricted';
+      const commandTimeout=document.getElementById('systemManagerCommandTimeout'); if(commandTimeout) commandTimeout.value=String(settings?.commandTimeoutSeconds ?? 0);
       const launchPermission=document.getElementById('systemManagerLaunchPermission'); if(launchPermission) launchPermission.value=settings?.permissions?.launchApplications || 'ask';
       const openPermission=document.getElementById('systemManagerOpenPermission'); if(openPermission) openPermission.value=settings?.permissions?.openTargets || 'ask';
       for (const [key,id] of Object.entries({applications:'systemManagerGroupApplications',processes:'systemManagerGroupProcesses',diagnostics:'systemManagerGroupDiagnostics'})) {
@@ -798,6 +799,7 @@
       const read=(id,fallback=false)=>document.getElementById(id)?.checked ?? fallback;
       const settings={
         enabled:read('systemManagerEnabled'), profile:document.getElementById('systemManagerProfile')?.value || 'restricted',
+        commandTimeoutSeconds:Math.max(0,Math.min(3600,Math.floor(Number(document.getElementById('systemManagerCommandTimeout')?.value)||0))),
         groups:{applications:read('systemManagerGroupApplications'),processes:read('systemManagerGroupProcesses'),diagnostics:read('systemManagerGroupDiagnostics')},
         capabilities:{discoverApplications:read('systemManagerDiscoverApplications'),launchApplications:read('systemManagerLaunchApplications'),openTargets:read('systemManagerOpenTargets'),listProcesses:read('systemManagerListProcesses'),inspectProcesses:read('systemManagerInspectProcesses'),terminateProcesses:read('systemManagerTerminateProcesses'),systemInformation:read('systemManagerSystemInformation'),environmentInformation:read('systemManagerEnvironmentInformation'),serviceInformation:read('systemManagerServiceInformation'),networkInformation:read('systemManagerNetworkInformation')},
         permissions:{launchApplications:document.getElementById('systemManagerLaunchPermission')?.value || 'ask',openTargets:document.getElementById('systemManagerOpenPermission')?.value || 'ask'}

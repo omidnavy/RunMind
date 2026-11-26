@@ -1,8 +1,20 @@
 # RunMind Roadmap
 
-## Current release: 2.6.1 — System Manager UI & Model Compatibility
+## Current source baseline: 2.6.3 — Developer Intelligence & System Manager
 
-RunMind 2.6.1 completes the adapter management surface and improves cross-model prompt compatibility and truthful action results. It preserves the generic application discovery and shared Agent architecture introduced in 2.6.0. It preserves the three supported hosts and the shared Agent Core/native bridge.
+## Active milestone: Phase 1 Developer Workbench completion + System Manager hardening
+
+The 2.6.3 source baseline includes the adapter management surface, cross-model prompt compatibility, truthful action outcomes, generic application discovery, and the shared Agent Core/native bridge across all three hosts.
+
+### Milestone scope and implementation direction
+
+This milestone coordinates the remaining Phase 1 Developer Workbench work with System Manager hardening. It does not include Phases 2–6. The implementation should remain shared across Standalone, PowerToys Run, and PowerToys Command Palette.
+
+- Improve project intelligence with bounded persistent indexing, package-manager/lockfile detection, declared script discovery, and best-effort local import relationships. The import graph remains heuristic, not AST/compiler-grade.
+- Keep build, test, lint, Playwright, API, and dependency-audit execution behind the existing native workspace selection and fresh PowerShell/native command approval. Static validation must never imply execution.
+- Preserve Git/workspace operations, Skills, Profiles, MCP, workflow/task recovery foundations, and existing three-host shared architecture.
+- Harden System Manager process handling, adapter validation, container lifecycle execution, truthful launch/activation outcomes, and native permission checks.
+- Keep true AST/compiler analysis, full debugging/profiling, embedded Playwright, database work, MCP advanced protocol features, and sub-agent orchestration outside this milestone unless separately agreed.
 
 ### Included in this source bundle
 
@@ -43,7 +55,7 @@ RunMind 2.6.1 completes the adapter management surface and improves cross-model 
 - Native operations are explicit, bounded, and approval-gated where they change application state.
 - System Manager is optional and disabled by default.
 - No shell execution is hidden behind application discovery or ordinary read-only diagnostics.
-- No arbitrary scripts, forced focus, GUI automation, administrator elevation, registry modification, or service control.
+- No arbitrary scripts, forced focus, GUI automation, automatic administrator elevation, or registry modification. Windows service start/stop is now available only through the explicit service capability and mandatory confirmation.
 
 
 ## 2.6.2 — System Management Skills & Capability Contracts

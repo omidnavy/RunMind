@@ -65,6 +65,7 @@
         if (name === 'system_manager_install_adapter') return await callAgentHost('systemManager.adapters.save',{adapter:args.adapter||{}},signal);
         if (name === 'system_manager_list_processes') return await callAgentHost('systemManager.process.list',{query:String(args.query||'')},signal);
         if (name === 'system_manager_diagnostics') return await callAgentHost('systemManager.diagnostics',{},signal);
+        if (name === 'system_manager_service_action') return await callAgentHost('systemManager.services.action',{action:String(args.action||''),service:String(args.service||'')},signal);
         if (name === 'system_manager_launch_application') {
           return await callAgentHost('systemManager.apps.launch',{applicationId:String(args.applicationId||''),arguments:Array.isArray(args.arguments)?args.arguments:[],behavior:String(args.behavior||'')},signal);
         }
@@ -708,7 +709,13 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
             } catch (error) { checks.push({ path: item.path, status: 'invalid', error: String(error?.message || error).slice(0, 400) }); }
           }
           const testFiles = index.files.filter(file => /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$|(?:^|\/)test_[^/]+\.py$/i.test(file.path)).map(file => file.path).slice(0, 100);
-          return { root: index.rootName, indexedAt: index.updatedAt, manifestsChecked: checks.length, valid: checks.filter(item => item.status === 'valid').length, invalid: checks.filter(item => item.status === 'invalid').length, warnings: checks.filter(item => item.status === 'warning').length, checks, frameworks, packageScripts, testFilesFound: testFiles.length, testFiles, executionPerformed: false, note: 'This tool performs static manifest and test-file discovery only. For actual build, lint, test, Playwright, or audit execution, use the native PowerShell tool after selecting a native workspace and obtaining fresh approval.' };
+          const toolchains = index.toolchains || { packageManager: null, packageManagerSource: 'not detected', lockfiles: [], ecosystems: [] };
+          const manager = toolchains.packageManager;
+          const scriptCommands = manager && ['npm','pnpm','yarn','bun'].includes(manager)
+            ? Object.fromEntries(Object.keys(packageScripts).filter(key => ['build','test','lint','check','typecheck','audit'].includes(key)).map(key => [key, manager === 'npm' ? `npm run ${key}` : manager === 'yarn' ? `yarn ${key}` : `${manager} run ${key}`]))
+            : {};
+          const importGraph = index.importGraph || { localImportEdges: [], filesWithIncomingImports: [], note: 'No local import graph is available; refresh the project index.' };
+          return { root: index.rootName, indexedAt: index.updatedAt, manifestsChecked: checks.length, valid: checks.filter(item => item.status === 'valid').length, invalid: checks.filter(item => item.status === 'invalid').length, warnings: checks.filter(item => item.status === 'warning').length, checks, frameworks, toolchains, packageScripts, scriptCommands, importGraph: { localImportEdges: importGraph.localImportEdges.length, mostImportedFiles: importGraph.filesWithIncomingImports, note: importGraph.note }, testFilesFound: testFiles.length, testFiles, executionPerformed: false, note: 'Static manifest checks, lockfile/toolchain detection, heuristic local import links, and test-file discovery only. Script commands are derived from the detected package manager and declared package.json scripts; they are suggestions, not executed. For actual build, lint, test, Playwright, or audit execution, use the native PowerShell tool after selecting a native workspace and obtaining fresh approval.' };
         }
         case 'list_developer_workflows': return { workflows: (await loadDeveloperWorkflows()).map(({id,name,description,builtIn})=>({id,name,description,builtIn})) };
         case 'start_developer_workflow': return await startDeveloperWorkflow(args.id, args.context || '');

@@ -28,3 +28,10 @@ Use the current System Manager tools and adapter inventory; never assume a parti
 - Prefer registered adapter operations over constructing commands.
 - Declarative adapters are argument templates, not scripts. Never reinterpret their fields as shell commands.
 - Do not substitute arbitrary PowerShell/native execution when an adapter operation is unavailable. Explain the limitation instead.
+
+## Windows services and containers
+- Use the service action tool only when the System Diagnostics group and `serviceInformation` capability are enabled.
+- Service actions are `list`, `inspect`, `start`, and `stop`. Use exact service names. Start/stop always require a fresh native confirmation; if the request is declined or the OS denies access, stop and report that outcome.
+- After requesting a service start/stop, inspect it again. Report the resulting service state only when the follow-up inspection confirms it.
+- Container actions support Docker and Podman through discrete CLI arguments. State-changing actions require native confirmation.
+- The System Manager command timeout is user-configurable. `0` means no automatic timeout; task cancellation remains active. Do not claim that `0` disables cancellation.

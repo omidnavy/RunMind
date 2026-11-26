@@ -1,14 +1,14 @@
-# RunMind 2.6.1 — Feature Matrix
+# RunMind 2.6.3 — Feature Matrix (Phase 1 + System Manager hardening work in progress)
 
 | Area | Capability | Status in 2.6.1 | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
 | Hosts | PowerToys Command Palette | Preserved | Shared Agent Core |
-| Developer | Project index and search | Implemented | Persistent local index |
-| Developer | Static project validation | Implemented | Does not execute commands |
+| Developer | Project index and search | Implemented with limits | Persistent local index; bounded scan; regex-based symbol/import extraction, not AST/compiler semantics |
+| Developer | Static project validation | Implemented with limits | JSON/XML and selected manifest checks; test discovery; package manager/lockfile detection; no build/test execution |
 | Developer | Approved PowerShell/native execution | Implemented | Existing 2.4.0 bridge |
-| Developer | Build/test workflows | Implemented | Workflow-guided approved execution |
+| Developer | Build/test workflows | Implemented with limits | Workflow-guided approved PowerShell/native execution; commands are selected from project evidence and require fresh approval |
 | Developer | Static analysis/lint workflow | Implemented | Discovers configured tools; read-only checks first |
 | Developer | Playwright test-runner workflow | Implemented | Uses project-installed Playwright CLI; no embedded browser runtime |
 | Developer | API smoke-test workflow | Implemented | Uses approved PowerShell; no dedicated API client UI |
@@ -27,7 +27,9 @@
 | System Manager | Open files/folders/HTTPS URLs | Implemented | Windows default-handler request accepted; target application/window/focus/navigation are not verified |
 | System Manager | Process inspection | Implemented | Read-only; detail fields individually gated |
 | System Manager | Process termination | Implemented | Disabled by default; mandatory fresh confirmation and identity revalidation |
-| System Manager | OS/environment/service/network diagnostics | Implemented | Individual switches; read-only |
+| System Manager | OS/environment/service/network diagnostics | Implemented | Individual switches; read-only diagnostics |
+| System Manager | Windows service control | Added in integration pass | List/inspect; start/stop with mandatory native confirmation; requires serviceInformation capability |
+| System Manager | Native command timeout | User-configurable | 0 disables automatic timeout; 1–3600 seconds; cancellation remains available |
 | System Manager | Application lifecycle | Implemented with limits | Reuse/activate, new-window allowlist, new-process, per-app preferences and graceful close; no force-kill |
 | System Manager | Packaged Windows apps | Implemented with limits | AppsFolder/AUMID activation; no generic arguments or visible-window verification |
 | System Manager | Application adapters | Implemented | Built-ins plus user JSON manifests with argument templates; no scripts/shell |
@@ -96,3 +98,27 @@
 | Dedicated adapters tab and bounded inner scrolling | Implemented |
 | Built-in adapter edit overrides/reset | Implemented |
 | RunMind open/create/export existing conversation native adapter | Not implemented; conversations remain in WebView IndexedDB |
+
+
+## Phase 1 + System Manager milestone — implementation notes
+
+| Area | Capability | Status | Notes |
+|---|---|---|---|
+| Developer | Package-manager and lockfile detection | Implemented in project index | Detects npm, pnpm, Yarn, Bun, uv, Poetry, Pipenv, Cargo, Go, Composer and Bundler lockfiles; Node packageManager field takes precedence when present |
+| Developer | Declared script command suggestions | Implemented in static validation | Suggestions are derived only from detected Node package manager and scripts declared in package.json; never executed by validation |
+| Developer | Local import relationships | Heuristic | Best-effort relative imports for JS/TS/Python; not AST-based, compiler-resolved, or a complete dependency graph |
+| System Manager | Container command output and timeout | Hardened | Asynchronous process wait, user-configurable timeout (0 = no automatic timeout), cancellation, process-tree termination, bounded stdout/stderr |
+| System Manager | Native confirmation and permissions | Preserved | System Manager remains disabled by default; destructive process/container operations still require native confirmation |
+
+### Additional System Manager integration pass
+
+- The previous fixed 30-second container timeout is removed. `commandTimeoutSeconds` is stored in System Manager settings; 0 means no automatic timeout, and 1–3600 sets the requested limit. Cancellation remains available.
+- Added a Windows service tool for listing, inspecting, starting and stopping services. Start/stop always require a fresh native confirmation; successful command acceptance is not represented as verified final service state.
+
+### Explicit Phase 1 gaps
+
+- True AST parsing and compiler-grade symbol/reference resolution are not included; current source indexing remains regex-based and language-limited.
+- Runtime build, test, lint, Playwright and dependency-audit commands are not executed by static validation. They require an explicitly selected native workspace and fresh approval.
+- Native process execution runs as the current Windows user and is not a security sandbox.
+- Multi-host Windows compilation and end-to-end execution must be validated on Windows; this environment cannot establish those results.
+- RunMind's built-in adapter can submit a startup prompt, but does not manage an already-running conversation/session store.

@@ -13,6 +13,8 @@ using Microsoft.Win32;
 using System.Net.NetworkInformation;
 using System.Windows;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RunMind.Shared;
 
@@ -124,7 +126,8 @@ public sealed partial class AgentHostBridge
             ["systemInformation"] = true, ["environmentInformation"] = false, ["serviceInformation"] = false, ["networkInformation"] = false
         },
         ["permissions"] = new JsonObject { ["launchApplications"] = "ask", ["openTargets"] = "ask" },
-        ["applicationBehaviors"] = new JsonObject()
+        ["applicationBehaviors"] = new JsonObject(),
+        ["commandTimeoutSeconds"] = 0
     };
 
     private static JsonObject ReadSystemManagerSettings()
@@ -152,6 +155,8 @@ public sealed partial class AgentHostBridge
                 var value = (string?)saved["permissions"]?[permission];
                 defaults["permissions"]![permission] = value is "allow" or "ask" ? value : "ask";
             }
+            var timeoutSeconds = saved["commandTimeoutSeconds"]?.GetValue<int>() ?? 0;
+            defaults["commandTimeoutSeconds"] = Math.Clamp(timeoutSeconds, 0, 3600);
             if (saved["applicationBehaviors"] is JsonObject behaviors)
             {
                 foreach (var pair in behaviors.Take(100))
@@ -202,6 +207,11 @@ public sealed partial class AgentHostBridge
             if (input.TryGetProperty("capabilities", out var capabilities) && capabilities.ValueKind == JsonValueKind.Object && capabilities.TryGetProperty(capability, out var capabilityValue) && (capabilityValue.ValueKind is JsonValueKind.True or JsonValueKind.False)) current["capabilities"]![capability] = capabilityValue.GetBoolean();
         foreach (var permission in new[] { "launchApplications", "openTargets" })
             if (input.TryGetProperty("permissions", out var permissions) && permissions.ValueKind == JsonValueKind.Object && permissions.TryGetProperty(permission, out var permissionValue) && permissionValue.ValueKind == JsonValueKind.String && (permissionValue.GetString() is "allow" or "ask")) current["permissions"]![permission] = permissionValue.GetString();
+        if (input.TryGetProperty("commandTimeoutSeconds", out var timeoutValue) && timeoutValue.TryGetInt32(out var requestedTimeout))
+        {
+            if (requestedTimeout is < 0 or > 3600) throw new InvalidDataException("Command timeout must be between 0 and 3600 seconds. Use 0 for no automatic timeout.");
+            current["commandTimeoutSeconds"] = requestedTimeout;
+        }
         Directory.CreateDirectory(SystemManagerRoot);
         EnsureNoReparseAncestors(SystemManagerRoot);
         var temp = SystemManagerSettingsPath + ".tmp";
@@ -839,7 +849,7 @@ public sealed partial class AgentHostBridge
         return SystemManagerLaunchApplication(document.RootElement);
     }
 
-    private static object SystemManagerContainerAction(JsonElement args)
+    private async Task<object> SystemManagerContainerActionAsync(JsonElement args, CancellationToken cancellationToken)
     {
         RequireSystemCapability("applications", "launchApplications");
         var action = ReadString(args, "action", 20).ToLowerInvariant();
@@ -864,11 +874,66 @@ public sealed partial class AgentHostBridge
         if (stateChanging && !ConfirmSystemManagerAction("launchApplications", $"RunMind · {runtime} container {action}", $"Runtime: {Path.GetFileNameWithoutExtension(executable)}\nContainer: {container}\nAction: {action}", alwaysAsk: true)) return new { accepted = false, cancelled = true, runtime, action, container };
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         foreach (var value in commandArguments) start.ArgumentList.Add(value);
-        using var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start {Path.GetFileName(executable)}.");
-        var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(30000)) { try { process.Kill(entireProcessTree: true); } catch { } throw new TimeoutException($"Container action '{action}' exceeded 30 seconds."); }
-        var output = stdout.GetAwaiter().GetResult(); var error = stderr.GetAwaiter().GetResult();
-        return new { available = true, accepted = process.ExitCode == 0, completed = process.ExitCode == 0, verified = process.ExitCode == 0 && (action is "list" or "inspect"), runtime = Path.GetFileNameWithoutExtension(executable), action, container, exitCode = process.ExitCode, output = output.Length > 30000 ? output[..30000] : output, error = error.Length > 8000 ? error[..8000] : error, message = process.ExitCode == 0 ? "Runtime command completed. For start/stop/restart, use inspect or list to verify the resulting state." : "Container runtime returned a non-zero exit code." };
+        using var process = new Process { StartInfo = start };
+        if (!process.Start()) throw new InvalidOperationException($"Could not start {Path.GetFileName(executable)}.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var timeoutSeconds = (int?)ReadSystemManagerSettings()["commandTimeoutSeconds"] ?? 0;
+        if (timeoutSeconds > 0) timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        var stdoutTask = ReadBoundedProcessOutputAsync(process.StandardOutput, timeout.Token);
+        var stderrTask = ReadBoundedProcessOutputAsync(process.StandardError, timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+            try { await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false); } catch { }
+            if (cancellationToken.IsCancellationRequested) throw;
+            throw new TimeoutException($"Container action '{action}' exceeded the configured {timeoutSeconds}-second timeout and was terminated.");
+        }
+        var output = await stdoutTask.ConfigureAwait(false);
+        var error = await stderrTask.ConfigureAwait(false);
+        return new { available = true, accepted = process.ExitCode == 0, completed = process.ExitCode == 0, verified = process.ExitCode == 0 && (action is "list" or "inspect"), runtime = Path.GetFileNameWithoutExtension(executable), action, container, exitCode = process.ExitCode, output = output.text, outputTruncated = output.truncated, error = error.text, errorTruncated = error.truncated, message = process.ExitCode == 0 ? "Runtime command completed. For start/stop/restart, use inspect or list to verify the resulting state." : "Container runtime returned a non-zero exit code." };
+    }
+
+    private async Task<object> SystemManagerServiceActionAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        RequireSystemCapability("diagnostics", "serviceInformation");
+        var action = ReadString(args, "action", 16).ToLowerInvariant();
+        var service = ReadString(args, "service", 128);
+        if (action is not ("list" or "inspect" or "start" or "stop")) throw new InvalidDataException("Supported service actions are list, inspect, start, and stop.");
+        if (action != "list" && !System.Text.RegularExpressions.Regex.IsMatch(service, "^[A-Za-z0-9_.-]{1,128}$")) throw new InvalidDataException("A valid Windows service name is required.");
+        if (action is "start" or "stop")
+        {
+            if (!ConfirmSystemManagerAction("launchApplications", $"RunMind · {action} Windows service", $"Service: {service}\nAction: {action}\nThis changes Windows service state and may affect applications or the operating system.", alwaysAsk: true))
+                return new { accepted = false, cancelled = true, action, service };
+        }
+        var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "sc.exe");
+        var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
+        if (action == "list") { start.ArgumentList.Add("query"); start.ArgumentList.Add("state="); start.ArgumentList.Add("all"); }
+        else if (action == "inspect") { start.ArgumentList.Add("queryex"); start.ArgumentList.Add(service); }
+        else { start.ArgumentList.Add(action); start.ArgumentList.Add(service); }
+        using var process = new Process { StartInfo = start };
+        if (!process.Start()) throw new InvalidOperationException("Could not start the Windows Service Control utility.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var timeoutSeconds = (int?)ReadSystemManagerSettings()["commandTimeoutSeconds"] ?? 0;
+        if (timeoutSeconds > 0) timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        var stdoutTask = ReadBoundedProcessOutputAsync(process.StandardOutput, timeout.Token);
+        var stderrTask = ReadBoundedProcessOutputAsync(process.StandardError, timeout.Token);
+        try { await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false); }
+        catch (OperationCanceledException)
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+            try { await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false); } catch { }
+            if (cancellationToken.IsCancellationRequested) throw;
+            throw new TimeoutException(timeoutSeconds == 0 ? "The Windows service command was cancelled." : $"The Windows service command exceeded the configured {timeoutSeconds}-second timeout.");
+        }
+        var output = await stdoutTask.ConfigureAwait(false);
+        var error = await stderrTask.ConfigureAwait(false);
+        return new { accepted = process.ExitCode == 0, action, service = action == "list" ? null : service, exitCode = process.ExitCode, output = output.text, outputTruncated = output.truncated, error = error.text, errorTruncated = error.truncated, note = action is "start" or "stop" ? "Service Control accepted the request; inspect the service to verify its resulting state." : "Service information returned by Windows Service Control." };
     }
 
     private static bool SupportsNewWindowBehavior(SystemApplicationRecord application)
@@ -1225,6 +1290,12 @@ public sealed partial class AgentHostBridge
         return new { diagnostics = data, note = "Read-only Windows and process diagnostics. Service and network details are included only when their individual capabilities are enabled." };
     }
 
+    private static bool WaitForProcessExit(Process process)
+    {
+        process.WaitForExit();
+        return true;
+    }
+
     private static object ReadWindowsServices()
     {
         var scPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "sc.exe");
@@ -1234,7 +1305,9 @@ public sealed partial class AgentHostBridge
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the Windows Service Control utility.");
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(10000)) { try { process.Kill(true); } catch { } throw new TimeoutException("Windows service enumeration exceeded 10 seconds."); }
+        var timeoutSeconds = (int?)ReadSystemManagerSettings()["commandTimeoutSeconds"] ?? 0;
+        var exited = timeoutSeconds > 0 ? process.WaitForExit(checked(timeoutSeconds * 1000)) : WaitForProcessExit(process);
+        if (!exited) { try { process.Kill(true); } catch { } throw new TimeoutException($"Windows service enumeration exceeded the configured {timeoutSeconds}-second timeout."); }
         var output = outputTask.GetAwaiter().GetResult();
         _ = errorTask.GetAwaiter().GetResult();
         var services = new List<object>();

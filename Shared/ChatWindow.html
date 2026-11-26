@@ -444,13 +444,14 @@
                 </div>
               </section>
               <section class="agent-settings-card" data-system-manager-view="settings">
-                <div class="agent-settings-card-heading"><div><h3>System Diagnostics</h3><p>Read-only operating-system, environment, service and network information.</p></div></div>
+                <div class="agent-settings-card-heading"><div><h3>System Diagnostics</h3><p>Read-only diagnostics plus explicitly confirmed Windows service start/stop operations.</p></div></div>
                 <label class="agent-settings-checkbox"><input id="systemManagerGroupDiagnostics" type="checkbox"><span>Enable System Diagnostics</span></label>
                 <div class="agent-settings-fields">
                   <label class="agent-settings-checkbox"><input id="systemManagerSystemInformation" type="checkbox"><span>Operating system and runtime information</span></label>
                   <label class="agent-settings-checkbox"><input id="systemManagerEnvironmentInformation" type="checkbox"><span>Environment information</span></label>
                   <label class="agent-settings-checkbox"><input id="systemManagerServiceInformation" type="checkbox"><span>Windows service inspection</span></label>
                   <label class="agent-settings-checkbox"><input id="systemManagerNetworkInformation" type="checkbox"><span>Network diagnostics</span></label>
+                  <label class="agent-settings-field"><span>Native command timeout (seconds; 0 = no automatic timeout)</span><input id="systemManagerCommandTimeout" type="number" min="0" max="3600" step="1" value="0"></label>
                 </div>
               </section>
             </section>

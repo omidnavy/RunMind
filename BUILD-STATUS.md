@@ -1,4 +1,22 @@
-# RunMind 2.6.1 — System Manager UI & Model Compatibility
+# RunMind 2.6.3 — Developer Intelligence & System Manager
+
+## Active integrated milestone — Phase 1 + System Manager
+
+- Added package-manager and lockfile signals to the persistent project index (npm, pnpm, Yarn, Bun, uv, Poetry, Pipenv, Cargo, Go, Composer, Bundler). Bun binary lockfiles are detected by filename without reading their binary contents.
+- Added Node package script command suggestions based only on the declared package manager and scripts in `package.json`. Static validation does not execute them.
+- Added best-effort local import relationship summaries for relative JavaScript/TypeScript/Python imports. These are heuristic leads, not AST/compiler-resolved references.
+- Extended project validation with toolchain evidence, declared script commands, and local import graph summary.
+- Refactored Docker/Podman CLI actions to use asynchronous waiting, cancellation, a 30-second timeout, process-tree cleanup, and bounded stdout/stderr capture.
+- Added `docs/PHASE1-INTEGRATED-VALIDATION.md` with repository-level workflows and cross-host acceptance criteria.
+
+### Validation status for this source snapshot
+
+- JavaScript syntax: checked for all 17 shared ChatWindow script files.
+- JSON/XML: all 2 JSON files and 6 project/XAML/manifest XML files parsed successfully.
+- Project-index helper behavior: pnpm declared-manager detection, Bun `.lockb` filename detection, and relative JS import-edge detection passed targeted Node checks.
+- Changed C# files: lexical delimiter scan passed; this is not a C# compilation.
+- .NET SDK/C# compiler: unavailable in this environment. No Windows build or runtime test is claimed.
+- ZIP integrity and SHA-256: verified in the accompanying release report.
 
 ## Release bundle status
 
@@ -15,7 +33,7 @@
 
 ## Validation performed in this environment
 
-See `VALIDATION-REPORT.md` for exact checks and limitations. Windows/.NET compilation and live Windows behavior have not been verified in this environment. JavaScript syntax, HTML ID consistency, JSON/XML parsing, tool-to-native-dispatch wiring, C# lexical delimiter balance, release metadata, ZIP integrity, and SHA-256 are checked here.
+See `VALIDATION-REPORT-PHASE1-INTEGRATION.md` for exact checks and limitations for the current integration pass; `VALIDATION-REPORT.md` remains historical baseline information. Windows/.NET compilation and live Windows behavior have not been verified in this environment. JavaScript syntax, HTML ID consistency, JSON/XML parsing, tool-to-native-dispatch wiring, C# lexical delimiter balance, release metadata, ZIP integrity, and SHA-256 are checked here.
 
 ## Target-machine validation still required
 
