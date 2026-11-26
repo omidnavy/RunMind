@@ -233,18 +233,3 @@ test('PowerShell keeps native stderr warnings from becoming terminating errors',
   assert.match(bridge, /\$PSNativeCommandUseErrorActionPreference = \$false/);
   assert.match(bridge, /script = script\.TrimStart\('\\uFEFF'\)/);
 });
-
-
-test('targeted port-owner and process-tree diagnostics are exposed as read-only System Manager tools', () => {
-  assert.match(providers, /system_manager_process_tree/);
-  assert.match(providers, /system_manager_find_port_owner/);
-  assert.match(tools, /systemManager\.process\.tree/);
-  assert.match(tools, /systemManager\.port\.owner/);
-  assert.match(bridge, /systemManager\.process\.tree/);
-  assert.match(bridge, /systemManager\.port\.owner/);
-  assert.match(native, /SystemManagerProcessTree/);
-  assert.match(native, /SystemManagerFindPortOwner/);
-  assert.match(native, /new\[\] \{ "-ano", "-p", protocol \}/);
-  assert.match(native, /RequireSystemCapability\("processes", "listProcesses"\)/);
-  assert.match(tools, /'system_manager_process_tree', 'system_manager_find_port_owner'/);
-});

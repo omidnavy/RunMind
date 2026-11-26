@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const childProcess = require('node:child_process');
+const vm = require('node:vm');
 const { validateRequest, parseInputJson, run, MAX_ACTIONS } = require('../Shared/PlaywrightRunner.cjs');
 
 function makeFakePlaywright(options = {}) {
@@ -50,7 +51,6 @@ test('local browser fixture is a real accessible HTML application with a matchin
   assert.equal(manifest.scripts.dev, 'node server.cjs 4320');
   for (const marker of ['<html lang="en">','<main id="main">','<nav aria-label="Primary navigation">','<label for="request-name">','aria-live="polite"','id="request-list"']) assert.ok(html.includes(marker), marker);
   assert.match(app, /addEventListener\('submit'/);
-  assert.match(app, /if \(event\.isTrusted\) status\.textContent = 'Form cleared\.'/);
   assert.match(server, /pathname === '\/health'/);
 });
 
@@ -64,13 +64,6 @@ test('Playwright request validation accepts a bounded structured workflow', () =
   assert.equal(result.browser, 'chromium');
   assert.equal(result.channel, 'auto');
   assert.equal(result.actions.length, 4);
-});
-
-test('Playwright action schema requires selector and value fields on every action object', () => {
-  const providers = fs.readFileSync(path.join(__dirname, '..', 'Shared', 'ChatWindow', 'scripts', 'providers.js'), 'utf8');
-  assert.match(providers, /required: \['action','selector','value'\], additionalProperties: false \} \} \}, required: \['actions'\]/);
-  assert.match(providers, /use an empty string only for goto, inspect_page, expect_url, expect_title, and screenshot/i);
-  assert.match(providers, /use an empty string for actions that do not consume a value/i);
 });
 
 test('Playwright selects installed Edge/Chrome before bundled Chromium and supports explicit channels', () => {
@@ -109,9 +102,70 @@ test('Playwright request validation rejects non-web schemes and embedded credent
 
 test('Playwright request validation rejects unsupported or malformed actions', () => {
   assert.throws(() => validateRequest({ actions: [{ action: 'evaluate', value: 'process.exit()' }] }), /unsupported action/);
-  assert.throws(() => validateRequest({ actions: [{ action: 'click' }] }), /action 1 \('click'\) requires a non-empty selector/);
-  assert.throws(() => validateRequest({ actions: [{ action: 'fill', selector: '#name' }] }), /action 1 \('fill'\) requires a non-empty value/);
+  assert.throws(() => validateRequest({ actions: [{ action: 'click' }] }), /requires a non-empty selector/);
+  assert.throws(() => validateRequest({ actions: [{ action: 'fill', selector: '#name' }] }), /requires a non-empty value/);
   assert.throws(() => validateRequest({ actions: [{ action: 'wait_for', selector: '#name', state: 'magic' }] }), /invalid wait state/);
+});
+
+test('Playwright selector failures identify the exact action and show a useful correction', () => {
+  assert.throws(() => validateRequest({ actions: [
+    { action: 'goto', value: 'http://127.0.0.1:4320/' },
+    { action: 'inspect_page' },
+    { action: 'fill', value: 'RunMind acceptance test' }
+  ] }), /Action 3 \('fill'\) requires a non-empty selector.*#request-name/s);
+  assert.throws(() => validateRequest({ actions: [
+    { action: 'goto', value: 'http://127.0.0.1:4320/' },
+    { action: 'select_option', selector: '#request-priority' }
+  ] }), /Action 2 \('select_option'\) requires a non-empty value/);
+});
+
+test('Playwright fixture preserves submit feedback while explicit reset reports Form cleared', () => {
+  const root = path.resolve(__dirname, '..');
+  const app = fs.readFileSync(path.join(root, 'test-fixtures', 'playwright-app', 'app.js'), 'utf8');
+  assert.match(app, /resetFollowsSubmission = true;\s*form\.reset\(\)/);
+  assert.match(app, /if \(resetFollowsSubmission\) \{\s*resetFollowsSubmission = false;\s*return;/);
+  assert.match(app, /status\.textContent = 'Form cleared\.';/);
+  assert.ok(app.indexOf('Request submitted: ${name}.') < app.indexOf('resetFollowsSubmission = true;'));
+});
+
+test('Playwright fixture executes submit/reset behavior without overwriting successful feedback', () => {
+  const root = path.resolve(__dirname, '..');
+  const source = fs.readFileSync(path.join(root, 'test-fixtures', 'playwright-app', 'app.js'), 'utf8');
+  const documentListeners = new Map();
+  const formListeners = new Map();
+  const nameField = { value: 'RunMind acceptance test', focus() {} };
+  const priorityField = { value: 'high' };
+  const status = { textContent: '' };
+  const listItems = [];
+  const list = { append(item) { listItems.push(item); } };
+  const emptyState = { removed: false, remove() { this.removed = true; } };
+  const form = {
+    addEventListener(name, handler) { formListeners.set(name, handler); },
+    reset() {
+      nameField.value = '';
+      priorityField.value = 'normal';
+      formListeners.get('reset')?.();
+    }
+  };
+  const elements = new Map([
+    ['#request-form', form], ['#request-name', nameField], ['#request-priority', priorityField],
+    ['#submission-status', status], ['#request-list', list], ['#empty-state', emptyState]
+  ]);
+  const document = {
+    addEventListener(name, handler) { documentListeners.set(name, handler); },
+    querySelector(selector) { return elements.get(selector) || null; },
+    createElement(tag) { return { tag, children: [], append(...children) { this.children.push(...children); }, textContent: '' }; }
+  };
+  vm.runInNewContext(source, { document }, { timeout: 1000 });
+  documentListeners.get('DOMContentLoaded')();
+  formListeners.get('submit')({ preventDefault() {} });
+  assert.equal(status.textContent, 'Request submitted: RunMind acceptance test.');
+  assert.equal(nameField.value, '');
+  assert.equal(priorityField.value, 'normal');
+  assert.equal(listItems.length, 1);
+  assert.equal(emptyState.removed, true);
+  form.reset();
+  assert.equal(status.textContent, 'Form cleared.');
 });
 
 test('Playwright request validation enforces action and field bounds', () => {

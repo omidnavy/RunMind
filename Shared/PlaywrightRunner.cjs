@@ -34,8 +34,8 @@ function validateRequest(input) {
     const value = String(raw.value ?? '');
     if (selector.length > MAX_SELECTOR) throw new Error(`Action ${index + 1} selector exceeds ${MAX_SELECTOR} characters.`);
     if (value.length > MAX_TEXT) throw new Error(`Action ${index + 1} value exceeds ${MAX_TEXT} characters.`);
-    if (['click','fill','press','check','uncheck','select_option','wait_for','expect_text','expect_visible','expect_hidden','read_text','count'].includes(action) && !selector.trim()) throw new Error(`Playwright action ${index + 1} ('${action}') requires a non-empty selector. Include the selector property on every action object; use an empty string only for actions that do not target a page element.`);
-    if (['goto','fill','press','select_option','expect_text','expect_url','expect_title'].includes(action) && !value) throw new Error(`Playwright action ${index + 1} ('${action}') requires a non-empty value. Include the value property on every action object, using an empty string only when the action does not consume one.`);
+    if (['click','fill','press','check','uncheck','select_option','wait_for','expect_text','expect_visible','expect_hidden','read_text','count'].includes(action) && !selector.trim()) throw new Error(`Action ${index + 1} ('${action}') requires a non-empty selector. Supply a workspace page selector such as '#request-name', 'form button[type=submit]', or '[role=status]'.`);
+    if (['goto','fill','press','select_option','expect_text','expect_url','expect_title'].includes(action) && !value) throw new Error(`Action ${index + 1} ('${action}') requires a non-empty value. For goto use an absolute HTTP/HTTPS URL; for locator actions use the text or key to enter/select/assert.`);
     if (action === 'goto') {
       let url;
       try { url = new URL(value); } catch { throw new Error(`Action ${index + 1} requires an absolute HTTP or HTTPS URL.`); }

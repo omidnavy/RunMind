@@ -1,14 +1,9 @@
-## 2.6.4 — Phase 2 reliability and System Manager diagnostics (2026-11-22)
+## 2.6.4 — Project Understanding & Diagnostics reliability
 
-- Fix the Playwright tool-schema/runner contract: every action object now requires explicit `action`, `selector`, and `value` properties. Empty selector/value strings are documented for actions that do not consume them; locator actions still require non-empty selectors during native preflight validation.
-- Improve Playwright preflight errors with the exact action index and action name, plus an explanation of the missing field. Invalid action sequences are rejected before browser launch.
-- Fix the Playwright fixture's submission status: the programmatic form reset after submission no longer overwrites the success message; a user-initiated Clear form action still reports `Form cleared.`
-- Add read-only System Manager `system_manager_find_port_owner` for targeted TCP/UDP local-port ownership lookup, including process identity metadata when Windows permits access.
-- Add read-only System Manager `system_manager_process_tree` for a bounded parent chain and child-descendant view with process identity, executable path, start time, and memory information where accessible.
-- Route both new diagnostics through the existing process/list-process capability and read-only approval model. They do not terminate or modify processes.
-- Add Playwright schema-contract, fixture behavior, and System Manager tool-wiring regression tests.
-- Bump all three host project package versions to 2.6.4.
-- Unified browser/native workspace selection and persistent development-server orphan reconciliation remain planned follow-up work; they are not claimed as completed in this release.
+- Make Project Understanding an explicit architecture/code intelligence workflow that uses the persistent index, symbol graph, compiler-backed references, and source tracing.
+- Add a separate Project Diagnostics workflow for manifest and lockfile consistency, toolchain declarations, project scripts, build/test configuration, test discovery, and optional approval-gated environment/build checks. Static diagnosis remains read-only and reports unperformed checks honestly.
+- Tighten Playwright action schemas with action-specific selector/value requirements and more useful validation errors, addressing repeated missing-selector/value failures.
+- Fix the Playwright acceptance fixture so a successful form submission keeps its confirmation message while a user-triggered reset still reports “Form cleared.”
 
 ## 2.6.3 — Phase 2 follow-up refinements (2026-11-22)
 

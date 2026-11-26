@@ -1,3 +1,12 @@
+## RunMind 2.6.4 incremental update — Project Diagnostics and Playwright reliability
+
+- Promoted Project Understanding into an explicit architecture/code-intelligence workflow and added the separate Project Diagnostics workflow for manifest, lockfile, toolchain, configuration, test-discovery and optional approval-gated environment checks.
+- Corrected Playwright action schema requirements for selectors and values; runner errors now identify the exact failed action and provide selector/value guidance.
+- Fixed the accessible Playwright fixture so submission status persists after its programmatic form reset while a user-triggered reset still reports `Form cleared.`
+- Full portable Node suite: **135/135 passed** with Node.js **v22.16.0**; modified JavaScript files passed syntax checks.
+- Windows/.NET 10 compilation and live Windows validation have not been run in this environment because the .NET SDK is unavailable. Validate with `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` on Windows with Node.js 24 and .NET 10 installed.
+- The unified browser/native workspace migration remains outstanding; this bundle documents that limitation and does not claim the second folder picker has been removed.
+
 ## Phase 2 — Development Server Management — 2026-11-21
 
 - Added `development_server_manage` to the shared Agent Core and native process bridge for all three hosts.

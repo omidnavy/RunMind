@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const list = document.querySelector('#request-list');
   const emptyState = document.querySelector('#empty-state');
   let requestCount = 0;
+  let resetFollowsSubmission = false;
 
   form.addEventListener('submit', event => {
     event.preventDefault();
@@ -28,13 +29,16 @@ document.addEventListener('DOMContentLoaded', () => {
     item.append(title, detail);
     list.append(item);
     status.textContent = `Request submitted: ${name}.`;
+    resetFollowsSubmission = true;
     form.reset();
     nameField.focus();
   });
 
-  form.addEventListener('reset', event => {
-    // form.reset() is also used after successful submission. Only a user-initiated
-    // reset should replace the submission confirmation with the clear message.
-    if (event.isTrusted) status.textContent = 'Form cleared.';
+  form.addEventListener('reset', () => {
+    if (resetFollowsSubmission) {
+      resetFollowsSubmission = false;
+      return;
+    }
+    status.textContent = 'Form cleared.';
   });
 });
