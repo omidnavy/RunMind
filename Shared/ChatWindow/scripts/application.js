@@ -765,6 +765,10 @@
       const txValues = samples.map(item => item.network?.sendBytesPerSecond).filter(Number.isFinite);
       const ioReadValues = samples.map(item => item.processIo?.readBytesPerSecond).filter(Number.isFinite);
       const ioWriteValues = samples.map(item => item.processIo?.writeBytesPerSecond).filter(Number.isFinite);
+      const gpuDedicatedValues = samples.map(item => item.gpu?.dedicatedBytes).filter(Number.isFinite);
+      const gpuSharedValues = samples.map(item => item.gpu?.sharedBytes).filter(Number.isFinite);
+      const gpuUtilizationValues = samples.map(item => item.gpu?.utilizationPercent).filter(Number.isFinite);
+      const maxGpuMemory = Math.max(1024, ...gpuDedicatedValues, ...gpuSharedValues) * 1.12;
       const maxNetwork = Math.max(1024, ...rxValues, ...txValues) * 1.12;
       const maxProcessIo = Math.max(1024, ...ioReadValues, ...ioWriteValues) * 1.12;
       liveResourceChartPoints('liveResourceCpuLine', samples.map(item => item.machineCpuPercent), 100);
@@ -773,6 +777,9 @@
       liveResourceChartPoints('liveResourceSendLine', samples.map(item => item.network?.sendBytesPerSecond), maxNetwork);
       liveResourceChartPoints('liveResourceIoReadLine', samples.map(item => item.processIo?.readBytesPerSecond), maxProcessIo);
       liveResourceChartPoints('liveResourceIoWriteLine', samples.map(item => item.processIo?.writeBytesPerSecond), maxProcessIo);
+      liveResourceChartPoints('liveResourceGpuUtilizationLine', samples.map(item => item.gpu?.utilizationPercent), 100);
+      liveResourceChartPoints('liveResourceGpuDedicatedLine', samples.map(item => item.gpu?.dedicatedBytes), maxGpuMemory);
+      liveResourceChartPoints('liveResourceGpuSharedLine', samples.map(item => item.gpu?.sharedBytes), maxGpuMemory);
       const cpu = Number.isFinite(latest.machineCpuPercent) ? latest.machineCpuPercent : null;
       const memory = Number.isFinite(latest.memory?.memoryLoadPercent) ? latest.memory.memoryLoadPercent : null;
       const setText = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = value; };
@@ -784,6 +791,15 @@
       setText('liveResourceNetworkOut', latest.network?.available ? `Send ${liveResourceFormatBytesPerSecond(latest.network.sendBytesPerSecond)}` : 'Network counters unavailable');
       setText('liveResourceProcessCount', String(latest.processes?.count ?? '—'));
       setText('liveResourceProcessNote', latest.processes?.truncated ? 'Process inventory truncated at 1,000' : 'Accessible processes observed');
+      const gpu = latest.gpu || {};
+      const gpuUtilization = Number.isFinite(gpu.utilizationPercent) ? gpu.utilizationPercent : null;
+      setText('liveResourceGpuUtilization', gpuUtilization == null ? 'Unavailable' : `${gpuUtilization.toFixed(1)}%`);
+      setText('liveResourceGpuUtilizationNote', gpuUtilization == null ? 'Windows GPU engine counters unavailable' : `Busiest engine · ${gpu.adapterCount || '—'} adapter(s) observed`);
+      setText('liveResourceGpuMemory', Number.isFinite(gpu.dedicatedBytes) ? liveResourceFormatBytes(gpu.dedicatedBytes) : 'Unavailable');
+      setText('liveResourceGpuMemoryNote', `Shared ${Number.isFinite(gpu.sharedBytes) ? liveResourceFormatBytes(gpu.sharedBytes) : 'Unavailable'} · ${gpu.adapterCount || 0} adapter(s)`);
+      setText('liveResourceGpuUtilizationPeak', gpuUtilizationValues.length ? `Peak ${Math.max(...gpuUtilizationValues).toFixed(1)}%` : 'Peak unavailable');
+      const gpuMemoryPeak = Math.max(0, ...gpuDedicatedValues, ...gpuSharedValues);
+      setText('liveResourceGpuMemoryPeak', gpuDedicatedValues.length || gpuSharedValues.length ? `Peak ${liveResourceFormatBytes(gpuMemoryPeak)}` : 'Peak unavailable');
       setText('liveResourceCpuPeak', cpuValues.length ? `Peak ${Math.max(...cpuValues).toFixed(1)}%` : 'Peak unavailable');
       setText('liveResourceMemoryPeak', memoryValues.length ? `Peak ${Math.max(...memoryValues).toFixed(1)}%` : 'Peak unavailable');
       setText('liveResourceNetworkPeak', rxValues.length || txValues.length ? `Peak ${liveResourceFormatBytesPerSecond(Math.max(0,...rxValues,...txValues))}` : 'Peak unavailable');
@@ -820,11 +836,11 @@
       if (exportButton) exportButton.disabled = samples.length === 0;
     }
     function resetLiveResourceMonitorView() {
-      for (const id of ['liveResourceCpuLine','liveResourceMemoryLine','liveResourceReceiveLine','liveResourceSendLine','liveResourceIoReadLine','liveResourceIoWriteLine']) {
+      for (const id of ['liveResourceCpuLine','liveResourceMemoryLine','liveResourceReceiveLine','liveResourceSendLine','liveResourceIoReadLine','liveResourceIoWriteLine','liveResourceGpuUtilizationLine','liveResourceGpuDedicatedLine','liveResourceGpuSharedLine']) {
         const node = document.getElementById(id);
         if (node) node.setAttribute('d', '');
       }
-      for (const [id, value] of Object.entries({ liveResourceCpu:'—', liveResourceCpuNote:'Waiting for first sample', liveResourceMemory:'—', liveResourceMemoryNote:'Waiting for first sample', liveResourceNetworkIn:'—', liveResourceNetworkOut:'Send —', liveResourceProcessCount:'—', liveResourceProcessNote:'Waiting for first sample', liveResourceCpuPeak:'Peak —', liveResourceMemoryPeak:'Peak —', liveResourceNetworkPeak:'Peak —', liveResourceIoPeak:'Peak —', liveResourceAlert:'No live threshold alerts.' })) {
+      for (const [id, value] of Object.entries({ liveResourceCpu:'—', liveResourceCpuNote:'Waiting for first sample', liveResourceMemory:'—', liveResourceMemoryNote:'Waiting for first sample', liveResourceNetworkIn:'—', liveResourceNetworkOut:'Send —', liveResourceProcessCount:'—', liveResourceProcessNote:'Waiting for first sample', liveResourceCpuPeak:'Peak —', liveResourceMemoryPeak:'Peak —', liveResourceNetworkPeak:'Peak —', liveResourceIoPeak:'Peak —', liveResourceGpuUtilization:'—', liveResourceGpuUtilizationNote:'Waiting for GPU counters', liveResourceGpuMemory:'—', liveResourceGpuMemoryNote:'Waiting for GPU counters', liveResourceGpuUtilizationPeak:'Peak —', liveResourceGpuMemoryPeak:'Peak —', liveResourceAlert:'No live threshold alerts.' })) {
         const node = document.getElementById(id);
         if (node) { node.textContent = value; node.classList.remove('warning'); }
       }
@@ -851,7 +867,7 @@
           liveResourceSession = null;
           document.getElementById('liveResourceStart').disabled = false;
           document.getElementById('liveResourceStop').disabled = true;
-          liveResourceSetStatus('Monitoring session ended. Collected samples remain available until this panel closes.', false);
+          liveResourceSetStatus('Monitoring session ended. Collected samples remain available in this RunMind window.', false);
           return;
         }
         if (sample?.accepted) {
@@ -886,8 +902,8 @@
     async function startLiveResourceMonitor() {
       if (liveResourceSession) return;
       const settings = systemManagerSettingsCache;
-      if (!settings?.enabled || !settings?.groups?.diagnostics || !settings?.capabilities?.resourceMonitoring) {
-        liveResourceSetStatus('Enable System Manager, System Diagnostics, and Resource Monitoring in the Settings tab first.', false, true);
+      if (!settings?.enabled) {
+        liveResourceSetStatus('Enable System Manager in the Settings tab first. Clicking Start monitoring begins this read-only session.', false, true);
         return;
       }
       const durationSeconds = Number(document.getElementById('liveResourceDuration')?.value) || 300;
@@ -911,10 +927,10 @@
     }
     function exportLiveResourceCsv() {
       if (!liveResourceHistory.length) return;
-      const columns = ['sampledAtUtc','elapsedSeconds','machineCpuPercent','memoryLoadPercent','usedPhysicalBytes','totalPhysicalBytes','receiveBytesPerSecond','sendBytesPerSecond','processIoReadBytesPerSecond','processIoWriteBytesPerSecond','processCount','processListTruncated'];
+      const columns = ['sampledAtUtc','elapsedSeconds','machineCpuPercent','memoryLoadPercent','usedPhysicalBytes','totalPhysicalBytes','gpuUtilizationPercent','gpuDedicatedBytes','gpuSharedBytes','receiveBytesPerSecond','sendBytesPerSecond','processIoReadBytesPerSecond','processIoWriteBytesPerSecond','processCount','processListTruncated'];
       const rows = [columns.join(',')];
       for (const sample of liveResourceHistory) {
-        const values = [sample.sampledAtUtc,sample.elapsedSeconds,sample.machineCpuPercent,sample.memory?.memoryLoadPercent,sample.memory?.usedPhysicalBytes,sample.memory?.totalPhysicalBytes,sample.network?.receiveBytesPerSecond,sample.network?.sendBytesPerSecond,sample.processIo?.readBytesPerSecond,sample.processIo?.writeBytesPerSecond,sample.processes?.count,sample.processes?.truncated];
+        const values = [sample.sampledAtUtc,sample.elapsedSeconds,sample.machineCpuPercent,sample.memory?.memoryLoadPercent,sample.memory?.usedPhysicalBytes,sample.memory?.totalPhysicalBytes,sample.gpu?.utilizationPercent,sample.gpu?.dedicatedBytes,sample.gpu?.sharedBytes,sample.network?.receiveBytesPerSecond,sample.network?.sendBytesPerSecond,sample.processIo?.readBytesPerSecond,sample.processIo?.writeBytesPerSecond,sample.processes?.count,sample.processes?.truncated];
         rows.push(values.map(value => value == null ? '' : String(value).replaceAll('"','""')).join(','));
       }
       const blob = new Blob([rows.join('\r\n')+'\r\n'], { type: 'text/csv;charset=utf-8' });
@@ -930,7 +946,6 @@
       button.addEventListener('click', () => {
         const tab = button.dataset.systemManagerTab || 'settings';
         setSystemManagerTab(tab);
-        if (tab !== 'monitor' && liveResourceSession) void stopLiveResourceMonitor('Monitoring stopped because the Live Monitor tab was left.');
       });
     });
     $('#liveResourceStart')?.addEventListener('click', () => { void startLiveResourceMonitor(); });
@@ -951,9 +966,6 @@
       $('#liveResourceSortMemory')?.setAttribute('aria-pressed', 'true');
       $('#liveResourceSortCpu')?.setAttribute('aria-pressed', 'false');
       renderLiveResourceMonitor();
-    });
-    $('#systemManagerMenu')?.addEventListener('toggle', event => {
-      if (event.target === $('#systemManagerMenu') && !event.target.open && liveResourceSession) void stopLiveResourceMonitor('Monitoring stopped because the System Manager panel was closed.');
     });
     window.addEventListener('pagehide', () => {
       if (!liveResourceSession) return;

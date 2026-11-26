@@ -2031,8 +2031,261 @@ try {
         public required Dictionary<int, ResourceProcessSample> PreviousProcesses { get; set; }
         public (ulong Idle, ulong Kernel, ulong User)? PreviousSystemCpu { get; set; }
         public NetworkByteSnapshot? PreviousNetwork { get; set; }
+        public GpuTelemetryReader? GpuTelemetry { get; set; }
         public long Sequence { get; set; }
     }
+
+    // Windows exposes GPU engine utilization and adapter memory through PDH.
+    // Counters are optional: unsupported GPU/driver combinations remain unavailable.
+    private sealed class GpuTelemetryReader : IDisposable
+    {
+        private const uint PdhMoreData = 0x800007D2;
+        private const uint PdhRefreshCounters = 0x00000004;
+        private const uint PdhFormatDouble = 0x00000200;
+        private const uint PdhFormatLarge = 0x00000400;
+        private const uint PdhFormatNoScale = 0x00001000;
+        private const int MaximumCountersPerMetric = 2048;
+        private IntPtr _query;
+        private readonly List<(string Instance, IntPtr Handle)> _engineCounters = new();
+        private readonly List<(string Instance, IntPtr Handle)> _dedicatedMemoryCounters = new();
+        private readonly List<(string Instance, IntPtr Handle)> _sharedMemoryCounters = new();
+        private readonly HashSet<string> _knownCounterPaths = new(StringComparer.OrdinalIgnoreCase);
+        private DateTimeOffset _lastCounterRefreshUtc;
+        private bool _disposed;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct PdhCounterInfoHeader
+        {
+            public uint Length;
+            public uint Type;
+            public uint Version;
+            public uint Status;
+            public int Scale;
+            public int DefaultScale;
+            public UIntPtr UserData;
+            public UIntPtr QueryUserData;
+            public IntPtr FullPath;
+        }
+
+        [StructLayout(LayoutKind.Explicit, Size = 16)]
+        private struct PdhFormattedCounterValue
+        {
+            [FieldOffset(0)] public uint Status;
+            [FieldOffset(8)] public double DoubleValue;
+            [FieldOffset(8)] public long LargeValue;
+        }
+
+        [DllImport("pdh.dll", ExactSpelling = true)]
+        private static extern uint PdhOpenQueryW(IntPtr dataSource, UIntPtr userData, out IntPtr query);
+        [DllImport("pdh.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern uint PdhAddEnglishCounterW(IntPtr query, string fullCounterPath, UIntPtr userData, out IntPtr counter);
+        [DllImport("pdh.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern uint PdhAddCounterW(IntPtr query, string fullCounterPath, UIntPtr userData, out IntPtr counter);
+        [DllImport("pdh.dll", ExactSpelling = true)]
+        private static extern uint PdhGetCounterInfoW(IntPtr counter, byte retrieveExplainText, ref uint bufferSize, IntPtr buffer);
+        [DllImport("pdh.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern uint PdhExpandWildCardPathW(IntPtr dataSource, string wildcardPath, IntPtr expandedPathList, ref uint pathListLength, uint flags);
+        [DllImport("pdh.dll", ExactSpelling = true)]
+        private static extern uint PdhCollectQueryData(IntPtr query);
+        [DllImport("pdh.dll", ExactSpelling = true)]
+        private static extern uint PdhGetFormattedCounterValue(IntPtr counter, uint format, out uint counterType, out PdhFormattedCounterValue value);
+        [DllImport("pdh.dll", ExactSpelling = true)]
+        private static extern uint PdhRemoveCounter(IntPtr counter);
+        [DllImport("pdh.dll", ExactSpelling = true)]
+        private static extern uint PdhCloseQuery(IntPtr query);
+
+        public static GpuTelemetryReader? TryCreate()
+        {
+            GpuTelemetryReader? reader = null;
+            try
+            {
+                reader = new GpuTelemetryReader();
+                if (PdhOpenQueryW(IntPtr.Zero, UIntPtr.Zero, out reader._query) != 0 || reader._query == IntPtr.Zero)
+                {
+                    reader.Dispose();
+                    return null;
+                }
+                reader.AddWildcardCounters("\\GPU Engine(*)\\Utilization Percentage", reader._engineCounters);
+                reader.AddWildcardCounters("\\GPU Adapter Memory(*)\\Dedicated Usage", reader._dedicatedMemoryCounters);
+                reader.AddWildcardCounters("\\GPU Adapter Memory(*)\\Shared Usage", reader._sharedMemoryCounters);
+                if (reader._engineCounters.Count + reader._dedicatedMemoryCounters.Count + reader._sharedMemoryCounters.Count == 0)
+                {
+                    reader.Dispose();
+                    return null;
+                }
+                reader._lastCounterRefreshUtc = DateTimeOffset.UtcNow;
+                _ = PdhCollectQueryData(reader._query); // Prime rate-based GPU engine counters.
+                return reader;
+            }
+            catch
+            {
+                reader?.Dispose();
+                return null;
+            }
+        }
+
+        private void AddWildcardCounters(string englishWildcardPath, List<(string Instance, IntPtr Handle)> destination)
+        {
+            if (_query == IntPtr.Zero || destination.Count >= MaximumCountersPerMetric) return;
+            if (PdhAddEnglishCounterW(_query, englishWildcardPath, UIntPtr.Zero, out var wildcardCounter) != 0 || wildcardCounter == IntPtr.Zero) return;
+            try
+            {
+                var localizedWildcardPath = ReadCounterFullPath(wildcardCounter);
+                if (string.IsNullOrWhiteSpace(localizedWildcardPath)) return;
+                foreach (var path in ExpandWildcardPath(localizedWildcardPath).Take(MaximumCountersPerMetric))
+                {
+                    if (destination.Count >= MaximumCountersPerMetric) break;
+                    if (_knownCounterPaths.Contains(path)) continue;
+                    if (PdhAddCounterW(_query, path, UIntPtr.Zero, out var counter) != 0 || counter == IntPtr.Zero) continue;
+                    _knownCounterPaths.Add(path);
+                    destination.Add((ReadCounterInstance(path), counter));
+                }
+            }
+            finally { _ = PdhRemoveCounter(wildcardCounter); }
+        }
+
+        private static string? ReadCounterFullPath(IntPtr counter)
+        {
+            uint size = 0;
+            var status = PdhGetCounterInfoW(counter, 0, ref size, IntPtr.Zero);
+            if (status != PdhMoreData || size < (uint)Marshal.SizeOf<PdhCounterInfoHeader>() || size > 1024 * 1024) return null;
+            var buffer = Marshal.AllocHGlobal((int)size);
+            try
+            {
+                status = PdhGetCounterInfoW(counter, 0, ref size, buffer);
+                if (status != 0) return null;
+                var header = Marshal.PtrToStructure<PdhCounterInfoHeader>(buffer);
+                return header.FullPath == IntPtr.Zero ? null : Marshal.PtrToStringUni(header.FullPath);
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+        }
+
+        private static IEnumerable<string> ExpandWildcardPath(string localizedWildcardPath)
+        {
+            uint length = 0;
+            var status = PdhExpandWildCardPathW(IntPtr.Zero, localizedWildcardPath, IntPtr.Zero, ref length, PdhRefreshCounters);
+            if (status != PdhMoreData || length == 0 || length > 1024 * 1024) yield break;
+            var buffer = Marshal.AllocHGlobal(checked((int)length * sizeof(char)));
+            try
+            {
+                status = PdhExpandWildCardPathW(IntPtr.Zero, localizedWildcardPath, buffer, ref length, PdhRefreshCounters);
+                if (status != 0) yield break;
+                var offset = 0;
+                while (offset < length)
+                {
+                    var path = Marshal.PtrToStringUni(IntPtr.Add(buffer, checked(offset * sizeof(char))));
+                    if (string.IsNullOrEmpty(path)) break;
+                    yield return path;
+                    offset += path.Length + 1;
+                }
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+        }
+
+        private static string ReadCounterInstance(string path)
+        {
+            var open = path.IndexOf('(');
+            var close = open >= 0 ? path.IndexOf(')', open + 1) : -1;
+            return open >= 0 && close > open ? path[(open + 1)..close] : string.Empty;
+        }
+
+        public object ReadSample()
+        {
+            if (_disposed || _query == IntPtr.Zero)
+                return new { available = false, utilizationPercent = (double?)null, dedicatedBytes = (long?)null, sharedBytes = (long?)null, adapterCount = 0, note = "Windows GPU performance counters are unavailable for this sample." };
+            if (DateTimeOffset.UtcNow - _lastCounterRefreshUtc >= TimeSpan.FromSeconds(15))
+            {
+                AddWildcardCounters("\\GPU Engine(*)\\Utilization Percentage", _engineCounters);
+                AddWildcardCounters("\\GPU Adapter Memory(*)\\Dedicated Usage", _dedicatedMemoryCounters);
+                AddWildcardCounters("\\GPU Adapter Memory(*)\\Shared Usage", _sharedMemoryCounters);
+                _lastCounterRefreshUtc = DateTimeOffset.UtcNow;
+            }
+            if (PdhCollectQueryData(_query) != 0)
+                return new { available = false, utilizationPercent = (double?)null, dedicatedBytes = (long?)null, sharedBytes = (long?)null, adapterCount = 0, note = "Windows GPU performance counters are unavailable for this sample." };
+
+            var engineBusyByPhysicalEngine = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            var adapters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var counter in _engineCounters)
+            {
+                if (!TryReadDouble(counter.Handle, out var value) || value < 0) continue;
+                var instance = counter.Instance;
+                var luidIndex = instance.IndexOf("luid_", StringComparison.OrdinalIgnoreCase);
+                var key = luidIndex >= 0 ? instance[luidIndex..] : instance;
+                if (key.Length == 0) continue;
+                engineBusyByPhysicalEngine[key] = Math.Min(100d, engineBusyByPhysicalEngine.GetValueOrDefault(key) + value);
+                adapters.Add(GetAdapterKey(instance));
+            }
+            double? utilization = engineBusyByPhysicalEngine.Count == 0 ? null : Math.Round(engineBusyByPhysicalEngine.Values.Max(), 1);
+
+            long dedicatedBytes = 0;
+            var hasDedicated = false;
+            long sharedBytes = 0;
+            var hasShared = false;
+            foreach (var counter in _dedicatedMemoryCounters)
+            {
+                if (!TryReadLarge(counter.Handle, out var bytes) || bytes < 0) continue;
+                dedicatedBytes = SaturatingAdd(dedicatedBytes, bytes);
+                hasDedicated = true;
+                adapters.Add(GetAdapterKey(counter.Instance));
+            }
+            foreach (var counter in _sharedMemoryCounters)
+            {
+                if (!TryReadLarge(counter.Handle, out var bytes) || bytes < 0) continue;
+                sharedBytes = SaturatingAdd(sharedBytes, bytes);
+                hasShared = true;
+                adapters.Add(GetAdapterKey(counter.Instance));
+            }
+            if (adapters.Remove(string.Empty)) { /* Unknown adapter IDs are not counted. */ }
+            var available = utilization.HasValue || hasDedicated || hasShared;
+            var note = available
+                ? "Utilization is the busiest observed physical GPU engine (per-process engine counters are grouped by engine and capped at 100%). Memory reports dedicated and shared adapter usage; the driver does not expose a reliable total capacity through these counters."
+                : "GPU Engine and GPU Adapter Memory counters are unavailable or unsupported by the installed graphics driver.";
+            return new { available, utilizationPercent = utilization, dedicatedBytes = hasDedicated ? dedicatedBytes : (long?)null, sharedBytes = hasShared ? sharedBytes : (long?)null, adapterCount = adapters.Count, note };
+        }
+
+        private static string GetAdapterKey(string instance)
+        {
+            var start = instance.IndexOf("luid_", StringComparison.OrdinalIgnoreCase);
+            if (start < 0) return string.Empty;
+            var end = instance.IndexOf("_phys_", start, StringComparison.OrdinalIgnoreCase);
+            return end > start ? instance[start..end] : instance[start..];
+        }
+
+        private static long SaturatingAdd(long left, long right)
+            => left > long.MaxValue - right ? long.MaxValue : left + right;
+
+        private static bool TryReadDouble(IntPtr counter, out double value)
+        {
+            value = 0;
+            if (PdhGetFormattedCounterValue(counter, PdhFormatDouble, out _, out var formatted) != 0 || formatted.Status > 1 || !double.IsFinite(formatted.DoubleValue)) return false;
+            value = formatted.DoubleValue;
+            return true;
+        }
+
+        private static bool TryReadLarge(IntPtr counter, out long value)
+        {
+            value = 0;
+            if (PdhGetFormattedCounterValue(counter, PdhFormatLarge | PdhFormatNoScale, out _, out var formatted) != 0 || formatted.Status > 1) return false;
+            value = formatted.LargeValue;
+            return true;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (_query != IntPtr.Zero)
+            {
+                _ = PdhCloseQuery(_query);
+                _query = IntPtr.Zero;
+            }
+            _engineCounters.Clear();
+            _dedicatedMemoryCounters.Clear();
+            _sharedMemoryCounters.Clear();
+            _knownCounterPaths.Clear();
+        }
+    }
+
     private sealed class ResourceProcessAggregate
     {
         public required int ProcessId { get; init; }
@@ -2045,6 +2298,12 @@ try {
 
     private static void RequireSystemManagerCapability(string capability)
         => RequireSystemCapability("diagnostics", capability);
+
+    private static void RequireSystemManagerEnabledForLiveMonitoring()
+    {
+        if (!(bool?)ReadSystemManagerSettings()["enabled"] ?? false)
+            throw new UnauthorizedAccessException("Windows System Manager is disabled in the System Manager menu.");
+    }
 
     // All PowerShell bodies below are shipped constants. User-supplied values are
     // serialized as JSON, Base64-encoded, and decoded as data inside the fixed script.
@@ -2211,7 +2470,7 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
     private object SystemManagerLiveResourcesStart(JsonElement args)
     {
         if (Volatile.Read(ref _disposed) != 0) throw new ObjectDisposedException(nameof(AgentHostBridge));
-        RequireSystemManagerCapability("resourceMonitoring");
+        RequireSystemManagerEnabledForLiveMonitoring();
         var duration = args.TryGetProperty("duration_seconds", out var durationValue) && durationValue.TryGetInt32(out var requestedDuration) ? requestedDuration : 300;
         var interval = args.TryGetProperty("interval_seconds", out var intervalValue) && intervalValue.TryGetInt32(out var requestedInterval) ? requestedInterval : 1;
         if (duration is < 30 or > 900) throw new InvalidDataException("Live resource sessions must be between 30 seconds and 15 minutes.");
@@ -2222,6 +2481,7 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
             if (Volatile.Read(ref _disposed) != 0) throw new ObjectDisposedException(nameof(AgentHostBridge));
             if (_liveResourceSession is { } active && active.Clock.Elapsed.TotalSeconds < active.DurationSeconds)
                 throw new InvalidOperationException("A live resource monitoring session is already active in this RunMind window.");
+            _liveResourceSession?.GpuTelemetry?.Dispose();
 
             var initialProcesses = ReadResourceProcessSnapshot(out _);
             var initialSystemCpu = ReadSystemCpuTimes();
@@ -2237,7 +2497,8 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
                 PreviousSampleTimestamp = now,
                 PreviousProcesses = initialProcesses,
                 PreviousSystemCpu = initialSystemCpu,
-                PreviousNetwork = initialNetwork
+                PreviousNetwork = initialNetwork,
+                GpuTelemetry = GpuTelemetryReader.TryCreate()
             };
             _liveResourceSession = session;
             return new
@@ -2249,7 +2510,7 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
                 intervalSeconds = interval,
                 processorCount = Environment.ProcessorCount,
                 storage = "volatile-memory-only",
-                note = "Monitoring is user-started, read-only and bounded. Samples remain in this window's memory and are not persisted. Closing the System Manager panel or RunMind window stops the session."
+                note = "Monitoring is user-started, read-only and bounded. Samples remain in this window's memory and are not persisted. Closing the RunMind window stops the session."
             };
         }
     }
@@ -2257,7 +2518,7 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
     private object SystemManagerLiveResourcesSample(JsonElement args)
     {
         if (Volatile.Read(ref _disposed) != 0) return new { success = false, accepted = false, running = false, stopped = true, reason = "host-disposed" };
-        RequireSystemManagerCapability("resourceMonitoring");
+        RequireSystemManagerEnabledForLiveMonitoring();
         var requestedId = ReadBoundedExactString(args, "session_id", 64);
         if (requestedId.Length != 32 || !requestedId.All(Uri.IsHexDigit)) throw new InvalidDataException("A valid live resource session ID is required.");
 
@@ -2270,6 +2531,7 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
             if (session.Clock.Elapsed.TotalSeconds >= session.DurationSeconds)
             {
                 _liveResourceSession = null;
+                session.GpuTelemetry?.Dispose();
                 return new { success = true, accepted = false, running = false, expired = true, elapsedSeconds = Math.Round(session.Clock.Elapsed.TotalSeconds, 2), reason = "duration-limit-reached" };
             }
 
@@ -2358,6 +2620,7 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
             }
 
             var memory = ReadSystemMemoryStatus();
+            var gpu = session.GpuTelemetry?.ReadSample() ?? new { available = false, utilizationPercent = (double?)null, dedicatedBytes = (long?)null, sharedBytes = (long?)null, adapterCount = 0, note = "GPU telemetry is unavailable on this system." };
             var totalWorkingSet = currentProcesses.Values.Sum(item => Math.Max(0, item.WorkingSetBytes));
             var totalPrivateMemory = currentProcesses.Values.Sum(item => Math.Max(0, item.PrivateMemoryBytes));
             session.PreviousProcesses = currentProcesses;
@@ -2380,6 +2643,7 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
                 processorCount,
                 machineCpuPercent,
                 memory,
+                gpu,
                 network = new
                 {
                     available = receiveBytesPerSecond.HasValue && sendBytesPerSecond.HasValue,
@@ -2418,6 +2682,7 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
                     "Process working-set/private-memory values are sampled for up to the first 1,000 processes returned by Windows.",
                     "Network rates sum operational non-loopback interfaces; a sample is unavailable when the observed interface set changes. VPN, bridge or virtual networking configurations can still overlap.",
                     "Process I/O transfer counters include I/O operations and are not physical-disk-only measurements. Physical disk throughput remains in the finite resource report.",
+                    "GPU utilization is the busiest observed physical engine, based on Windows GPU Engine counters; dedicated/shared memory values come from GPU Adapter Memory counters and may be unavailable with unsupported drivers.",
                     "CPU/memory alert flags are fixed display thresholds (85% CPU, 90% memory), not root-cause or anomaly claims."
                 }
             };
@@ -2432,14 +2697,21 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
             if (_liveResourceSession is null) return new { success = true, stopped = true, alreadyStopped = true };
             if (requestedId.Length != 32 || !requestedId.All(Uri.IsHexDigit) || !string.Equals(_liveResourceSession.Id, requestedId, StringComparison.Ordinal))
                 return new { success = false, stopped = false, reason = "session-id-mismatch" };
+            var session = _liveResourceSession;
             _liveResourceSession = null;
+            session.GpuTelemetry?.Dispose();
             return new { success = true, stopped = true, stoppedAtUtc = DateTimeOffset.UtcNow };
         }
     }
 
     private void StopLiveResourceSessionForDispose()
     {
-        lock (_liveResourceSync) _liveResourceSession = null;
+        lock (_liveResourceSync)
+        {
+            var session = _liveResourceSession;
+            _liveResourceSession = null;
+            session?.GpuTelemetry?.Dispose();
+        }
     }
 
     private static async Task<object> SystemManagerSampleResourcesAsync(JsonElement args, CancellationToken cancellationToken)

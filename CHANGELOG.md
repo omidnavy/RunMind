@@ -1,3 +1,11 @@
+## P7 Live Resource Intelligence follow-up — 2026-11-25
+
+- Treat clicking **Start monitoring** as explicit authorization for the UI session; remove the extra `resourceMonitoring` checkbox requirement while retaining that capability gate for the finite Agent resource-report tool.
+- Keep the native session and WebView polling alive while the System Manager flyout is closed or a different tab is selected. Explicit Stop, time limit, WebView/window teardown and native-host disposal still end the session.
+- Add optional Windows PDH GPU engine utilization and dedicated/shared GPU memory usage charts, current values and CSV fields. Unsupported counters remain unavailable; no memory-capacity percentage is inferred.
+- Correct System Manager tab grid to three columns and Deep Research tab grid to four columns.
+- Extend source-contract tests and update P7 Windows acceptance instructions. Native .NET compilation and real GPU counter behavior remain Windows validation gates.
+
 ﻿## 3.4.0 — P7 Live Resource Intelligence (2026-11-25)
 
 - Add an explicit Start/Stop Live Monitor tab to the shared System Manager UI in Standalone, PowerToys Run and Command Palette.

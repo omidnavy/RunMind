@@ -48,17 +48,17 @@ P6 connects Git evidence, the project architecture index, build/test history, de
 
 ## Completed milestone: P7 — Live Resource Intelligence (3.4.0 source enhancement)
 
-P7 adds a user-started live telemetry dashboard to the shared Windows System Manager UI. It reuses the existing native bridge, resource settings capability and WebView without adding a service, database, package or background collector. See `docs/LIVE-RESOURCE-INTELLIGENCE.md`, `docs/P7-IMPLEMENTATION-AUDIT.md` and `docs/P7-WINDOWS-ACCEPTANCE.md`.
+P7 adds a user-started live telemetry dashboard to the shared Windows System Manager UI. It reuses the existing native bridge and WebView without adding a service, database, package or background collector. Clicking Start is the explicit authorization for the UI session; the separate `resourceMonitoring` capability continues to gate the finite Agent resource-report tool. See `docs/LIVE-RESOURCE-INTELLIGENCE.md`, `docs/P7-IMPLEMENTATION-AUDIT.md` and `docs/P7-WINDOWS-ACCEPTANCE.md`.
 
 - Explicit Start/Stop sessions with native duration bounds of 30–900 seconds and 1/2/5 second polling intervals.
-- Live host CPU, physical memory, network interface rates, aggregated process I/O transfer rates, and process CPU/working-set/private-memory rankings.
-- CPU and memory SVG charts, network and process-I/O charts, CPU/memory process ranking toggle, 900-sample in-memory cap and explicit CSV export.
-- Session IDs required for sampling/stopping; only one session per bridge; cleanup on tab departure, panel close, pagehide, host disposal or duration expiry.
+- Live host CPU, physical memory, GPU engine utilization, dedicated/shared GPU memory usage, network interface rates, aggregated process I/O transfer rates, and process CPU/working-set/private-memory rankings.
+- CPU, memory, GPU, network and process-I/O SVG charts, CPU/memory process ranking toggle, 900-sample in-memory cap and explicit CSV export.
+- Session IDs required for sampling/stopping; only one session per bridge; switching tabs or closing the flyout does not stop the session; cleanup occurs on explicit Stop, pagehide, host disposal or duration expiry.
 - No persisted raw telemetry, background service, automatic remediation or Agent-controlled long-running session. The existing Agent resource report remains finite (maximum 60 seconds).
 
 ### P7 validation boundary
 
-Portable tests validate source contracts and UI behavior. Live Windows counter behavior and .NET compilation remain target-machine gates. Process I/O transfer counters are not physical-disk-only throughput; network counters may overlap on VPN/virtual interfaces; fixed CPU/memory thresholds are indicators, not anomaly diagnosis.
+Portable tests validate source contracts and UI behavior. Live Windows counter behavior and .NET compilation remain target-machine gates. GPU values depend on driver-exposed Windows PDH counters; dedicated/shared memory is reported as used bytes without inferring unavailable memory capacity. GPU utilization is the busiest observed physical engine rather than a sum. Process I/O transfer counters are not physical-disk-only throughput; network counters may overlap on VPN/virtual interfaces; fixed CPU/memory thresholds are indicators, not anomaly diagnosis.
 
 
 ## Completed milestone: P0 — Foundation & Reliability

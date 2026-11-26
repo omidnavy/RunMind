@@ -23,11 +23,14 @@ test('Live Resource Intelligence is dispatched through the shared native bridge'
   ]) assert.match(read(project), /Shared\\SystemManager\.cs/);
 });
 
-test('live sampling remains capability-gated and uses strict duration and interval bounds', () => {
+test('live sampling uses the System Manager master switch and keeps strict duration and interval bounds', () => {
   const start = native.slice(native.indexOf('private object SystemManagerLiveResourcesStart'), native.indexOf('private object SystemManagerLiveResourcesSample'));
   const sample = native.slice(native.indexOf('private object SystemManagerLiveResourcesSample'), native.indexOf('private object SystemManagerLiveResourcesStop'));
-  assert.match(start, /RequireSystemManagerCapability\("resourceMonitoring"\)/);
-  assert.match(sample, /RequireSystemManagerCapability\("resourceMonitoring"\)/);
+  const finiteAgentReport = native.slice(native.indexOf('private static async Task<object> SystemManagerSampleResourcesAsync'), native.indexOf('private static async Task<object> SystemManagerHealthReportAsync'));
+  assert.match(start, /RequireSystemManagerEnabledForLiveMonitoring\(\)/);
+  assert.match(sample, /RequireSystemManagerEnabledForLiveMonitoring\(\)/);
+  assert.doesNotMatch(start + sample, /RequireSystemManagerCapability\("resourceMonitoring"\)/);
+  assert.match(finiteAgentReport, /RequireSystemManagerCapability\("resourceMonitoring"\)/);
   assert.match(start, /duration is < 30 or > 900/);
   assert.match(start, /interval is not \(1 or 2 or 5\)/);
   assert.match(start, /already active in this RunMind window/);
@@ -50,7 +53,7 @@ test('host disposal clears volatile live resource session state', () => {
   assert.match(bridge, /private readonly object _liveResourceSync = new\(\)/);
   assert.match(bridge, /private LiveResourceSession\? _liveResourceSession/);
   assert.match(bridge, /StopLiveResourceSessionForDispose\(\)/);
-  assert.match(native, /private void StopLiveResourceSessionForDispose\(\)[\s\S]*?lock \(_liveResourceSync\) _liveResourceSession = null/);
+  assert.match(native, /private void StopLiveResourceSessionForDispose\(\)[\s\S]*?lock \(_liveResourceSync\)[\s\S]*?session\?\.GpuTelemetry\?\.Dispose\(\)/);
   assert.match(native, /Volatile\.Read\(ref _disposed\)/);
 });
 
@@ -71,6 +74,18 @@ test('host CPU, physical memory, process CPU/memory, network and process-I/O sou
   assert.match(native, /VPN, bridge or virtual networking configurations/);
 });
 
+test('GPU telemetry uses optional Windows PDH engine and adapter-memory counters', () => {
+  assert.match(native, /PdhOpenQueryW/);
+  assert.match(native, /PdhAddEnglishCounterW/);
+  assert.ok(native.includes('\\\\GPU Engine(*)\\\\Utilization Percentage'));
+  assert.ok(native.includes('\\\\GPU Adapter Memory(*)\\\\Dedicated Usage'));
+  assert.ok(native.includes('\\\\GPU Adapter Memory(*)\\\\Shared Usage'));
+  assert.match(native, /PdhGetFormattedCounterValue/);
+  assert.match(native, /PdhFormatLarge \| PdhFormatNoScale/);
+  assert.match(native, /driver does not expose a reliable total capacity/);
+  assert.match(native, /GpuTelemetry\?\.Dispose\(\)/);
+});
+
 test('native telemetry remains bounded and does not persist samples', () => {
   const start = native.slice(native.indexOf('private object SystemManagerLiveResourcesStart'), native.indexOf('private object SystemManagerLiveResourcesSample'));
   const sample = native.slice(native.indexOf('private object SystemManagerLiveResourcesSample'), native.indexOf('private object SystemManagerLiveResourcesStop'));
@@ -83,7 +98,7 @@ test('native telemetry remains bounded and does not persist samples', () => {
 });
 
 test('dashboard has explicit Start/Stop, interval and duration controls, charts, process ranking and export', () => {
-  for (const id of ['liveResourceStart','liveResourceStop','liveResourceDuration','liveResourceInterval','liveResourceCpuLine','liveResourceMemoryLine','liveResourceReceiveLine','liveResourceSendLine','liveResourceIoReadLine','liveResourceIoWriteLine','liveResourceSortCpu','liveResourceSortMemory','liveResourceProcesses','liveResourceExport'])
+  for (const id of ['liveResourceStart','liveResourceStop','liveResourceDuration','liveResourceInterval','liveResourceCpuLine','liveResourceMemoryLine','liveResourceReceiveLine','liveResourceSendLine','liveResourceIoReadLine','liveResourceIoWriteLine','liveResourceGpuUtilization','liveResourceGpuMemory','liveResourceGpuUtilizationLine','liveResourceGpuDedicatedLine','liveResourceGpuSharedLine','liveResourceSortCpu','liveResourceSortMemory','liveResourceProcesses','liveResourceExport'])
     assert.match(html, new RegExp(`id="${id}"`));
   assert.match(html, /<option value="60">1 minute/);
   assert.match(html, /<option value="300" selected>5 minutes/);
@@ -93,6 +108,20 @@ test('dashboard has explicit Start/Stop, interval and duration controls, charts,
   assert.match(html, /<option value="5">5 seconds/);
   assert.match(html, /Process I\/O transfer[\s\S]*?not disk-only/);
   assert.match(html, /Export CSV/);
+  assert.match(html, /GPU utilization/);
+  assert.match(html, /Dedicated GPU memory/);
+  assert.match(application, /gpuUtilizationPercent/);
+  assert.match(application, /gpuDedicatedBytes/);
+  assert.match(application, /gpuSharedBytes/);
+});
+
+test('tab grid column counts match the actual Deep Research and System Manager tabs', () => {
+  const systemManagerTabCount = (html.match(/data-system-manager-tab=/g) || []).length;
+  const researchTabCount = (html.match(/data-research-view=/g) || []).length;
+  assert.equal(systemManagerTabCount, 3);
+  assert.equal(researchTabCount, 4);
+  assert.match(styles, /\.system-manager-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
+  assert.match(styles, /\.research-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(4,/);
 });
 
 test('dashboard keeps at most 900 samples in WebView memory and never auto-starts monitoring', () => {
@@ -107,12 +136,13 @@ test('dashboard keeps at most 900 samples in WebView memory and never auto-start
   assert.doesNotMatch(application, /localStorage\.(?:setItem|getItem).*liveResource|indexedDB.*liveResource/i);
 });
 
-test('dashboard stops when leaving the tab, closing the panel or disposing the page', () => {
-  assert.match(application, /tab !== 'monitor' && liveResourceSession/);
-  assert.match(application, /systemManagerMenu[\s\S]*?!event\.target\.open && liveResourceSession/);
+test('live monitoring survives tab changes and flyout closure but stops on explicit stop or page teardown', () => {
+  assert.doesNotMatch(application, /tab !== 'monitor' && liveResourceSession/);
+  assert.doesNotMatch(application, /systemManagerMenu[\s\S]*?!event\.target\.open && liveResourceSession/);
   assert.match(application, /window\.addEventListener\('pagehide'/);
   assert.match(application, /systemManager\.liveResources\.stop/);
-  assert.match(application, /Monitoring stopped because the Live Monitor tab was left/);
+  assert.doesNotMatch(application, /Monitoring stopped because the Live Monitor tab was left|Monitoring stopped because the System Manager panel was closed/);
+  assert.match(html, /Closing this flyout or switching tabs does not stop an active session/);
 });
 
 test('charts and process ranking are rendered without an external chart library', () => {

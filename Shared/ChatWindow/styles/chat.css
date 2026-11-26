@@ -318,7 +318,7 @@
     .research-workspace-menu { position: relative; }
     .research-panel { position: absolute; z-index: 28; top: calc(100% + 8px); left: 0; right: auto; bottom: auto; width: min(640px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; display: flex; flex-direction: column; gap: 11px; padding: 15px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-panel); }
     .research-panel[hidden] { display: none !important; }
-    .research-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; padding: 4px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); }
+    .research-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; padding: 4px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); }
     .research-tab { min-width: 0; min-height: 32px; padding: 5px 8px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-muted); font-size: 11px; font-weight: 650; }
     .research-tab[aria-selected="true"] { border-color: var(--color-border); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-float); }
     .research-tab-count { display: inline-grid; place-items: center; min-width: 17px; height: 17px; margin-left: 4px; padding: 0 4px; border-radius: var(--radius-pill); background: var(--color-surface-hover); color: var(--color-muted); font-size: 9px; }
@@ -819,7 +819,7 @@
     #systemManagerMenu .toolbar-panel { max-height: min(760px, calc(100vh - 24px)); }
     #systemManagerSettingsPage { max-height: none; overflow: visible; padding-right: 0; }
     #systemManagerAdaptersCard .capability-list { max-height: min(330px, 42vh); overflow-y: auto; overscroll-behavior: contain; padding-right: 3px; }
-    .system-manager-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .system-manager-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 #projectMissionControlChangedPaths { box-sizing:border-box; width:100%; min-height:64px; resize:vertical; padding:8px 10px; font:11px/1.5 Consolas,'Cascadia Code',monospace; }
 .project-mission-control { display:flex; flex-direction:column; gap:12px; max-height:720px; overflow:auto; overscroll-behavior:contain; margin-top:10px; padding:12px; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); color:var(--color-text); }
@@ -917,7 +917,7 @@ body.quick-host-mode .app {
 .live-resource-controls select { width: 100%; min-width: 0; }
 .live-resource-progress { height: 3px; margin-top: 10px; overflow: hidden; border-radius: 99px; background: var(--color-border); }
 .live-resource-progress span { display: block; width: 0; height: 100%; background: var(--color-accent); transition: width .3s linear; }
-.live-resource-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.live-resource-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
 .live-resource-metric,.live-resource-chart-card,.live-resource-process-card { min-width: 0; padding: 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
 .live-resource-metric { display: flex; flex-direction: column; gap: 5px; }
 .live-resource-metric>span,.live-resource-metric small { color: var(--color-muted); font-size: 10px; }
@@ -933,6 +933,8 @@ body.quick-host-mode .app {
 .live-chart-line.cpu { stroke: var(--color-accent); }
 .live-chart-line.memory { stroke: #4bbd9b; }
 .live-chart-line.receive { stroke: var(--color-accent); }
+.live-chart-line.gpu { stroke: #a78bfa; }
+.live-chart-key.gpu { background: #a78bfa; }
 .live-chart-line.send { stroke: #65a6e8; }
 .live-resource-chart-card footer { margin-top: 4px; }
 .live-resource-chart-wide { grid-column: 1 / -1; }

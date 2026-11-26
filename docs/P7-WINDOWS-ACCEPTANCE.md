@@ -13,11 +13,11 @@ Run on Windows 11 with Node.js 24+ and .NET 10. Complete independently in RunMin
 ## Permission behavior
 
 - [ ] With System Manager disabled, Start reports that System Manager must be enabled and native start is rejected.
-- [ ] With System Manager enabled but Diagnostics disabled, native start is rejected.
-- [ ] With Diagnostics enabled but `resourceMonitoring` disabled, native start is rejected.
-- [ ] Enable all three settings and confirm the session starts.
-- [ ] Disable `resourceMonitoring` during an active session; the next sample fails closed and the UI stops the session.
-- [ ] Confirm defaults remain disabled for the master/capability settings.
+- [ ] With System Manager enabled, confirm Start works even when the Diagnostics group and `resourceMonitoring` capability are disabled.
+- [ ] Confirm the `resourceMonitoring` capability still gates the finite Agent `system_manager_resource_monitor` report.
+- [ ] Confirm the UI session is not auto-started; clicking Start is the explicit authorization.
+- [ ] Disable the System Manager master switch during an active session; the next sample fails closed and the UI stops the session.
+- [ ] Confirm default System Manager master/capability settings remain disabled.
 
 ## Session bounds and lifecycle
 
@@ -29,7 +29,9 @@ Run on Windows 11 with Node.js 24+ and .NET 10. Complete independently in RunMin
 - [ ] Confirm a stop call with a missing/incorrect session ID cannot stop another active session.
 - [ ] Confirm exact session stop ends sampling and repeated stop is idempotent.
 - [ ] Confirm the 15-minute cap ends the session without further samples.
-- [ ] Leave the Live Monitor tab, close the System Manager panel, close the WebView/window, and close the host; verify the session is stopped/disposed.
+- [ ] Switch to Settings or Application Adapters, then close the System Manager flyout; confirm samples continue while hidden and the history is visible when reopened.
+- [ ] Confirm explicit Stop ends collection and retains the current samples for CSV export.
+- [ ] Close the WebView/RunMind window and close the host; verify the session is stopped/disposed.
 
 ## Measurement correctness
 
@@ -43,6 +45,10 @@ Run on Windows 11 with Node.js 24+ and .NET 10. Complete independently in RunMin
 - [ ] Generate file and non-file process I/O and confirm the Process I/O chart label does not describe it as physical disk throughput.
 - [ ] Compare physical-disk counters only in the existing finite resource report; unavailable providers remain unavailable.
 - [ ] Confirm missing native counters are displayed as unavailable, never as zero.
+- [ ] On supported hardware, compare GPU utilization and dedicated/shared GPU memory against Task Manager during an idle period and a GPU workload.
+- [ ] Confirm GPU utilization represents the busiest observed engine, not a sum of all engines.
+- [ ] Confirm dedicated/shared GPU memory is displayed as usage in bytes and no memory-capacity percentage is fabricated when total capacity is unavailable.
+- [ ] On unsupported drivers, confirm GPU values display Unavailable without affecting CPU/memory/network monitoring.
 - [ ] Confirm the 85% CPU and 90% memory indicators are described as fixed display thresholds, not diagnoses.
 
 ## UI, history and export
@@ -51,7 +57,7 @@ Run on Windows 11 with Node.js 24+ and .NET 10. Complete independently in RunMin
 - [ ] Confirm a new session clears prior chart traces before the first new sample.
 - [ ] Confirm no more than 900 samples are retained by the UI.
 - [ ] Confirm Stop retains current session history in memory and CSV export downloads only after the user clicks Export CSV.
-- [ ] Inspect exported CSV headers and values for timestamps, CPU, memory, network, process I/O and process inventory status.
+- [ ] Inspect exported CSV headers and values for timestamps, CPU, memory, GPU utilization/dedicated/shared memory, network, process I/O and process inventory status.
 - [ ] Confirm closing the panel/host does not leave a persisted telemetry file or background collector.
 - [ ] Verify responsive panel layout at 100%, 125%, 150% and 200% Windows display scaling.
 - [ ] Verify normal and high-contrast/reduced-motion behavior as applicable.

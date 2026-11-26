@@ -1,14 +1,15 @@
-# P7 Live Resource Intelligence — implementation status (2026-11-25)
+# P7 Live Resource Intelligence — implementation status and follow-up (2026-11-25)
 
-- Shared native System Manager bridge implements explicit live resource sessions with 30–900 second limits, allowed 1/2/5 second intervals, exact session ID validation, volatile per-session baselines and host-disposal cleanup.
-- Shared Standalone/PowerToys Run/Command Palette UI exposes Start/Stop, CPU/memory/network/process-I/O charts, top processes ranked by CPU or memory, bounded in-memory sample history and explicit CSV export.
-- Process I/O transfer and interface aggregation limitations are disclosed in the UI and P7 documentation. The existing Agent resource report remains a separate finite maximum-60-second operation.
-- No new runtime dependency, background service, persistent raw telemetry store or automatic remediation was introduced.
-- Portable validation on the completed source tree (Node.js v22.16.0): **319/319** full regression tests passed; **12/12** P7-focused tests passed; **58/58** JavaScript/CJS syntax checks passed; **4/4** JSON files parsed; **12/12** XML/XAML/MSBuild/manifest files parsed; CSS parsed successfully with PostCSS (**845 rules**).
-- Network rates are withheld for a sample if the active interface identity set changes, avoiding false throughput spikes during adapter/VPN transitions.
-- Final source package: `RunMind-3.4.0-Live-Resource-Intelligence-2026-11-25.zip`; ZIP CRC/integrity passed. The exact archive was extracted into a clean directory and revalidated: **319/319** full regression tests and **12/12** P7-focused tests passed; **58/58** JavaScript/CJS syntax checks, **4/4** JSON parses, **12/12** XML/XAML/MSBuild/manifest parses and CSS/PostCSS parsing (**845 rules**) passed. SHA-256 is provided in the adjacent `.zip.sha256` sidecar.
-- Windows .NET 10 compilation, actual performance-counter behavior, sampling overhead and interactive acceptance remain unverified in this environment; complete `docs/P7-WINDOWS-ACCEPTANCE.md` on Windows.
+- The System Manager flyout's Live Monitor is explicitly user-started. The Start click is the authorization; only the System Manager master switch is required. The separate `resourceMonitoring` capability still gates the finite Agent resource-report tool (maximum 60 seconds).
+- Closing the System Manager flyout or switching its tabs no longer stops sampling. The WebView keeps polling and accumulating the bounded history while the flyout is hidden; reopening displays the current readings and session trace. Explicit Stop, duration expiry, page/WebView teardown or native-host disposal ends the session.
+- Added optional Windows PDH GPU engine utilization and dedicated/shared GPU adapter-memory usage. New charts and current values are included in the dashboard and CSV export. Counters are driver-dependent; missing values stay unavailable and no GPU memory-capacity percentage is inferred.
+- Corrected the System Manager tab grid to three columns and the Deep Research tab grid to four columns.
+- Native sessions remain bounded to 30–900 seconds with 1/2/5-second polling; history remains capped at 900 in-memory samples. No new runtime dependency, background service, or persistent telemetry store was added.
+- Portable validation on Node.js v22.16.0: **321/321** full regression tests passed; **14/14** focused P7 tests passed; **62/62** JavaScript/CJS/MJS syntax checks passed; **4/4** JSON files parsed; **13/13** XML/XAML/MSBuild/manifest/SVG files parsed; **22/22** CSS files parsed with zero top-level syntax errors.
+- The updated source archive is extracted and revalidated before delivery; its SHA-256 is provided in the adjacent `.sha256` sidecar.
+- .NET 10 compilation, real Windows PDH/GPU counter behavior, telemetry overhead and interactive Windows acceptance are **not verified in this environment** because the .NET SDK/MSBuild and Windows runtime are unavailable. Complete `docs/P7-WINDOWS-ACCEPTANCE.md` on the target Windows machine.
 
+---
 ---
 
 # RunMind 3.4.0 — Complete Runner Build Status

@@ -12,13 +12,15 @@
 | Process CPU | Process CPU-time deltas matched by PID and start time | First 1,000 accessible processes only; short-lived/inaccessible processes may be absent |
 | Process memory | Working set/private memory and top-memory ranking | Working set includes shared pages and must not be summed as unique physical ownership |
 | Network rates | Interface receive/send counter deltas | Active non-loopback/non-tunnel interfaces; virtual/VPN adapters can overlap |
+| GPU utilization | Windows PDH `GPU Engine(*)\Utilization Percentage` | Busiest observed physical engine; unsupported drivers yield unavailable |
+| GPU memory | Windows PDH `GPU Adapter Memory(*)\Dedicated Usage` and `Shared Usage` | Usage bytes only; no reliable capacity/percentage is inferred |
 | Process I/O | `GetProcessIoCounters` read/write transfer deltas | Not physical-disk-only I/O and not a per-process disk attribution guarantee |
-| Live charts | Inline SVG path rendering for CPU, memory, network and process I/O | No chart library or remote assets |
+| Live charts | Inline SVG path rendering for CPU, memory, GPU utilization/memory, network and process I/O | No chart library or remote assets |
 | Process table | Toggle ranking by CPU or memory | Up to eight rows per view |
 | Session export | Explicit browser-generated CSV | User-triggered download only |
 | Bounded history | Maximum 900 samples in WebView memory | No raw telemetry persistence |
-| Lifecycle cleanup | Stop on tab departure, panel close, pagehide and bridge disposal; native time limit | If host process is force-killed, OS teardown reclaims volatile state |
-| Permission enforcement | Existing System Manager master/group/capability gate | Default capability remains disabled |
+| Lifecycle cleanup | Keep sampling when tabs change or flyout closes; stop on explicit Stop, duration expiry, pagehide and bridge disposal; native time limit | If host process is force-killed, OS teardown reclaims volatile state |
+| Permission enforcement | System Manager master-switch gate for the UI session; finite Agent report retains diagnostics/resourceMonitoring gating | UI Start click is explicit authorization |
 
 ## Security and privacy review
 
@@ -26,7 +28,7 @@
 - No executable command, PowerShell script, remote request, or service installation is involved in the live sampling loop.
 - Native session IDs are unpredictable GUIDs; sample and stop calls require the exact active session ID.
 - One active session is stored per native bridge instance.
-- The UI keeps no more than 900 samples and exports only after explicit user action.
+- The UI keeps no more than 900 samples and exports only after explicit user action. Closing the flyout does not stop polling; history remains in the same WebView memory.
 - The finite P2 Agent resource tool remains capped at 60 seconds; Live Monitor does not silently change its semantics or become Agent-controlled.
 
 ## Known limits
@@ -43,4 +45,4 @@
 
 Run `node --test --test-concurrency=1 tests/*.test.cjs`. `live-resource-intelligence.test.cjs` asserts native bridge dispatch, strict bounds, exact session identity, capability gating, lifecycle cleanup, no native persistence, telemetry semantics, UI controls, data cap, CSV export, responsive CSS and Agent guidance.
 
-C# compilation and live Windows counter behavior require .NET 10 target-machine validation. Do not mark P7 Windows-certified until the Windows acceptance checklist passes in all three Full Agent hosts.
+C# compilation and live Windows GPU/PDH counter behavior require .NET 10 target-machine validation. Do not mark P7 Windows-certified until the Windows acceptance checklist passes in all three Full Agent hosts.
