@@ -1,4 +1,10 @@
-﻿## Process Intelligence follow-up — 2026-11-25
+## Process inspection modal interaction fix — 2026-11-26
+
+- Prevent clicks inside the separate Process Inspection modal from being interpreted as outside clicks by the global toolbar flyout handler. Dragging, resizing and interacting with the modal therefore leave the owning Live Monitor flyout open.
+- Stop Escape propagation inside the persistent inspection modal so the document-level Escape handler cannot dismiss the owning flyout. The modal remains explicitly closed through its Close button.
+- Add a source-contract regression test and Windows acceptance steps for dragging, resizing, interacting with and pressing Escape inside the modal.
+
+## Process Intelligence follow-up — 2026-11-25
 
 - Extend Live Resource Intelligence with an integrated selectable Process Intelligence list, bounded to the live top-CPU/top-memory candidate union and filterable/sortable in the UI.
 - Add on-demand native inspection of executable path, original command line, owner, session, token elevation/integrity, parent/observed children, hosted services, file metadata, Authenticode signer/status and live CPU/memory.

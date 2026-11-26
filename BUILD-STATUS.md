@@ -1,4 +1,4 @@
-﻿# RunMind 3.4.0 — Process Intelligence source status (2026-11-25)
+# RunMind 3.4.0 — Process Intelligence source status (2026-11-25)
 
 - Input baseline: the complete README Refresh source package, including the refreshed product-oriented README and screenshot. Existing RunMind hosts, the Live Resource Intelligence v2 work, and prior documentation are retained.
 - Integrated **Process Intelligence** into the Live Monitor card. The live list is a bounded CPU/memory candidate union with filter and sort; selecting a process performs on-demand native inspection.
@@ -296,3 +296,4 @@ Implemented in this update:
 Validation environment: Node.js `v22.16.0` in the packaging container. Full portable regression suite: **307/307 passed**; focused Change Impact Explorer v2 suite: **9/9 passed**; JavaScript syntax: **61/61 passed**; JSON parse: **4/4 passed**; XML/XAML/project/manifest parse: **12/12 passed**. The same full suite and syntax/structure checks are repeated from the final extracted ZIP. Final archive integrity and SHA-256 sidecar are verified.
 
 **Windows certification is still required.** This environment has no .NET SDK/MSBuild or Windows Desktop runtime. The added `impact_snapshot` native Git bridge and all WPF/C# projects must be compiled using .NET 10 on Windows, followed by the new `Change Impact Explorer v2` acceptance cases in `docs/P4-WINDOWS-ACCEPTANCE.md`. Do not interpret portable JavaScript tests as native Windows build certification.
+- Follow-up UI fix: modal clicks (including the synthetic click after dragging) are excluded from the global outside-click flyout dismissal path; Escape is contained by the modal. Focused tests: 19/19; full Node regression suite: 326/326. Native Windows build/runtime acceptance remains required.

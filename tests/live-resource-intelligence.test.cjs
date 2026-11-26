@@ -1,4 +1,4 @@
-﻿const test = require('node:test');
+const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -177,6 +177,22 @@ test('Process Intelligence UI bounds its list, exposes sort subjects, and opens 
   assert.doesNotMatch(application, /modal\.addEventListener\('click',[\s\S]{0,240}?hidden\s*=\s*true/);
   assert.doesNotMatch(application, /event\.key\s*===\s*'Escape'[\s\S]{0,120}?modal\.hidden\s*=\s*true/);
   assert.doesNotMatch(application, /function resetLiveResourceMonitorView\(\)[\s\S]{0,420}?liveResourceProcessModal[\s\S]{0,80}?hidden\s*=\s*true/);
+});
+
+test('process inspection modal interactions do not dismiss the owning Live Monitor flyout', () => {
+  const outsideClickHandler = application.slice(
+    application.indexOf("document.addEventListener('click', event => {"),
+    application.indexOf("document.addEventListener('keydown', event => {")
+  );
+  assert.match(outsideClickHandler, /processInspectionModal = document\.getElementById\('liveResourceProcessModal'\)/);
+  assert.match(outsideClickHandler, /!processInspectionModal\.hidden && processInspectionModal\.contains\(event\.target\)\) return/);
+  assert.ok(outsideClickHandler.indexOf('processInspectionModal.contains(event.target)') < outsideClickHandler.indexOf('for (const menu of toolbarFlyoutMenus())'));
+  const modalKeyboardHandler = application.slice(
+    application.indexOf("modal.addEventListener('keydown', event => {"),
+    application.indexOf("})();", application.indexOf("modal.addEventListener('keydown', event => {"))
+  );
+  assert.match(modalKeyboardHandler, /event\.key === 'Escape'[\s\S]*?event\.preventDefault\(\)[\s\S]*?event\.stopPropagation\(\)/);
+  assert.match(modalKeyboardHandler, /event\.key !== 'Tab'/);
 });
 
 test('Agent guidance distinguishes finite tool reports from UI-started live sessions', () => {

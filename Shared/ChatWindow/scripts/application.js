@@ -153,6 +153,11 @@
     $('#openSessionButton').addEventListener('click', () => sessionFileInput.click());
     sessionFileInput.addEventListener('change', () => { void openSessionFile(sessionFileInput.files?.[0]); });
     document.addEventListener('click', event => {
+      // Process inspection is a separate, top-level modal layered over the toolbar
+      // flyout. Interactions inside it (including the synthetic click after a drag)
+      // must not be treated as outside clicks that dismiss the owning Live Monitor.
+      const processInspectionModal = document.getElementById('liveResourceProcessModal');
+      if (event.target instanceof Node && processInspectionModal && !processInspectionModal.hidden && processInspectionModal.contains(event.target)) return;
       // Enabling Deep Research from the composer intentionally opens its header flyout.
       // Do not interpret that same bubbling click as an outside click and close it again.
       if (event.target instanceof Node && deepResearchButton.contains(event.target)) {
@@ -1205,7 +1210,10 @@
       window.addEventListener('resize', clampPanel);
       modal.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
+          // The inspection window is intentionally persistent; also keep the
+          // document-level Escape handler from closing the Live Monitor flyout.
           event.preventDefault();
+          event.stopPropagation();
           return;
         }
         if (event.key !== 'Tab') return;

@@ -62,3 +62,10 @@ Use a disposable test process that does not host a Windows service. Do not test 
 - [ ] Confirm CSV export still contains bounded session telemetry and does not include on-demand command lines or process inspection payloads.
 
 Record the Windows version, GPU/driver, host surface, build result, failures and relevant sanitized evidence in the release report. Redact user names, command-line secrets and personal paths before sharing logs or screenshots.
+
+### Inspection modal and Live Monitor flyout interaction
+
+- Open Process Intelligence from Live Monitor, then drag the inspection modal by its header. The inspection modal must move while the Live Monitor flyout remains open.
+- Resize the inspection modal from its lower-right corner. The Live Monitor flyout must remain open.
+- Click controls and text inside the inspection modal; these interactions must not be treated as outside clicks for the toolbar flyout.
+- Press Escape while focus is inside the inspection modal. It remains open, and the Live Monitor flyout remains open. Close the inspection modal only with its Close button.
