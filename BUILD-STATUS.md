@@ -165,3 +165,21 @@ Latest portable validation on this source tree:
 - Obsolete launcher labels: **0 remain**.
 
 Node.js version: 22.16.0. This environment does not provide the .NET SDK/MSBuild or Windows Desktop runtime. Consequently, the updated WPF/C# source has not been compiled or visually exercised on Windows. Re-run `Build-Release-x64.bat` and complete the Windows acceptance checks for lower-half window growth, no-match behavior, suggestion actions and 100–200% DPI scaling before accepting this change.
+
+## Follow-up: Windows Release x64 build feedback — Compact UX build correction
+
+The latest user-provided Windows build log showed that the other three hosts compiled successfully and Runner had one compile error plus two warnings. This source corrects the three reported items:
+
+- `MainWindow.xaml.cs`: explicitly aliases `System.Windows.Controls.Button` as `WpfButton` and uses that alias in the suggestion click handler, resolving CS0104 caused by the WPF/Windows Forms hybrid imports.
+- `MainWindow.xaml.cs`: awaits the `Dispatcher.InvokeAsync` operation in `Window_Loaded`, so the initial height/monitor positioning completes in sequence and does not produce CS4014.
+- `App.xaml.cs`, `RunMind.Runner.csproj` and `app.manifest`: replaces manifest-declared DPI awareness with an explicit `Application.SetHighDpiMode(PerMonitorV2)` call before `base.OnStartup` and before creating any app windows; the project declares `ApplicationHighDpiMode=PerMonitorV2`, and duplicate DPI declarations were removed from the manifest. This addresses WFO0003 while retaining the intended Per-Monitor-V2 mode for the native WPF/WinForms host.
+- Added a Runner regression test for the explicit WPF Button type, awaited dispatcher initialization and the DPI configuration contract.
+
+Portable validation on this source:
+
+- Full Node regression suite: **286/286 passed**.
+- Runner-specific contract and window UX suites: see the validation report accompanying this archive.
+- XML/XAML/project/manifest and JSON parsing: rerun during package validation.
+- The incoming Compact UX archive checksum was verified before modification, and the final archive was extracted and checked after packaging.
+
+The environment still has no .NET SDK, MSBuild, Windows Desktop targeting packs or Windows runtime. Therefore this correction has **not** been compiled locally. Re-run `Build-Release-x64.bat` on Windows and confirm that Runner compiles without CS0104, CS4014 or WFO0003. Also confirm that cursor-monitor placement and resizing continue to work across mixed-DPI monitors.

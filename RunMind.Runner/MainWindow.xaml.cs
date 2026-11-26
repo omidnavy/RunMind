@@ -13,6 +13,7 @@ using Forms = System.Windows.Forms;
 using RunMind.Shared;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 using WpfClipboard = System.Windows.Clipboard;
+using WpfButton = System.Windows.Controls.Button;
 
 namespace RunMind.Runner;
 
@@ -65,11 +66,11 @@ public partial class MainWindow : Window
         CreateTrayIcon();
         SearchBox.Focus();
         RefreshSearch();
-        Dispatcher.BeginInvoke(new Action(() =>
+        await Dispatcher.InvokeAsync(() =>
         {
             UpdateWindowHeightForResults(SearchBox.Text.Length == 0);
             PositionOnConfiguredMonitor();
-        }), DispatcherPriority.Loaded);
+        }, DispatcherPriority.Loaded);
         StatusText.Text = _hotkeyStatus ?? $"Esc to hide  ·  Enter to open  ·  {_settings.Hotkey} to summon";
 
         // The launcher is usable immediately. Start-menu enumeration runs off the UI thread.
@@ -228,7 +229,7 @@ public partial class MainWindow : Window
 
     private void Suggestion_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: string tag }) return;
+        if (sender is not WpfButton { Tag: string tag }) return;
         if (tag == "__runmind_suggestion__" &&
             (!_inlineSettings.Enabled || !_settings.EnabledPlugins.Contains("runmind", StringComparer.Ordinal)))
         {

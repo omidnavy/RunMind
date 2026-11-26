@@ -318,3 +318,20 @@ test('Runner search input uses explicit themed foreground, caret and selection c
   assert.match(xaml, /SelectionTextBrush="\{DynamicResource RunnerAccentContrast\}"/);
   assert.doesNotMatch(xaml, /Grid\.Column="2"[\s\S]{0,100}InlineAnswerText/);
 });
+
+
+test('Runner build uses explicit WPF control types, awaits dispatcher startup work, and configures PerMonitorV2 without manifest DPI declarations', async () => {
+  const main = await read('RunMind.Runner/MainWindow.xaml.cs');
+  const app = await read('RunMind.Runner/App.xaml.cs');
+  const project = await read('RunMind.Runner/RunMind.Runner.csproj');
+  const manifest = await read('RunMind.Runner/app.manifest');
+
+  assert.match(main, /^using WpfButton = System\.Windows\.Controls\.Button;/m);
+  assert.match(main, /sender is not WpfButton \{ Tag: string tag \}/);
+  assert.match(main, /await Dispatcher\.InvokeAsync\([\s\S]{0,220}DispatcherPriority\.Loaded\);/);
+  assert.doesNotMatch(main, /Dispatcher\.BeginInvoke\(new Action\(\(\) =>[\s\S]{0,220}DispatcherPriority\.Loaded\);/);
+  assert.match(project, /<ApplicationHighDpiMode>PerMonitorV2<\/ApplicationHighDpiMode>/);
+  assert.match(app, /Application\.SetHighDpiMode\(System\.Windows\.Forms\.HighDpiMode\.PerMonitorV2\);/);
+  assert.ok(app.indexOf('SetHighDpiMode') < app.indexOf('base.OnStartup(e)'), 'DPI awareness must be set before WPF startup creates windows');
+  assert.doesNotMatch(manifest, /dpiAware|dpiAwareness/);
+});

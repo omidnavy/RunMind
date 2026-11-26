@@ -12,6 +12,9 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Configure process DPI awareness before creating any WPF or WinForms HWNDs.
+        // This replaces manifest-based DPI settings and avoids WFO0003 in the hybrid host.
+        System.Windows.Forms.Application.SetHighDpiMode(System.Windows.Forms.HighDpiMode.PerMonitorV2);
         base.OnStartup(e);
 
         _instanceMutex = new Mutex(initiallyOwned: true, MutexName, out _ownsMutex);
