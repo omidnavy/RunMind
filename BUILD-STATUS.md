@@ -23,12 +23,12 @@
 
 Environment: Linux container, Node.js `v22.16.0`; Python XML/JSON parsing.
 
-- Full regression suite: **270/270 passed** using `node --test --test-concurrency=1 tests/*.test.cjs`.
-- Runner-specific contract suite: **15/15 passed** using `node --test tests/runner-contract.test.cjs`.
-- JavaScript syntax: **25 files parsed** using `node --check`.
+- Full regression suite: **271/271 passed** using `node --test --test-concurrency=1 tests/*.test.cjs`.
+- Runner-specific contract suite: **16/16 passed** using `node --test tests/runner-contract.test.cjs`.
+- JavaScript syntax: **56 files parsed** using `node --check`.
 - JSON: **4 files parsed**.
 - XML, XAML, MSBuild and manifest files: **11 files parsed**.
-- Runner XAML event-handler references: **21 checked**, all mapped to code-behind methods.
+- Runner XAML event-handler references: **19 checked**, all mapped to code-behind methods.
 - No failing tests or parse errors were observed in those checks.
 
 These are portable source-level checks. They do not constitute a .NET compilation or Windows integration test.
@@ -69,3 +69,14 @@ Do not mark 3.4.0 certified or production-ready until these Windows checks pass.
 - Complete NuGet/transitive dependency security review and SBOM.
 - Windows Release x64, WebView2, PowerToys and native System Manager acceptance.
 - Accessibility, upgrade, performance, long-session and end-to-end acceptance.
+
+## Follow-up correction from Windows Release x64 build report
+
+The user-provided build output showed that Standalone, PowerToys Run and Command Palette compiled successfully, while Runner failed on ten source-level errors. The following corrections are now included in this archive:
+
+- `RunnerThemeManager.cs`: explicitly alias `System.Windows.Media.Color` and `ColorConverter` to resolve the WPF / drawing namespace collision.
+- `RunnerSettingsWindow.xaml.cs`: explicitly alias `System.Windows.Controls.ComboBox` so the settings helpers use WPF controls rather than the Windows Forms type.
+- `RunnerInlineModelClient.cs`: explicitly import `System.IO` and `System.Net.Http` for `StreamReader`, `HttpClient`, `HttpRequestMessage`, `HttpResponseMessage` and `HttpContent`.
+- Add a Runner regression contract test for these explicit aliases and imports.
+
+The portable suite now reports 271/271 overall and 16/16 Runner-specific tests. This environment still has no .NET SDK/MSBuild or Windows Desktop targeting packs, so these source corrections have **not** been compiled here. Re-run `Build-Release-x64.bat` on Windows before treating the correction as verified by compilation.

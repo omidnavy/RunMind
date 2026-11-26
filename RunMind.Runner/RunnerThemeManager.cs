@@ -3,6 +3,8 @@
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
+using MediaColor = System.Windows.Media.Color;
+using MediaColorConverter = System.Windows.Media.ColorConverter;
 using RunMind.Shared;
 
 namespace RunMind.Runner;
@@ -80,17 +82,17 @@ internal static class RunnerThemeManager
     private static SolidColorBrush GetBrush(string key)
         => Application.Current.Resources[key] as SolidColorBrush ?? new SolidColorBrush(Colors.Transparent);
 
-    private static Color ParseColor(string value, string fallback)
+    private static MediaColor ParseColor(string value, string fallback)
     {
         try
         {
             if (value.Length == 4 && value[0] == '#')
                 value = "#" + string.Concat(value.Skip(1).SelectMany(character => new[] { character, character }));
-            return (Color)ColorConverter.ConvertFromString(value)!;
+            return (MediaColor)MediaColorConverter.ConvertFromString(value)!;
         }
         catch
         {
-            return (Color)ColorConverter.ConvertFromString(fallback)!;
+            return (MediaColor)MediaColorConverter.ConvertFromString(fallback)!;
         }
     }
 }

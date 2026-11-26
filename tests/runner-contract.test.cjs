@@ -245,3 +245,25 @@ test('Calculator keeps standard unary/exponent precedence and never evaluates ar
   assert.match(unary[0], /return ParsePower\(\)/);
   assert.doesNotMatch(plugins, /\beval\s*\(|\bnew Function\s*\(/);
 });
+
+
+test('Runner explicitly qualifies WPF drawing controls and imports HTTP/IO APIs', async () => {
+  const theme = await read('RunMind.Runner/RunnerThemeManager.cs');
+  const settingsWindow = await read('RunMind.Runner/RunnerSettingsWindow.xaml.cs');
+  const client = await read('RunMind.Runner/RunnerInlineModelClient.cs');
+
+  assert.match(theme, /^using MediaColor = System\.Windows\.Media\.Color;$/m);
+  assert.match(theme, /^using MediaColorConverter = System\.Windows\.Media\.ColorConverter;$/m);
+  assert.match(theme, /private static MediaColor ParseColor\(/);
+  assert.doesNotMatch(theme, /private static Color ParseColor\(/);
+
+  assert.match(settingsWindow, /^using WpfComboBox = System\.Windows\.Controls\.ComboBox;$/m);
+  assert.match(settingsWindow, /SelectTag\(WpfComboBox combo/);
+  assert.match(settingsWindow, /GetTag\(WpfComboBox combo/);
+
+  assert.match(client, /^using System\.IO;$/m);
+  assert.match(client, /^using System\.Net\.Http;$/m);
+  for (const type of ['HttpClient', 'HttpResponseMessage', 'HttpRequestMessage', 'HttpContent', 'StreamReader']) {
+    assert.ok(client.includes(type), `inline model client should use ${type}`);
+  }
+});

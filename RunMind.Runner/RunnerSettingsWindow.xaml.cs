@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using WpfComboBox = System.Windows.Controls.ComboBox;
 using RunMind.Shared;
 
 namespace RunMind.Runner;
@@ -231,13 +232,13 @@ public partial class RunnerSettingsWindow : Window
         return value;
     }
 
-    private static void SelectTag(ComboBox combo, string tag)
+    private static void SelectTag(WpfComboBox combo, string tag)
     {
         combo.SelectedItem = combo.Items.Cast<object>().OfType<ComboBoxItem>()
             .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), tag, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string GetTag(ComboBox combo, string fallback)
+    private static string GetTag(WpfComboBox combo, string fallback)
         => (combo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? fallback;
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;

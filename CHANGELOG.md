@@ -8,6 +8,7 @@
 - Add Quick Host restrictions at both UI and native message boundaries. Workspace selection, attachments, Full Agent, MCP, Skills, developer tools and System Manager are not exposed.
 - Keep native launcher startup independent of WebView2 and model network initialization; application indexing is asynchronous and ChatWindow is lazy.
 - Include the earlier reported Windows compile fixes and Runner-specific regression tests. Windows/.NET Release x64 build and runtime certification remain target-machine gates.
+- Follow up on the first consolidated Runner Windows build report: explicitly alias WPF `Color` / `ColorConverter` and `ComboBox` types, and import `System.IO` / `System.Net.Http` in the inline model client. Add a regression check for these compiler fixes; Windows recompilation remains required.
 
 ## 3.3.1 — Stabilization
 
