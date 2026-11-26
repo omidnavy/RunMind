@@ -5,7 +5,7 @@
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
 | Hosts | PowerToys Command Palette | Preserved | Shared Agent Core |
-| Developer | Project index and search | Implemented with limits | Persistent bounded local index; Acorn AST parsing for JavaScript; regex fallback for TypeScript/JSX and other languages; no compiler-grade cross-file resolution |
+| Developer | Project index and search | Implemented with limits | Persistent bounded local index; Acorn AST parsing and lexical reference resolution for JavaScript; static relative import/export matching; `project_symbol_graph` tool; TypeScript/TSX/JSX and other languages retain heuristic fallback |
 | Developer | Coordinated multi-file editing | Added in integration pass | 2–20 files, one approval, snapshot checks, per-file backups, best-effort rollback; sequential writes are not atomic |
 | Developer | Static project validation | Implemented with limits | JSON/XML and selected manifest checks; test discovery; package manager/lockfile detection; no build/test execution |
 | Developer | Approved PowerShell/native execution | Implemented | Existing 2.4.0 bridge |
@@ -108,7 +108,7 @@
 |---|---|---|---|
 | Developer | Package-manager and lockfile detection | Implemented in project index | Detects npm, pnpm, Yarn, Bun, uv, Poetry, Pipenv, Cargo, Go, Composer and Bundler lockfiles; Node packageManager field takes precedence when present |
 | Developer | Declared script command suggestions | Implemented in static validation | Suggestions are derived only from detected Node package manager and scripts declared in package.json; never executed by validation |
-| Developer | Local import relationships | Heuristic | JavaScript import specifiers are AST-extracted when parsing succeeds; TypeScript/JSX/Python remain heuristic; relative path resolution is best-effort, not compiler-resolved or a complete dependency graph |
+| Developer | Local import relationships | Heuristic | JavaScript relative paths are matched to indexed files and named exports; TypeScript/JSX/Python remain heuristic; package aliases, conditional exports, and compiler resolution are not evaluated |
 | System Manager | Container command output and timeout | Hardened | Asynchronous process wait, user-configurable timeout (0 = no automatic timeout), cancellation, process-tree termination, bounded stdout/stderr |
 | System Manager | Native confirmation and permissions | Preserved | System Manager remains disabled by default; destructive process/container operations still require native confirmation |
 

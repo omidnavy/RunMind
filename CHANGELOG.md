@@ -1,16 +1,16 @@
-## Phase 1 AST analysis increment
+## Phase 1 semantic JavaScript increment
 
-- Bundle Acorn 8.15.0 locally (MIT) and load it before the project index; no network access or runtime package installation is required.
-- Upgrade the persistent project-index schema to v2 so existing regex-only JavaScript records are rebuilt.
-- Parse JavaScript files with an ECMAScript AST; extract static imports, re-exports, dynamic imports, CommonJS `require()` specifiers, declarations, and identifier occurrence counts.
-- Record syntax errors with line/column diagnostics. TypeScript, JSX, and non-JavaScript languages explicitly retain the existing heuristic fallback.
-- Local import path resolution remains best-effort; this increment does not claim TypeScript/compiler semantics or scope-resolved cross-file references.
+- Upgrade the project-index schema/key to v3 and force re-indexing of prior records.
+- Resolve JavaScript identifier references against lexical bindings, including nested block shadowing, function parameters, imports, and declarations; retain source positions and unresolved names.
+- Record named/default exports and import bindings, then statically match relative module imports to indexed files and exported names.
+- Add the `project_symbol_graph` agent tool for inspecting declarations, references, module edges, resolved imports, and unresolved imports.
+- Keep Acorn bundled/offline. TypeScript, TSX, JSX, package aliases, conditional exports, and compiler-grade semantics remain outside this increment.
 
 # RunMind Changelog
 
 ## Unreleased — Phase 1 Developer Workbench & System Manager hardening
 
-- Bundle Acorn 8.15.0 (MIT) for offline ECMAScript AST parsing; extract JavaScript declarations, imports, and identifier occurrence counts, with source-located parse diagnostics. The index schema is v2 and forces existing JavaScript entries to be re-analyzed. TypeScript, JSX, and other languages retain explicit heuristic fallback.
+- Bundle Acorn 8.15.0 (MIT) for offline JavaScript AST parsing; resolve lexical references, record exports/import bindings, and statically link relative imports to indexed exports. The index schema/key is v3. Add the `project_symbol_graph` inspection tool. TypeScript, TSX, JSX, and other languages retain explicit heuristic fallback.
 
 - Extend the persistent project index with package-manager and lockfile detection across Node.js, Python, Rust, Go, PHP, and Ruby ecosystems.
 - Detect npm, pnpm, Yarn, and Bun using package metadata/lockfiles; expose only script commands backed by declared `package.json` scripts. Suggestions are informational and are not executed by indexing or static validation.
