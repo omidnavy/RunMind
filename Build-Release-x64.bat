@@ -40,6 +40,15 @@ if exist "RunMind.CommandPalette\AskRunMindPage.cs" (
     echo [INFO] Removed obsolete AskRunMindPage.cs.
 )
 
+if exist "RunMind.Runner\RunnerChatWindow.xaml" (
+    del /f /q "RunMind.Runner\RunnerChatWindow.xaml"
+    echo [INFO] Removed retired RunnerChatWindow.xaml.
+)
+if exist "RunMind.Runner\RunnerChatWindow.xaml.cs" (
+    del /f /q "RunMind.Runner\RunnerChatWindow.xaml.cs"
+    echo [INFO] Removed retired RunnerChatWindow.xaml.cs.
+)
+
 if not exist "%SOLUTION%" (
     echo [ERROR] Solution file not found:
     echo         "%~dp0%SOLUTION%"

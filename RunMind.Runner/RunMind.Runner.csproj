@@ -17,7 +17,14 @@
     <Version>3.4.0</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Exclude retired Runner chat artifacts left behind by in-place source extraction. -->
+    <DefaultItemExcludesInProjectFolder>$(DefaultItemExcludesInProjectFolder);RunnerChatWindow.xaml;RunnerChatWindow.xaml.cs</DefaultItemExcludesInProjectFolder>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Defense in depth: these files were removed when chat moved back to Standalone. -->
+    <Page Remove="RunnerChatWindow.xaml" />
+    <Compile Remove="RunnerChatWindow.xaml.cs" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\AppearancePreferences.cs" Link="Shared\AppearancePreferences.cs" />
     <Compile Include="..\Shared\ThemeCatalog.cs" Link="Shared\ThemeCatalog.cs" />

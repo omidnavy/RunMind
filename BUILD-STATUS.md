@@ -21,14 +21,22 @@
 
 Latest portable validation on the final source tree and extracted archive:
 
-- Full Node regression suite: **290/290 passed**.
-- Runner-specific contract, window UX and handoff suite: **35/35 passed**.
+- Full Node regression suite: **292/292 passed**.
+- Runner-specific contract, window UX and handoff suite: **37/37 passed**.
 - JavaScript syntax checks: **58/58 passed**.
 - JSON files: **4/4 parsed**.
 - XML/XAML/project/manifest files: **11/11 parsed**.
 - ZIP integrity test and SHA-256 sidecar verification: passed.
 
 This environment has no .NET SDK/MSBuild or Windows runtime, so Release x64 compilation and interactive Windows handoff acceptance remain unverified.
+
+## Latest Windows build correction — stale retired Runner chat XAML (2026-11-24)
+
+The reported `MC3074` error referenced `RunMind.Runner/RunnerChatWindow.xaml`, but inspection of the preceding source archive confirmed that this XAML and its code-behind were already absent. The likely cause was an in-place extraction into a directory containing the obsolete file from an earlier package; ZIP extraction overwrites existing files but does not delete files removed from newer packages.
+
+The Runner project now excludes both retired files using `DefaultItemExcludesInProjectFolder`, plus explicit `Page Remove` and `Compile Remove` entries. `Build-Release-x64.bat` also deletes the stale XAML and code-behind before restore/build if they remain in a reused source folder. This prevents WPF default item discovery from compiling stale chat-window artifacts even when the source directory is reused. The handoff regression suite asserts the project exclusions and build-script cleanup.
+
+This is a source/project-level correction. The current environment does not contain .NET SDK/MSBuild or Windows Desktop targeting packs, so the Windows Release x64 build remains unverified here.
 
 ## Complete Runner scope in this source
 
@@ -48,8 +56,8 @@ This environment has no .NET SDK/MSBuild or Windows runtime, so Release x64 comp
 
 Environment: Linux container, Node.js `v22.16.0`; Python XML parsing. The latest checks ran directly against this modified source tree.
 
-- Full regression suite: **290/290 passed** using `node --test`.
-- Runner-specific contract, window UX and handoff suite: **35/35 passed** using `node --test tests/runner-contract.test.cjs tests/runner-window-ux.test.cjs tests/runner-standalone-handoff.test.cjs`.
+- Full regression suite: **292/292 passed** using `node --test`.
+- Runner-specific contract, window UX and handoff suite: **37/37 passed** using `node --test tests/runner-contract.test.cjs tests/runner-window-ux.test.cjs tests/runner-standalone-handoff.test.cjs`.
 - XML, XAML, MSBuild project and manifest parsing: checked again after the latest edits.
 - Runner XAML named controls and code-behind bindings: checked for unique names and the new monitor, sizing, provider and ranking controls.
 - Contract tests cover WindowChrome, cursor-monitor selection, auto sizing, conditional provider settings, plugin ranking, themed controls, blank empty state, removal of the duplicate Runner chat host, bounded current-user IPC, executable discovery and prompt/answer handoff.

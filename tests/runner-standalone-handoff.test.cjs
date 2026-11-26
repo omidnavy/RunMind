@@ -16,6 +16,20 @@ test('Runner has no duplicate WebView2 chat host and relies on Standalone for fu
   assert.doesNotMatch(main, /RunnerChatWindow/);
 });
 
+test('Runner project excludes retired chat XAML and code-behind left in an in-place extraction folder', async () => {
+  const project = await read('RunMind.Runner/RunMind.Runner.csproj');
+  assert.match(project, /DefaultItemExcludesInProjectFolder[^\n]*RunnerChatWindow\.xaml/);
+  assert.match(project, /DefaultItemExcludesInProjectFolder[^\n]*RunnerChatWindow\.xaml\.cs/);
+  assert.match(project, /<Page Remove="RunnerChatWindow\.xaml"\s*\/>/);
+  assert.match(project, /<Compile Remove="RunnerChatWindow\.xaml\.cs"\s*\/>/);
+});
+
+test('Release build removes retired Runner chat files from reused source directories', async () => {
+  const build = await read('Build-Release-x64.bat');
+  assert.match(build, /if exist "RunMind\.Runner\\RunnerChatWindow\.xaml"[\s\S]*?del \/f \/q "RunMind\.Runner\\RunnerChatWindow\.xaml"/);
+  assert.match(build, /if exist "RunMind\.Runner\\RunnerChatWindow\.xaml\.cs"[\s\S]*?del \/f \/q "RunMind\.Runner\\RunnerChatWindow\.xaml\.cs"/);
+});
+
 test('Standalone receives handoff context without Quick Host restrictions or automatic resubmission', async () => {
   const app = await read('RunMind.Standalone/App.xaml.cs');
   const main = await read('RunMind.Standalone/MainWindow.xaml.cs');
