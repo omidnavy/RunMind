@@ -1,8 +1,8 @@
 # Archived validation reports
 
-These reports are snapshots from earlier development increments. They preserve the evidence and limitations recorded at the time; their test counts and acceptance conclusions do **not** certify the current 3.4.0 source tree.
+These reports are snapshots from earlier development increments. They preserve the evidence and limitations recorded at the time; their test counts and acceptance conclusions do **not** certify the current 3.4.1 source tree or a Windows binary release.
 
-## Current 3.4.0 feature history
+## 3.4.0 feature-line follow-up records
 
 - [P7 Live Resource Intelligence follow-up validation](P7-LIVE-RESOURCE-FOLLOW-UP-VALIDATION.md)
 - [Process Intelligence validation](PROCESS-INTELLIGENCE-VALIDATION.md)
