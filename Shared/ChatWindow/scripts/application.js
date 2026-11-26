@@ -478,11 +478,31 @@
     for (const id of ['systemManagerEnabled','systemManagerProfile','systemManagerLaunchPermission','systemManagerOpenPermission','systemManagerGroupApplications','systemManagerGroupProcesses','systemManagerGroupDiagnostics','systemManagerDiscoverApplications','systemManagerLaunchApplications','systemManagerOpenTargets','systemManagerListProcesses','systemManagerInspectProcesses','systemManagerTerminateProcesses','systemManagerSystemInformation','systemManagerEnvironmentInformation','systemManagerServiceInformation','systemManagerNetworkInformation']) {
       document.getElementById(id)?.addEventListener('change', () => { void saveSystemManagerSettingsFromUi(); });
     }
+    document.querySelectorAll('[data-system-manager-tab]').forEach(button => {
+      button.addEventListener('click', () => setSystemManagerTab(button.dataset.systemManagerTab || 'settings'));
+    });
     $('#refreshSystemManagerAdapters')?.addEventListener('click', () => { void loadSystemManagerAdapters(); });
     $('#installSystemManagerAdapter')?.addEventListener('click', () => { void installSystemManagerAdapterFromUi(); });
     $('#systemManagerAdapterList')?.addEventListener('click', event => {
-      const button = event.target.closest('button[data-adapter-remove]');
-      if (button) void removeSystemManagerAdapterFromUi(button.dataset.adapterRemove);
+      const button = event.target.closest('button[data-adapter-remove], button[data-adapter-edit], button[data-adapter-reset]');
+      if (!button) return;
+      if (button.dataset.adapterRemove) void removeSystemManagerAdapterFromUi(button.dataset.adapterRemove);
+      else if (button.dataset.adapterReset) void resetSystemManagerAdapter(button.dataset.adapterReset);
+      else if (button.dataset.adapterEdit) {
+        const input = $('#systemManagerAdapterManifest');
+        const details = input?.closest('details');
+        const saveButton = $('#installSystemManagerAdapter');
+        if (!input || !details) return;
+        let operations = {};
+        try { operations = JSON.parse(button.dataset.adapterOperations || '{}'); } catch (_) {}
+        input.value = JSON.stringify({ id: button.dataset.adapterEdit, displayName: button.dataset.adapterName || button.dataset.adapterEdit, match: button.dataset.adapterMatch || '', operations }, null, 2);
+        details.open = true;
+        if (saveButton) saveButton.textContent = 'Save built-in override';
+        const status = $('#systemManagerAdapterStatus');
+        if (status) status.textContent = `Edit argument templates for ${button.dataset.adapterName || button.dataset.adapterEdit}. Keep the built-in ID, display name and match unchanged. Empty operation arrays must be filled with argument templates before saving.`;
+        input.focus();
+        input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
     });
     $('#refreshAgentSkills').addEventListener('click', () => { void refreshAgentSkillManager(); });
     $('#installAgentSkill').addEventListener('click', () => { void installManagedAgentSkill(); });

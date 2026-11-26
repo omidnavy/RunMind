@@ -92,6 +92,7 @@
 | File Explorer open-folder/select-file adapter | Implemented |
 | Docker/Podman list, inspect, start, stop, restart, logs | Implemented (native CLI; Windows runtime test required) |
 | Coding/debugging/testing-and-quality/code-review skills | Implemented |
-| Dedicated adapters tab and bounded inner scrolling | Not implemented |
-| Built-in adapter edit overrides/reset | Not implemented |
+| File-history and skill lifecycle skills (skill-management/create-skill/install-skill) | Implemented |
+| Dedicated adapters tab and bounded inner scrolling | Implemented |
+| Built-in adapter edit overrides/reset | Implemented |
 | RunMind open/create/export existing conversation native adapter | Not implemented; conversations remain in WebView IndexedDB |

@@ -6,6 +6,9 @@
 - Added a File Explorer adapter for opening folders and selecting files.
 - Added a native Docker/Podman container action bridge for list, inspect, start, stop, restart, and logs. Runtime selection supports auto, Docker, and Podman; state-changing operations always require native confirmation.
 - Added coding, debugging, testing-and-quality, and code-review Agent Skills.
+- Added RunMind-native `file-history`, `skill-management`, `create-skill`, and `install-skill` skills, adapted from the supplied Bionic bundle. They use RunMind Git, backup, and skill-manager capabilities; Bionic-only browser/session APIs were not copied.
+- Fixed a C# record `with` initializer in shared adapter override loading that prevented all three hosts from compiling.
+- Wired System Manager tab navigation and built-in adapter Edit/Reset controls; Edit now opens the declarative manifest editor prefilled with the built-in operation names.
 - Added shared coding execution guidance emphasizing project inspection, root-cause fixes, preserving user changes, proportionate validation, and honest verification reporting.
 - Retained the existing system-management, container-management, and runmind-management skills.
 

@@ -59,5 +59,7 @@ Source updates include three bundled Agent Skills, native skill discovery/loadin
 - Added Notepad and File Explorer built-in adapter definitions.
 - Added native Docker/Podman CLI operation with strict action/runtime/container validation and mandatory confirmation for start/stop/restart.
 - Added four coding skills and shared coding execution policy.
-- Existing adapter manager remains embedded in the System Manager settings page; dedicated tab, built-in override editor/reset, and full RunMind conversation management are not implemented in this snapshot.
+- Added four additional RunMind-native skills adapted from the supplied Bionic bundle: file-history, skill-management, create-skill, and install-skill.
+- Fixed the shared adapter override record initializer and connected the adapter tab, Edit, and Reset UI actions.
+- System Manager includes separate Settings and Application Adapters tabs, bounded panel/list scrolling, built-in adapter override storage, Edit/Reset actions, and custom adapter management. Full RunMind conversation management through the native adapter remains unimplemented; the existing `.runmind` save/open UI is still available.
 - Windows/.NET compilation and runtime validation are still required.

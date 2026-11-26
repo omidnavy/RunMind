@@ -669,7 +669,7 @@ public sealed partial class AgentHostBridge
                         if (values.Any(v => v.Length > 1024 || System.Text.RegularExpressions.Regex.IsMatch(v, "\\{(?!target\\}|line\\})"))) continue;
                         operations[op.Name] = values;
                     }
-                    if (operations.Count > 0) rows[index] = rows[index] with { operations };
+                    if (operations.Count > 0) rows[index] = rows[index] with { operations = operations };
                 }
                 catch { }
             }

@@ -852,7 +852,7 @@
       if (!adapter || typeof adapter !== 'object' || Array.isArray(adapter)) { if (status) status.textContent = 'The manifest must be a JSON object.'; return; }
       try {
         const result = await callAgentHost('systemManager.adapters.save', { adapter });
-        if (result?.installed) { input.value = ''; if (status) status.textContent = `${result.overridden ? 'Saved override for' : 'Installed'} ${result.displayName}.`; await loadSystemManagerAdapters(); }
+        if (result?.installed) { input.value = ''; const saveButton = document.getElementById('installSystemManagerAdapter'); if (saveButton) saveButton.textContent = 'Validate and install'; if (status) status.textContent = `${result.overridden ? 'Saved override for' : 'Installed'} ${result.displayName}.`; await loadSystemManagerAdapters(); }
         else if (result?.cancelled) { if (status) status.textContent = 'Installation cancelled.'; }
         else if (status) status.textContent = 'The adapter was not installed.';
       } catch (error) { if (status) status.textContent = `Could not install adapter: ${error?.message || error}`; }
