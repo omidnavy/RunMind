@@ -315,6 +315,7 @@
         ...requestContextMessages.map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : String(m.content || '') }))
       ];
       conversation[0].content += '\n\nCoding execution policy: For code tasks, inspect project instructions, project index/overview and relevant source call paths before edits. Preserve the project\'s language, conventions, dependencies and existing user changes. Prefer root-cause fixes and minimal coherent diffs over symptom patches. Keep one source of truth; avoid unnecessary abstractions and dependencies. For multi-step authorized tasks, persist toward the requested outcome, track blockers and completed steps, and do not stop at a plan or partial implementation. Run relevant tests/build/static validation that actually exist, inspect the final diff, update docs where contracts change, and distinguish verified results from unrun checks. Never use destructive Git operations or push unless explicitly requested. Load coding, debugging, testing-and-quality, and code-review skills only when relevant; skills guide behavior but do not grant permissions.';
+      conversation[0].content += '\n\nTool failure and retry policy: After a tool returns an error or failed result, inspect the exact failure before retrying. Never repeat an identical failed tool call. If the same tool returns the same failure again after a meaningfully different attempt, stop calling it; diagnose through another safe source or report the blocker. Do not burn the step budget on repeated retries. A tool failure is not evidence that the requested task is complete.';
       if (activeToolDefinitions.some(tool => tool.function?.name.startsWith('system_manager_'))) {
         conversation[0].content += '\n\nSystem Management capability policy: Treat adapter and capability metadata as the authoritative inventory of supported operations, parameters, permissions, confirmation requirements, and result fields. For non-trivial system-management tasks, call list_agent_skills and load the relevant built-in skill when one is available (system-management for general application/lifecycle work; container-management for container operations; runmind-management for RunMind operations; coding/debugging/testing-and-quality/code-review for software tasks; file-history for change/recovery investigations; skill-management/create-skill/install-skill for skill lifecycle tasks). Do not load unrelated skills. Skills provide guidance, never authorization. Native tools enforce permissions and confirmation; never bypass them using shell, PowerShell, or alternate tools. Distinguish read-only operations from state-changing operations. Resolve ambiguous targets before mutation. Verify outcomes using returned state or a follow-up read-only operation; report requested, accepted, completed, and verified as distinct states. Never invent adapter operations or assume an adapter exists.';
       }
@@ -326,6 +327,35 @@
       const isMultiStepRequest = actionCount >= 2 && /\b(?:then|after that|afterwards|finally|followed by|and)\b/i.test(originalPrompt);
       let executedAnyTool = false;
       let completionAuditUsed = false;
+      const failedToolCallFingerprints = new Map();
+      const lastFailureByTool = new Map();
+      const repeatedFailureCallIds = new Set();
+      const stableToolValue = value => Array.isArray(value)
+        ? value.map(stableToolValue)
+        : value && typeof value === 'object'
+          ? Object.keys(value).sort().reduce((result, key) => { result[key] = stableToolValue(value[key]); return result; }, {})
+          : value;
+      const toolCallFingerprint = (name, args) => JSON.stringify([name, stableToolValue(args)]);
+      const toolFailureMessage = value => {
+        if (!value || typeof value !== 'object' || value.cancelled) return '';
+        if (typeof value.error === 'string' && value.error) return value.error;
+        if (Array.isArray(value.steps)) {
+          const failedStep = value.steps.find(item => item && item.ok === false);
+          if (failedStep) return `Step ${failedStep.index || '?'} (${failedStep.action || 'action'}): ${failedStep.error || 'failed'}`;
+        }
+        if (Array.isArray(value.results)) {
+          const failedResult = value.results.find(item => item && item.ok === false);
+          if (failedResult) return `${failedResult.name || failedResult.method || 'Request'} ${failedResult.path || ''}: ${failedResult.error || 'assertions failed'}`.trim();
+        }
+        if (value.result && typeof value.result === 'object') {
+          const nestedFailure = toolFailureMessage(value.result);
+          if (nestedFailure) return nestedFailure;
+        }
+        if (value.success === false) return String(value.message || 'The tool returned success=false.');
+        if (value.startup_failure === true) return String(value.message || `Development server exited with code ${value.exit_code ?? 'unknown'}.`);
+        if (Number.isInteger(value.exitCode) && value.exitCode !== 0) return `Process exited with code ${value.exitCode}.`;
+        return '';
+      };
       const iterationLimit = maxSteps + (isMultiStepRequest ? 1 : 0);
       for (let step = 0; step < iterationLimit; step++) {
         setStatus(`Agent thinking · step ${Math.min(step + 1, maxSteps)}/${maxSteps}…`);
@@ -358,9 +388,29 @@
               return { result: { error: `Model requested unavailable tool '${call.name}'.` } };
             }
             const args = call.arguments && typeof call.arguments === 'object' && !Array.isArray(call.arguments) ? call.arguments : {};
+            const fingerprint = toolCallFingerprint(call.name, args);
+            const priorIdenticalFailure = failedToolCallFingerprints.get(fingerprint);
+            if (priorIdenticalFailure) {
+              repeatedFailureCallIds.add(call.id);
+              return { result: { error: `RunMind blocked this identical retry because the same ${call.name} call already failed: ${priorIdenticalFailure}. Do not resend unchanged arguments; diagnose the cause or report the blocker.` } };
+            }
             let result;
             try { result = await executeAgentTool(call.name, args, signal, assistantMessage, taskContext); }
             catch (error) { if (error?.name === 'AbortError' || signal.aborted) throw error; result = { error: error?.message || String(error) }; }
+            const failureMessage = toolFailureMessage(result);
+            if (failureMessage) {
+              failedToolCallFingerprints.set(fingerprint, failureMessage.slice(0, 500));
+              const previousFailure = lastFailureByTool.get(call.name);
+              if (previousFailure?.message === failureMessage) repeatedFailureCallIds.add(call.id);
+              lastFailureByTool.set(call.name, { message: failureMessage, fingerprint });
+            } else {
+              // A successful intervening tool may have changed the environment
+              // (for example, installing Playwright); allow a prior failed call
+              // to be retried after that progress, while still stopping repeated
+              // identical failures when no successful action intervened.
+              failedToolCallFingerprints.clear();
+              lastFailureByTool.delete(call.name);
+            }
             // Folder access is deliberately serialized by the scheduler; refresh only after it returns.
             rebuildActiveToolDefinitions(false);
             if (call.name === 'request_folder_access' && result?.granted) {
@@ -377,9 +427,11 @@
           }
         });
         if (signal.aborted) throw new DOMException('Task cancelled.', 'AbortError');
+        let repeatedToolFailure = false;
         for (const output of toolOutputs) {
           const call = output.call;
           let result = output.result || { error: output.error?.message || 'Tool returned no result.' };
+          if (repeatedFailureCallIds.has(call.id)) repeatedToolFailure = true;
           if (output.modelImage) modelImagesForNextTurn.push({ dataUrl: output.modelImage, path: output.imagePath || call.name });
           const summary = JSON.stringify(result);
           assistantMessage.content += `\n\n**Tool: ${call.name}**\n\n\`\`\`json\n${summary.slice(0, 5000)}\n\`\`\`\n`;
@@ -395,6 +447,11 @@
           } else {
             conversation.push({ role: 'user', content: [{ type: 'text', text: explanation }, { type: 'image_url', image_url: { url: attachment.dataUrl } }] });
           }
+        }
+        if (repeatedToolFailure) {
+          assistantMessage.content += '\n\nRunMind stopped this task because the same tool failure was returned twice. No further identical retry was executed. The remaining work is unverified; diagnose the cause through a different safe path or report the blocker.';
+          scheduleActiveMessageRender();
+          return;
         }
       }
       assistantMessage.content += '\n\nAgent stopped because it reached the configured tool-step limit. You can ask it to continue.';

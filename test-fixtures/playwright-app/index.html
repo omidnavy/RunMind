@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17243a">
+  <title>RunMind Playwright Fixture</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="brand" aria-label="RunMind fixture home">
+      <span class="brand-mark" aria-hidden="true">R</span>
+      <span>RunMind <span class="brand-muted">Browser Fixture</span></span>
+    </div>
+    <nav aria-label="Primary navigation">
+      <a href="#request">Request form</a>
+      <a href="#results">Results</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">PHASE 2 · PLAYWRIGHT VALIDATION</p>
+      <h1 id="page-title">A small app for real browser testing</h1>
+      <p class="intro">Explore the page structure, inspect accessible controls, submit a request, and capture a screenshot. This fixture runs locally and makes no external network calls.</p>
+    </section>
+
+    <div class="content-grid">
+      <section class="panel" id="request" aria-labelledby="request-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">INTERACTION</p>
+            <h2 id="request-title">Create a test request</h2>
+          </div>
+          <span class="status-dot" aria-hidden="true"></span>
+        </div>
+        <form id="request-form">
+          <div class="field">
+            <label for="request-name">Request name</label>
+            <input id="request-name" name="requestName" type="text" autocomplete="off" placeholder="e.g. Check dashboard" required>
+          </div>
+          <div class="field">
+            <label for="request-priority">Priority</label>
+            <select id="request-priority" name="priority">
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button class="primary-button" id="submit-request" type="submit">Submit request</button>
+            <button class="secondary-button" id="reset-form" type="reset">Clear form</button>
+          </div>
+        </form>
+        <p class="live-status" id="submission-status" role="status" aria-live="polite" aria-atomic="true">No requests submitted yet.</p>
+      </section>
+
+      <section class="panel results-panel" id="results" aria-labelledby="results-title">
+        <p class="eyebrow">OUTPUT</p>
+        <h2 id="results-title">Submitted requests</h2>
+        <p class="muted">New requests appear here after you submit the form.</p>
+        <ul class="request-list" id="request-list" aria-label="Submitted request list">
+          <li class="empty-state" id="empty-state">Waiting for your first request.</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <span>Local-only test fixture</span>
+    <span>Health endpoint: <code>/health</code></span>
+  </footer>
+</body>
+</html>

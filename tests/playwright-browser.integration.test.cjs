@@ -5,7 +5,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { validateRequest, run, MAX_ACTIONS } = require('../Shared/PlaywrightRunner.cjs');
+const childProcess = require('node:child_process');
+const { validateRequest, parseInputJson, run, MAX_ACTIONS } = require('../Shared/PlaywrightRunner.cjs');
 
 function makeFakePlaywright() {
   const calls = [];
@@ -24,7 +25,9 @@ function makeFakePlaywright() {
         async press(value) { record('press', value); }, async check() { record('check'); },
         async uncheck() { record('uncheck'); }, async selectOption(value) { record('selectOption', value); },
         async waitFor(options) { record('waitFor', options); }, async innerText() { record('innerText'); return 'Hello Playwright'; },
-        async count() { record('count'); return 1; }
+        async count() { record('count'); return 1; },
+        async evaluate() { record('evaluate'); return { document: { title: 'Fixture', language: 'en', url: 'http://127.0.0.1:4320/' }, bodyText: 'Fixture content', landmarks: [{ tag: 'main', role: '', name: 'Main content' }], landmarksTruncated: false, interactiveElements: [{ tag: 'button', role: 'button', name: 'Submit', selectorHint: '#submit', type: '', disabled: false, required: false, checked: null, visible: true }], interactiveElementsTruncated: false }; },
+        async ariaSnapshot() { record('ariaSnapshot'); return '- main:\n  - heading \"Fixture\" [level=1]'; }
       };
     },
     async screenshot(options) { calls.push(['screenshot', options]); fs.writeFileSync(options.path, Buffer.from('fake-png')); }
@@ -36,6 +39,19 @@ function makeFakePlaywright() {
   return { calls, handlers, routes, browser, page, get closed() { return closed; }, playwright: { chromium: { async launch(options) { calls.push(['launch', options]); return browser; } }, firefox: {}, webkit: {} } };
 }
 
+test('local browser fixture is a real accessible HTML application with a matching dev script', () => {
+  const root = path.resolve(__dirname, '..');
+  const fixture = path.join(root, 'test-fixtures', 'playwright-app');
+  const manifest = JSON.parse(fs.readFileSync(path.join(fixture, 'package.json'), 'utf8'));
+  const html = fs.readFileSync(path.join(fixture, 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(fixture, 'app.js'), 'utf8');
+  const server = fs.readFileSync(path.join(fixture, 'server.cjs'), 'utf8');
+  assert.equal(manifest.scripts.dev, 'node server.cjs 4320');
+  for (const marker of ['<html lang="en">','<main id="main">','<nav aria-label="Primary navigation">','<label for="request-name">','aria-live="polite"','id="request-list"']) assert.ok(html.includes(marker), marker);
+  assert.match(app, /addEventListener\('submit'/);
+  assert.match(server, /pathname === '\/health'/);
+});
+
 test('Playwright request validation accepts a bounded structured workflow', () => {
   const result = validateRequest({ actions: [
     { action: 'goto', value: 'http://127.0.0.1:3000' },
@@ -45,6 +61,17 @@ test('Playwright request validation accepts a bounded structured workflow', () =
   ] });
   assert.equal(result.browser, 'chromium');
   assert.equal(result.actions.length, 4);
+});
+
+test('Playwright JSON input accepts a UTF-8 BOM without weakening JSON validation', () => {
+  assert.deepEqual(parseInputJson('\uFEFF{"browser":"chromium","actions":[]}'), { browser: 'chromium', actions: [] });
+  assert.throws(() => parseInputJson('\uFEFF{broken'), SyntaxError);
+  const root = path.resolve(__dirname, '..');
+  const runner = path.join(root, 'Shared', 'PlaywrightRunner.cjs');
+  const child = childProcess.spawnSync(process.execPath, [runner], { input: `\uFEFF${JSON.stringify({ actions: [] })}`, encoding: 'utf8', timeout: 5000 });
+  assert.equal(child.status, 1);
+  assert.match(child.stdout, /between 1 and 30 browser actions/);
+  assert.doesNotMatch(child.stdout, /Unexpected token/);
 });
 
 test('Playwright request validation rejects non-web schemes and embedded credentials', () => {
@@ -93,6 +120,22 @@ test('Playwright runner executes structured navigation, assertions, reads and sc
     assert.equal(fs.existsSync(result.steps[9].result.artifact), true);
     assert.equal(fake.closed, true);
     assert.ok(fake.calls.some(call => call[0] === 'context.close'));
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('Playwright page inspection returns bounded landmarks, accessible controls, and an ARIA snapshot', async () => {
+  const fake = makeFakePlaywright();
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'runmind-playwright-inspect-'));
+  try {
+    const result = await run({ actions: [{ action: 'inspect_page' }] }, { playwright: fake.playwright, artifactDirectory: directory });
+    assert.equal(result.success, true);
+    const inspection = result.steps[0].result;
+    assert.equal(inspection.document.title, 'Fixture');
+    assert.equal(inspection.landmarks[0].tag, 'main');
+    assert.equal(inspection.interactiveElements[0].name, 'Submit');
+    assert.equal(inspection.accessibility.method, 'Playwright Locator.ariaSnapshot');
+    assert.match(inspection.accessibility.snapshot, /heading/);
+    assert.equal(fake.closed, true);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -157,6 +200,8 @@ test('all three native hosts deploy the same Playwright runner and dispatch rout
   const bridge = fs.readFileSync(path.join(root, 'Shared/AgentHostBridge.cs'), 'utf8');
   assert.match(bridge, /"playwright\.run"\s*=>\s*PlaywrightRunAsync/);
   assert.match(bridge, /PlaywrightRunner\.cjs/);
+  assert.match(bridge, /StandardInputEncoding = Utf8NoBom/);
+  assert.match(bridge, /private static readonly UTF8Encoding Utf8NoBom = new\(encoderShouldEmitUTF8Identifier: false\)/);
   for (const file of [
     'RunMind.Standalone/RunMind.Standalone.csproj',
     'Community.PowerToys.Run.Plugin.RunMind/Community.PowerToys.Run.Plugin.RunMind.csproj',
@@ -164,12 +209,25 @@ test('all three native hosts deploy the same Playwright runner and dispatch rout
   ]) assert.match(fs.readFileSync(path.join(root, file), 'utf8'), /PlaywrightRunner\.cjs/);
 });
 
+test('Agent exposes the safe page inspector and stops repeated tool failures', () => {
+  const root = path.resolve(__dirname, '..');
+  const providers = fs.readFileSync(path.join(root, 'Shared/ChatWindow/scripts/providers.js'), 'utf8');
+  const runtime = fs.readFileSync(path.join(root, 'Shared/ChatWindow/scripts/agent/runtime.js'), 'utf8');
+  assert.match(providers, /semantic landmarks, interactive controls, accessible names/);
+  assert.match(providers, /'inspect_page'/);
+  assert.match(runtime, /failedToolCallFingerprints = new Map\(\)/);
+  assert.match(runtime, /lastFailureByTool = new Map\(\)/);
+  assert.match(runtime, /failedToolCallFingerprints\.clear\(\)/);
+  assert.match(runtime, /same tool returns the same failure again/);
+  assert.match(runtime, /RunMind stopped this task because the same tool failure was returned twice/);
+});
+
 test('Agent exposes Playwright as a structured, approval-gated primary-agent tool', () => {
   const root = path.resolve(__dirname, '..');
   const providers = fs.readFileSync(path.join(root, 'Shared/ChatWindow/scripts/providers.js'), 'utf8');
   const tools = fs.readFileSync(path.join(root, 'Shared/ChatWindow/scripts/agent/tools.js'), 'utf8');
   assert.match(providers, /name: 'playwright_run'/);
-  assert.match(providers, /'goto','click','fill','press','check','uncheck','select_option'/);
+  assert.match(providers, /'goto','inspect_page','click','fill','press','check','uncheck','select_option'/);
   assert.match(tools, /name === 'playwright_run'/);
   assert.match(tools, /alwaysAsk: true/);
   assert.match(tools, /subAgentDepth/);

@@ -5,6 +5,11 @@ const { isDeepStrictEqual } = require('node:util');
 
 const MAX_REQUESTS = 20;
 const MAX_INPUT_BYTES = 512 * 1024;
+
+function parseInputJson(input) {
+  const normalized = String(input || '').replace(/^\uFEFF/, '');
+  return JSON.parse(normalized || '{}');
+}
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const MAX_BODY_TEXT = 64 * 1024;
 const MAX_OUTPUT_BYTES = 256 * 1024;
@@ -252,7 +257,7 @@ async function main() {
       input += chunk;
       if (Buffer.byteLength(input, 'utf8') > MAX_INPUT_BYTES) throw new Error('API test request exceeds the 512 KB input limit.');
     }
-    const parsed = JSON.parse(input || '{}');
+    const parsed = parseInputJson(input);
     const result = await run(parsed);
     process.stdout.write(`${JSON.stringify(result)}\n`);
     process.exitCode = result.success ? 0 : 2;
@@ -263,4 +268,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = { validateRequest, run, getJsonPath, MAX_REQUESTS, MAX_RESPONSE_BYTES, MAX_OUTPUT_BYTES };
+module.exports = { validateRequest, parseInputJson, run, getJsonPath, MAX_REQUESTS, MAX_RESPONSE_BYTES, MAX_OUTPUT_BYTES };

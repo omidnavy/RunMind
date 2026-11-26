@@ -29,6 +29,7 @@ The workspace must be selected in RunMind with `select_native_workspace`. If the
 A single run accepts 1–30 actions and stops on the first failed action or assertion:
 
 - `goto`: navigate to an absolute HTTP/HTTPS URL.
+- `inspect_page`: return a bounded semantic DOM summary, landmarks, interactive controls, accessible names, and a Playwright ARIA snapshot when the installed version supports it. This is a fixed inspection operation, not arbitrary page JavaScript evaluation.
 - `click`, `fill`, `press`, `check`, `uncheck`, `select_option`: locator interactions.
 - `wait_for`: wait for a locator to become visible, hidden, attached, or detached.
 - `expect_text`: assert locator text using contains/exact matching.
@@ -37,7 +38,7 @@ A single run accepts 1–30 actions and stops on the first failed action or asse
 - `read_text`, `count`: return bounded locator text or element count.
 - `screenshot`: save a viewport screenshot to the local artifact directory.
 
-The tool returns per-step outcomes and durations, final URL/title, browser console errors, page exceptions, failed network requests, and HTTP responses with status 400 or higher. Locator actions use Playwright's normal strictness and timeout behavior.
+The tool returns per-step outcomes and durations, final URL/title, browser console errors, page exceptions, failed network requests, and HTTP responses with status 400 or higher. Its native stdin protocol uses UTF-8 without a BOM; both Node runners also tolerate one leading BOM for compatibility. Locator actions use Playwright's normal strictness and timeout behavior.
 
 Example Agent action plan:
 
@@ -77,4 +78,4 @@ Example Agent action plan:
 
 ## Validation
 
-`tests/playwright-browser.integration.test.cjs` tests request validation, scheme/credential rejection, action bounds, structured workflow execution against a deterministic Playwright test double, assertion failure behavior, ephemeral context settings, tool approval wiring, and deployment through all three host projects. It does not claim a real browser was launched in this environment. The user must run the Windows Release x64 validation script to compile the native C# bridge in all three hosts.
+`tests/playwright-browser.integration.test.cjs` tests request validation, BOM-safe JSON input, scheme/credential rejection, action bounds, semantic/ARIA page inspection against a deterministic Playwright test double, structured workflow execution, assertion failure behavior, ephemeral context settings, tool approval wiring, and deployment through all three host projects. `test-fixtures/playwright-app` provides a local HTML app for manual Windows browser validation; it has no runtime dependencies, but the selected fixture workspace must have Playwright and Chromium installed. It does not claim a real browser was launched in this environment. The user must run the Windows Release x64 validation script to compile the native C# bridge in all three hosts.

@@ -218,3 +218,10 @@ test('network adapter properties do not collide with IPGlobalProperties local', 
   assert.match(native, /addresses = adapterProperties\.UnicastAddresses/);
   assert.match(native, /hostName = properties\.HostName/);
 });
+
+
+test('native process stdin uses UTF-8 without a BOM and PowerShell strips a supplied leading BOM', () => {
+  assert.match(bridge, /private static readonly UTF8Encoding Utf8NoBom = new\(encoderShouldEmitUTF8Identifier: false\)/);
+  assert.equal((bridge.match(/StandardInputEncoding = Utf8NoBom/g) || []).length, 3);
+  assert.match(bridge, /script = script\.TrimStart\('\\uFEFF'\)/);
+});

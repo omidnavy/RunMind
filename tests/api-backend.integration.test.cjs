@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { validateRequest, run, getJsonPath, MAX_REQUESTS, MAX_RESPONSE_BYTES } = require('../Shared/ApiTestRunner.cjs');
+const { validateRequest, parseInputJson, run, getJsonPath, MAX_REQUESTS, MAX_RESPONSE_BYTES } = require('../Shared/ApiTestRunner.cjs');
 
 async function withServer(handler, callback) {
   const server = http.createServer(handler);
@@ -21,6 +21,18 @@ test('API request validation accepts bounded same-origin HTTP test suites', () =
   assert.equal(request.requests.length, 2);
   assert.equal(request.requests[0].method, 'GET');
   assert.equal(MAX_REQUESTS, 20);
+});
+
+test('API runner JSON input accepts a UTF-8 BOM and still validates the request', () => {
+  assert.deepEqual(parseInputJson('\uFEFF{"base_url":"http://127.0.0.1:3000","requests":[]}'), { base_url: 'http://127.0.0.1:3000', requests: [] });
+  assert.throws(() => parseInputJson('\uFEFF{broken'), SyntaxError);
+  const childProcess = require('node:child_process');
+  const path = require('node:path');
+  const runner = path.join(__dirname, '..', 'Shared', 'ApiTestRunner.cjs');
+  const child = childProcess.spawnSync(process.execPath, [runner], { input: `\uFEFF${JSON.stringify({})}`, encoding: 'utf8', timeout: 5000 });
+  assert.equal(child.status, 1);
+  assert.match(child.stdout, /base_url|HTTP or HTTPS/i);
+  assert.doesNotMatch(child.stdout, /Unexpected token/);
 });
 
 test('API validation rejects unsafe schemes, credentials, cross-origin paths and invalid methods', () => {

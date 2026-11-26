@@ -5,18 +5,24 @@ const path = require('node:path');
 const os = require('node:os');
 
 const MAX_INPUT_BYTES = 640 * 1024;
+
+function parseInputJson(input) {
+  const normalized = String(input || '').replace(/^\uFEFF/, '');
+  return JSON.parse(normalized || '{}');
+}
 const MAX_ACTIONS = 30;
 const MAX_TEXT = 16000;
 const MAX_SELECTOR = 1000;
 const MAX_OUTPUT_TEXT = 12000;
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
+const MAX_INSPECTED_ELEMENTS = 80;
 
 function validateRequest(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('A Playwright request object is required.');
   const browser = String(input.browser || 'chromium').toLowerCase();
   if (!['chromium', 'firefox', 'webkit'].includes(browser)) throw new Error('Browser must be chromium, firefox, or webkit.');
   if (!Array.isArray(input.actions) || input.actions.length < 1 || input.actions.length > MAX_ACTIONS) throw new Error(`Provide between 1 and ${MAX_ACTIONS} browser actions.`);
-  const allowed = new Set(['goto','click','fill','press','check','uncheck','select_option','wait_for','expect_text','expect_url','expect_title','expect_visible','expect_hidden','read_text','count','screenshot']);
+  const allowed = new Set(['goto','inspect_page','click','fill','press','check','uncheck','select_option','wait_for','expect_text','expect_url','expect_title','expect_visible','expect_hidden','read_text','count','screenshot']);
   const actions = input.actions.map((raw, index) => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`Action ${index + 1} must be an object.`);
     const action = String(raw.action || '').toLowerCase();
@@ -61,6 +67,87 @@ function trimArtifacts(directory) {
       if (index >= 20 || total > 100 * 1024 * 1024) fs.rmSync(files[index].full, { force: true });
     }
   } catch { }
+}
+
+async function inspectPage(page) {
+  const body = page.locator('body');
+  const dom = await body.evaluate(element => {
+    const compact = value => String(value || '').replace(/\s+/g, ' ').trim();
+    const safeText = (element, maximum = 240) => compact(element?.innerText || element?.textContent || '').slice(0, maximum);
+    const namedBy = element => {
+      const ids = String(element.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean);
+      return ids.map(id => safeText(document.getElementById(id), 240)).filter(Boolean).join(' ');
+    };
+    const accessibleName = element => compact(
+      element.getAttribute('aria-label') || namedBy(element) ||
+      (element.labels ? Array.from(element.labels).map(label => safeText(label, 240)).join(' ') : '') ||
+      element.getAttribute('alt') || element.getAttribute('title') ||
+      element.getAttribute('placeholder') || safeText(element, 240)
+    ).slice(0, 240);
+    const selectorHint = element => {
+      if (element.id) return `#${element.id}`;
+      const name = element.getAttribute('name');
+      if (name) return `${element.tagName.toLowerCase()}[name=${JSON.stringify(name)}]`;
+      const ariaLabel = element.getAttribute('aria-label');
+      if (ariaLabel) return `${element.tagName.toLowerCase()}[aria-label=${JSON.stringify(ariaLabel)}]`;
+      return element.tagName.toLowerCase();
+    };
+    const landmarkSelector = 'header,nav,main,aside,footer,form,[role="banner"],[role="navigation"],[role="main"],[role="complementary"],[role="contentinfo"],h1,h2,h3,h4';
+    const landmarks = Array.from(document.querySelectorAll(landmarkSelector)).slice(0, 60).map(node => ({
+      tag: node.tagName.toLowerCase(),
+      role: node.getAttribute('role') || '',
+      name: accessibleName(node)
+    }));
+    const interactiveSelector = 'button,a[href],input:not([type="hidden"]),select,textarea,[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="tab"],[contenteditable="true"],[tabindex]:not([tabindex="-1"])';
+    const candidates = Array.from(document.querySelectorAll(interactiveSelector));
+    const interactiveElements = candidates.slice(0, 80).map(node => ({
+      tag: node.tagName.toLowerCase(),
+      role: node.getAttribute('role') || ({ A: 'link', BUTTON: 'button', SELECT: 'combobox', TEXTAREA: 'textbox' }[node.tagName] || (node.tagName === 'INPUT' ? ({ checkbox: 'checkbox', radio: 'radio', button: 'button', submit: 'button' }[String(node.type || '').toLowerCase()] || 'textbox') : '')),
+      name: accessibleName(node),
+      selectorHint: selectorHint(node),
+      type: node.getAttribute('type') || '',
+      disabled: !!node.disabled,
+      required: !!node.required,
+      checked: typeof node.checked === 'boolean' ? node.checked : null,
+      visible: node.getAttribute('aria-hidden') !== 'true' && node.getClientRects().length > 0
+    }));
+    return {
+      document: { title: document.title, language: document.documentElement.lang || '', url: location.href },
+      bodyText: safeText(element, 12000),
+      landmarks,
+      landmarksTruncated: document.querySelectorAll(landmarkSelector).length > landmarks.length,
+      interactiveElements,
+      interactiveElementsTruncated: candidates.length > interactiveElements.length
+    };
+  });
+
+  let accessibilitySnapshot = '';
+  let accessibilityMethod = 'semantic DOM fallback';
+  let accessibilityNote = 'This Playwright version does not expose Locator.ariaSnapshot(); landmarks and accessible names were derived from the DOM.';
+  if (typeof body.ariaSnapshot === 'function') {
+    try {
+      accessibilitySnapshot = String(await body.ariaSnapshot() || '').slice(0, MAX_OUTPUT_TEXT);
+      accessibilityMethod = 'Playwright Locator.ariaSnapshot';
+      accessibilityNote = '';
+    } catch (error) {
+      accessibilityNote = `Playwright accessibility snapshot failed: ${String(error?.message || error).slice(0, 500)}`;
+    }
+  }
+
+  return {
+    document: dom.document,
+    bodyText: dom.bodyText,
+    landmarks: dom.landmarks,
+    landmarksTruncated: dom.landmarksTruncated,
+    interactiveElements: dom.interactiveElements.slice(0, MAX_INSPECTED_ELEMENTS),
+    interactiveElementsTruncated: dom.interactiveElementsTruncated,
+    accessibility: {
+      method: accessibilityMethod,
+      snapshot: accessibilitySnapshot,
+      note: accessibilityNote,
+      truncated: accessibilitySnapshot.length >= MAX_OUTPUT_TEXT
+    }
+  };
 }
 
 async function run(input, dependencies = {}) {
@@ -120,6 +207,7 @@ async function run(input, dependencies = {}) {
         const locator = step.selector ? page.locator(step.selector) : null;
         switch (step.action) {
           case 'goto': await page.goto(step.value, { waitUntil: 'domcontentloaded' }); result = { url: page.url().slice(0, 4000) }; break;
+          case 'inspect_page': result = await inspectPage(page); break;
           case 'click': await locator.click(); result = { clicked: step.selector }; break;
           case 'fill': await locator.fill(step.value); result = { filled: step.selector }; break;
           case 'press': await locator.press(step.value); result = { pressed: step.value }; break;
@@ -175,9 +263,9 @@ async function main() {
     let input = '';
     for await (const chunk of process.stdin) {
       input += chunk;
-      if (Buffer.byteLength(input, 'utf8') > MAX_INPUT_BYTES) throw new Error('Playwright request exceeds the 128 KB input limit.');
+      if (Buffer.byteLength(input, 'utf8') > MAX_INPUT_BYTES) throw new Error('Playwright request exceeds the 640 KB input limit.');
     }
-    const parsed = JSON.parse(input || '{}');
+    const parsed = parseInputJson(input);
     parsed.working_directory = process.cwd();
     const result = await run(parsed);
     process.stdout.write(`${JSON.stringify(result)}\n`);
@@ -189,4 +277,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = { validateRequest, run, MAX_ACTIONS, MAX_INPUT_BYTES };
+module.exports = { validateRequest, parseInputJson, inspectPage, run, MAX_ACTIONS, MAX_INPUT_BYTES };

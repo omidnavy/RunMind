@@ -1,0 +1,10 @@
+{
+  "name": "runmind-playwright-app-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node server.cjs 4320",
+    "dev-alt": "node server.cjs 4321",
+    "start": "node server.cjs 4320"
+  }
+}

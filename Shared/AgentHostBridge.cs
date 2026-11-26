@@ -31,6 +31,7 @@ namespace RunMind.Shared;
 public sealed partial class AgentHostBridge : IDisposable
 {
     private const int MaximumMessageBytes = 1024 * 1024;
+    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
     private const int MaximumOutputCharacters = 512 * 1024;
     private const long MaximumDownloadBytes = 4L * 1024 * 1024 * 1024;
     private static readonly TimeSpan GitTimeout = TimeSpan.FromMinutes(2);
@@ -943,6 +944,7 @@ public sealed partial class AgentHostBridge : IDisposable
     {
         var script = ReadString(args, "script", 100_000);
         if (script.Length == 0) throw new InvalidDataException("A non-empty PowerShell script is required.");
+        script = script.TrimStart('\uFEFF');
         script = "$ErrorActionPreference = 'Stop'\r\n" + script;
         var working = GetProcessWorkingDirectory(args);
         var executable = FindExecutable("pwsh.exe") ?? FindPowerShellExecutable()
@@ -955,7 +957,7 @@ public sealed partial class AgentHostBridge : IDisposable
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardInputEncoding = Encoding.UTF8,
+            StandardInputEncoding = Utf8NoBom,
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
@@ -1023,7 +1025,7 @@ public sealed partial class AgentHostBridge : IDisposable
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardInputEncoding = Encoding.UTF8,
+            StandardInputEncoding = Utf8NoBom,
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
@@ -1104,7 +1106,7 @@ public sealed partial class AgentHostBridge : IDisposable
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardInputEncoding = Encoding.UTF8,
+            StandardInputEncoding = Utf8NoBom,
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
