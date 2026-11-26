@@ -59,13 +59,19 @@
       if (name.startsWith('system_manager_')) {
         if (!systemManagerSettingsCache?.enabled) throw new Error('Windows System Manager is disabled. Enable it in the System Manager menu first.');
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('System Manager operations are unavailable in Deep Research and delegated sub-agent tasks.');
-        if (name === 'system_manager_find_applications') { const query = String(args.query || '').trim(); if (!query) throw new Error('A non-empty application name is required. Search for the exact application instead of listing the whole catalog.'); return await callAgentHost('systemManager.apps.list',{query},signal); }
+        if (name === 'system_manager_find_applications') { const query = String(args.query || '').trim(); if (!query) throw new Error('A non-empty application name is required.'); return await callAgentHost('systemManager.apps.list',{query},signal); }
         if (name === 'system_manager_list_adapters') return await callAgentHost('systemManager.adapters.list',{},signal);
         if (name === 'system_manager_install_adapter') return await callAgentHost('systemManager.adapters.save',{adapter:args.adapter||{}},signal);
         if (name === 'system_manager_list_processes') return await callAgentHost('systemManager.process.list',{query:String(args.query||'')},signal);
         if (name === 'system_manager_diagnostics') return await callAgentHost('systemManager.diagnostics',{},signal);
         if (name === 'system_manager_launch_application') {
-          return await callAgentHost('systemManager.apps.launch',{path:String(args.path||''),arguments:Array.isArray(args.arguments)?args.arguments:[]},signal);
+          return await callAgentHost('systemManager.apps.launch',{applicationId:String(args.applicationId||''),arguments:Array.isArray(args.arguments)?args.arguments:[],behavior:String(args.behavior||'')},signal);
+        }
+        if (name === 'system_manager_set_application_behavior') {
+          return await callAgentHost('systemManager.apps.behavior.save',{applicationId:String(args.applicationId||''),behavior:String(args.behavior||'')},signal);
+        }
+        if (name === 'system_manager_close_application') {
+          return await callAgentHost('systemManager.apps.close',{applicationId:String(args.applicationId||'')},signal);
         }
         if (name === 'system_manager_application_action') {
           return await callAgentHost('systemManager.adapters.launch',{adapterId:String(args.adapterId||''),operation:String(args.operation||''),target:String(args.target||''),line:args.line},signal);
@@ -198,7 +204,32 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
         if (!window.chrome?.webview) throw new Error('Choose a workspace folder to save through the browser, or run RunMind in a desktop host for the resumable native downloader.');
         return await callAgentHost('download.file', { url: target.href, filename: args.filename || '', sha256: args.sha256 || '' }, signal, 2 * 60 * 60 * 1000, progress => { agentSkillsStatus.textContent = `Native download: ${formatBytes(progress.bytes)}${progress.total ? ` / ${formatBytes(progress.total)} (${Math.min(100, Math.round(progress.bytes / progress.total * 100))}%)` : ''}`; });
       }
-      if (name === 'list_agent_skills') return { skills: await discoverAgentSkills(signal), note: 'Only metadata was discovered. Load a skill on demand; scripts are not executed.' };
+      if (name === 'list_available_tools') {
+        const definitions = Array.isArray(taskContext?.tools) ? taskContext.tools : (Array.isArray(activeToolDefinitions) ? activeToolDefinitions : []);
+        const allTools = definitions.map(item => {
+          const definition = item?.function || {};
+          const name = String(definition.name || '');
+          const category = name.startsWith('mcp_') ? 'MCP'
+            : name.startsWith('system_manager_') ? 'System Manager'
+              : name.startsWith('git_') ? 'Git'
+                : name.startsWith('project_') ? 'Project'
+                  : ['list_agent_skills','load_agent_skill'].includes(name) ? 'Skills'
+                    : ['powershell_execute','run_native_command','select_native_workspace','download_file'].includes(name) ? 'Native'
+                      : ['web_search','fetch_webpage','research_topic','extract_links','extract_metadata','extract_tables','read_sitemap','read_rss_feed','page_to_markdown','check_links','compare_webpages','crawl_website'].includes(name) ? 'Web'
+                        : ['list_files','read_file','create_file','edit_file','delete_file','copy_file','move_file','rename_file','search_files','file_info','checksum_file','compare_files'].includes(name) ? 'Workspace'
+                          : name.startsWith('image_') || name.startsWith('create_chart') || name.startsWith('create_diagram') ? 'Artifacts' : 'Agent';
+          return { name, category, availability: 'exposed-now', description: String(definition.description || '').slice(0, 1200), required: Array.isArray(definition.parameters?.required) ? definition.parameters.required : [], parameters: Object.keys(definition.parameters?.properties || {}) };
+        }).filter(item => item.name).sort((a,b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+        const offset = Math.max(0, Math.min(10000, Math.floor(Number(args.offset) || 0)));
+        const limit = Math.max(1, Math.min(200, Math.floor(Number(args.limit) || 100)));
+        const tools = allTools.slice(offset, offset + limit);
+        const nextOffset = offset + tools.length;
+        return { scope: 'current-agent-session', host: window.chrome?.webview ? 'native-desktop-host' : 'browser-preview', total: allTools.length, offset, limit, count: tools.length, hasMore: nextOffset < allTools.length, nextOffset: nextOffset < allTools.length ? nextOffset : null, tools, note: 'This is the exact tool-definition set currently exposed to this Agent session. Use offset=nextOffset to retrieve another page when hasMore is true. Tools omitted from the complete inventory are not currently available to the model. MCP entries reflect currently connected/enabled servers.' };
+      }
+      if (name === 'list_agent_skills') {
+        const skills = await discoverAgentSkills(signal);
+        return { skills: skills.map(skill => ({ ...skill, loaded: (workspaceContext.enabledSkills || []).includes(skill.name) })), count: skills.length, sources: [{ scope: 'global', supported: !!window.chrome?.webview, authorized: !!window.chrome?.webview, location: '%LOCALAPPDATA%\\RunMind\\Skills' }, { scope: 'project', supported: true, authorized: !!agentDirectoryHandle, location: '.agents/skills' }], note: 'Only installed skills from the available global and authorized project sources are listed. Metadata discovery does not load instructions. Load a skill explicitly; scripts are never executed automatically. This source bundle does not include a separate built-in/Bionic skill catalog.' };
+      }
       if (name === 'load_agent_skill') return await loadAgentSkill(String(args.name || ''), String(args.scope || ''), Array.isArray(args.references) ? args.references : [], signal);
       if (readOnlyTools.has(name) && !loadAgentSettings().autoApproveReads && !taskApprovedReadTools.has(name)) {
         const detail = name === 'web_search' ? String(args.query || '') : name === 'fetch_webpage' ? String(args.url || '') : name === 'read_file' || name === 'list_files' ? String(args.path || '(selected folder root)') : JSON.stringify(args);

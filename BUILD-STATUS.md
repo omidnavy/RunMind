@@ -1,13 +1,14 @@
-# RunMind 2.5.2 — System Manager Action Reliability
+# RunMind 2.6.0 — System Manager & Agent Reliability
 
 ## Release bundle status
 
-- Source baseline: verified RunMind 2.4.0 Developer Workbench & Native Automation bundle.
-- Preserved Standalone, PowerToys Run, and PowerToys Command Palette hosts and the shared Agent Core/native bridge.
-- Added developer workflows for project builds/tests, static analysis/lint, Playwright test-runner checks, API smoke tests, and dependency security audits. They use existing native execution tools and require explicit per-command approval.
-- Extended Skills Manager with direct HTTPS `SKILL.md` imports, GitHub/GitLab repository-folder URL resolution, pasted Skill-content detection, preview/confirmation, Global/Project scope, frontmatter validation, duplicate protection, and source metadata. Scripts are never executed.
-- Added optional Windows System Manager, disabled by default, with shared native settings, group/individual switches, application discovery/catalog, generic launch/open operations, declarative application adapters, process inspection/termination, and read-only system diagnostics.
-- Added `Shared/SystemManager.cs` to all three host projects and synchronized project/package metadata to 2.5.2 / 2.5.2.0.
+- Full-source baseline: RunMind 2.5.2 source snapshot supplied for this release.
+- Preserves Standalone, PowerToys Run, PowerToys Command Palette, the shared ChatWindow, Agent Core, native bridge, Skills, MCP, Deep Research, Git, workflows, Project Profiles and existing permissions.
+- System Manager discovery now ranks flexible application matches across executable and packaged Windows applications, with bounded live refresh on stale index/search miss.
+- Launches use a stable application ID from current discovery, not a model-supplied executable path. Existing desktop windows are reused/activated by default; failed foreground activation does not silently start a duplicate.
+- Adds explicit new-window/new-process choices, persistent ask/reuse/new-window/new-process per-application preferences, and graceful close requests with mandatory native confirmation.
+- Adds current-session tool inventory and makes Global skill discovery/loading available without a project folder while retaining workspace authorization for Project skills.
+- Synchronizes host/package metadata to 2.6.0 / 2.6.0.0.
 
 ## Validation performed in this environment
 
@@ -16,11 +17,15 @@ See `VALIDATION-REPORT.md` for exact checks and limitations. JavaScript syntax, 
 ## Target-machine validation still required
 
 - Build the full solution with the .NET 10 Windows targeting pack and repository package dependencies.
-- Run Standalone, PowerToys Run, and PowerToys Command Palette and verify the shared System Manager settings are consistent across hosts.
-- Test System Manager master/group/capability switches, Restricted/Balanced/Custom prompts, application discovery/launch, built-in/custom adapters, process listing, native termination confirmation, services and network diagnostics.
-- Test direct HTTPS/GitHub/GitLab Skill import, pasted Skill auto-detection, preview/decline/confirm behavior, Global/Project installation, duplicate handling, and malicious/invalid URL rejection.
-- Test build/test/lint/Playwright/API/dependency workflows against real projects with native execution approval.
-- Re-run existing Git, workspace, indexing, conversation, Project Profile, Skills, MCP, Deep Research, and PowerShell/native execution regression checks.
+- Test Calculator discovery through Windows Apps folder, Firefox/Firefox Developer Edition matching, Steam discovery, aliases, stale catalog refresh and ambiguous results.
+- Test existing-window activation, Windows foreground restrictions, named-browser URL handoff, new-window/new-process behavior, packaged activation, graceful close, and per-app preferences.
+- Verify tool inventory against actual tool definitions with/without workspace access and connected MCP servers.
+- Verify global and project skill listing/loading with and without a project workspace; confirm unsupported bundled/Bionic skills are not falsely reported.
+- Run all existing Standalone, PowerToys Run and PowerToys Command Palette smoke/regression tests.
+- Re-run existing Git, workspace, indexing, conversation, Project Profile, Skills, MCP, Deep Research, workflow, and PowerShell/native execution checks.
+
+## Historical release notes
+
 
 
 ## 2.5.1 update

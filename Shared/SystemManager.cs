@@ -12,6 +12,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Win32;
 using System.Net.NetworkInformation;
 using System.Windows;
+using System.Runtime.InteropServices;
 
 namespace RunMind.Shared;
 
@@ -21,7 +22,17 @@ public sealed partial class AgentHostBridge
     private static string SystemManagerSettingsPath => Path.Combine(SystemManagerRoot, "settings.json");
     private static string SystemManagerCatalogPath => Path.Combine(SystemManagerRoot, "applications.json");
     private static string SystemManagerAdaptersRoot => Path.Combine(SystemManagerRoot, "Adapters");
-    private sealed record SystemApplicationRecord(string id, string name, string path, string source, string version);
+    private sealed record SystemApplicationRecord(string id, string name, string path, string source, string version, string[]? aliases = null, string? appUserModelId = null);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr hWnd);
+    private const int SwRestore = 9;
 
     private static string NormalizeExecutableCandidate(string value)
     {
@@ -111,7 +122,8 @@ public sealed partial class AgentHostBridge
             ["listProcesses"] = true, ["inspectProcesses"] = true, ["terminateProcesses"] = false,
             ["systemInformation"] = true, ["environmentInformation"] = false, ["serviceInformation"] = false, ["networkInformation"] = false
         },
-        ["permissions"] = new JsonObject { ["launchApplications"] = "ask", ["openTargets"] = "ask" }
+        ["permissions"] = new JsonObject { ["launchApplications"] = "ask", ["openTargets"] = "ask" },
+        ["applicationBehaviors"] = new JsonObject()
     };
 
     private static JsonObject ReadSystemManagerSettings()
@@ -138,6 +150,14 @@ public sealed partial class AgentHostBridge
             {
                 var value = (string?)saved["permissions"]?[permission];
                 defaults["permissions"]![permission] = value is "allow" or "ask" ? value : "ask";
+            }
+            if (saved["applicationBehaviors"] is JsonObject behaviors)
+            {
+                foreach (var pair in behaviors.Take(100))
+                {
+                    if (pair.Key.Length != 16 || !pair.Key.All(Uri.IsHexDigit) || pair.Value is not JsonValue jsonValue || !jsonValue.TryGetValue<string>(out var value)) continue;
+                    if (value is "ask" or "reuse" or "new-window" or "new-process") defaults["applicationBehaviors"]![pair.Key] = value;
+                }
             }
         }
         catch { return DefaultSystemManagerSettings(); }
@@ -198,135 +218,413 @@ public sealed partial class AgentHostBridge
         if (!(bool?)settings["capabilities"]?[capability] ?? false) throw new UnauthorizedAccessException($"System Manager capability '{capability}' is disabled.");
     }
 
+    private static bool IsValidAppUserModelId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 300 || value.Any(char.IsWhiteSpace)) return false;
+        var separator = value.IndexOf('!');
+        return separator > 0 && separator < value.Length - 1 && value.IndexOf('!', separator + 1) < 0
+            && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-' or '!');
+    }
+
+    private static string NormalizeApplicationSearchText(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        var previousSpace = true;
+        foreach (var character in value.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(character)) { builder.Append(character); previousSpace = false; }
+            else if (!previousSpace) { builder.Append(' '); previousSpace = true; }
+        }
+        return builder.ToString().Trim();
+    }
+
+    private static string NormalizeApplicationQuery(string query)
+    {
+        if (query.Contains("notepad++", StringComparison.OrdinalIgnoreCase)) return "notepad plus plus";
+        var words = NormalizeApplicationSearchText(query).Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var leadingVerbs = new HashSet<string>(new[] { "open", "launch", "start", "run", "find", "search", "please" }, StringComparer.Ordinal);
+        var genericWords = new HashSet<string>(new[] { "the", "my", "a", "an", "application", "app", "program", "browser", "called" }, StringComparer.Ordinal);
+        while (words.Count > 1 && leadingVerbs.Contains(words[0])) words.RemoveAt(0);
+        words.RemoveAll(genericWords.Contains);
+        return string.Join(' ', words);
+    }
+
+    private static string[] BuildApplicationAliases(string name, string path, IEnumerable<string>? supplied = null)
+    {
+        var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Add(string? value) { var normalized = NormalizeApplicationSearchText(value ?? string.Empty); if (normalized.Length > 0) aliases.Add(normalized); }
+        Add(name);
+        Add(Path.GetFileNameWithoutExtension(path));
+        if (supplied is not null) foreach (var alias in supplied) Add(alias);
+        var combined = string.Join(' ', aliases);
+        if (combined.Contains("firefox", StringComparison.Ordinal)) { Add("firefox"); Add("mozilla firefox"); }
+        if (combined.Contains("developer edition", StringComparison.Ordinal)) { Add("firefox developer edition"); Add("firefox dev edition"); }
+        if (combined.Contains("calculator", StringComparison.Ordinal)) { Add("calculator"); Add("windows calculator"); }
+        if (combined.Contains("steam", StringComparison.Ordinal)) Add("steam");
+        if (name.Contains("notepad++", StringComparison.OrdinalIgnoreCase) || path.Contains("notepad++", StringComparison.OrdinalIgnoreCase) || combined.Contains("notepad plus plus", StringComparison.Ordinal) || combined.Contains("notepad++", StringComparison.Ordinal)) { Add("notepad++"); Add("notepad plus plus"); }
+        if (combined.Contains("visual studio code", StringComparison.Ordinal) || combined.Split(' ').Contains("code")) { Add("vscode"); Add("vs code"); }
+        if (combined.Contains("microsoft edge", StringComparison.Ordinal)) Add("edge");
+        return aliases.Take(24).ToArray();
+    }
+
+    private static int EditDistanceAtMost(string left, string right, int maximum)
+    {
+        if (Math.Abs(left.Length - right.Length) > maximum) return maximum + 1;
+        var previous = Enumerable.Range(0, right.Length + 1).ToArray();
+        var current = new int[right.Length + 1];
+        for (var row = 1; row <= left.Length; row++)
+        {
+            current[0] = row;
+            var rowMinimum = current[0];
+            for (var column = 1; column <= right.Length; column++)
+            {
+                var cost = left[row - 1] == right[column - 1] ? 0 : 1;
+                current[column] = Math.Min(Math.Min(current[column - 1] + 1, previous[column] + 1), previous[column - 1] + cost);
+                rowMinimum = Math.Min(rowMinimum, current[column]);
+            }
+            if (rowMinimum > maximum) return maximum + 1;
+            (previous, current) = (current, previous);
+        }
+        return previous[right.Length];
+    }
+
+    private static int ScoreApplicationMatch(SystemApplicationRecord item, string query, out string reason)
+    {
+        reason = "no-match";
+        if (query.Length == 0) return 0;
+        var terms = (item.aliases ?? BuildApplicationAliases(item.name, item.path))
+            .Append(NormalizeApplicationSearchText(item.name))
+            .Append(NormalizeApplicationSearchText(item.path))
+            .Where(value => value.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var tokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var best = 0;
+        foreach (var term in terms)
+        {
+            var score = 0;
+            if (term.Equals(query, StringComparison.OrdinalIgnoreCase)) score = 1000;
+            else if (term.StartsWith(query, StringComparison.OrdinalIgnoreCase)) score = 900;
+            else if (term.Contains(query, StringComparison.OrdinalIgnoreCase)) score = 820;
+            else if (tokens.All(token => term.Split(' ').Any(part => part.StartsWith(token, StringComparison.OrdinalIgnoreCase)))) score = 720;
+            else
+            {
+                var hits = tokens.Count(token => term.Contains(token, StringComparison.OrdinalIgnoreCase));
+                if (hits > 0) score = 500 + (int)(300.0 * hits / tokens.Length);
+                else
+                {
+                    if (tokens.Length <= 3 && tokens.All(token => token.Length >= 4))
+                    {
+                        var termTokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        var fuzzyHits = tokens.Count(token => termTokens.Any(part => part.Length >= 4 && part[0] == token[0]
+                            && Math.Abs(part.Length - token.Length) <= (token.Length >= 8 ? 2 : 1)
+                            && EditDistanceAtMost(token, part, token.Length >= 8 ? 2 : 1) <= (token.Length >= 8 ? 2 : 1)));
+                        if (fuzzyHits == tokens.Length) score = 640;
+                    }
+                }
+            }
+            if (score <= best) continue;
+            best = score;
+            reason = score >= 900 ? "exact-or-prefix" : score >= 800 ? "contains" : score >= 700 ? "all-query-terms" : "partial-token-match";
+        }
+        return best;
+    }
+
+    private static List<SystemApplicationRecord> ReadSystemApplicationCatalog()
+    {
+        try
+        {
+            if (!File.Exists(SystemManagerCatalogPath) || IsReparsePoint(SystemManagerCatalogPath) || new FileInfo(SystemManagerCatalogPath).Length > 4 * 1024 * 1024) return new List<SystemApplicationRecord>();
+            return JsonSerializer.Deserialize<List<SystemApplicationRecord>>(File.ReadAllText(SystemManagerCatalogPath, Encoding.UTF8))?
+                .Where(item => item is not null && !string.IsNullOrWhiteSpace(item.id) && !string.IsNullOrWhiteSpace(item.name)
+                    && ((TryResolveApplicationExecutable(item.path ?? string.Empty, out _)) || IsValidAppUserModelId(item.appUserModelId)))
+                .GroupBy(item => item.id, StringComparer.OrdinalIgnoreCase).Select(group => group.First()).Take(1500).ToList() ?? new List<SystemApplicationRecord>();
+        }
+        catch { return new List<SystemApplicationRecord>(); }
+    }
+
+    private static void EnumeratePackagedApplications(Action<string, string> add)
+    {
+        List<(string name, string appUserModelId)> results = new();
+        var worker = new System.Threading.Thread(() => results = EnumeratePackagedApplicationsOnSta())
+        {
+            IsBackground = true,
+            Name = "RunMind packaged application discovery"
+        };
+        try
+        {
+            worker.SetApartmentState(System.Threading.ApartmentState.STA);
+            worker.Start();
+            if (!worker.Join(TimeSpan.FromSeconds(8))) return;
+        }
+        catch { return; }
+        foreach (var item in results) add(item.name, item.appUserModelId);
+    }
+
+    private static List<(string name, string appUserModelId)> EnumeratePackagedApplicationsOnSta()
+    {
+        var results = new List<(string name, string appUserModelId)>();
+        object? shell = null;
+        object? folder = null;
+        object? items = null;
+        try
+        {
+            var shellType = Type.GetTypeFromProgID("Shell.Application", throwOnError: false);
+            if (shellType is null) return results;
+            shell = Activator.CreateInstance(shellType);
+            if (shell is null) return results;
+            folder = shellType.InvokeMember("NameSpace", System.Reflection.BindingFlags.InvokeMethod, null, shell, new object[] { "shell:AppsFolder" });
+            if (folder is null) return results;
+            items = folder.GetType().InvokeMember("Items", System.Reflection.BindingFlags.InvokeMethod, null, folder, null);
+            if (items is null) return results;
+            var countValue = items.GetType().InvokeMember("Count", System.Reflection.BindingFlags.GetProperty, null, items, null);
+            var count = countValue is int number ? Math.Clamp(number, 0, 3000) : 0;
+            for (var index = 0; index < count; index++)
+            {
+                object? item = null;
+                try
+                {
+                    item = items.GetType().InvokeMember("Item", System.Reflection.BindingFlags.InvokeMethod, null, items, new object[] { index });
+                    if (item is null) continue;
+                    var itemType = item.GetType();
+                    var name = itemType.InvokeMember("Name", System.Reflection.BindingFlags.GetProperty, null, item, null) as string ?? string.Empty;
+                    var appId = itemType.InvokeMember("ExtendedProperty", System.Reflection.BindingFlags.InvokeMethod, null, item, new object[] { "System.AppUserModel.ID" }) as string;
+                    if (!IsValidAppUserModelId(appId)) appId = itemType.InvokeMember("Path", System.Reflection.BindingFlags.GetProperty, null, item, null) as string;
+                    if (name.Length > 0 && IsValidAppUserModelId(appId)) results.Add((name, appId!));
+                }
+                catch { }
+                finally { if (item is not null && Marshal.IsComObject(item)) Marshal.FinalReleaseComObject(item); }
+            }
+        }
+        catch { }
+        finally
+        {
+            if (items is not null && Marshal.IsComObject(items)) Marshal.FinalReleaseComObject(items);
+            if (folder is not null && Marshal.IsComObject(folder)) Marshal.FinalReleaseComObject(folder);
+            if (shell is not null && Marshal.IsComObject(shell)) Marshal.FinalReleaseComObject(shell);
+        }
+        return results;
+    }
+
     private static object SystemManagerListApplications(string query, bool forceRefresh = false)
     {
         RequireSystemCapability("applications", "discoverApplications");
         Directory.CreateDirectory(SystemManagerRoot);
         EnsureNoReparseAncestors(SystemManagerRoot);
-        List<SystemApplicationRecord>? cached = null;
-        try
+        var normalizedQuery = NormalizeApplicationQuery(query);
+        var cached = forceRefresh ? new List<SystemApplicationRecord>() : ReadSystemApplicationCatalog();
+        var cacheFresh = !forceRefresh && File.Exists(SystemManagerCatalogPath) && !IsReparsePoint(SystemManagerCatalogPath)
+            && DateTime.UtcNow - File.GetLastWriteTimeUtc(SystemManagerCatalogPath) < TimeSpan.FromMinutes(5);
+        var shouldDiscover = forceRefresh || cached.Count == 0 || !cacheFresh;
+        var rows = shouldDiscover
+            ? new Dictionary<string, SystemApplicationRecord>(StringComparer.OrdinalIgnoreCase)
+            : cached.ToDictionary(item => item.id, StringComparer.OrdinalIgnoreCase);
+        var discoveredSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void MergeRecord(SystemApplicationRecord record)
         {
-            if (!forceRefresh && File.Exists(SystemManagerCatalogPath) && !IsReparsePoint(SystemManagerCatalogPath) && new FileInfo(SystemManagerCatalogPath).Length <= 2 * 1024 * 1024 && DateTime.UtcNow - File.GetLastWriteTimeUtc(SystemManagerCatalogPath) < TimeSpan.FromMinutes(5))
+            if (!rows.TryGetValue(record.id, out var existing))
             {
-                var loaded = JsonSerializer.Deserialize<List<SystemApplicationRecord>>(File.ReadAllText(SystemManagerCatalogPath, Encoding.UTF8));
-                cached = loaded?.Where(item => item is not null && !string.IsNullOrWhiteSpace(item.id) && !string.IsNullOrWhiteSpace(item.name)
-                        && TryResolveApplicationExecutable(item.path, out _))
-                    .GroupBy(item => item.id, StringComparer.OrdinalIgnoreCase).Select(group => group.First()).Take(1000).ToList();
+                if (rows.Count < 1500) rows[record.id] = record;
+                return;
             }
+            var aliases = (existing.aliases ?? Array.Empty<string>()).Concat(record.aliases ?? Array.Empty<string>())
+                .Distinct(StringComparer.OrdinalIgnoreCase).Take(24).ToArray();
+            var sources = existing.source.Split("; ", StringSplitOptions.RemoveEmptyEntries)
+                .Concat(record.source.Split("; ", StringSplitOptions.RemoveEmptyEntries)).Distinct(StringComparer.OrdinalIgnoreCase);
+            rows[record.id] = existing with
+            {
+                name = record.name.Length > existing.name.Length ? record.name : existing.name,
+                source = string.Join("; ", sources),
+                version = string.IsNullOrWhiteSpace(existing.version) ? record.version : existing.version,
+                aliases = aliases
+            };
         }
-        catch { cached = null; }
-        var rows = cached is { Count: > 0 }
-            ? cached.ToDictionary(item => item.id, StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, SystemApplicationRecord>(StringComparer.OrdinalIgnoreCase);
-        void Add(string name, string path, string source, string version = "")
+        void Add(string name, string path, string source, string version = "", IEnumerable<string>? aliases = null)
         {
-            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path) || rows.Count >= 1000) return;
+            if (rows.Count >= 1500 || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path)) return;
             if (!TryResolveApplicationExecutable(path, out var normalized)) return;
             var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized.ToUpperInvariant())))[..16].ToLowerInvariant();
-            if (!rows.ContainsKey(id)) rows[id] = new SystemApplicationRecord(id, name.Trim(), normalized, source, version);
+            MergeRecord(new SystemApplicationRecord(id, name.Trim(), normalized, source, version, BuildApplicationAliases(name, normalized, aliases)));
+            discoveredSources.Add(source);
         }
-        if (cached is null || cached.Count == 0)
+        void AddPackaged(string name, string appUserModelId)
         {
-        foreach (var hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
-        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
-        {
-            try
-            {
-                using var baseKey = RegistryKey.OpenBaseKey(hive, view);
-                using var apps = baseKey.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\App Paths");
-                if (apps is null) continue;
-                foreach (var appName in apps.GetSubKeyNames().Take(500))
-                {
-                    try { using var key = apps.OpenSubKey(appName); var path = key?.GetValue(null) as string; if (!string.IsNullOrWhiteSpace(path)) Add(Path.GetFileNameWithoutExtension(appName), Environment.ExpandEnvironmentVariables(path), "App Paths"); } catch { }
-                }
-            }
-            catch { }
+            if (rows.Count >= 1500 || !IsValidAppUserModelId(appUserModelId)) return;
+            var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("AUMID:" + appUserModelId.ToUpperInvariant())))[..16].ToLowerInvariant();
+            MergeRecord(new SystemApplicationRecord(id, name.Trim(), string.Empty, "Windows Apps folder", string.Empty, BuildApplicationAliases(name, string.Empty), appUserModelId));
+            discoveredSources.Add("Windows Apps folder");
         }
-        var pathDirectories = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(100);
-        foreach (var directory in pathDirectories)
+
+        // Keep a valid fresh index for fast lookup. A miss or stale index triggers a bounded live rebuild.
+        if (shouldDiscover)
         {
-            try
+            EnumeratePackagedApplications(AddPackaged);
+            foreach (var hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
             {
-                var normalizedDirectory = directory.Trim('"');
-                if (!Directory.Exists(normalizedDirectory) || IsReparsePoint(normalizedDirectory)) continue;
-                foreach (var executable in Directory.EnumerateFiles(normalizedDirectory, "*.exe", SearchOption.TopDirectoryOnly).Take(25))
-                    if (!IsReparsePoint(executable)) Add(Path.GetFileNameWithoutExtension(executable), Path.GetFullPath(executable), "PATH");
-            }
-            catch { }
-            if (rows.Count >= 1000) break;
-        }
-        // Uninstall registration is a useful source for desktop applications that do not
-        // register App Paths or expose a Start Menu shortcut (Steam is a common example).
-        foreach (var hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
-        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
-        {
-            try
-            {
-                using var baseKey = RegistryKey.OpenBaseKey(hive, view);
-                using var uninstall = baseKey.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall");
-                if (uninstall is null) continue;
-                foreach (var entryName in uninstall.GetSubKeyNames().Take(1500))
-                {
-                    try
-                    {
-                        using var entry = uninstall.OpenSubKey(entryName);
-                        var displayName = entry?.GetValue("DisplayName") as string;
-                        if (string.IsNullOrWhiteSpace(displayName)) continue;
-                        var displayIcon = entry?.GetValue("DisplayIcon") as string;
-                        var hasExecutableIcon = !string.IsNullOrWhiteSpace(displayIcon) && TryResolveApplicationExecutable(displayIcon, out _);
-                        if (hasExecutableIcon) Add(displayName, displayIcon!, "Installed application registry");
-                        var installLocation = Environment.ExpandEnvironmentVariables((entry?.GetValue("InstallLocation") as string ?? string.Empty).Trim().Trim('"'));
-                        if (!hasExecutableIcon && !string.IsNullOrWhiteSpace(installLocation) && Directory.Exists(installLocation) && !IsReparsePoint(installLocation))
-                        {
-                            var executableName = new string(displayName.Where(character => !Path.GetInvalidFileNameChars().Contains(character)).ToArray()).Trim();
-                            if (executableName.Length > 0)
-                            {
-                                var executable = Path.Combine(installLocation, executableName + ".exe");
-                                if (File.Exists(executable) && !IsReparsePoint(executable)) Add(displayName, executable, "Installed application registry");
-                            }
-                        }
-                    }
-                    catch { }
-                    if (rows.Count >= 1000) break;
-                }
-            }
-            catch { }
-            if (rows.Count >= 1000) break;
-        }
-        foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), Environment.GetFolderPath(Environment.SpecialFolder.StartMenu) }.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var pending = new Stack<(string path, int depth)>(); pending.Push((root, 0)); var seen = 0;
-            while (pending.Count > 0 && seen < 2500)
-            {
-                var (folder, depth) = pending.Pop(); if (depth > 4) continue;
                 try
                 {
-                    foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    using var apps = baseKey.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\App Paths");
+                    if (apps is null) continue;
+                    foreach (var appName in apps.GetSubKeyNames().Take(500))
                     {
-                        if (++seen > 2500) break;
-                        if (IsReparsePoint(entry)) continue;
-                        if (Directory.Exists(entry)) pending.Push((entry, depth + 1));
-                        else if (entry.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)) Add(Path.GetFileNameWithoutExtension(entry), entry, "Start Menu shortcut");
+                        try { using var key = apps.OpenSubKey(appName); var path = key?.GetValue(null) as string; if (!string.IsNullOrWhiteSpace(path)) Add(Path.GetFileNameWithoutExtension(appName), path, "App Paths"); } catch { }
                     }
                 }
                 catch { }
             }
+
+            foreach (var hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+            {
+                try
+                {
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    using var uninstall = baseKey.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall");
+                    if (uninstall is null) continue;
+                    foreach (var entryName in uninstall.GetSubKeyNames().Take(1800))
+                    {
+                        try
+                        {
+                            using var entry = uninstall.OpenSubKey(entryName);
+                            var displayName = entry?.GetValue("DisplayName") as string;
+                            if (string.IsNullOrWhiteSpace(displayName)) continue;
+                            var displayVersion = entry?.GetValue("DisplayVersion") as string ?? string.Empty;
+                            var displayIcon = entry?.GetValue("DisplayIcon") as string;
+                            if (!string.IsNullOrWhiteSpace(displayIcon) && TryResolveApplicationExecutable(displayIcon, out _)) Add(displayName, displayIcon, "Installed application registry", displayVersion);
+                            var installLocation = Environment.ExpandEnvironmentVariables((entry?.GetValue("InstallLocation") as string ?? string.Empty).Trim().Trim('"'));
+                            if (string.IsNullOrWhiteSpace(displayIcon) || !TryResolveApplicationExecutable(displayIcon, out _))
+                            {
+                                if (!string.IsNullOrWhiteSpace(installLocation) && Directory.Exists(installLocation) && !IsReparsePoint(installLocation))
+                                {
+                                    try
+                                    {
+                                        foreach (var executable in Directory.EnumerateFiles(installLocation, "*.exe", SearchOption.TopDirectoryOnly).Take(12))
+                                            if (!IsReparsePoint(executable)) Add(displayName, executable, "Installed application registry", displayVersion, new[] { displayName });
+                                    }
+                                    catch { }
+                                }
+                            }
+                        }
+                        catch { }
+                        if (rows.Count >= 1500) break;
+                    }
+                }
+                catch { }
+                if (rows.Count >= 1500) break;
+            }
+
+            foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), Environment.GetFolderPath(Environment.SpecialFolder.StartMenu) }.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var pending = new Stack<(string path, int depth)>(); pending.Push((root, 0)); var seen = 0;
+                while (pending.Count > 0 && seen < 3000)
+                {
+                    var (folder, depth) = pending.Pop(); if (depth > 5) continue;
+                    try
+                    {
+                        foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
+                        {
+                            if (++seen > 3000) break;
+                            if (IsReparsePoint(entry)) continue;
+                            if (Directory.Exists(entry)) pending.Push((entry, depth + 1));
+                            else if (entry.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)) Add(Path.GetFileNameWithoutExtension(entry), entry, "Start Menu shortcut");
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            var installRoots = new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs")
+            }.Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path)).Distinct(StringComparer.OrdinalIgnoreCase);
+            foreach (var root in installRoots)
+            {
+                try
+                {
+                    if (IsReparsePoint(root)) continue;
+                    foreach (var executable in Directory.EnumerateFiles(root, "*.exe", SearchOption.TopDirectoryOnly).Take(25))
+                        if (!IsReparsePoint(executable)) Add(Path.GetFileNameWithoutExtension(executable), executable, "Common install locations");
+                    foreach (var folder in Directory.EnumerateDirectories(root).Take(100))
+                    {
+                        if (IsReparsePoint(folder)) continue;
+                        try
+                        {
+                            foreach (var executable in Directory.EnumerateFiles(folder, "*.exe", SearchOption.TopDirectoryOnly).Take(8))
+                                if (!IsReparsePoint(executable)) Add(Path.GetFileNameWithoutExtension(executable), executable, "Common install locations");
+                        }
+                        catch { }
+                        if (rows.Count >= 1500) break;
+                    }
+                }
+                catch { }
+                if (rows.Count >= 1500) break;
+            }
+
+            var pathDirectories = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(100);
+            foreach (var directory in pathDirectories)
+            {
+                try
+                {
+                    var normalizedDirectory = directory.Trim('"');
+                    if (!Directory.Exists(normalizedDirectory) || IsReparsePoint(normalizedDirectory)) continue;
+                    foreach (var executable in Directory.EnumerateFiles(normalizedDirectory, "*.exe", SearchOption.TopDirectoryOnly).Take(25))
+                        if (!IsReparsePoint(executable)) Add(Path.GetFileNameWithoutExtension(executable), executable, "PATH");
+                }
+                catch { }
+                if (rows.Count >= 1500) break;
+            }
+
+            // Preserve still-valid cached entries only as a fallback after fresh candidates have priority.
+            foreach (var item in cached)
+            {
+                if (rows.Count >= 1500) break;
+                MergeRecord(item);
+            }
+            try
+            {
+                if (File.Exists(SystemManagerCatalogPath) && IsReparsePoint(SystemManagerCatalogPath)) throw new InvalidDataException("The application catalog cannot be a symbolic link or reparse point.");
+                var catalogTemp = SystemManagerCatalogPath + ".tmp";
+                if (File.Exists(catalogTemp) && IsReparsePoint(catalogTemp)) throw new InvalidDataException("The application catalog temporary file cannot be a symbolic link or reparse point.");
+                File.WriteAllText(catalogTemp, JsonSerializer.Serialize(rows.Values.Take(1500).ToList()), new UTF8Encoding(false));
+                File.Move(catalogTemp, SystemManagerCatalogPath, true);
+            }
+            catch { }
         }
-        try
+
+        var savedBehaviors = ReadSystemManagerSettings()["applicationBehaviors"] as JsonObject ?? new JsonObject();
+        var matches = rows.Values.Select(item =>
         {
-            if (File.Exists(SystemManagerCatalogPath) && IsReparsePoint(SystemManagerCatalogPath)) throw new InvalidDataException("The application catalog cannot be a symbolic link or reparse point.");
-            File.WriteAllText(SystemManagerCatalogPath, JsonSerializer.Serialize(rows.Values.Take(1000).ToList()), new UTF8Encoding(false));
-        }
-        catch { }
-        }
-        var result = rows.Values.AsEnumerable();
-        if (!string.IsNullOrWhiteSpace(query)) result = result.Where(value => value.name.Contains(query, StringComparison.OrdinalIgnoreCase) || value.path.Contains(query, StringComparison.OrdinalIgnoreCase));
-        var matches = result.Take(250).ToList();
-        if (matches.Count == 0 && cached is { Count: > 0 } && !string.IsNullOrWhiteSpace(query))
-        {
+            var score = ScoreApplicationMatch(item, normalizedQuery, out var reason);
+            return new { item, score, reason };
+        })
+            .Where(result => result.score > 0).OrderByDescending(result => result.score).ThenBy(result => result.item.name, StringComparer.OrdinalIgnoreCase)
+            .Take(40).Select(result => new
+            {
+                applicationId = result.item.id, result.item.name, result.item.path, result.item.source, result.item.version,
+                aliases = result.item.aliases ?? Array.Empty<string>(), appUserModelId = result.item.appUserModelId,
+                kind = string.IsNullOrWhiteSpace(result.item.appUserModelId) ? "executable" : "packaged",
+                defaultBehavior = (string?)savedBehaviors[result.item.id] ?? "reuse",
+                matchScore = result.score, matchReason = result.reason
+            }).ToList();
+
+        if (matches.Count == 0 && !forceRefresh && !shouldDiscover && normalizedQuery.Length > 0)
             return SystemManagerListApplications(query, forceRefresh: true);
-        }
-        return new { query = query.Trim(), applications = matches, count = matches.Count, catalog = "persistent local catalog with five-minute freshness and refresh on search miss", note = "Results are filtered against the exact search query. Discovery includes App Paths, installed-application registry entries, Start Menu shortcuts and PATH; missing or invalid executable targets are excluded." };
+
+        return new
+        {
+            query = query.Trim(), normalizedQuery, applications = matches, count = matches.Count,
+            catalog = "bounded local application index with live refresh on stale index or search miss",
+            cache = new { hit = cached.Count > 0, fresh = cacheFresh, refreshed = shouldDiscover },
+            sources = new[] { "App Paths", "Installed application registry", "Start Menu shortcuts", "Common install locations", "PATH", "Windows Apps folder" },
+            discoveredSources = discoveredSources.ToArray(),
+            note = matches.Count == 0
+                ? "No matching application was found in the supported Windows discovery sources. The catalog was refreshed before returning this result."
+                : "Candidates are ranked by exact name, prefix, alias, substring and token matches. If multiple candidates remain plausible, ask the user to choose; do not launch an unrelated candidate. Packaged applications use Windows Apps folder activation rather than an executable path."
+        };
     }
 
     private sealed record SystemApplicationAdapter(string id, string displayName, string match, Dictionary<string, string[]> operations, bool builtIn);
@@ -441,85 +739,255 @@ public sealed partial class AgentHostBridge
             EnsureNoReparseAncestors(target);
         }
         _ = SystemManagerListApplications(adapter.match);
-        var catalog = File.Exists(SystemManagerCatalogPath) && !IsReparsePoint(SystemManagerCatalogPath) && new FileInfo(SystemManagerCatalogPath).Length <= 2 * 1024 * 1024
-            ? JsonSerializer.Deserialize<List<SystemApplicationRecord>>(File.ReadAllText(SystemManagerCatalogPath, Encoding.UTF8))?.Where(item => item is not null && !string.IsNullOrWhiteSpace(item.name) && !string.IsNullOrWhiteSpace(item.path)).ToList() ?? new List<SystemApplicationRecord>()
-            : new List<SystemApplicationRecord>();
-        var matches = catalog.Where(item => item.name.Contains(adapter.match, StringComparison.OrdinalIgnoreCase) || item.path.Contains(adapter.match, StringComparison.OrdinalIgnoreCase))
+        var catalog = ReadSystemApplicationCatalog();
+        var normalizedAdapterMatch = NormalizeApplicationSearchText(adapter.match);
+        var matches = catalog.Where(item => !string.IsNullOrWhiteSpace(item.path)
+                && ((item.aliases ?? BuildApplicationAliases(item.name, item.path)).Any(alias => NormalizeApplicationSearchText(alias).Contains(normalizedAdapterMatch, StringComparison.OrdinalIgnoreCase))
+                    || NormalizeApplicationSearchText(item.name).Contains(normalizedAdapterMatch, StringComparison.OrdinalIgnoreCase)
+                    || NormalizeApplicationSearchText(item.path).Contains(normalizedAdapterMatch, StringComparison.OrdinalIgnoreCase)))
             .Where(item => item.path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(item.path)).Take(10).ToList();
         if (matches.Count == 0) return new { launched = false, reason = "application-not-found", adapter = id, matches = Array.Empty<object>() };
         if (matches.Count > 1) return new { launched = false, reason = "ambiguous-application", adapter = id, matches = matches.Select(item => new { item.name, item.path, item.source }).ToArray() };
         var launchArguments = templates.Select(value => value.Replace("{target}", target, StringComparison.Ordinal).Replace("{line}", line.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)).ToArray();
-        using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { path = matches[0].path, arguments = launchArguments }));
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { applicationId = matches[0].id, arguments = launchArguments }));
         return SystemManagerLaunchApplication(document.RootElement);
+    }
+
+    private static bool SupportsNewWindowBehavior(SystemApplicationRecord application)
+    {
+        if (!string.IsNullOrWhiteSpace(application.appUserModelId)) return false;
+        var executable = Path.GetFileName(application.path ?? string.Empty);
+        return new[] { "firefox.exe", "chrome.exe", "msedge.exe", "brave.exe", "vivaldi.exe", "opera.exe", "code.exe" }.Contains(executable, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static object SystemManagerSetApplicationBehavior(JsonElement args)
+    {
+        RequireSystemCapability("applications", "launchApplications");
+        var applicationId = ReadString(args, "applicationId", 80);
+        var behavior = ReadString(args, "behavior", 40);
+        if (applicationId.Length == 0 || behavior is not ("ask" or "reuse" or "new-window" or "new-process")) throw new InvalidDataException("A discovered application ID and a supported behavior are required.");
+        _ = SystemManagerListApplications("", forceRefresh: false);
+        var application = ReadSystemApplicationCatalog().FirstOrDefault(item => item.id.Equals(applicationId, StringComparison.OrdinalIgnoreCase));
+        if (application is null) throw new InvalidDataException("The application is no longer present in the discovered catalog. Search again before changing its behavior.");
+        if (behavior == "new-window" && !SupportsNewWindowBehavior(application)) throw new InvalidDataException("This application does not have a known, supported new-window command. Keep the reuse behavior or use new-process where supported.");
+        if (!string.IsNullOrWhiteSpace(application.appUserModelId) && behavior != "reuse") throw new InvalidDataException("Packaged Windows applications currently support reuse/activation only; an ask-each-time preference is not useful for this app.");
+        if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Change application behavior", $"Application: {application.name}\nBehavior: {behavior}\nThis preference applies to future launch requests for this discovered application.", alwaysAsk: true))
+            return new { saved = false, cancelled = true, applicationId, behavior };
+        var settings = ReadSystemManagerSettings();
+        var behaviors = settings["applicationBehaviors"] as JsonObject ?? new JsonObject();
+        if (behaviors.Count >= 100 && !behaviors.ContainsKey(applicationId)) throw new InvalidOperationException("The application behavior preference limit (100) has been reached.");
+        behaviors[applicationId] = behavior;
+        settings["applicationBehaviors"] = behaviors;
+        Directory.CreateDirectory(SystemManagerRoot);
+        EnsureNoReparseAncestors(SystemManagerRoot);
+        var temporary = SystemManagerSettingsPath + ".tmp";
+        if ((File.Exists(SystemManagerSettingsPath) && IsReparsePoint(SystemManagerSettingsPath)) || (File.Exists(temporary) && IsReparsePoint(temporary))) throw new InvalidDataException("System Manager settings cannot be stored through a symbolic link or reparse point.");
+        File.WriteAllText(temporary, settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
+        File.Move(temporary, SystemManagerSettingsPath, true);
+        return new { saved = true, applicationId, application = application.name, behavior };
+    }
+
+    private static bool TryActivateApplicationWindow(string executablePath, out int processId, out bool foregroundConfirmed)
+    {
+        processId = 0;
+        foregroundConfirmed = false;
+        var activationRequested = false;
+        foreach (var candidate in Process.GetProcesses())
+        {
+            using (candidate)
+            {
+                try
+                {
+                    var candidatePath = candidate.MainModule?.FileName;
+                    if (string.IsNullOrWhiteSpace(candidatePath) || !string.Equals(Path.GetFullPath(candidatePath), executablePath, StringComparison.OrdinalIgnoreCase)) continue;
+                    var handle = candidate.MainWindowHandle;
+                    if (handle == IntPtr.Zero) continue;
+                    processId = candidate.Id;
+                    if (IsIconic(handle)) ShowWindowAsync(handle, SwRestore);
+                    activationRequested |= SetForegroundWindow(handle);
+                    System.Threading.Thread.Sleep(120);
+                    if (GetForegroundWindow() != handle) continue;
+                    foregroundConfirmed = true;
+                    return true;
+                }
+                catch { }
+            }
+        }
+        return activationRequested;
     }
 
     private static object SystemManagerLaunchApplication(JsonElement args)
     {
         RequireSystemCapability("applications", "launchApplications");
-        var path = ReadString(args, "path", 2048);
-        if (path.Length == 0 || !Path.IsPathFullyQualified(path)) throw new InvalidDataException("A fully qualified application path from the discovered catalog is required.");
-        EnsureNoReparseAncestors(path);
-        if (!TryResolveApplicationExecutable(path, out var executablePath)) throw new FileNotFoundException("The selected application executable no longer exists or its shortcut target cannot be resolved.", path);
-        path = executablePath;
-        _ = SystemManagerListApplications(string.Empty);
-        var catalog = File.Exists(SystemManagerCatalogPath) && !IsReparsePoint(SystemManagerCatalogPath) && new FileInfo(SystemManagerCatalogPath).Length <= 2 * 1024 * 1024
-            ? JsonSerializer.Deserialize<List<SystemApplicationRecord>>(File.ReadAllText(SystemManagerCatalogPath, Encoding.UTF8))?.Where(item => item is not null && !string.IsNullOrWhiteSpace(item.path)).ToList() ?? new List<SystemApplicationRecord>()
-            : new List<SystemApplicationRecord>();
-        var catalogued = false;
-        foreach (var item in catalog)
+        var applicationId = ReadString(args, "applicationId", 80);
+        if (applicationId.Length == 0) throw new InvalidDataException("A discovered application ID is required. Search for the application before launching it.");
+        var catalog = ReadSystemApplicationCatalog();
+        var application = catalog.FirstOrDefault(item => item.id.Equals(applicationId, StringComparison.OrdinalIgnoreCase));
+        if (application is null)
         {
-            try { if (string.Equals(Path.GetFullPath(item.path), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)) { catalogued = true; break; } }
-            catch { }
+            _ = SystemManagerListApplications("", forceRefresh: true);
+            application = ReadSystemApplicationCatalog().FirstOrDefault(item => item.id.Equals(applicationId, StringComparison.OrdinalIgnoreCase));
         }
-        if (!catalogued)
+        if (application is null) throw new UnauthorizedAccessException("The selected application is not in the refreshed local catalog. Search again and select a current result.");
+        var requestedBehavior = ReadString(args, "behavior", 40);
+        if (requestedBehavior.Length > 0 && requestedBehavior is not ("reuse" or "new-window" or "new-process"))
+            throw new InvalidDataException("Unsupported per-request application behavior.");
+        var savedBehavior = (string?)ReadSystemManagerSettings()["applicationBehaviors"]?[applicationId];
+        if (requestedBehavior.Length == 0 && savedBehavior == "ask")
         {
-            _ = SystemManagerListApplications(string.Empty, forceRefresh: true);
-            catalog = File.Exists(SystemManagerCatalogPath) && !IsReparsePoint(SystemManagerCatalogPath) && new FileInfo(SystemManagerCatalogPath).Length <= 2 * 1024 * 1024
-                ? JsonSerializer.Deserialize<List<SystemApplicationRecord>>(File.ReadAllText(SystemManagerCatalogPath, Encoding.UTF8))?.Where(item => item is not null && !string.IsNullOrWhiteSpace(item.path)).ToList() ?? new List<SystemApplicationRecord>()
-                : new List<SystemApplicationRecord>();
-            foreach (var item in catalog)
-            {
-                try { if (string.Equals(Path.GetFullPath(item.path), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)) { catalogued = true; break; } }
-                catch { }
-            }
+            var choices = SupportsNewWindowBehavior(application) ? new[] { "reuse", "new-window", "new-process" } : new[] { "reuse", "new-process" };
+            return new { launched = false, verified = false, needsUserChoice = true, application = application.name, applicationId, choices, message = "This application's saved preference is Ask each time. Ask the user whether to reuse/activate, open a new window when supported, or request a new process. Do not launch until the user chooses." };
         }
-        if (!catalogued) throw new UnauthorizedAccessException("The requested executable is not present in RunMind's discovered application catalog. Search the catalog first.");
+        var behavior = requestedBehavior is "reuse" or "new-window" or "new-process" ? requestedBehavior : savedBehavior is "reuse" or "new-window" or "new-process" ? savedBehavior : "reuse";
+        var arguments = ReadStringArray(args, "arguments", 40, 2048);
+        var argumentPreview = string.Join(Environment.NewLine, arguments);
+
+        if (!string.IsNullOrWhiteSpace(application.appUserModelId))
+        {
+            if (!IsValidAppUserModelId(application.appUserModelId)) throw new InvalidDataException("The packaged application activation identifier is invalid.");
+            if (behavior != "reuse") return new { launched = false, verified = false, reason = "behavior-not-supported", application = application.name, behavior, supportedBehavior = "reuse" };
+            if (arguments.Count > 0) return new { launched = false, verified = false, reason = "packaged-arguments-not-supported", application = application.name, applicationId, message = "The generic Windows Apps folder activation path cannot safely pass command-line arguments to this packaged application. The URL or requested document was not forwarded." };
+            if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Activate application", $"Application: {application.name}\nPackage activation ID: {application.appUserModelId}\nArguments: {argumentPreview}")) return new { launched = false, cancelled = true, reason = "user-declined" };
+            using var activationProcess = Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true, Arguments = "shell:AppsFolder\\" + application.appUserModelId });
+            return new { launched = false, verified = false, activationRequested = true, requestAccepted = true, alreadyRunning = (bool?)null, application = application.name, applicationId, appUserModelId = application.appUserModelId, behavior, note = "Windows accepted the packaged-app activation request. RunMind cannot verify a visible window, focus, or completion of the application's action." };
+        }
+
+        if (!TryResolveApplicationExecutable(application.path ?? string.Empty, out var path))
+            throw new FileNotFoundException("The selected application's executable no longer exists. Search again to refresh the catalog.", application.path);
+        if (behavior == "new-window")
+        {
+            if (!SupportsNewWindowBehavior(application)) return new { launched = false, verified = false, reason = "new-window-not-supported", application = application.name, path, behavior };
+            if (!arguments.Contains("--new-window", StringComparer.OrdinalIgnoreCase)) arguments.Insert(0, "--new-window");
+        }
+
+        var existingProcesses = FindRunningProcessesForExecutable(path).ToHashSet();
+        if (behavior == "reuse" && existingProcesses.Count > 0 && arguments.Count == 0)
+        {
+            if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Activate application", $"Application: {application.name}\nPath: {path}\nRunMind will try to restore and activate an existing window."))
+                return new { launched = false, cancelled = true, reason = "user-declined", application = application.name, applicationId };
+            var activationAttempted = TryActivateApplicationWindow(path, out var existingProcessId, out var foregroundConfirmed);
+            if (activationAttempted && foregroundConfirmed)
+                return new { launched = false, verified = true, activated = true, processRunning = true, alreadyRunning = true, processId = existingProcessId, application = application.name, applicationId, path, behavior, note = "An existing application window was restored/activated and Windows reported it as the foreground window." };
+            return new { launched = false, verified = false, activated = false, processRunning = true, alreadyRunning = true, processId = existingProcessId > 0 ? existingProcessId : existingProcesses.First(), application = application.name, applicationId, path, behavior, reason = "already-running-not-activated", note = "The application is already running, but RunMind could not verify that its window received foreground focus. No duplicate process was started. Ask the user whether to try a new process." };
+        }
+
         var start = new ProcessStartInfo(path)
         {
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(path) ?? Environment.CurrentDirectory
         };
-        if (args.TryGetProperty("arguments", out var values) && values.ValueKind == JsonValueKind.Array && values.GetArrayLength() > 0)
-        {
-            foreach (var value in values.EnumerateArray().Take(40)) { if (value.ValueKind != JsonValueKind.String) throw new InvalidDataException("Application arguments must be strings."); start.ArgumentList.Add(value.GetString() ?? string.Empty); }
-        }
-        var argumentPreview = args.TryGetProperty("arguments", out var confirmArguments) && confirmArguments.ValueKind == JsonValueKind.Array
-            ? string.Join(Environment.NewLine, confirmArguments.EnumerateArray().Where(value => value.ValueKind == JsonValueKind.String).Select(value => value.GetString()).Take(40))
-            : "(none)";
-        if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Launch application", $"Application: {Path.GetFileNameWithoutExtension(path)}\nPath: {path}\nArguments:\n{argumentPreview}")) return new { launched = false, cancelled = true, reason = "user-declined" };
-
-        // Capture the exact pre-existing PIDs. Their continued existence alone is not
-        // proof that this launch request was delivered to the running application.
-        var existingProcesses = FindRunningProcessesForExecutable(path).ToHashSet();
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Launch application", $"Application: {application.name}\nPath: {path}\nBehavior: {behavior}\nArguments:\n{argumentPreview}")) return new { launched = false, cancelled = true, reason = "user-declined" };
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows did not return a process for the application launch.");
         var processId = process.Id;
         try { process.WaitForExit(1800); } catch { }
         process.Refresh();
         if (!process.HasExited)
-            return new { launched = true, verified = true, processRunning = true, handoffAccepted = false, processId, alreadyRunning = false, application = Path.GetFileNameWithoutExtension(path), path,
+            return new { launched = true, verified = true, processRunning = true, handoffAccepted = false, processId, alreadyRunning = false, application = application.name, applicationId, path, behavior,
                 note = "A newly started process for the selected executable is still running. This verifies process startup, not that a visible window received focus." };
 
         var exitCode = process.ExitCode;
         var matchingProcesses = FindRunningProcessesForExecutable(path);
         var survivingPriorInstance = matchingProcesses.FirstOrDefault(id => existingProcesses.Contains(id));
         if (survivingPriorInstance != 0 && exitCode == 0)
-            return new { launched = false, verified = false, processRunning = true, handoffAccepted = true, processId = survivingPriorInstance, alreadyRunning = true, application = Path.GetFileNameWithoutExtension(path), path,
+        {
+            var activationAttempted = TryActivateApplicationWindow(path, out var activatedProcessId, out var foregroundConfirmed);
+            return new { launched = false, verified = foregroundConfirmed, processRunning = true, handoffAccepted = true, activated = activationAttempted && foregroundConfirmed, processId = activatedProcessId > 0 ? activatedProcessId : survivingPriorInstance, alreadyRunning = true, application = application.name, applicationId, path, behavior,
                 reason = "existing-instance-handoff-unverified", exitCode,
-                message = "The launcher exited successfully and a pre-existing instance is still running. Windows/application handoff is plausible, but RunMind cannot verify that the requested URL or action reached that instance. Do not report the requested navigation or focus as confirmed." };
+                message = "The launcher exited successfully and a pre-existing instance remains. RunMind attempted to activate its window, but cannot verify that the requested URL or action reached the existing application. The requested navigation/action remains unverified." };
+        }
 
-        return new { launched = false, verified = false, processRunning = matchingProcesses.Count > 0, handoffAccepted = false, processId, application = Path.GetFileNameWithoutExtension(path), path,
+        return new { launched = false, verified = false, processRunning = matchingProcesses.Count > 0, handoffAccepted = false, processId, application = application.name, applicationId, path, behavior,
             reason = "process-exited", exitCode,
-            message = "The launch process exited before a new running process or a confirmed handoff could be verified. RunMind is not reporting this as a successful launch." };
+            message = "The launch process exited before a new running process or a confirmed handoff could be verified." };
+    }
+
+    private static object SystemManagerCloseApplication(JsonElement args)
+    {
+        RequireSystemCapability("applications", "launchApplications");
+        var applicationId = ReadString(args, "applicationId", 80);
+        if (applicationId.Length == 0) throw new InvalidDataException("A discovered application ID is required.");
+        var application = ReadSystemApplicationCatalog().FirstOrDefault(item => item.id.Equals(applicationId, StringComparison.OrdinalIgnoreCase));
+        if (application is null) throw new InvalidDataException("The application is not in the current catalog. Search again before closing it.");
+        if (!string.IsNullOrWhiteSpace(application.appUserModelId)) return new { closed = false, reason = "packaged-app-close-not-supported", application = application.name, message = "RunMind does not force-close packaged Windows applications. Close the app from its own window or Windows task manager." };
+        if (!TryResolveApplicationExecutable(application.path ?? string.Empty, out var executablePath)) throw new FileNotFoundException("The application's executable is no longer available.", application.path);
+        var expectedProcessName = Path.GetFileNameWithoutExtension(executablePath);
+        var running = new List<(int processId, DateTime startedAtUtc)>();
+        var targets = new List<(int processId, DateTime startedAtUtc)>();
+        var unverified = new List<(int processId, DateTime startedAtUtc)>();
+        foreach (var candidate in Process.GetProcesses())
+        {
+            using (candidate)
+            {
+                try
+                {
+                    var candidatePath = candidate.MainModule?.FileName;
+                    if (string.IsNullOrWhiteSpace(candidatePath))
+                    {
+                        if (candidate.ProcessName.Equals(expectedProcessName, StringComparison.OrdinalIgnoreCase))
+                            unverified.Add((candidate.Id, candidate.StartTime.ToUniversalTime()));
+                        continue;
+                    }
+                    if (!string.Equals(Path.GetFullPath(candidatePath), executablePath, StringComparison.OrdinalIgnoreCase)) continue;
+                    var identity = (candidate.Id, candidate.StartTime.ToUniversalTime());
+                    running.Add(identity);
+                    if (candidate.MainWindowHandle != IntPtr.Zero) targets.Add(identity);
+                }
+                catch
+                {
+                    try
+                    {
+                        if (candidate.ProcessName.Equals(expectedProcessName, StringComparison.OrdinalIgnoreCase))
+                            unverified.Add((candidate.Id, candidate.StartTime.ToUniversalTime()));
+                    }
+                    catch { }
+                }
+            }
+        }
+        if (running.Count == 0 && unverified.Count == 0) return new { closed = true, alreadyClosed = true, application = application.name, processRunning = false };
+        if (targets.Count == 0) return new { closed = false, alreadyClosed = false, processRunning = running.Count > 0, application = application.name, processIds = running.Select(item => item.processId).ToArray(), unverifiedProcessIds = unverified.Select(item => item.processId).ToArray(), reason = running.Count == 0 ? "process-identity-unavailable" : "no-visible-main-window", note = "RunMind could not identify an accessible main window for every matching application process. It did not force-terminate any process." };
+        if (!ConfirmSystemManagerAction("launchApplications", "RunMind · Close application", $"Application: {application.name}\nExecutable: {executablePath}\nWindows to close: {targets.Count}\nRunMind will send a normal window-close request. It will not force-terminate the process.", alwaysAsk: true))
+            return new { closed = false, cancelled = true, application = application.name, processIds = targets.Select(item => item.processId).ToArray() };
+        var requested = new List<int>();
+        var failed = new List<int>();
+        foreach (var target in targets)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(target.processId);
+                var currentPath = process.MainModule?.FileName;
+                if (string.IsNullOrWhiteSpace(currentPath) || !string.Equals(Path.GetFullPath(currentPath), executablePath, StringComparison.OrdinalIgnoreCase)
+                    || process.StartTime.ToUniversalTime() != target.startedAtUtc) { failed.Add(target.processId); continue; }
+                if (process.CloseMainWindow()) requested.Add(target.processId); else failed.Add(target.processId);
+            }
+            catch { failed.Add(target.processId); }
+        }
+        foreach (var processId in requested)
+        {
+            try { using var process = Process.GetProcessById(processId); process.WaitForExit(2500); } catch { }
+        }
+        var remaining = new List<int>();
+        foreach (var original in running)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(original.processId);
+                if (process.StartTime.ToUniversalTime() == original.startedAtUtc && !process.HasExited) remaining.Add(original.processId);
+            }
+            catch { }
+        }
+        var unverifiedRemaining = new List<int>();
+        foreach (var original in unverified)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(original.processId);
+                if (process.StartTime.ToUniversalTime() == original.startedAtUtc && process.ProcessName.Equals(expectedProcessName, StringComparison.OrdinalIgnoreCase)) unverifiedRemaining.Add(original.processId);
+            }
+            catch { }
+        }
+        return new { closed = remaining.Count == 0 && unverifiedRemaining.Count == 0 && failed.Count == 0, closeRequested = requested, remaining, unverifiedRemaining, failed, application = application.name,
+            note = remaining.Count == 0 && unverifiedRemaining.Count == 0 ? "All identified application processes have exited." : "Some processes did not close or could not be fully verified after the normal window-close request. RunMind did not force-terminate them." };
     }
 
     private static object SystemManagerOpenTarget(JsonElement args)

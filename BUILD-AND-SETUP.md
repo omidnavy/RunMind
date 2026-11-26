@@ -1,4 +1,4 @@
-# RunMind 2.5.2 — Build and setup
+# RunMind 2.6.0 — Build and setup
 
 This guide covers the current full-source release and retains explicitly labeled historical notes where useful.
 
@@ -27,6 +27,18 @@ The shared ChatWindow runtime separates its workspace and conversation IndexedDB
 ## RunMind 2.2.7 source snapshot
 
 This ZIP is a full source-project snapshot, not a changed-files-only overlay. It includes the application projects, shared sources, brand assets, PowerToys reference assemblies under `lib\x64`, screenshots, build/package/install scripts, and documentation. The generated PDF/OCR runtime resources are intentionally not prebundled: `Prepare-RunMind-OCR.ps1` downloads the pinned package versions and language models into `Vendor` and `OCR\tessdata` during the release build. The integration currently targets Windows x64. `Build-Release-x64.bat` is the single release entry point: it restores the solution including the `win-x64` runtime pack, cleans and builds Standalone, the PowerToys Run plugin, and the Command Palette extension, then creates and signs the Command Palette MSIX. It opts out of .NET CLI telemetry for all `dotnet` processes started by the script and suppresses first-run/logo output. It does not install any application. `Install-RunMind-CommandPalette.bat` trusts the public signing certificate when needed, installs the already-built MSIX, and makes a guarded attempt to configure the direct RunMind alias; it does not restore packages, run OCR preparation, compile, or package anything.
+
+
+### RunMind 2.6.0 System Manager behavior
+
+- Application discovery stores a bounded local index at `%LOCALAPPDATA%\RunMind\SystemManager\applications.json`. It searches registered desktop applications, Start Menu shortcuts, bounded Program Files/per-user Programs locations, PATH and packaged applications in `shell:AppsFolder`; stale data and search misses trigger a refresh.
+- Agent launch calls use the `applicationId` returned by discovery. Do not pass an arbitrary executable path to the native launch operation.
+- Existing desktop applications are reused and activated by default. If Windows does not confirm foreground activation, RunMind reports that honestly and does not silently start a duplicate process.
+- Per-application behavior preferences are stored in `%LOCALAPPDATA%\RunMind\SystemManager\settings.json`. The Agent can set `ask`, `reuse`, `new-window` (supported applications only), or `new-process`; changing a saved preference always displays a native confirmation.
+- Application close sends normal window-close requests after native confirmation. It never force-terminates processes. Packaged applications and background-only processes are not force-closed.
+- Packaged application activation through AppsFolder is reported as a request accepted by Windows, not proof that a window appeared or that a URL/action completed.
+- `list_available_tools` reports only tools currently exposed to the Agent session. `list_agent_skills` discovers installed Global skills and Project skills when a workspace is authorized. This source bundle does not include a separate Bionic built-in skills directory.
+
 
 ## Installing the PowerToys Run plugin
 

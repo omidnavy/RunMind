@@ -328,6 +328,8 @@ Standalone and PowerToys use separate WebView2 profiles. Their chat settings, cr
 RunMind for Command Palette includes an About section in its extension settings. Website: [https://omid.navy](https://omid.navy).
 
 
-### System Manager (2.5.2)
+### System Manager (2.6.0)
 
-Windows System Manager now has a dedicated toolbar flyout, separate from Agent Settings. Application discovery resolves Start Menu shortcuts and filters missing targets. Launch requests are verified against a matching running process; short-lived launches that cannot be verified are reported as failures.
+Windows System Manager has a dedicated toolbar flyout and remains disabled by default. Application discovery uses ranked name/alias matching across registered desktop applications, Start Menu shortcuts, bounded common install locations, PATH and packaged Windows Apps. Launches use stable IDs from current discovery, reuse and activate existing desktop windows by default, and distinguish verified foreground activation from process startup or unverified application handoff. Ask/reuse/new-window/new-process behavior and persistent per-app preferences are supported with application-specific limits. Graceful close requests always require native confirmation and never force-kill processes. Packaged-app activation is supported but does not claim visible-window or navigation verification.
+
+Agent introspection now includes `list_available_tools` for the exact tools exposed in the current session. Global Skills can be discovered and loaded without selecting a project workspace; project Skills remain workspace-scoped. The current source bundle does not include a separate built-in/Bionic skill payload, so the inventory reports only installed Global and authorized Project skills.

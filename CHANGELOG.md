@@ -1,3 +1,30 @@
+## [2.6.0] — System Manager & Agent Reliability (2026-11-17)
+
+### Application intelligence and lifecycle
+- Replace exact-substring-only discovery with ranked matching across normalized names, executable names, aliases, registered and common install locations, Start Menu shortcuts, App Paths, PATH and packaged Windows Apps.
+- Add bounded Windows Apps folder discovery for packaged applications such as Calculator; packaged activation is explicitly reported as requested, not as a verified visible window or completed action.
+- Rebuild the local application index when stale or when a search misses; validate candidate executables again before launch.
+- Return stable application IDs and ranked match reasons instead of asking the model to echo executable paths back to native code.
+- Default to reuse-and-activate for already-running desktop applications. If foreground activation cannot be verified, do not silently create a duplicate process.
+- Support explicit new-window behavior for a small allowlist of applications with known command-line support, and new-process requests where the application permits them.
+- Add persistent per-application launch behavior preferences (`ask`, `reuse`, `new-window`, `new-process`), protected by native confirmation.
+- Add graceful application close requests. RunMind sends normal window-close messages, always confirms, and never force-kills an application through this action.
+- Update declarative application adapters to use the same application-ID launch contract.
+
+### Agent introspection and Skills
+- Add `list_available_tools`, which reports the exact tool definitions currently exposed to the active Agent session, including connected MCP and host/workspace-dependent tools.
+- Expose `list_agent_skills` and `load_agent_skill` without requiring a selected project workspace, so global Skills can be discovered and loaded independently.
+- Report skill scope and loaded state; distinguish supported global/project sources from a separate bundled/Bionic catalog, which is not present in this source snapshot.
+
+### Preserved boundaries
+- Keep one shared Agent runtime and native bridge across Standalone, PowerToys Run and PowerToys Command Palette.
+- Keep System Manager disabled by default and retain native permission checks and confirmation dialogs.
+- Do not add arbitrary scripts, shell execution, forced focus, GUI automation, administrator elevation, registry modification or service control.
+
+### Validation limits
+- JavaScript syntax, JSON/XML parsing, version synchronization, static tool/native dispatch checks, and C# lexical checks are performed in this environment.
+- Windows/.NET compilation and live discovery, packaged activation, window focus, launch, close and multi-host runtime tests require a Windows target machine.
+
 ## [2.5.2] — System Manager Action Reliability (2026-11-17)
 
 - Require a fresh application discovery and launch sequence for every new user request; prior conversation turns and tool results cannot satisfy a new action.
