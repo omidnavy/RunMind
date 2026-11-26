@@ -1,10 +1,16 @@
 # RunMind 2.6.3 — Workspace and WebView2 Startup Fixes
 
 Date: 2026-11-21  
-Baseline: RunMind 2.6.3, Phase 2 development-server package with the earlier System Manager UI fixes retained.  
+Baseline: RunMind 2.6.3, Phase 2 development-server package with the earlier System Manager UI fixes retained; includes the Windows test-runner timing adjustment.  
 Version: unchanged (2.6.3).
 
 ## Fixes included
+
+### 0. Windows validation test-runner stability
+
+A Windows validation run reported 112/113 passing tests. The only failure was the real Node Inspector launch integration test timing out after five seconds while waiting for the spawned debug target to write its expected stdout line. The workspace resolver and WebView2 regression tests passed in that same run. No .NET compilation was reached because the validation script deliberately stops when a Node test fails.
+
+The Windows validation script now runs test files serially (`--test-concurrency=1`) to avoid unnecessary process contention between integration suites. The Inspector launch test's final debuggee-output wait is extended from 5 to 15 seconds and reports captured stdout, stderr, child exit code, and observed Inspector events if it still times out. The debugger implementation itself was not changed for this test-only failure.
 
 ### 1. Native workspace path resolution
 
@@ -36,9 +42,11 @@ The profile location and WebView2 user data are unchanged. RunMind remains multi
 
 | Check | Result |
 |---|---:|
-| `node --test tests/*.test.cjs` | **113/113 passed** |
+| `node --test --test-concurrency=1 tests/*.test.cjs` | **113/113 passed** |
 | JavaScript syntax checks (`Shared`, `tests`, `test-fixtures`) | Passed |
 | XML parsing of all three `.csproj` files | Passed |
+| Node Inspector launch/attach integration suite (5 consecutive runs) | **4/4 passed on each run** |
+| Windows validation runner concurrency contract | Passed |
 | Development-server fixture manifest check | Passed |
 | New nested-workspace resolver regression contracts | Passed |
 | New WebView2 lock wiring regression contracts | Passed |

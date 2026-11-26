@@ -133,7 +133,7 @@ test('AST refactoring tool is exposed preview-first and applies through approved
 
 test('Windows validation script builds the complete three-host solution after Node tests', () => {
   const script = read('Validate-Phase1-Windows.ps1');
-  assert.match(script, /node --test/);
+  assert.match(script, /node --test --test-concurrency=1/);
   assert.match(script, /RunMind\.sln/);
   assert.match(script, /dotnet build/);
   assert.match(script, /Platform=\$Platform/);

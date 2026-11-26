@@ -74,6 +74,8 @@ test('Node Inspector supports launch, pause, source breakpoint, stack evaluation
   const child = spawn(process.execPath, ['--inspect-brk=127.0.0.1:0', scriptPath], { cwd: directory, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stderr = '';
   let stdout = '';
+  let childClosed = false;
+  child.once('close', () => { childClosed = true; });
   child.stderr.setEncoding('utf8');
   child.stdout.setEncoding('utf8');
   child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-16000); });
@@ -126,7 +128,20 @@ test('Node Inspector supports launch, pause, source breakpoint, stack evaluation
   });
   assert.equal(evaluation.result.value, 2, 'The paused frame should expose the pre-assignment local value.');
   await inspector.command('Debugger.resume');
-  await waitFor(() => /runmind-debugger-test\s+5/.test(stdout), 5000, 'debugged script output');
+  try {
+    // Allow for slower Windows process scheduling while still bounding the integration test.
+    // The validation script runs test files serially so this Inspector process is not competing
+    // with other process-heavy integration tests for startup and event-loop time.
+    await waitFor(() => /runmind-debugger-test\s+5/.test(stdout) || childClosed, 15000, 'debugged script output or process close');
+  } catch (error) {
+    const diagnostic = [
+      `Child exit code: ${child.exitCode}`,
+      `Captured stdout: ${stdout.slice(-2000) || '<empty>'}`,
+      `Captured stderr: ${stderr.slice(-4000) || '<empty>'}`,
+      `Inspector events: ${inspector.events.map(event => event.method || 'unknown').join(', ') || '<none>'}`
+    ].join('\n');
+    throw new Error(`${error.message}\n${diagnostic}`, { cause: error });
+  }
   socket.close(); // Node keeps the process alive while an Inspector client remains attached.
   await waitFor(() => child.exitCode !== null, 5000, 'debugger detach and Node process exit');
   assert.match(stdout, /runmind-debugger-test\s+5/);

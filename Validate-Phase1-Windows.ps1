@@ -24,7 +24,7 @@ try {
         dotnet --info
 
         Write-Host '--- All Node integration and contract tests (Phase 1 + current Phase 2) ---' -ForegroundColor Cyan
-        node --test (Get-ChildItem (Join-Path $root 'tests') -Filter '*.test.cjs' | ForEach-Object { $_.FullName })
+        node --test --test-concurrency=1 (Get-ChildItem (Join-Path $root 'tests') -Filter '*.test.cjs' | ForEach-Object { $_.FullName })
         if ($LASTEXITCODE -ne 0) { throw "Node tests failed with exit code $LASTEXITCODE." }
 
         Write-Host '--- Build all three Windows hosts ---' -ForegroundColor Cyan
