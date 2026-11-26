@@ -74,7 +74,7 @@ public sealed partial class AgentHostBridge
         var profile = (string?)settings["profile"] ?? "restricted";
         var permission = (string?)settings["permissions"]?[capability] ?? "ask";
         if (!alwaysAsk && profile != "restricted" && permission == "allow") return true;
-        var application = Application.Current;
+        var application = System.Windows.Application.Current;
         if (application?.Dispatcher is null) throw new InvalidOperationException("Native confirmation UI is unavailable; the System Manager action was blocked.");
         var approved = false;
         application.Dispatcher.Invoke(() =>
