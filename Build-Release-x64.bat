@@ -86,21 +86,21 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/8] Restoring the full solution and the Windows x64 runtime pack...
-dotnet restore "%SOLUTION%" --runtime win-x64 -p:Configuration=Release -p:Platform=x64
+echo [2/8] Cleaning all Release x64 projects...
+dotnet clean "%SOLUTION%" --configuration Release -p:Platform=x64
 if errorlevel 1 (
     echo.
-    echo [ERROR] dotnet restore failed. Release build cancelled.
+    echo [ERROR] dotnet clean failed. Release build cancelled.
     set "EXITCODE=1"
     goto :finish
 )
 
 echo.
-echo [3/8] Cleaning all Release x64 projects...
-dotnet clean "%SOLUTION%" --configuration Release -p:Platform=x64
+echo [3/8] Restoring the full solution and the Windows x64 runtime pack...
+dotnet restore "%SOLUTION%" --runtime win-x64 -p:Configuration=Release -p:Platform=x64
 if errorlevel 1 (
     echo.
-    echo [ERROR] dotnet clean failed. Release build cancelled.
+    echo [ERROR] dotnet restore failed. Release build cancelled.
     set "EXITCODE=1"
     goto :finish
 )
@@ -111,7 +111,10 @@ echo        - RunMind Standalone
 echo        - PowerToys Run plugin
 echo        - PowerToys Command Palette extension
 echo        - Optional RunMind Runner
-dotnet build "%SOLUTION%" --configuration Release -p:Platform=x64
+rem Step [3/8] restored the full solution with --runtime win-x64 after Clean.
+rem Do not run an implicit restore here: it would overwrite Standalone's RID-specific
+rem assets file with a framework-only target, breaking the later --no-restore publish.
+dotnet build "%SOLUTION%" --configuration Release --no-restore -p:Platform=x64
 if errorlevel 1 (
     echo.
     echo [ERROR] Solution build failed.

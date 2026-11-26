@@ -235,3 +235,11 @@ The environment still has no .NET SDK, MSBuild, Windows Desktop targeting packs 
 6. Install Standalone in a non-default location, run it once, close it, then use Runner Open Chat. Verify the cached executable path discovers it.
 7. With Standalone absent and its cached/registered path invalid, verify Runner displays a clear not-found message and does not open a fake chat window.
 8. Confirm Runner's output/publish directory contains no WebView2 package or duplicate ChatWindow runtime, while Standalone still includes its normal WebView2/chat files.
+
+## Latest Windows build correction — preserve win-x64 assets for Standalone publish (2026-11-24)
+
+The user's Windows log confirmed all four Release x64 hosts compile and the Command Palette MSIX packages/signs successfully. Step [6/8] then failed with `NETSDK1047` because the earlier Step [2/8] restore used `--runtime win-x64`, but the Step [4/8] solution build performed a default implicit restore. That second restore rewrote the Standalone assets file without the `net10.0-windows10.0.22621.0/win-x64` target required by the later `dotnet publish --no-restore`.
+
+`Build-Release-x64.bat` now runs Clean first, then restores the full solution with `--runtime win-x64`, then passes `--no-restore` to the solution build in Step [4/8]. This ordering ensures Clean cannot remove the newly restored assets and prevents the solution build from overwriting them with a framework-only restore. The Standalone and Runner publish steps can therefore consume the preserved runtime-specific targets. Command Palette packaging remains its own project-specific build and is unchanged.
+
+A regression test asserts the clean/restore/build/publish sequence and prevents a default implicit restore from being reintroduced between RID restore and publish. Source validation on the final extracted archive: **294/294** full regression tests and **39/39** Runner-specific tests passed; **59/59** JavaScript syntax checks, **4/4** JSON parses and **11/11** XML/XAML/project/manifest parses passed. ZIP integrity and SHA-256 verification passed. The environment used for this source update does not have .NET SDK/MSBuild, so the user's next Windows run remains the confirmation of the publish fix.
