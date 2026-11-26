@@ -10,6 +10,17 @@
 - Include the earlier reported Windows compile fixes and Runner-specific regression tests. Windows/.NET Release x64 build and runtime certification remain target-machine gates.
 - Follow up on the first consolidated Runner Windows build report: explicitly alias WPF `Color` / `ColorConverter` and `ComboBox` types, and import `System.IO` / `System.Net.Http` in the inline model client. Add a regression check for these compiler fixes; Windows recompilation remains required.
 
+
+## 3.4.0 source enhancement — Change Impact Explorer v2 (2026-11-24)
+
+- Add approved Git working-tree and optional local base-ref change collection, including rename/delete and untracked-source analysis.
+- Infer JS/TS changed declarations from diff hunks; map TypeScript checker references and resolved import bindings to symbol consumers.
+- Expand local asset dependency analysis across HTML media/script/link/iframe/track/embed, srcset, inline/embedded styles, CSS url/import, SVG hrefs and JS/TS module-relative assets.
+- Resolve non-indexed image/font/media changes through indexed asset owners; report dynamic import/require/context/glob sites and removed-module importer candidates.
+- Consume bounded Istanbul/LCOV changed-line evidence, select evidence-ranked test candidates, and expose blast radius, weighted validation risk and structural evidence confidence.
+- Upgrade local index records to v7 so original HTML/CSS/SVG source casing is preserved. Static analysis remains bounded and cannot prove all runtime-generated dependencies.
+- Add focused v2 tests. See `docs/CHANGE-IMPACT-EXPLORER-V2.md` and `docs/P4-WINDOWS-ACCEPTANCE.md`.
+
 ## 3.3.1 — Stabilization
 
 - Replace unbounded Windows diagnostic/service process stream reads with concurrent bounded stdout/stderr draining (512 KB retained per stream), finite timeout handling, process-tree termination and bounded cleanup. Preserve the user-configured no-automatic-timeout option.

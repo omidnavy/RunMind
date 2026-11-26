@@ -260,3 +260,22 @@ The user's Windows log confirmed all four Release x64 hosts compile and the Comm
 `Build-Release-x64.bat` now runs Clean first, then restores the full solution with `--runtime win-x64`, then passes `--no-restore` to the solution build in Step [4/8]. This ordering ensures Clean cannot remove the newly restored assets and prevents the solution build from overwriting them with a framework-only restore. The Standalone and Runner publish steps can therefore consume the preserved runtime-specific targets. Command Palette packaging remains its own project-specific build and is unchanged.
 
 A regression test asserts the clean/restore/build/publish sequence and prevents a default implicit restore from being reintroduced between RID restore and publish. Source validation on the final extracted archive: **294/294** full regression tests and **39/39** Runner-specific tests passed; **59/59** JavaScript syntax checks, **4/4** JSON parses and **11/11** XML/XAML/project/manifest parses passed. ZIP integrity and SHA-256 verification passed. The environment used for this source update does not have .NET SDK/MSBuild, so the user's next Windows run remains the confirmation of the publish fix.
+
+
+## Change Impact Explorer v2 — implementation and validation (2026-11-24)
+
+This source extends the existing P4 project-index/Git-review engine rather than introducing a parallel analyzer. The shared Agent tool and built-in workflow are available in Standalone, PowerToys Run and PowerToys Command Palette. The optional Runner remains a deliberately restricted quick host and does not host the Full Agent.
+
+Implemented in this update:
+
+- Git-aware operation by default when `project_change_impact` is called without explicit paths. Fresh `gitRead` approval precedes the native snapshot and index refresh. Working-tree mode includes staged, unstaged, renamed/deleted and untracked paths. Optional local `base_ref` mode analyzes `base_ref...HEAD` plus working-tree changes without fetch or Git mutation.
+- Unified-diff hunk mapping to current AST declaration ranges, changed-symbol inference, removed declaration candidates, TypeScript checker cross-file references and static import/export binding consumers.
+- Reverse direct/transitive dependency traversal, removed/renamed module importer candidates, dynamic dependency signals and unresolved-import reporting.
+- Expanded local asset graph for HTML, CSS, SVG, media, fonts, scripts, preload/module-relative URL patterns and non-indexed asset changes. Asset-owner modules feed impact and test selection.
+- Candidate test recommendations with evidence/confidence, plus bounded Istanbul/LCOV changed-line coverage evidence. Aggregate coverage is not misrepresented as test-to-line attribution.
+- Transparent blast-radius/risk and structural confidence/completeness reporting, explicit graph/index/compiler truncation, parser errors, unresolved edges and static-analysis limitations.
+- Dedicated guide and expanded P4 Windows acceptance checklist.
+
+Validation environment: Node.js `v22.16.0` in the packaging container. Full portable regression suite: **307/307 passed**; focused Change Impact Explorer v2 suite: **9/9 passed**; JavaScript syntax: **61/61 passed**; JSON parse: **4/4 passed**; XML/XAML/project/manifest parse: **12/12 passed**. The same full suite and syntax/structure checks are repeated from the final extracted ZIP. Final archive integrity and SHA-256 sidecar are verified.
+
+**Windows certification is still required.** This environment has no .NET SDK/MSBuild or Windows Desktop runtime. The added `impact_snapshot` native Git bridge and all WPF/C# projects must be compiled using .NET 10 on Windows, followed by the new `Change Impact Explorer v2` acceptance cases in `docs/P4-WINDOWS-ACCEPTANCE.md`. Do not interpret portable JavaScript tests as native Windows build certification.

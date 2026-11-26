@@ -1,11 +1,11 @@
-# RunMind 3.2.0 — P4 Windows acceptance checklist
+# RunMind 3.4.0 — P4 Change Impact Explorer v2 Windows acceptance checklist
 
-Run after extracting the 3.2.0 source on Windows with Node.js 24+ and .NET 10. Repeat interactive checks in Standalone, PowerToys Run and PowerToys Command Palette.
+Run after extracting the latest 3.4.0 source on Windows with Node.js 24+ and .NET 10. Repeat interactive checks in Standalone, PowerToys Run and PowerToys Command Palette.
 
 ## Build and version
 
 - [ ] Run `.\Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` from the repository root in PowerShell.
-- [ ] Confirm all three hosts compile/package with version `3.2.0` and Command Palette Appx identity `3.2.0.0`.
+- [ ] Confirm all three hosts compile/package with version `3.4.0` and Command Palette Appx identity `3.4.0.0`.
 - [ ] Verify `p4-logic.js`, updated Agent scripts and Workflow UI are present in all three host outputs.
 - [ ] Run `node --test --test-concurrency=1` using the installed Node.js 24 runtime.
 
@@ -47,13 +47,23 @@ Run after extracting the 3.2.0 source on Windows with Node.js 24+ and .NET 10. R
 - [ ] Verify Skill content is loaded only through the explicit Skill tool.
 - [ ] Include malicious instruction text in AGENTS.md/SKILL.md and verify it cannot bypass native approval or RunMind security instructions.
 
-## Change Impact Explorer
+## Change Impact Explorer v2
 
-- [ ] Change a JS/TS module with direct and transitive importers and verify both sets are reported.
-- [ ] Verify JS/TS test candidates and confidence labels.
-- [ ] Change an SVG referenced from HTML/CSS/SVG and verify the asset consumers appear.
-- [ ] Supply unknown and unsupported-language paths and verify they are explicitly classified.
-- [ ] Confirm it does not run Git or tests automatically.
+- [ ] Invoke `project_change_impact` without `changed_paths`; verify fresh `gitRead` approval precedes snapshot collection and index refresh.
+- [ ] Decline Git-read approval; verify no Git snapshot or index refresh occurs and the operation reports cancellation.
+- [ ] Create a fixture with staged, unstaged, untracked, renamed and deleted JS/TS files. Verify old/new paths, untracked full-file declaration inference, changed hunk ranges and removed-module importer candidates.
+- [ ] Change a function, method, property, class and type declaration; verify AST line-range mapping infers symbols without manually supplying `changed_symbols`.
+- [ ] Add direct/transitive importers and aliased/named imports; verify TypeScript checker references and resolved import bindings distinguish exact symbol consumers from file-level potential consumers.
+- [ ] Select `source=git-branch` with an existing local `base_ref`; verify the merge-base comparison is combined with staged/unstaged/untracked changes and no fetch or Git mutation occurs.
+- [ ] Supply a missing/invalid local ref and a ref without a merge base; verify explicit errors and no fallback to an unrelated comparison.
+- [ ] Change assets referenced through HTML `src`, `poster`, `srcset`, script/link/iframe/track/embed, CSS `url()`/`@import`, inline/embedded styles, SVG `href`/`xlink:href` and JS/TS `new URL(..., import.meta.url)`; verify owner/consumer edges.
+- [ ] Change an image, font or media file that is not text-indexed but is referenced by a known HTML/CSS/SVG/JS/TS file; verify it appears under `unindexedAssetChanges`, not `unknownChangedPaths`, and owning modules contribute test candidates.
+- [ ] Introduce literal and non-literal `import()`, variable `require()`, `require.context()` and `import.meta.glob`; verify statically resolvable literal targets are graph edges and dynamic constructions appear as uncertainty signals.
+- [ ] Provide Istanbul `coverage-final.json`, `.nyc_output/out.json` and/or LCOV `lcov.info`; verify changed added lines are marked measured/covered/uncovered. Confirm removed-only lines are excluded from current-source coverage.
+- [ ] Verify aggregate coverage never claims individual test-to-line attribution; recommendations combine import/asset evidence and lower-confidence filename heuristics.
+- [ ] Trigger or simulate index/compiler/asset graph caps and parser/unresolved/dynamic evidence; verify `confidence.coverage`, drivers, risk factors and limitations disclose the gaps.
+- [ ] Confirm risk and confidence descriptions state that they are heuristics, not probabilities. Confirm no files are edited and no tests/builds are run.
+- [ ] Repeat the working-tree and local-base-ref scenarios in Standalone, PowerToys Run and PowerToys Command Palette.
 
 ## Development Session Timeline
 

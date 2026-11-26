@@ -1020,6 +1020,52 @@ public sealed partial class AgentHostBridge : IDisposable
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized))).ToLowerInvariant();
     }
 
+    private static async Task<object> BuildGitImpactSnapshotAsync(string root, string baseRef, CancellationToken cancellationToken)
+    {
+        var current = await BuildGitReviewSnapshotAsync(root, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(baseRef))
+            return new { action = "impact_snapshot", success = true, current, branchComparison = (object?)null };
+
+        var safeBase = SafeGitRef(baseRef);
+        async Task<(int ExitCode, string Output, string Error)> Run(params string[] arguments)
+        {
+            var command = new List<string> { "-c", "core.quotepath=false", "-c", "color.ui=false" };
+            command.AddRange(arguments);
+            return await ExecuteGitProcessAsync(root, command, cancellationToken).ConfigureAwait(false);
+        }
+
+        var verify = await Run("rev-parse", "--verify", $"{safeBase}^{{commit}}").ConfigureAwait(false);
+        if (verify.ExitCode != 0)
+            throw new InvalidDataException($"The requested base ref '{safeBase}' is not an available local commit. Fetch it first or choose an existing local ref. {Limit(verify.Error, 600)}");
+
+        var mergeBase = await Run("merge-base", safeBase, "HEAD").ConfigureAwait(false);
+        if (mergeBase.ExitCode != 0 || string.IsNullOrWhiteSpace(mergeBase.Output))
+            throw new InvalidDataException($"Git could not find a merge base between '{safeBase}' and HEAD. Use a ref with shared history.");
+
+        var range = $"{safeBase}...HEAD";
+        var diff = await Run("diff", "--no-ext-diff", "--no-color", "--find-renames", "--unified=3", range).ConfigureAwait(false);
+        if (diff.ExitCode != 0) throw new IOException($"Git base comparison failed with exit code {diff.ExitCode}. {Limit(diff.Error, 1000)}");
+        var nameStatus = await Run("diff", "--name-status", "--find-renames", "-z", range).ConfigureAwait(false);
+        if (nameStatus.ExitCode != 0) throw new IOException($"Git base comparison inventory failed with exit code {nameStatus.ExitCode}. {Limit(nameStatus.Error, 1000)}");
+
+        return new
+        {
+            action = "impact_snapshot",
+            success = true,
+            current,
+            branchComparison = new
+            {
+                baseRef = safeBase,
+                mergeBase = mergeBase.Output.Trim(),
+                diff = diff.Output,
+                nameStatus = nameStatus.Output,
+                truncated = diff.Output.Contains("[output truncated", StringComparison.OrdinalIgnoreCase)
+                    || nameStatus.Output.Contains("[output truncated", StringComparison.OrdinalIgnoreCase),
+                note = "Comparison includes commits reachable from HEAD but not from the selected local base ref, plus the current staged and unstaged working-tree snapshot. Untracked files remain supplied by the current project index. The comparison does not fetch or modify Git data."
+            }
+        };
+    }
+
     private static async Task<object> BuildGitReviewSnapshotAsync(string root, CancellationToken cancellationToken)
     {
         async Task<(int ExitCode, string Output, string Error)> Run(params string[] arguments)
@@ -1581,6 +1627,7 @@ public sealed partial class AgentHostBridge : IDisposable
         {
             case "status": values.AddRange(new[] { "status", "--short", "--branch" }); break;
             case "review_snapshot": return await BuildGitReviewSnapshotAsync(root, cancellationToken).ConfigureAwait(false);
+            case "impact_snapshot": return await BuildGitImpactSnapshotAsync(root, ReadString(args, "baseRef", 160), cancellationToken).ConfigureAwait(false);
             case "diff": values.AddRange(new[] { "diff", "--no-ext-diff", "--no-color" }); AddOptionalValidatedPath(values, args, "path"); break;
             case "log": values.AddRange(new[] { "log", "-n", "30", "--oneline", "--decorate" }); break;
             case "show":

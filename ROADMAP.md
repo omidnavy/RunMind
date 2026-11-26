@@ -114,7 +114,7 @@ P4 completes the named Agent capability milestone on top of P0–P3. It strength
 - **Task checkpoints/recovery:** bounded redacted per-chat task/plan/progress/operation records; interruption marks uncertain outcomes; explicit same-workspace Resume and inspect-before-retry policy; no automatic replay.
 - **Tool summarization:** bounded/depth-limited, credential-redacted structured summaries; body, HTML and binary/base64 payloads are omitted from Agent context and local previews.
 - **Skills/project context:** bounded project instructions, package metadata, project index and ranked Skill metadata; Skill content is explicitly loaded and untrusted; no instruction grants tools or permission.
-- **Change Impact Explorer:** explicit changed paths/symbols to JS/TS direct/transitive importers and test candidates, with HTML/CSS/SVG asset consumers and unknown/unanalysed paths.
+- **Change Impact Explorer v2 (3.4.0 source enhancement):** Git working-tree and optional local base-ref intake; automatic AST symbol inference; TypeScript checker consumers; direct/transitive import graph; deleted/renamed importer detection; expanded HTML/CSS/SVG/media/font asset graph; dynamic dependency signals; Istanbul/LCOV changed-line evidence; confidence-labelled test candidates; blast-radius, risk and completeness reporting. See `docs/CHANGE-IMPACT-EXPLORER-V2.md`.
 - **Development Session Timeline:** local chronological checkpoint/tool/dependency/sub-agent records in Workflow UI and a read-only Agent tool.
 - **Artifact Verification:** structural checks, exact-byte SHA-256, optional expected digest comparison and verification receipt; digest equality is not provenance/signature verification.
 
@@ -123,7 +123,7 @@ P4 completes the named Agent capability milestone on top of P0–P3. It strength
 - MCP pagination is bounded to 20 pages/2,000 entries per discovered catalogue; remote resource/prompt/tool calls remain approved operations.
 - Read-only concurrency is restricted to an explicit allow-list; approval-gated, mutating, duplicate, MCP and delegated calls are barriers.
 - Checkpoints are local to the chat's WebView profile, bounded to 20 entries and do not restore raw conversation transcripts or external state.
-- Change impact is static/index-based and can miss runtime-generated/dynamic dependencies.
+- Change impact remains static/index-based. Recognizable dynamic dependency sites and index/compiler/asset truncation are reported, but reflection, runtime-computed dependencies, generated loaders and environment-dependent relationships cannot be proven. Scores are evidence heuristics, not probabilities.
 - Session timeline contains only RunMind-recorded events; it is not a log warehouse or causal tracing engine.
 - Artifact digest checks establish byte equality only, not trusted provenance.
 - Windows/.NET certification remains pending until the P0–P5 acceptance checklists pass on target Windows.
@@ -181,7 +181,7 @@ Keep the current codebase compact: reuse the shared Agent Core, native bridge, p
 
 ## 2.6.3 — Developer Intelligence & System Manager
 
-Implemented in this source snapshot: Windows Notepad adapter, File Explorer folder/file actions, Docker/Podman container lifecycle/read operations, and four coding skills. The adapter editor/override UI and native conversation-session management remain follow-up work; RunMind conversations currently live in WebView IndexedDB and are not exposed as a native session store.
+Implemented in this source snapshot: Windows Notepad adapter, File Explorer folder/file actions, Docker/Podman container lifecycle/read operations, built-in/global/project Skills, declarative custom application adapters, and the Application Adapters editor/override/reset/remove UI. Native conversation-session management remains follow-up work; RunMind conversations currently live in WebView IndexedDB and are not exposed as a native session store. See `docs/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md` for the complete shipped extension model and its deliberate security boundaries.
 
 
 ## Phase 2 progress — 2026-11-21

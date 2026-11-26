@@ -80,7 +80,7 @@ P4 adds eight Agent capabilities:
 - **Task checkpoints and recovery:** bounded redacted per-chat checkpoints, plan/progress and operation links. Interrupted operations are marked unknown; resume is user-initiated, requires the same workspace and inspects uncertain external outcomes before any retry. No automatic replay.
 - **Tool-result summarization:** bounded/redacted structured results for model context and local operation history, excluding raw request/response bodies, HTML and binary/base64 content.
 - **Skills and project context:** bounded project instructions, package metadata, project-index coverage/architecture and relevance-ranked Skill metadata are included as context. Skills remain explicitly loaded guidance; neither Skills nor project files grant permissions.
-- **Change Impact Explorer:** explicit JS/TS changed paths and symbols, direct/transitive importer and test candidates, HTML/CSS/SVG asset consumers, plus unknown/unanalysed paths. It does not infer Git changes or execute tests.
+- **Change Impact Explorer v2:** Git-aware working-tree/local-base-ref analysis, automatic AST symbol inference, TypeScript checker consumers, direct/transitive modules, expanded HTML/CSS/SVG/media/font assets, dynamic dependency signals, removed-module importers, Istanbul/LCOV changed-line evidence, affected-test candidates and transparent blast-radius/risk/confidence reporting. It is read-only and does not run tests.
 - **Development Session Timeline:** chronological checkpoint, tool-operation/dependency-layer and sub-agent events shown in Workflow and exposed as a read-only Agent tool.
 - **Artifact Verification:** structural checks and SHA-256 over exact artifact bytes, optional independently supplied expected digest comparison and a bounded receipt. A matching digest is not proof of provenance or signature authenticity.
 
@@ -395,6 +395,7 @@ Standalone and PowerToys use separate WebView2 profiles. Their chat settings, cr
 
 - [Build and setup](BUILD-AND-SETUP.md) — build prerequisites, release packaging, and deployment details.
 - [Feature matrix](FEATURE-MATRIX.md) — detailed capability status, behavior, and limits.
+- [Advanced Intelligence & Extensibility](docs/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md) — consolidated guide to Change Impact Explorer v2, Development Session Timeline, System Intelligence, Agent Orchestration, MCP, Skills, application adapters, Runner plugins and their safety boundaries. See also the [Change Impact Explorer v2 technical contract](docs/CHANGE-IMPACT-EXPLORER-V2.md).
 - [Changelog](CHANGELOG.md) — release-by-release changes and fixes.
 - [Roadmap](ROADMAP.md) — planned work and project direction.
 

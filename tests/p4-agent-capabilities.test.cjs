@@ -105,8 +105,10 @@ test('P4 Change Impact Explorer follows reverse import edges and includes SVG as
   const context = vm.createContext({ fixture: null });
   vm.runInContext(`
     function projectIndexNormalizePath(value) { return String(value || '').replace(/\\\\/g, '/').replace(/^\\.\\//, ''); }
-    function projectIndexBuildUnderstanding() { return { assetReferences: [{ from: 'index.html', to: 'assets/icon.svg', kind: 'html-image', targetIndexed: true }] }; }
-    function projectIndexAnalyzeTestImpact(_index, paths) { return { tests: [{ path: 'tests/app.test.js', confidence: 'high' }], summary: { recommendedTests: paths.length } }; }
+    function projectIndexBuildUnderstanding() { return { assetReferences: [{ from: 'index.html', to: 'assets/icon.svg', kind: 'html-image', targetIndexed: true }], entryPoints: [], highCouplingModules: [] }; }
+    function projectIndexAnalyzeTestImpact(_index, paths) { return { tests: [{ path: 'tests/app.test.js', confidence: 'high' }], summary: { recommendedTests: 1 }, coverageEvidence: { summary: { coverageFiles: 0, changedLinesMeasured: 0, changedLinesCovered: 0 } } }; }
+    function projectIndexInferChangedSymbols() { return { symbols: [], removedCandidates: [] }; }
+    function projectIndexBuildCoverageEvidence() { return { available: false, summary: { coverageFiles: 0, changedLinesMeasured: 0, changedLinesCovered: 0 } }; }
     ${fn}
     globalThis.analyze = projectIndexAnalyzeChangeImpact;
   `, context);

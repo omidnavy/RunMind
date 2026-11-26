@@ -1137,11 +1137,44 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
         }
         case 'project_change_impact': {
           if (!agentDirectoryHandle) throw new Error('No task folder selected.');
-          const index = await loadProjectIndex();
-          if (!index) throw new Error('Build or refresh the project index before exploring change impact.');
-          const result = projectIndexAnalyzeChangeImpact(index, args.changed_paths || [], args.changed_symbols || []);
+          const explicitPaths = Array.isArray(args.changed_paths) ? args.changed_paths.filter(value => typeof value === 'string' && value.trim()) : [];
+          const requestedSource = String(args.source || '').toLowerCase();
+          const useGit = requestedSource === 'git-working-tree' || requestedSource === 'git-branch' || (!requestedSource && explicitPaths.length === 0);
+          let result;
+          if (!useGit) {
+            if (!explicitPaths.length) throw new Error('Provide changed_paths for explicit analysis, or select source="git-working-tree" to inspect the selected repository automatically.');
+            const index = await buildProjectIndex({ force: false, signal });
+            if (!index) throw new Error('Project index could not be built or refreshed before exploring change impact.');
+            result = projectIndexAnalyzeChangeImpact(index, explicitPaths, args.changed_symbols || [], { source: 'explicit-paths' });
+          } else {
+            const baseRef = String(args.base_ref || '').trim();
+            if (requestedSource === 'git-branch' && !baseRef) throw new Error('Provide base_ref when source is git-branch. The ref must already exist locally; RunMind will not fetch it.');
+            const approved = await requireAgentApproval({
+              title: baseRef ? 'Compare repository changes against a Git base ref?' : 'Inspect current Git changes for Change Impact Explorer?',
+              subtitle: 'Git read-only · Change Impact Explorer',
+              detail: baseRef
+                ? `Reads the selected repository status, staged/unstaged changes, untracked path names and the local commit range ${baseRef}...HEAD. It does not fetch, stage, commit, switch branches or modify Git data. The project index is refreshed to inspect current and untracked files.`
+                : 'Reads the selected repository branch, staged/unstaged diffs and untracked path names. It does not modify Git data. The project index is refreshed to inspect current and untracked files.',
+              risky: false, permissionCategory: 'gitRead'
+            }, signal);
+            if (!approved) return { cancelled: true, message: 'Git Change Impact analysis was declined.' };
+            const snapshot = await callAgentHost('git.run', { action: 'impact_snapshot', baseRef, contextId: workspaceContext.id }, signal, 90000);
+            if (!snapshot?.success) throw new Error(snapshot?.error || 'Git impact snapshot could not be collected. Select the canonical workspace with git_select_repository first.');
+            const index = await buildProjectIndex({ force: false, signal });
+            if (!index) throw new Error('Project index could not be built or refreshed before exploring Git changes.');
+            const review = projectDevelopmentAnalyzeGitSnapshot(index, snapshot);
+            if (!review.architectureImpact?.available) {
+              if (!review.changedPaths.length) return { available: true, schemaVersion: 2, source: baseRef ? 'git-working-tree-and-branch' : 'git-working-tree', git: { branch: review.branch, baseRef: review.baseRef }, changedPaths: [], summary: { suppliedChanges: 0, matchedChanges: 0, directDependents: 0, transitiveDependents: 0, recommendedTests: 0 }, message: 'No changed paths were detected in the selected repository or requested branch range.' };
+              throw new Error(review.architectureImpact?.message || 'Git changes were found, but architecture impact analysis could not be completed.');
+            }
+            result = { ...review.architectureImpact, git: { ...(review.architectureImpact.git || {}), branch: review.branch, baseRef: review.baseRef, changedFiles: review.changedFiles, diffSummary: review.diffSummary, branchComparison: review.branchComparison } };
+          }
           const limit = Math.max(1, Math.min(500, Math.floor(Number(args.max_results) || 200)));
-          return { ...result, directDependents: result.directDependents.slice(0, limit), transitiveDependents: result.transitiveDependents.slice(0, limit), impactedModules: result.impactedModules.slice(0, limit), symbolConsumers: result.symbolConsumers.slice(0, limit), assetConsumers: result.assetConsumers.slice(0, limit) };
+          const bounded = { ...result };
+          for (const key of ['directDependents','transitiveDependents','impactedModules','symbolConsumers','assetConsumers','removedModuleConsumers','dynamicDependencySignals','unresolvedImports','tests','changedSymbols','removedSymbolCandidates','exportedSymbolChanges']) {
+            if (Array.isArray(bounded[key])) bounded[key] = bounded[key].slice(0, limit);
+          }
+          return bounded;
         }
         case 'development_session_timeline': {
           if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('Development Session Timeline is available only in the primary Agent session.');

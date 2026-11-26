@@ -9,7 +9,7 @@ RunMind 3.1.0 retains the complete P0 reliability foundation, P1 Project Intelli
 3. **Task checkpoints and recovery:** bounded, redacted per-chat checkpoints, task plan/progress, linked tool-operation IDs, interrupted/unknown outcomes, explicit review-and-resume, same-workspace requirement and fresh approvals. Uncertain non-idempotent operations are inspected before any retry; no automatic replay occurs.
 4. **Tool-result summarization:** bounded structured summaries, secret redaction, depth/item/property caps, omission of raw bodies/HTML/binary/base64 payloads, JSON-safe truncation and summarized Agent context plus local operation history.
 5. **Skills and project context:** bounded discovery of project instructions and package metadata, current index coverage/architecture context, relevance-ranked Skill metadata and loaded Skill names. Skills are not silently auto-executed; project instructions and Skill content remain untrusted guidance and never grant tool permissions.
-6. **Change Impact Explorer:** explicit changed workspace-relative paths/symbols; direct/transitive JS/TS import dependents, test candidates, HTML/CSS/SVG asset consumers, and unknown/unanalysed paths. Available as an Agent tool and reusable developer workflow; does not infer Git changes or run tests.
+6. **Change Impact Explorer (original P4):** explicit changed workspace-relative paths/symbols; direct/transitive JS/TS import dependents, test candidates, HTML/CSS/SVG asset consumers, and unknown/unanalysed paths. The 3.4.0 source enhancement is documented below and in `docs/CHANGE-IMPACT-EXPLORER-V2.md`.
 7. **Development Session Timeline:** chronological local view of checkpoint, tool-operation/dependency-layer and sub-agent evidence, available both in the Workflow panel and as a read-only Agent tool.
 8. **Artifact Verification:** structural checks and SHA-256 over the exact workspace artifact bytes, optional independently supplied expected digest comparison, and bounded verification receipt. A digest match does not prove provenance, signer identity or trustworthiness.
 
@@ -27,3 +27,10 @@ RunMind 3.1.0 retains the complete P0 reliability foundation, P1 Project Intelli
 ## Validation boundary
 
 Portable test and syntax results are recorded in `BUILD-STATUS.md`. Windows/.NET compilation and live acceptance across all three Windows hosts remain a target-machine gate; do not label this release Windows-certified until `Validate-Phase1-Windows.ps1` and the P0–P4 Windows checklists pass on Windows with .NET 10 and Node.js 24+.
+
+
+## Change Impact Explorer v2 enhancement — 2026-11-24
+
+The 3.4.0 shared source upgrades the P4 analyzer with Git working-tree and optional local base-ref intake (fresh `gitRead` approval), AST-inferred changed symbols, TypeScript checker consumers, deleted/renamed module importer candidates, expanded HTML/CSS/SVG/media/font asset edges, dynamic dependency signals, Istanbul/LCOV changed-line coverage, test recommendations, blast-radius and transparent evidence-based risk/confidence reports. It remains read-only and does not execute tests.
+
+See `docs/CHANGE-IMPACT-EXPLORER-V2.md` for exact behavior and limits. Static analysis cannot prove all runtime dependencies; risk/confidence are heuristics, not probabilities. Windows acceptance remains pending.

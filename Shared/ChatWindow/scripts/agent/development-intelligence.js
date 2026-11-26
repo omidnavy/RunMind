@@ -129,36 +129,88 @@ function projectDevelopmentDiffPaths(diff) {
 }
 
 function projectDevelopmentAnalyzeGitSnapshot(index, snapshot) {
-  const status = projectDevelopmentParseGitStatus(snapshot);
-  // A rename affects references to the old module as well as consumers of its new path.
-  const changedPaths = [...new Set(status.files.flatMap(item => [item.path, item.originalPath].filter(Boolean)))].slice(0, 500);
+  const current = snapshot?.current || snapshot || {};
+  const status = projectDevelopmentParseGitStatus(current);
+  const staged = projectIndexParseUnifiedDiff(current?.stagedDiff || '');
+  const unstaged = projectIndexParseUnifiedDiff(current?.unstagedDiff || '');
+  const branch = projectIndexParseUnifiedDiff(snapshot?.branchComparison?.diff || '');
+  const parsedFiles = new Map();
+  const mergeDiff = parsed => {
+    for (const file of parsed?.files || []) {
+      const key = String(file.path || file.oldPath || '').toLowerCase();
+      if (!key) continue;
+      const existing = parsedFiles.get(key) || { path: file.path, oldPath: file.oldPath, status: file.status, addedLines: [], removedLines: [], changedLineRanges: [], binary: false };
+      existing.path = file.path || existing.path;
+      existing.oldPath = file.oldPath || existing.oldPath;
+      if (file.status && file.status !== 'modified') existing.status = file.status;
+      existing.addedLines.push(...(file.addedLines || []));
+      existing.removedLines.push(...(file.removedLines || []));
+      existing.changedLineRanges.push(...(file.changedLineRanges || []));
+      existing.binary ||= file.binary === true;
+      parsedFiles.set(key, existing);
+    }
+  };
+  mergeDiff(branch);
+  mergeDiff(staged);
+  mergeDiff(unstaged);
+  const indexedByPath = new Map((index?.files || []).map(file => [file.path.toLowerCase(), file]));
+  // Untracked files are intentionally absent from Git's unified diff. The project index has their content,
+  // so treat their complete declaration ranges as new code rather than silently omitting symbol impact.
+  for (const row of status.files.filter(item => item.untracked)) {
+    const key = row.path.toLowerCase();
+    if (parsedFiles.has(key)) continue;
+    const record = indexedByPath.get(key);
+    const lineCount = record?.analysisSource ? String(record.analysisSource).split(/\r?\n/).length : 0;
+    parsedFiles.set(key, { path: row.path, oldPath: row.path, status: 'untracked', addedLines: [], removedLines: [], changedLineRanges: lineCount ? [{ start: 1, end: lineCount, kind: 'added' }] : [], binary: false, wholeFile: true });
+  }
+  const combinedDiff = {
+    files: [...parsedFiles.values()],
+    changedPaths: [...new Set([...status.changedPaths, ...branch.changedPaths, ...staged.changedPaths, ...unstaged.changedPaths])].slice(0, 1000),
+    addedLineCount: branch.addedLineCount + staged.addedLineCount + unstaged.addedLineCount,
+    removedLineCount: branch.removedLineCount + staged.removedLineCount + unstaged.removedLineCount,
+    binaryFiles: [...new Set([...branch.binaryFiles, ...staged.binaryFiles, ...unstaged.binaryFiles])]
+  };
+  const changedPaths = combinedDiff.changedPaths.slice(0, 1000);
+  const inferred = index ? projectIndexInferChangedSymbols(index, combinedDiff) : { symbols: [], removedCandidates: [] };
   let impact = null;
   if (index && changedPaths.length) {
-    try { impact = projectIndexAnalyzeChangeImpact(index, changedPaths, []); }
-    catch (error) { impact = { available: false, message: String(error?.message || error).slice(0, 300) }; }
+    try {
+      impact = projectIndexAnalyzeChangeImpact(index, changedPaths, inferred.symbols, {
+        source: snapshot?.branchComparison ? 'git-working-tree-and-branch' : 'git-working-tree',
+        diffLineRanges: combinedDiff.files.map(file => ({ path: file.path, ranges: file.changedLineRanges || [], removedLines: file.removedLines || [] })),
+        git: { branch: status.branch, baseRef: snapshot?.branchComparison?.baseRef || null, branchComparisonAvailable: !!snapshot?.branchComparison, branchComparisonTruncated: snapshot?.branchComparison?.truncated === true }
+      });
+    } catch (error) { impact = { available: false, message: String(error?.message || error).slice(0, 300) }; }
   }
-  const testImpact = index && changedPaths.length ? projectIndexAnalyzeTestImpact(index, changedPaths) : null;
-  const diffPaths = [...new Set([...projectDevelopmentDiffPaths(snapshot?.stagedDiff), ...projectDevelopmentDiffPaths(snapshot?.unstagedDiff)])];
+  const diffPaths = [...new Set(combinedDiff.files.map(file => file.path).filter(Boolean))].slice(0, 1000);
+  const testImpact = impact?.testImpact || null;
   return {
     available: true,
     branch: status.branch,
+    baseRef: snapshot?.branchComparison?.baseRef || null,
     status: status.branchStatus,
     changedFiles: status.files,
     changedPaths,
     diffPaths,
+    changedSymbols: impact?.changedSymbols || inferred.symbols,
+    removedSymbolCandidates: inferred.removedCandidates,
+    diffSummary: { files: combinedDiff.files.length, addedLines: combinedDiff.addedLineCount, removedLines: combinedDiff.removedLineCount, binaryFiles: combinedDiff.binaryFiles },
     summary: { changed: changedPaths.length, staged: status.stagedCount, unstaged: status.unstagedCount, untracked: status.untrackedCount, conflicted: status.conflictCount,
       directDependents: impact?.summary?.directDependents || 0, transitiveDependents: impact?.summary?.transitiveDependents || 0,
-      affectedTests: testImpact?.summary?.recommendedTests || 0, affectedAssets: impact?.summary?.assetConsumers || 0 },
-    conflicts: { paths: status.conflictedPaths, count: status.conflictedPaths.length, unmergedIndexEntries: Array.isArray(snapshot?.conflictIndexEntries) ? snapshot.conflictIndexEntries.slice(0, 100) : [] },
-    whitespace: snapshot?.diffCheck || { exitCode: null, output: '' },
+      affectedTests: testImpact?.summary?.recommendedTests || 0, affectedAssets: impact?.summary?.assetConsumers || 0,
+      riskScore: impact?.risk?.score ?? null, confidenceScore: impact?.confidence?.score ?? null },
+    conflicts: { paths: status.conflictedPaths, count: status.conflictedPaths.length, unmergedIndexEntries: Array.isArray(current?.conflictIndexEntries) ? current.conflictIndexEntries.slice(0, 100) : [] },
+    whitespace: current?.diffCheck || { exitCode: null, output: '' },
     architectureImpact: impact,
     testImpact,
-    diffs: { staged: String(snapshot?.stagedDiff || '').slice(0, 220000), unstaged: String(snapshot?.unstagedDiff || '').slice(0, 220000) },
+    diffs: { staged: String(current?.stagedDiff || '').slice(0, 220000), unstaged: String(current?.unstagedDiff || '').slice(0, 220000), branch: String(snapshot?.branchComparison?.diff || '').slice(0, 220000) },
+    branchComparison: snapshot?.branchComparison ? { baseRef: snapshot.branchComparison.baseRef, mergeBase: snapshot.branchComparison.mergeBase || null, truncated: snapshot.branchComparison.truncated === true } : null,
     limitations: [
-      'Git status and tracked diffs are actual repository evidence. Untracked file names are included but their contents are not part of Git diff; inspect them separately.',
+      'Git status, staged/unstaged tracked diffs and optional base-ref comparison are repository evidence. Untracked file contents are read from the already-authorized project index; Git itself does not include them in unified diffs.',
       'Architecture and test relationships are derived from the current bounded static project index, not runtime execution.',
       'A Git status snapshot cannot attribute pre-existing changes to RunMind. Agent-owned changes are tracked separately when RunMind writes them.',
-      'Merge conflict status is detected from Git index/status evidence; conflict markers in arbitrary files are not exhaustively searched.'
+      'Merge conflict status is detected from Git index/status evidence; conflict markers in arbitrary files are not exhaustively searched.',
+      'Istanbul/LCOV coverage provides line execution counts, not individual test-to-line attribution. Test recommendations therefore combine import graph, asset links and explicitly labeled filename heuristics.'
     ]
   };
 }

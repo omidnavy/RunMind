@@ -3,6 +3,18 @@
 
 > **Current source release (3.4.0):** P0–P6 remain retained from 3.3.1. This release adds the complete optional RunMind Runner. Portable test and Windows build boundaries are recorded in `BUILD-STATUS.md`; target-Windows certification and existing Full Agent credential-at-rest gates remain open. See `3.4.0-RELEASE-NOTES.md` and `docs/STABILIZATION-AUDIT.md`.
 
+## Advanced Intelligence & Extensibility — consolidated capability map
+
+The capabilities below are already implemented across P1–P6 and are retained in 3.4.0. See [`docs/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md`](docs/ADVANCED-INTELLIGENCE-AND-EXTENSIBILITY.md) for entry points, architecture, safety boundaries and limits.
+
+| Capability | Shipped implementation | Main boundary |
+|---|---|---|
+| Change Impact Explorer v2 | `project_change_impact`, `project_test_impact`, Git Change Review; auto Git working-tree/local-base-ref intake, AST symbol inference, TS checker consumers, direct/transitive graph, HTML/CSS/SVG/media/font assets, dynamic signals, removed-module importers, Istanbul/LCOV, test candidates, blast radius/risk/confidence | Static/index-based; runtime uncertainty is explicit; no automatic test run; see `docs/CHANGE-IMPACT-EXPLORER-V2.md` |
+| Development Session Timeline | Workflow UI and `development_session_timeline`; checkpoints, tool operations, execution layers and sub-agent activity | Local recorded events only; not arbitrary log ingestion or causal tracing |
+| System Intelligence | `system_manager_health_report`; service dependency/failure evidence, crashes/events, finite resource samples, network ownership and optional summary history | On-demand and capability-gated; temporal association is not root-cause proof |
+| Advanced Agent Orchestration | Bounded read-only parallel groups, serialized barriers, tool-result summaries, checkpoints, explicit recovery and MCP discovery | Max four workers; no automatic side-effect replay; remote MCP operations remain approved |
+| Ecosystem & Extensibility | MCP servers, bundled/global/project Skills, declarative System Manager adapters, first-party Runner plugin contract | Runner does not load third-party DLLs/scripts; see extension-plane matrix in the guide |
+
 ## Optional host — RunMind Runner (3.4.0 Complete Runner)
 
 | Area | Capability | Status | Notes |
@@ -48,7 +60,7 @@
 | Agent reliability | Task checkpoints and recovery | Implemented in P4 | Bounded/redacted per-chat task/plan/progress/operation records; interrupted outcomes unknown; explicit same-workspace resume; inspect before retry; no auto-replay |
 | Agent context | Tool-result summarization | Implemented in P4 | Bounded structured summaries, secret redaction, depth/item/property limits and omission of raw body/HTML/binary payloads |
 | Agent context | Skills and project context | Improved in P4 | Bounded project instructions/package/index context; relevance-ranked Skill metadata; Skills explicitly loaded and untrusted; never grant permissions |
-| Developer | Change Impact Explorer | Implemented in P4 | Explicit JS/TS paths/symbols; direct/transitive import dependents; test candidates; HTML/CSS/SVG asset consumers; unknown/unanalysed paths |
+| Developer | Change Impact Explorer v2 | Implemented in 3.4.0 source enhancement; Windows acceptance pending | Git-aware working tree and local base-ref mode; AST inferred symbols; TS checker references; removed/renamed importers; HTML/CSS/SVG/media/font graph; dynamic signals; Istanbul/LCOV; evidence-backed test candidates, blast radius and transparent risk/confidence |
 | Agent observability | Development Session Timeline | Implemented in P4 | Chronological local checkpoints, tool operations/dependency groups and sub-agent evidence in Workflow UI and read-only Agent tool |
 | Artifact integrity | Artifact Verification | Expanded in P4 | Structural checks, exact-byte SHA-256, optional trusted expected digest comparison, bounded receipt; digest is not provenance proof |
 | Developer | Project index and search | Implemented with limits | Persistent incremental index; Acorn JS analysis; TypeScript compiler API for JS/JSX/TS/TSX semantic references; HTML/CSS project understanding; root tsconfig paths; static module graph; `project_symbol_graph` | Language-aware code analysis is intentionally scoped to JavaScript, TypeScript, JSX/TSX, HTML and CSS. SVG is indexed separately as a vector asset with local-reference analysis, not as a programming language. Compiler checker bounded to 500 source files and 12 MB; no default libs/full diagnostic pass; external installed packages use native Node resolver tool.

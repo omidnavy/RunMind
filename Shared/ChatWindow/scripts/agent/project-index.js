@@ -1,7 +1,7 @@
     'use strict';
 
-    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v6.';
-    const PROJECT_INDEX_LIMITS = Object.freeze({ files: 10000, entries: 50000, depth: 10, fileBytes: 256 * 1024, totalBytes: 24 * 1024 * 1024 });
+    const PROJECT_INDEX_PREFIX = 'runmind.project-index.v7.';
+    const PROJECT_INDEX_LIMITS = Object.freeze({ files: 10000, entries: 50000, depth: 10, fileBytes: 256 * 1024, coverageFileBytes: 1024 * 1024, totalBytes: 24 * 1024 * 1024 });
     const PROJECT_INDEX_SKIP_DIRS = new Set(['.git','.hg','.svn','.runmind-backups','.cache','node_modules','vendor','bin','obj','dist','build','out','target','.next','.nuxt','.venv','venv','__pycache__','coverage','.idea','.vs','.gradle','.terraform','.npm','.nuget','.cargo','.docker','.pypoetry','.conda','secret','secrets','credential','credentials','.ssh','.aws','.azure','.gnupg']);
     const PROJECT_INDEX_SKIP_FILES = /^(?:\.env(?:\..*)?|(?:.*\.(?:pem|key|p12|pfx|keystore|jks|kdbx|sqlite|db|wasm|dll|exe|so|dylib|bin|lockb)|.*(?:secret|credential).*)|id_(?:rsa|ed25519)|credentials?(?:\..*)?|secrets?(?:\..*)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|nuget\.config|pip\.conf|\.dockercfg|known_hosts)$/i;
     const PROJECT_INDEX_TEXT_EXTENSIONS = new Set(['.md','.mdx','.txt','.rst','.adoc','.json','.jsonc','.json5','.yaml','.yml','.toml','.ini','.cfg','.conf','.xml','.html','.htm','.svg','.css','.scss','.less','.js','.mjs','.cjs','.jsx','.ts','.tsx','.mts','.cts','.vue','.svelte','.py','.pyi','.cs','.java','.kt','.kts','.go','.rs','.c','.h','.cc','.cpp','.hpp','.hh','.php','.rb','.swift','.sh','.bash','.zsh','.ps1','.bat','.cmd','.sql','.graphql','.gql','.proto','.dockerfile','.makefile','.gradle','.properties','.lock']);
@@ -215,9 +215,9 @@
       catch (error) {
         parseError = error;
         try { ast = parser.parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true, allowReturnOutsideFunction: true }); }
-        catch (_) { return { supported: true, engine: 'acorn', parseError: { message: String(parseError.message || parseError).slice(0,300), line: parseError.loc?.line || null, column: parseError.loc?.column ?? null }, imports: [], symbols: [], symbolDetails: [], identifierOccurrences: [], references: [], calls: [], exports: [], importBindings: [] }; }
+        catch (_) { return { supported: true, engine: 'acorn', parseError: { message: String(parseError.message || parseError).slice(0,300), line: parseError.loc?.line || null, column: parseError.loc?.column ?? null }, imports: [], symbols: [], symbolDetails: [], declarationRanges: [], dynamicDependencySignals: [], identifierOccurrences: [], references: [], calls: [], exports: [], importBindings: [] }; }
       }
-      const imports = new Set(), exports = [], importBindings = [], scopes = [], scopeByNode = new WeakMap(), declarationNodes = new WeakSet(), referenceNodes = [];
+      const imports = new Set(), exports = [], importBindings = [], dynamicDependencySignals = [], declarationRanges = [], scopes = [], scopeByNode = new WeakMap(), declarationNodes = new WeakSet(), referenceNodes = [];
       const makeScope = (parent, type, node) => { const scope={parent,type,node,bindings:new Map()}; scopes.push(scope); if(node)scopeByNode.set(node,scope); return scope; };
       const rootScope = makeScope(null,'module',ast);
       const patternNames = (pattern, out=[]) => {
@@ -251,8 +251,10 @@
           imports.add(node.source.value);
           for(const spec of node.specifiers||[]) { declare(scope,spec.local,'import'); importBindings.push({source:node.source.value,imported:spec.type==='ImportDefaultSpecifier'?'default':spec.type==='ImportNamespaceSpecifier'?'*':spec.imported?.name||spec.imported?.value,local:spec.local.name}); }
         }
-        if(node.type==='ImportExpression'&&node.source?.type==='Literal'&&typeof node.source.value==='string')imports.add(node.source.value);
-        if(node.type==='CallExpression'&&node.callee?.type==='Identifier'&&node.callee.name==='require'&&node.arguments?.[0]?.type==='Literal'&&typeof node.arguments[0].value==='string')imports.add(node.arguments[0].value);
+        if(node.type==='ImportExpression') { if(node.source?.type==='Literal'&&typeof node.source.value==='string')imports.add(node.source.value); else dynamicDependencySignals.push({kind:'dynamic-import',expression:source.slice(node.source?.start??node.start,node.source?.end??node.end).slice(0,180),start:node.start}); }
+        if(node.type==='CallExpression'&&node.callee?.type==='Identifier'&&node.callee.name==='require') { if(node.arguments?.[0]?.type==='Literal'&&typeof node.arguments[0].value==='string')imports.add(node.arguments[0].value); else dynamicDependencySignals.push({kind:'dynamic-require',expression:source.slice(node.arguments?.[0]?.start??node.start,node.arguments?.[0]?.end??node.end).slice(0,180),start:node.start}); }
+        if(node.type==='CallExpression'&&node.callee?.type==='MemberExpression'&&node.callee.object?.type==='MetaProperty'&&node.callee.object.meta?.name==='import'&&node.callee.object.property?.name==='meta'&&['glob','globEager'].includes(node.callee.property?.name)) dynamicDependencySignals.push({kind:'import-meta-glob',expression:source.slice(node.arguments?.[0]?.start??node.start,node.arguments?.[0]?.end??node.end).slice(0,180),start:node.start});
+        if(node.type==='CallExpression'&&node.callee?.type==='MemberExpression'&&node.callee.object?.type==='Identifier'&&node.callee.object.name==='require'&&node.callee.property?.name==='context') dynamicDependencySignals.push({kind:'require-context',expression:source.slice(node.arguments?.[0]?.start??node.start,node.arguments?.[0]?.end??node.end).slice(0,180),start:node.start});
         if(node.type==='ExportNamedDeclaration') {
           if(node.source)imports.add(node.source.value);
           if(node.declaration) { const d=node.declaration; if(d.id)exports.push({exported:d.id.name,local:d.id.name,kind:'declaration'}); else if(d.declarations)for(const item of d.declarations)for(const id of patternNames(item.id))exports.push({exported:id.name,local:id.name,kind:'declaration'}); }
@@ -317,11 +319,22 @@
         for(const [child,childKey] of childEntries(node)) { next[next.length-1].key=childKey; visitReferences(child,current,next); }
       };
       visitReferences(ast,rootScope);
+      const collectDeclarations = (node, parent = null) => {
+        if (!node || typeof node.type !== 'string') return;
+        const add = (name, kind) => { if (name && Number.isInteger(node.start) && Number.isInteger(node.end)) declarationRanges.push({ name: String(name), kind, start: node.start, end: node.end }); };
+        if (node.type === 'FunctionDeclaration' && node.id) add(node.id.name, 'function');
+        else if (node.type === 'ClassDeclaration' && node.id) add(node.id.name, 'class');
+        else if (node.type === 'VariableDeclarator') for (const id of patternNames(node.id)) add(id.name, parent?.kind || 'variable');
+        else if ((node.type === 'MethodDefinition' || (node.type === 'Property' && node.method)) && node.key?.type === 'Identifier') add(node.key.name, 'method');
+        else if (node.type === 'PropertyDefinition' && node.key?.type === 'Identifier') add(node.key.name, 'property');
+        for (const [child] of childEntries(node)) collectDeclarations(child, node);
+      };
+      collectDeclarations(ast);
       const symbolDetails=[];
       for(const scope of scopes)for(const [name,bindings] of scope.bindings)for(const binding of bindings){const refs=references.filter(ref=>ref.name===name&&ref.resolution==='local'&&ref.declaration===binding.start);symbolDetails.push({name,kind:binding.kind,scope:scope.type,start:binding.start,referenceCount:refs.length,referenceOccurrences:refs.length,readCount:refs.filter(ref=>ref.read).length,writeCount:refs.filter(ref=>ref.write).length,referencePositions:refs.slice(0,100).map(ref=>ref.start)});}
       symbolDetails.sort((a,b)=>a.name.localeCompare(b.name)||a.start-b.start);
       const identifierOccurrences=new Map(); for(const ref of references)identifierOccurrences.set(ref.name,(identifierOccurrences.get(ref.name)||0)+1);
-      return {supported:true,engine:'acorn-semantic-local',calls:calls.slice(0,5000),imports:[...imports].slice(0,120),symbols:[...new Set(symbolDetails.map(item=>item.name))].slice(0,120),symbolDetails:symbolDetails.slice(0,500),identifierOccurrences:[...identifierOccurrences].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)).slice(0,500),references:references.slice(0,5000),exports:exports.slice(0,500),importBindings:importBindings.slice(0,500),parseError:null};
+      return {supported:true,engine:'acorn-semantic-local',calls:calls.slice(0,5000),imports:[...imports].slice(0,120),symbols:[...new Set(symbolDetails.map(item=>item.name))].slice(0,120),symbolDetails:symbolDetails.slice(0,500),declarationRanges:declarationRanges.slice(0,1500),dynamicDependencySignals:dynamicDependencySignals.slice(0,500),identifierOccurrences:[...identifierOccurrences].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name)).slice(0,500),references:references.slice(0,5000),exports:exports.slice(0,500),importBindings:importBindings.slice(0,500),parseError:null};
     }
     function projectIndexExtractTypeScript(source, path = '') {
       const ts = globalThis.ts;
@@ -335,12 +348,12 @@
       if (diagnostic) {
         const position = diagnostic.start ?? 0;
         const location = sourceFile.getLineAndCharacterOfPosition(position);
-        return { supported: true, engine: 'typescript-compiler-api', parserVersion: ts.version, parseError: { message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n').slice(0, 400), line: location.line + 1, column: location.character }, imports: [], symbols: [], symbolDetails: [], identifierOccurrences: [], references: [], calls: [], exports: [], importBindings: [], diagnostics: diagnostics.length };
+        return { supported: true, engine: 'typescript-compiler-api', parserVersion: ts.version, parseError: { message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n').slice(0, 400), line: location.line + 1, column: location.character }, imports: [], symbols: [], symbolDetails: [], declarationRanges: [], dynamicDependencySignals: [], identifierOccurrences: [], references: [], calls: [], exports: [], importBindings: [], diagnostics: diagnostics.length };
       }
       const scopes = [];
       const nodeScopes = new WeakMap();
       const declarationNodes = new WeakSet();
-      const references = [], calls = [], imports = new Set(), exports = [], importBindings = [];
+      const references = [], calls = [], imports = new Set(), exports = [], importBindings = [], dynamicDependencySignals = [], declarationRanges = [];
       const root = { parent: null, type: 'module', node: sourceFile, bindings: new Map() };
       scopes.push(root);
       const makeScope = (parent, type, node) => { const scope = { parent, type, node, bindings: new Map() }; scopes.push(scope); return scope; };
@@ -366,6 +379,14 @@
       const functionAt = node => { let current = node; while (current && current !== sourceFile) { if (ts.isFunctionLike(current)) { if (current.name && ts.isIdentifier(current.name)) return current.name.text; const owner=current.parent; if (owner && ts.isVariableDeclaration(owner) && ts.isIdentifier(owner.name)) return owner.name.text; if (owner && ts.isPropertyAssignment(owner) && ts.isIdentifier(owner.name)) return owner.name.text; } current = current.parent; } return null; };
       const walk = (node, parentScope, parent = null) => {
         let scope = parentScope;
+        const addDeclarationRange = (name, kind, declaration = node) => {
+          if (name && declaration && Number.isInteger(declaration.end)) declarationRanges.push({ name: String(name), kind, start: declaration.getStart(sourceFile), end: declaration.end });
+        };
+        if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isMethodDeclaration(node) || ts.isMethodSignature(node) || ts.isPropertyDeclaration(node) || ts.isPropertySignature(node)) && node.name && ts.isIdentifier(node.name)) {
+          const kind = ts.isFunctionLike(node) ? 'function' : ts.isClassLike(node) ? 'class' : ts.isInterfaceDeclaration(node) ? 'interface' : ts.isTypeAliasDeclaration(node) ? 'type' : ts.isEnumDeclaration(node) ? 'enum' : ts.isMethodDeclaration(node) || ts.isMethodSignature(node) ? 'method' : 'property';
+          addDeclarationRange(node.name.text, kind, node);
+        }
+        if (ts.isVariableDeclaration(node)) for (const identifier of bindingIdentifiers(node.name)) addDeclarationRange(identifier.text, 'variable', node);
         if (node !== sourceFile && (ts.isBlock(node) || ts.isModuleBlock(node))) scope = makeScope(parentScope, 'Block', node);
         if (ts.isFunctionLike(node)) scope = makeScope(parentScope, 'function', node);
         if (ts.isClassLike(node)) scope = makeScope(parentScope, 'class', node);
@@ -433,7 +454,12 @@
 
         if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
           const expression = node.expression;
-          if (ts.isCallExpression(node) && (expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(expression) && expression.text === 'require')) && node.arguments?.[0] && ts.isStringLiteralLike(node.arguments[0])) imports.add(node.arguments[0].text);
+          if (ts.isCallExpression(node) && (expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(expression) && expression.text === 'require'))) {
+            if(node.arguments?.[0] && ts.isStringLiteralLike(node.arguments[0])) imports.add(node.arguments[0].text);
+            else dynamicDependencySignals.push({kind:expression.kind===ts.SyntaxKind.ImportKeyword?'dynamic-import':'dynamic-require',expression:node.arguments?.[0]?.getText(sourceFile).slice(0,180)||'',start:node.getStart(sourceFile)});
+          }
+          if(ts.isPropertyAccessExpression(expression)&&ts.isMetaProperty(expression.expression)&&expression.expression.keywordToken===ts.SyntaxKind.ImportKeyword&&expression.expression.name?.text==='meta'&&['glob','globEager'].includes(expression.name.text)) dynamicDependencySignals.push({kind:'import-meta-glob',expression:node.arguments?.[0]?.getText(sourceFile).slice(0,180)||'',start:node.getStart(sourceFile)});
+          if(ts.isPropertyAccessExpression(expression)&&ts.isPropertyAccessExpression(expression.expression)&&ts.isIdentifier(expression.expression.expression)&&expression.expression.expression.text==='require'&&expression.name.text==='context') dynamicDependencySignals.push({kind:'require-context',expression:node.arguments?.[0]?.getText(sourceFile).slice(0,180)||'',start:node.getStart(sourceFile)});
           let callee = '', receiver = '';
           if (ts.isIdentifier(expression)) callee = expression.text;
           else if (ts.isPropertyAccessExpression(expression)) { callee = expression.name.text; receiver = expression.expression.getText(sourceFile); }
@@ -471,7 +497,7 @@
         symbols.push({ ...binding, scope: scope.type, referenceCount: refs.length, readCount: refs.filter(item => item.read).length, writeCount: refs.filter(item => item.write).length });
       }
       const occurrenceMap = new Map(); for (const ref of references) occurrenceMap.set(ref.name, (occurrenceMap.get(ref.name) || 0) + 1);
-      return { supported: true, engine: 'typescript-compiler-api', parserVersion: ts.version, parseError: null, imports: [...imports].slice(0, 200), symbols: [...new Set(symbols.map(item => item.name))].slice(0, 200), symbolDetails: symbols.slice(0, 1000), identifierOccurrences: [...occurrenceMap].map(([name,count]) => ({ name,count })).sort((a,b) => b.count-a.count || a.name.localeCompare(b.name)).slice(0,1000), references: references.slice(0,10000), calls: calls.slice(0,5000), exports: exports.slice(0,1000), importBindings: importBindings.slice(0,1000), diagnostics: 0 };
+      return { supported: true, engine: 'typescript-compiler-api', parserVersion: ts.version, parseError: null, imports: [...imports].slice(0, 200), symbols: [...new Set(symbols.map(item => item.name))].slice(0, 200), symbolDetails: symbols.slice(0, 1000), declarationRanges: declarationRanges.slice(0, 3000), dynamicDependencySignals: dynamicDependencySignals.slice(0, 500), identifierOccurrences: [...occurrenceMap].map(([name,count]) => ({ name,count })).sort((a,b) => b.count-a.count || a.name.localeCompare(b.name)).slice(0,1000), references: references.slice(0,10000), calls: calls.slice(0,5000), exports: exports.slice(0,1000), importBindings: importBindings.slice(0,1000), diagnostics: 0 };
     }
 
     function projectIndexRefactorPublicApi(targetPath, targetSource, consumers, oldName, newName) {
@@ -722,7 +748,7 @@
     async function loadProjectIndex() {
       if (!agentDirectoryHandle) throw new Error('Select and authorize a project workspace first.');
       const value = await workspaceDbAction('readonly','get',undefined,projectIndexKey());
-      return value && value.version===6 && value.contextId===workspaceContext.id ? value : null;
+      return value && value.version===7 && value.contextId===workspaceContext.id ? value : null;
     }
     function projectIndexAnalyzeTypeScriptProgram(files, manifests = []) {
       const ts = globalThis.ts;
@@ -838,10 +864,10 @@
       const previous = force ? null : await loadProjectIndex();
       const oldFiles = new Map((previous?.files || []).map(file => [file.path,file]));
       const files = [], manifests = [], technologies = new Set(), visitedPaths = new Set();
-      let entries=0, scanned=0, readBytes=0, reused=0, skipped=0, truncated=false, reason='';
+      let entries=0, scanned=0, readBytes=0, coverageBytes=0, reused=0, skipped=0, truncated=false, reason='';
       const stop = value => { truncated=true; if(!reason) reason=value; };
       const manifestNames = new Set(['package.json','dockerfile','makefile','package-lock.json','pnpm-lock.yaml','yarn.lock','bun.lock','bun.lockb']);
-      async function visit(dir,prefix,depth) {
+      async function visit(dir,prefix,depth,coverageOnly=false) {
         if(signal?.aborted){stop('cancelled');return;}
         if(depth>PROJECT_INDEX_LIMITS.depth){stop('depth limit reached');return;}
         for await (const [name,handle] of dir.entries()) {
@@ -851,30 +877,32 @@
           if(scanned>=PROJECT_INDEX_LIMITS.files){stop('file limit reached');return;}
           entries++;
           const path=prefix?`${prefix}/${name}`:name;
-          if(handle.kind==='directory') { if(!PROJECT_INDEX_SKIP_DIRS.has(name.toLowerCase())) await visit(handle,path,depth+1); continue; }
+          if(handle.kind==='directory') { const lowerDirectory=name.toLowerCase(); if(coverageOnly){skipped++;continue;} if(lowerDirectory==='coverage'||lowerDirectory==='.nyc_output') await visit(handle,path,depth+1,true); else if(!PROJECT_INDEX_SKIP_DIRS.has(lowerDirectory)) await visit(handle,path,depth+1,false); continue; }
           scanned++;
           visitedPaths.add(path);
           if(PROJECT_INDEX_SKIP_FILES.test(name)) { skipped++; continue; }
           const lower=name.toLowerCase(), ext=lower.match(/\.[^.]+$/)?.[0]||'';
           const isManifest=manifestNames.has(lower)||(lower.startsWith('tsconfig.')&&lower.endsWith('.json'));
-          if(!isManifest&&!PROJECT_INDEX_TEXT_EXTENSIONS.has(ext)) { skipped++; continue; }
+          const coverageEvidence=/^(?:[^/]+\/)*coverage\/(?:coverage-final\.json|coverage-summary\.json|lcov\.info)$/i.test(path)||/^(?:[^/]+\/)*\.nyc_output\/out\.json$/i.test(path);
+          if(coverageOnly&&!coverageEvidence){skipped++;continue;}
+          if(!isManifest&&!coverageEvidence&&!PROJECT_INDEX_TEXT_EXTENSIONS.has(ext)) { skipped++; continue; }
           try {
             const file=await handle.getFile();
-            if(file.size>PROJECT_INDEX_LIMITS.fileBytes){skipped++;continue;}
+            if(file.size>(coverageEvidence?PROJECT_INDEX_LIMITS.coverageFileBytes:PROJECT_INDEX_LIMITS.fileBytes)){skipped++;continue;}
             const prior=oldFiles.get(path);
-            if(prior && prior.size===file.size && prior.lastModified===file.lastModified && typeof prior.text==='string' && ( !['javascript','typescript'].includes(prior.language) || typeof prior.analysisSource==='string') && (prior.language!=='javascript' || /^(?:acorn|typescript-compiler-api)/.test(String(prior.analysisEngine||'')))) {
+            if(prior && prior.size===file.size && prior.lastModified===file.lastModified && typeof prior.text==='string' && ( !['javascript','typescript','html','css','svg'].includes(prior.language) || typeof prior.analysisSource==='string') && (prior.language!=='javascript' || /^(?:acorn|typescript-compiler-api)/.test(String(prior.analysisEngine||'')))) {
               files.push(prior); reused++;
               if(isManifest) manifests.push({path,text:prior.manifestText||prior.text.slice(0,64000)});
               if(prior.language && prior.language!=='text') technologies.add(prior.language);
               continue;
             }
-            if(readBytes+file.size>PROJECT_INDEX_LIMITS.totalBytes){stop('aggregate text budget reached');return;}
-            const source=await file.text(); readBytes+=file.size;
+            if(coverageEvidence ? coverageBytes+file.size>4*1024*1024 : readBytes+file.size>PROJECT_INDEX_LIMITS.totalBytes){skipped++;continue;}
+            const source=await file.text(); if(coverageEvidence)coverageBytes+=file.size;else readBytes+=file.size;
             const text=redactProjectIndexSecrets(source);
             const language=projectIndexLanguage(path);
             if ((language==='typescript' || ext==='.jsx') && !globalThis.ts?.createSourceFile) { try { await projectIndexEnsureTypeScriptCompiler(); } catch (_) { /* Heuristic fallback remains available if the offline compiler bundle cannot load. */ } }
             const extracted=projectIndexExtract(text,language,path);
-            const record={path,size:file.size,lastModified:file.lastModified,language,analysisEngine:extracted.engine||'regex-fallback',parseError:extracted.parseError||null,imports:extracted.imports,symbols:extracted.symbols,symbolDetails:extracted.symbolDetails||[],identifierOccurrences:extracted.identifierOccurrences||[],references:extracted.references||[],calls:extracted.calls||[],exports:extracted.exports||[],importBindings:extracted.importBindings||[],manifestText:isManifest?text.slice(0,64000):null,analysisSource:['javascript','typescript'].includes(language)?text.slice(0,256*1024):null,text:text.slice(0,Math.min(text.length,160000)).toLowerCase()};
+            const record={path,size:file.size,lastModified:file.lastModified,language,analysisEngine:extracted.engine||'regex-fallback',parseError:extracted.parseError||null,imports:extracted.imports||[],symbols:extracted.symbols||[],symbolDetails:extracted.symbolDetails||[],declarationRanges:extracted.declarationRanges||[],dynamicDependencySignals:extracted.dynamicDependencySignals||[],identifierOccurrences:extracted.identifierOccurrences||[],references:extracted.references||[],calls:extracted.calls||[],exports:extracted.exports||[],importBindings:extracted.importBindings||[],manifestText:isManifest?text.slice(0,64000):null,coverageDataText:coverageEvidence?text.slice(0,PROJECT_INDEX_LIMITS.coverageFileBytes):null,analysisSource:['javascript','typescript','html','css','svg'].includes(language)?text.slice(0,256*1024):null,text:text.slice(0,Math.min(text.length,160000)).toLowerCase()};
             files.push(record);
             if(isManifest) manifests.push({path,text:text.slice(0,64000)});
             if(language!=='text') technologies.add(language);
@@ -901,8 +929,9 @@
       for(const file of files)file.compilerReferences=compilerReferencesByPath.get(file.path)||[];
       const resolvedKeys=new Set((importGraph.resolvedBindings||[]).map(item=>[item.from,item.to,item.source,item.local,item.imported].join('|')));
       for(const binding of compilerAnalysis.resolvedBindings||[]){const key=[binding.from,binding.to,binding.source,binding.local,binding.imported].join('|');if(!resolvedKeys.has(key)){importGraph.resolvedBindings.push(binding);resolvedKeys.add(key);}}
+      importGraph.dynamicDependencySignals=files.flatMap(file=>(file.dynamicDependencySignals||[]).map(signal=>({path:file.path,...signal}))).slice(0,5000);
       importGraph.compilerAnalysis={supported:compilerAnalysis.supported!==false,compilerVersion:compilerAnalysis.compilerVersion||null,filesAnalyzed:compilerAnalysis.filesAnalyzed||0,truncated:!!compilerAnalysis.truncated,crossFileReferences:compilerAnalysis.crossFileReferences?.length||0,note:compilerAnalysis.note||compilerAnalysis.reason||''};
-      const index={version:6,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
+      const index={version:7,contextId:workspaceContext.id,rootName:agentDirectoryHandle.name||workspaceContext.folderName||'workspace',createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),files,manifests:manifests.map(({path,text})=>({path,text})),technologies:[...technologies].sort(),frameworks,dependencies,toolchains,importGraph,stats:{files:files.length,scanned,entries,readBytes,reused,removed,skipped,truncated,reason}};
       await workspaceDbAction('readwrite','put',index,projectIndexKey());
       projectIndexStatus?.(index);
       return {root:index.rootName,files:index.stats.files,scanned,entries,readBytes,reused,removed,skipped,truncated,reason,technologies:index.technologies,frameworks:index.frameworks,dependencies:index.dependencies.slice(0,100),toolchains:index.toolchains,importGraphSummary:{localImportEdges:index.importGraph?.localImportEdges?.length||0,resolvedBindings:index.importGraph?.resolvedBindings?.length||0,unresolvedBindings:index.importGraph?.unresolvedBindings?.length||0,circularDependencies:index.importGraph?.circularDependencies?.length||0,externalImports:index.importGraph?.externalImports?.length||0,mostImportedFiles:index.importGraph?.filesWithIncomingImports||[],note:index.importGraph?.note},updatedAt:index.updatedAt};
@@ -1024,40 +1053,70 @@
       for (const file of files) {
         if (/^(?:index|main|app)\.(?:html?)$/i.test(file.path.split('/').pop())) entryPoints.push({ path: file.path, source: 'HTML entry candidate', confidence: 'candidate' });
         if (file.language === 'html' && typeof file.text === 'string') {
+          const htmlSource = typeof file.analysisSource === 'string' ? file.analysisSource : file.text;
           const scriptPattern = /<script\b[^>]*\bsrc\s*=\s*[\"']([^\"']+)[\"'][^>]*>/gi;
           const stylePattern = /<link\b[^>]*\brel\s*=\s*[\"']stylesheet[\"'][^>]*\bhref\s*=\s*[\"']([^\"']+)[\"'][^>]*>/gi;
           for (const [pattern, kind] of [[scriptPattern, 'HTML script reference'], [stylePattern, 'HTML stylesheet reference']]) {
-            let match; while ((match = pattern.exec(file.text)) && entryPoints.length < 200) if (!/^(?:https?:|data:|\/\/|#)/i.test(match[1])) entryPoints.push({ path: match[1], source: `${file.path} · ${kind}`, confidence: 'heuristic-candidate' });
+            let match; while ((match = pattern.exec(htmlSource)) && entryPoints.length < 200) if (!/^(?:https?:|data:|\/\/|#)/i.test(match[1])) entryPoints.push({ path: match[1], source: `${file.path} · ${kind}`, confidence: 'heuristic-candidate' });
           }
         }
       }
+      const addAssetReference = (file, reference, kind) => {
+        const target = projectIndexResolveLocalAsset(file.path, reference);
+        if (!target || assetReferences.length >= 2500) return;
+        const extension = target.toLowerCase().match(/\.[^.\/]+$/)?.[0] || '';
+        if (!extension || !/\.(?:svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|css|js|mjs|cjs|ts|tsx|jsx|json|wasm|mp4|webm|mp3|ogg|wav)$/i.test(extension)) return;
+        const svgKind = /\.svg$/i.test(target) ? (String(kind).startsWith('HTML') ? 'HTML SVG asset reference' : String(kind).startsWith('CSS') ? 'CSS SVG asset reference' : kind) : kind;
+        assetReferences.push({ from: file.path, to: target, kind: svgKind, sourceKind: kind, targetIndexed: files.some(item => item.path.toLowerCase() === target.toLowerCase()), resolution: files.some(item => item.path.toLowerCase() === target.toLowerCase()) ? 'indexed-local-target' : 'unindexed-local-target' });
+      };
       for (const file of files) {
         if (typeof file.text !== 'string') continue;
+        const sourceText = typeof file.analysisSource === 'string' ? file.analysisSource : file.text;
         if (file.language === 'html') {
-          const markupAssetPattern = /(?:\bsrc|\bhref|\bdata)\s*=\s*([\"'])([^\"']+\.svg(?:[?#][^\"']*)?)\1/gi;
-          let assetMatch;
-          while ((assetMatch = markupAssetPattern.exec(file.text)) && assetReferences.length < 500) {
-            const target = projectIndexResolveLocalAsset(file.path, assetMatch[2]);
-            if (target) assetReferences.push({ from: file.path, to: target, kind: 'HTML SVG asset reference', targetIndexed: files.some(item => item.path === target) });
+          const tagPattern = /<(?:img|source|video|audio|script|link|input|image|use|object|embed|iframe|track)\b[^>]*>/gi;
+          let tag;
+          while ((tag = tagPattern.exec(sourceText)) && assetReferences.length < 2500) {
+            const tagText = tag[0], tagName = tagText.match(/^<([\w-]+)/)?.[1]?.toLowerCase() || 'html';
+            for (const attribute of ['src','poster','data','href','xlink:href']) {
+              const match = tagText.match(new RegExp("\\b" + attribute.replace(':','\\:') + "\\s*=\\s*([\"'])(.*?)\\1", 'i'));
+              if (!match) continue;
+              if (attribute === 'href' && tagName === 'link' && !/\brel\s*=\s*(["'])?(?:stylesheet|icon|preload|modulepreload|manifest|prefetch)/i.test(tagText)) continue;
+              if (attribute === 'href' && !['link','image','use','object','embed'].includes(tagName)) continue;
+              addAssetReference(file, match[2], `HTML ${tagName} ${attribute}`);
+            }
+            if (/\bsrcset\s*=/.test(tagText)) {
+              const srcset = tagText.match(/\bsrcset\s*=\s*(["'])(.*?)\1/i)?.[2] || '';
+              for (const candidate of srcset.split(',')) addAssetReference(file, candidate.trim().split(/\s+/)[0], `HTML ${tagName} srcset`);
+            }
+          }
+          const inlineStylePattern = /\bstyle\s*=\s*([\"'])(.*?)\1/gi;
+          let inlineStyle;
+          while ((inlineStyle = inlineStylePattern.exec(sourceText)) && assetReferences.length < 2500) {
+            const cssUrlPattern = /url\(\s*([\"']?)([^\"')]+)\1\s*\)/gi;
+            let url;
+            while ((url = cssUrlPattern.exec(inlineStyle[2]))) addAssetReference(file, url[2], 'HTML inline style url() reference');
+          }
+          const embeddedStylePattern = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+          let embeddedStyle;
+          while ((embeddedStyle = embeddedStylePattern.exec(sourceText)) && assetReferences.length < 2500) {
+            const cssUrlPattern = /url\(\s*([\"']?)([^\"')]+)\1\s*\)/gi;
+            let url;
+            while ((url = cssUrlPattern.exec(embeddedStyle[1]))) addAssetReference(file, url[2], 'HTML embedded style url() reference');
           }
         } else if (file.language === 'css') {
-          const cssAssetPattern = /url\(\s*([\"']?)([^\"')]+\.svg(?:[?#][^\"')]*)?)\1\s*\)/gi;
+          const cssUrlPattern = /url\(\s*(["']?)([^"')]+)\1\s*\)/gi;
           let assetMatch;
-          while ((assetMatch = cssAssetPattern.exec(file.text)) && assetReferences.length < 500) {
-            const target = projectIndexResolveLocalAsset(file.path, assetMatch[2]);
-            if (target) assetReferences.push({ from: file.path, to: target, kind: 'CSS SVG asset reference', targetIndexed: files.some(item => item.path === target) });
-          }
-        }
-      }
-      for (const file of files) {
-        if (file.language !== 'svg' || typeof file.text !== 'string') continue;
-        const referencePattern = /(?:\bxlink:href|\bhref)\s*=\s*([\"'])(.*?)\1/gi;
-        let match;
-        while ((match = referencePattern.exec(file.text)) && assetReferences.length < 500) {
-          const reference = String(match[2] || '').trim();
-          const target = projectIndexResolveLocalAsset(file.path, reference);
-          if (!target) continue;
-          assetReferences.push({ from: file.path, to: target, kind: 'SVG local href reference', targetIndexed: files.some(item => item.path === target) });
+          while ((assetMatch = cssUrlPattern.exec(sourceText)) && assetReferences.length < 2500) addAssetReference(file, assetMatch[2], 'CSS url() reference');
+          const cssImportPattern = /@import\s+(?:url\(\s*)?(["'])(.*?)\1\s*\)?/gi;
+          while ((assetMatch = cssImportPattern.exec(sourceText)) && assetReferences.length < 2500) addAssetReference(file, assetMatch[2], 'CSS @import reference');
+        } else if (file.language === 'svg') {
+          const referencePattern = /(?:\bxlink:href|\bhref)\s*=\s*(["'])(.*?)\1/gi;
+          let match;
+          while ((match = referencePattern.exec(sourceText)) && assetReferences.length < 2500) addAssetReference(file, match[2], 'SVG local href reference');
+        } else if (['javascript','typescript'].includes(file.language)) {
+          const urlPattern = /new\s+URL\s*\(\s*(["'])(.*?)\1\s*,\s*import\.meta\.url\s*\)/g;
+          let match;
+          while ((match = urlPattern.exec(sourceText)) && assetReferences.length < 2500) addAssetReference(file, match[2], 'JavaScript new URL(import.meta.url) reference');
         }
       }
       const uniqueEntries = [...new Map(entryPoints.map(item => [`${item.path}|${item.source}`, item])).values()].slice(0, 100);
@@ -1066,8 +1125,8 @@
         .filter(item => item.incomingImports >= 2 || item.outgoingImports >= 8).sort((a, b) => (b.incomingImports + b.outgoingImports) - (a.incomingImports + a.outgoingImports)).slice(0, 40);
       return {
         available: true, root: index.rootName, indexedAt: index.updatedAt,
-        scope: 'Language-aware code analysis is limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS; SVG is indexed as a first-class vector asset and its local href/xlink:href references are inspected. Other source files are generic text only. HTML reference candidates come from normalized search text and must be checked in the original HTML before use.',
-        modules, entryPoints: uniqueEntries, assetReferences: assetReferences.slice(0, 200),
+        scope: 'Language-aware code analysis is limited to JavaScript, TypeScript, JSX/TSX, HTML and CSS; SVG is indexed as a first-class vector asset and its local href/xlink:href references are inspected. Original bounded source text is retained for HTML/CSS/SVG reference extraction so case-sensitive local paths are preserved. Other source files are generic text only.',
+        modules, entryPoints: uniqueEntries, assetReferences: assetReferences.slice(0, 2500), assetReferencesTruncated: assetReferences.length >= 2500,
         dependencyDirection: { localImportEdges: edges.length, resolvedBindings: index.importGraph?.resolvedBindings?.length || 0, unresolvedBindings: index.importGraph?.unresolvedBindings?.length || 0, circularDependencies: index.importGraph?.circularDependencies || [], note: index.importGraph?.note || '' },
         highCouplingModules: hotspots,
         boundaries: modules.map(item => item.directory),
@@ -1134,90 +1193,344 @@
       const warningCount = checks.filter(item => item.severity === 'warning').length;
       return { available: true, root: index.rootName, indexedAt: index.updatedAt, status: errorCount ? 'issues-found' : warningCount ? 'attention' : 'healthy', summary: { errors: errorCount, warnings: warningCount, information: checks.length - errorCount - warningCount }, checks, packageManager: manager, lockfiles, packageScripts: scripts, testFilesFound: testFiles.length, testFiles, toolingConfigurations: configs, execution: { performed: false, environmentProbes: false, build: false, tests: false, dependencyAudit: false }, limitations: ['Static checks use indexed manifests and source metadata only.', 'Installed Node.js/package-manager versions and actual build/test/audit results require a separate approved native execution.', 'Only JavaScript, TypeScript, JSX/TSX, HTML and CSS receive language-aware project analysis.'] };
     }
-    function projectIndexAnalyzeTestImpact(index, changedPaths = []) {
+    function projectIndexParseUnifiedDiff(diff) {
+      const files = [];
+      let current = null, oldLine = 0, newLine = 0;
+      const finish = () => { if (current) { current.addedLines = current.addedLines.slice(0, 5000); current.removedLines = current.removedLines.slice(0, 5000); current.changedLineRanges = current.changedLineRanges.slice(0, 2000); files.push(current); current = null; } };
+      const addLine = (rows, line, maximum=5000) => { if (rows.length < maximum) rows.push(line); };
+      for (const raw of String(diff || '').split(/\r?\n/)) {
+        if (raw.startsWith('diff --git ')) {
+          finish();
+          current = { path: '', oldPath: '', status: 'modified', addedLines: [], removedLines: [], changedLineRanges: [], binary: false };
+          const header = raw.slice(11), marker = header.indexOf(' b/');
+          if (marker >= 0) { current.oldPath = header.slice(2, marker); current.path = header.slice(marker + 3); }
+          continue;
+        }
+        if (!current) continue;
+        if (raw.startsWith('rename from ')) { current.oldPath = raw.slice(12); current.status = 'renamed'; continue; }
+        if (raw.startsWith('rename to ')) { current.path = raw.slice(10); current.status = 'renamed'; continue; }
+        if (raw.startsWith('new file mode ')) { current.status = 'added'; continue; }
+        if (raw.startsWith('deleted file mode ')) { current.status = 'deleted'; continue; }
+        if (raw.startsWith('--- a/')) { current.oldPath = raw.slice(6); continue; }
+        if (raw.startsWith('+++ b/')) { current.path = raw.slice(6); continue; }
+        if (raw.startsWith('--- /dev/null')) { current.status = 'added'; continue; }
+        if (raw.startsWith('+++ /dev/null')) { current.status = 'deleted'; continue; }
+        if (raw.startsWith('Binary files ') || raw.startsWith('GIT binary patch')) { current.binary = true; continue; }
+        const hunk = raw.match(/^@@ -(?:(\d+)(?:,(\d+))?) \+(?:(\d+)(?:,(\d+))?) @@/);
+        if (hunk) { oldLine = Number(hunk[1] || 0); newLine = Number(hunk[3] || 0); continue; }
+        if (!raw || raw[0] === '\\') continue;
+        if (raw[0] === '+') {
+          addLine(current.addedLines, { line: newLine, text: raw.slice(1) });
+          current.changedLineRanges.push({ start: newLine, end: newLine, kind: 'added' });
+          newLine++;
+        } else if (raw[0] === '-') {
+          addLine(current.removedLines, { line: oldLine, text: raw.slice(1) });
+          current.changedLineRanges.push({ start: newLine, end: newLine, oldLine, kind: 'removed' });
+          oldLine++;
+        } else if (raw[0] === ' ') { oldLine++; newLine++; }
+      }
+      finish();
+      for (const file of files) {
+        file.path = String(file.path || '').replace(/^b\//, '');
+        file.oldPath = String(file.oldPath || '').replace(/^a\//, '');
+        if (!file.path && file.oldPath) file.path = file.oldPath;
+        if (!file.oldPath) file.oldPath = file.path;
+        file.changedLineRanges = file.changedLineRanges.filter(item => item.start > 0);
+      }
+      return { files, changedPaths: [...new Set(files.flatMap(file => [file.path, file.oldPath]).filter(Boolean))], addedLineCount: files.reduce((sum,file)=>sum+file.addedLines.length,0), removedLineCount: files.reduce((sum,file)=>sum+file.removedLines.length,0), binaryFiles: files.filter(file=>file.binary).map(file=>file.path) };
+    }
+
+    function projectIndexInferChangedSymbols(index, parsedDiff) {
+      const byPath = new Map((index?.files || []).map(file => [file.path, file]));
+      const output = [], unresolved = [];
+      for (const diffFile of parsedDiff?.files || []) {
+        const path = diffFile.path || diffFile.oldPath;
+        const file = byPath.get(path);
+        if (!file || !['javascript','typescript'].includes(file.language)) {
+          if (diffFile.removedLines?.length) {
+            for (const row of diffFile.removedLines) {
+              const match = row.text.match(/^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|var)\s+([A-Za-z_$][\w$]*)/);
+              if (match) unresolved.push({ path, name: match[1], change: 'removed-or-deleted', confidence: 'patch-signature-heuristic', line: row.line });
+            }
+          }
+          continue;
+        }
+        const source = String(file.analysisSource || '');
+        if (!source) continue;
+        const lineStarts = [0];
+        for (let index = 0; index < source.length; index++) if (source.charCodeAt(index) === 10) lineStarts.push(index + 1);
+        const ranges = (diffFile.changedLineRanges || []).filter(item => item.kind === 'added');
+        const declarations = (file.declarationRanges || []).filter(item => item && item.name && Number.isInteger(item.start) && Number.isInteger(item.end));
+        for (const lineRange of ranges) {
+          const lineStart = lineStarts[Math.max(0, lineRange.start - 1)] ?? 0;
+          const lineEnd = lineStarts[lineRange.end] ?? source.length;
+          const matches = declarations.filter(item => item.start <= lineEnd && item.end >= lineStart).sort((a,b)=>(a.end-a.start)-(b.end-b.start));
+          for (const declaration of matches.slice(0, 5)) {
+            const key = `${path}|${declaration.name}|${declaration.start}`;
+            if (!output.some(item => item.key === key)) output.push({ key, path, name: declaration.name, kind: declaration.kind, declarationStart: declaration.start, changedLine: lineRange.start, change: 'modified-or-added', confidence: 'ast-range-overlap' });
+          }
+        }
+        for (const row of diffFile.removedLines || []) {
+          const match = row.text.match(/^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|var)\s+([A-Za-z_$][\w$]*)/);
+          if (match) unresolved.push({ path, name: match[1], change: 'removed-or-renamed', confidence: 'patch-signature-heuristic', line: row.line });
+        }
+      }
+      return { symbols: output.map(({key,...item})=>item).slice(0,500), removedCandidates: unresolved.slice(0,500), source: 'unified-diff hunks mapped to current AST declaration ranges; removed declarations use a conservative signature-line heuristic' };
+    }
+
+    function projectIndexBuildCoverageEvidence(index, changedLineRanges = []) {
+      const records = [];
+      const normalize = value => String(value || '').replace(/\\/g,'/').replace(/^\.\//,'').replace(/^\/+/, '').toLowerCase();
+      const matchSource = value => {
+        const normalized = normalize(value);
+        if (!normalized) return null;
+        const files = index?.files || [];
+        return files.find(file => normalize(file.path) === normalized)
+          || files.find(file => normalized.endsWith('/' + normalize(file.path))) || null;
+      };
+      for (const file of index?.files || []) {
+        const raw = file.coverageDataText;
+        if (!raw) continue;
+        if (/coverage-final\.json$/i.test(file.path) || /\.nyc_output\/out\.json$/i.test(file.path)) {
+          try {
+            const data = JSON.parse(raw);
+            for (const [sourcePath, record] of Object.entries(data).slice(0, 2000)) {
+              const source = matchSource(record?.path || sourcePath);
+              if (!source) continue;
+              const lineCounts = new Map();
+              for (const [id, count] of Object.entries(record?.s || {})) { const line = Number(record?.statementMap?.[id]?.start?.line); if (line > 0) { const row = lineCounts.get(line) || { hits: 0, statements: 0 }; row.hits += Number(count) || 0; row.statements++; lineCounts.set(line,row); } }
+              for (const [id, count] of Object.entries(record?.f || {})) { const line = Number(record?.fnMap?.[id]?.loc?.start?.line); if (line > 0) { const row = lineCounts.get(line) || { hits: 0, statements: 0 }; row.hits += Number(count) || 0; row.functions = (row.functions || 0) + 1; lineCounts.set(line,row); } }
+              records.push({ path: source.path, lines: [...lineCounts].map(([line,value])=>({line,...value})), format: 'istanbul-json' });
+            }
+          } catch (_) { records.push({ path: file.path, unavailable: true, reason: 'Coverage JSON could not be parsed.' }); }
+        } else if (/lcov\.info$/i.test(file.path)) {
+          let sourcePath = '', lineCounts = new Map();
+          const flush = () => { if (sourcePath) { const source = matchSource(sourcePath); if (source) records.push({ path: source.path, lines: [...lineCounts].map(([line,hits])=>({line,hits,statements:1})), format: 'lcov' }); } lineCounts = new Map(); };
+          for (const line of raw.split(/\r?\n/).slice(0, 200000)) {
+            if (line.startsWith('SF:')) { flush(); sourcePath = line.slice(3).trim(); }
+            else if (line.startsWith('DA:')) { const [lineNumber,hits] = line.slice(3).split(','); const number = Number(lineNumber); if (number > 0) lineCounts.set(number,(lineCounts.get(number)||0)+(Number(hits)||0)); }
+            else if (line === 'end_of_record') { flush(); sourcePath = ''; }
+          }
+          flush();
+        }
+      }
+      const unique = [...new Map(records.map(item=>[item.path,item])).values()].slice(0,2000);
+      const changed = new Map((changedLineRanges || []).map(item=>[item.path,(item.ranges || []).filter(range=>range.kind !== 'removed')]));
+      const evaluated = unique.map(item => {
+        const hitLines = item.lines?.filter(row=>row.hits>0).length || 0;
+        const measuredLines = item.lines?.length || 0;
+        const ranges = changed.get(item.path) || [];
+        const changedLines = new Set(); for (const range of ranges) for (let line=range.start;line<=range.end;line++) changedLines.add(line);
+        const changedEvidence = changedLines.size ? item.lines?.filter(row=>changedLines.has(row.line)) || [] : [];
+        const changedCovered = changedEvidence.filter(row=>row.hits>0).length;
+        return { path:item.path, format:item.format, coveredLines:hitLines, measuredLines, lineCoveragePercent:measuredLines?Math.round(hitLines/measuredLines*1000)/10:null, changedLines:changedLines.size, changedLinesMeasured:changedEvidence.length, changedLinesCovered:changedCovered, changedLineCoveragePercent:changedEvidence.length?Math.round(changedCovered/changedEvidence.length*1000)/10:null };
+      });
+      return { available:evaluated.length>0, sources:evaluated, summary:{coverageFiles:unique.length, sourceFiles:evaluated.length, changedFilesWithCoverage:evaluated.filter(item=>item.changedLines>0).length, changedLinesMeasured:evaluated.reduce((sum,item)=>sum+item.changedLinesMeasured,0), changedLinesCovered:evaluated.reduce((sum,item)=>sum+item.changedLinesCovered,0)}, note:'Coverage reports provide aggregate source/line execution evidence. Standard Istanbul and LCOV reports do not identify which individual test executed each line; they can identify changed lines with no observed coverage, but cannot prove a particular test covers a particular source line.' };
+    }
+
+    function projectIndexAnalyzeTestImpact(index, changedPaths = [], options = {}) {
       if (!index) return { available: false, message: 'Build the project index before analyzing test impact.' };
-      const changed = [...new Set((Array.isArray(changedPaths) ? changedPaths : [changedPaths]).map(projectIndexNormalizePath).filter(Boolean))].slice(0, 100);
-      if (!changed.length) throw new Error('Provide one or more workspace-relative changed_paths. This analysis does not infer a Git diff.');
+      const changed = [...new Set((Array.isArray(changedPaths) ? changedPaths : [changedPaths]).map(projectIndexNormalizePath).filter(Boolean))].slice(0, 1000);
+      if (!changed.length) throw new Error('Provide one or more workspace-relative changed_paths. Use Git-aware Change Impact Explorer to collect repository changes automatically.');
       const filesByPath = new Map((index.files || []).map(file => [file.path, file]));
-      const existing = changed.filter(path => filesByPath.has(path));
-      const unknown = changed.filter(path => !filesByPath.has(path));
+      const lowerPathMap = new Map((index.files || []).map(file => [file.path.toLowerCase(), file.path]));
+      const canonical = value => lowerPathMap.get(String(value || '').toLowerCase()) || null;
+      const existing = changed.map(path => canonical(path)).filter(Boolean);
       const analyzed = existing.filter(path => ['javascript', 'typescript'].includes(filesByPath.get(path)?.language));
-      const unanalysed = existing.filter(path => !['javascript', 'typescript'].includes(filesByPath.get(path)?.language));
+      const unanalysed = existing.filter(path => !['javascript', 'typescript','html','css','svg'].includes(filesByPath.get(path)?.language));
       const edges = index.importGraph?.localImportEdges || [];
       const reverse = new Map();
       for (const edge of edges) { const list = reverse.get(edge.to) || []; list.push(edge.from); reverse.set(edge.to, list); }
-      const impacted = new Set(analyzed), queue = [...analyzed];
-      while (queue.length && impacted.size < 2000) {
+      const understanding = projectIndexBuildUnderstanding(index);
+      const assetReferences = understanding.assetReferences || [];
+      const changedSet = new Set(changed.map(path => path.toLowerCase()));
+      const knownAssetChanges = changed.filter(path => !canonical(path) && assetReferences.some(item => String(item.to || '').toLowerCase() === path.toLowerCase()));
+      const unknown = changed.filter(path => !canonical(path) && !knownAssetChanges.some(asset => asset.toLowerCase() === path.toLowerCase()));
+      const assetOwners = assetReferences.filter(item => changedSet.has(String(item.to || '').toLowerCase())).map(item => item.from);
+      const dependencyRoots = [...new Set([...analyzed, ...existing.filter(path => ['css','svg','html'].includes(filesByPath.get(path)?.language)).flatMap(path => reverse.get(path) || []), ...assetOwners])];
+      const impacted = new Set(dependencyRoots), distance = new Map(dependencyRoots.map(path => [path,0]));
+      const queue = dependencyRoots.map(path => ({ path, depth: 0 }));
+      while (queue.length && impacted.size < 3000) {
         const target = queue.shift();
-        for (const importer of reverse.get(target) || []) if (!impacted.has(importer)) { impacted.add(importer); queue.push(importer); }
+        for (const importer of reverse.get(target.path) || []) if (!impacted.has(importer)) { impacted.add(importer); distance.set(importer,target.depth+1); queue.push({ path: importer, depth: target.depth + 1 }); }
       }
-      const testPattern = /(?:^|\/)(?:test|tests|spec|specs)(?:\/|$)|\.(?:test|spec)\.[^/]+$/i;
+      const testPattern = /(?:^|\/)(?:__tests?__|tests?|specs?|e2e|integration|playwright|cypress)(?:\/|$)|\.(?:test|spec|cy|e2e|integration)\.[^/]+$/i;
       const testFiles = (index.files || []).filter(file => ['javascript', 'typescript'].includes(file.language) && testPattern.test(file.path));
       const directTests = [], transitiveTests = [], nameCandidates = [];
+      const changedCodeAndRoots = new Set(dependencyRoots);
       for (const test of testFiles) {
-        if (existing.includes(test.path)) { directTests.push({ path: test.path, reason: 'The changed file is itself a discovered test.', confidence: 'direct' }); continue; }
-        const directEdges = edges.filter(edge => edge.from === test.path && analyzed.includes(edge.to));
-        if (directEdges.length) { directTests.push({ path: test.path, reason: `Directly imports changed module(s): ${directEdges.map(edge => edge.to).join(', ')}`, confidence: 'high' }); continue; }
-        if (impacted.has(test.path)) { transitiveTests.push({ path: test.path, reason: 'Imports a module that transitively depends on a changed file.', confidence: 'medium' }); continue; }
-        const testBase = test.path.split('/').pop().replace(/\.(?:test|spec)\.[^.]+$/i, '').toLowerCase();
-        const changedBases = analyzed.map(path => path.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase());
-        if (changedBases.some(base => base && (testBase === base || testBase.includes(base) || base.includes(testBase)))) nameCandidates.push({ path: test.path, reason: 'Filename similarity only; inspect before running.', confidence: 'low' });
+        if (existing.includes(test.path)) { directTests.push({ path: test.path, reason: 'The changed file is itself a discovered test.', confidence: 'direct', evidence: [test.path] }); continue; }
+        const directEdges = edges.filter(edge => edge.from === test.path && changedCodeAndRoots.has(edge.to));
+        if (directEdges.length) { directTests.push({ path: test.path, reason: `Directly imports affected module(s): ${directEdges.map(edge => edge.to).slice(0,8).join(', ')}`, confidence: 'high', evidence: directEdges.map(edge=>edge.to).slice(0,20) }); continue; }
+        if (impacted.has(test.path)) { transitiveTests.push({ path: test.path, reason: 'Imports a module that transitively depends on a changed module or asset.', confidence: 'medium', evidence: [...(test.imports || [])].slice(0,20) }); continue; }
+        const testBase = test.path.split('/').pop().replace(/\.(?:test|spec|cy|e2e|integration)\.[^.]+$/i, '').toLowerCase();
+        const changedBases = [...changed,...assetOwners].map(path => path.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase());
+        if (changedBases.some(base => base && (testBase === base || testBase.includes(base) || base.includes(testBase)))) nameCandidates.push({ path: test.path, reason: 'Filename similarity only; inspect before running.', confidence: 'low', evidence: changed });
       }
-      const selected = [...directTests, ...transitiveTests, ...nameCandidates].slice(0, 200);
-      return { available: true, changedPaths: changed, matchedChangedPaths: existing, analyzedChangedPaths: analyzed, unanalysedChangedPaths: unanalysed, unknownChangedPaths: unknown, impactedModules: [...impacted].slice(0, 500), impactedModuleCount: impacted.size, tests: selected, summary: { analyzedChanges: analyzed.length, unanalysedChanges: unanalysed.length, unknownChanges: unknown.length, highConfidence: directTests.length, mediumConfidence: transitiveTests.length, lowConfidence: nameCandidates.length, recommendedTests: selected.length }, executionPerformed: false, note: 'Impact is derived only for JavaScript/TypeScript changed files from the indexed static import graph. Other indexed file types are reported as unanalysed. Dynamic imports, runtime-generated dependencies, test discovery conventions outside the indexed patterns, and external test harness behavior may be missed. No tests were executed.' };
+      const selected = [...directTests, ...transitiveTests, ...nameCandidates].slice(0, 300);
+      const lineRanges = Array.isArray(options.changedLineRanges) ? options.changedLineRanges : [];
+      const coverage = projectIndexBuildCoverageEvidence(index, lineRanges);
+      const parseErrorPaths = (index.files || []).filter(file => file.parseError && ['javascript','typescript'].includes(file.language)).map(file=>file.path);
+      const graphTruncated = impacted.size >= 3000;
+      return {
+        available: true, changedPaths: changed, matchedChangedPaths: existing, analyzedChangedPaths: analyzed, unanalysedChangedPaths: unanalysed, unknownChangedPaths: unknown, unindexedAssetChanges: knownAssetChanges,
+        dependencyRoots, assetOwners: [...new Set(assetOwners)], impactedModules: [...impacted].slice(0, 800), impactedModuleCount: impacted.size,
+        graphTruncated, tests: selected,
+        summary: { analyzedChanges: analyzed.length, unanalysedChanges: unanalysed.length, unknownChanges: unknown.length, directAssetOwners: [...new Set(assetOwners)].length, highConfidence: directTests.length, mediumConfidence: transitiveTests.length, lowConfidence: nameCandidates.length, recommendedTests: selected.length, changedLinesMeasured: coverage.summary.changedLinesMeasured, changedLinesCovered: coverage.summary.changedLinesCovered },
+        coverageEvidence: coverage,
+        executionPerformed: false,
+        note: 'Test-file recommendations are limited to JavaScript/TypeScript tests; language-aware source analysis is available only for JavaScript/TypeScript changed files. Recommendations combine direct and transitive import relationships, changed/unindexed asset-to-owner links and explicitly lower-confidence filename heuristics. Istanbul/LCOV coverage can flag changed lines with no observed execution but cannot attribute a line to a particular test. No tests were executed.'
+      };
     }
-    function projectIndexAnalyzeChangeImpact(index, changedPaths = [], changedSymbols = []) {
+
+    function projectIndexAnalyzeChangeImpact(index, changedPaths = [], changedSymbols = [], options = {}) {
       if (!index) return { available: false, message: 'Build the project index before exploring change impact.' };
       const normalize = value => projectIndexNormalizePath(String(value || '').trim());
-      const changed = [...new Set((Array.isArray(changedPaths) ? changedPaths : [changedPaths]).map(normalize).filter(Boolean))].slice(0, 100);
-      if (!changed.length) throw new Error('Provide one or more workspace-relative changed_paths. Git changes are not inferred.');
+      const changed = [...new Set((Array.isArray(changedPaths) ? changedPaths : [changedPaths]).map(normalize).filter(Boolean))].slice(0, 1000);
+      if (!changed.length) throw new Error('Provide workspace-relative changed paths or use Git-aware Change Impact Explorer.');
       const files = Array.isArray(index.files) ? index.files : [];
       const filesByPath = new Map(files.map(file => [file.path, file]));
-      const matched = changed.filter(path => filesByPath.has(path));
-      const unknown = changed.filter(path => !filesByPath.has(path));
-      const supported = matched.filter(path => ['javascript','typescript'].includes(filesByPath.get(path)?.language));
-      const unanalysed = matched.filter(path => !['javascript','typescript','html','css','svg'].includes(filesByPath.get(path)?.language));
+      const pathByLower = new Map(files.map(file => [file.path.toLowerCase(), file.path]));
+      const canonical = value => pathByLower.get(String(value || '').toLowerCase()) || null;
+      const matched = changed.map(path => canonical(path)).filter(Boolean);
       const graph = index.importGraph || {};
       const edges = Array.isArray(graph.localImportEdges) ? graph.localImportEdges : [];
       const reverse = new Map();
       for (const edge of edges) { const rows = reverse.get(edge.to) || []; rows.push(edge.from); reverse.set(edge.to, rows); }
+      const understanding = projectIndexBuildUnderstanding(index);
+      const assetReferences = Array.isArray(understanding.assetReferences) ? understanding.assetReferences : [];
+      const changedLower = new Set(changed.map(path => path.toLowerCase()));
+      const assetReferenceTruncated = understanding.assetReferencesTruncated === true;
+      const knownAssetChanges = changed.filter(path => !canonical(path) && assetReferences.some(item => String(item.to || '').toLowerCase() === path.toLowerCase()));
+      const unknown = changed.filter(path => !canonical(path) && !knownAssetChanges.some(asset => asset.toLowerCase() === path.toLowerCase()));
       const direct = new Set(), transitive = new Set(), distance = new Map();
-      const queue = matched.filter(path => ['javascript','typescript'].includes(filesByPath.get(path)?.language)).map(path => ({ path, depth: 0 }));
-      for (const row of queue) distance.set(row.path, 0);
-      while (queue.length && distance.size < 3000) {
+      const codeRoots = matched.filter(path => ['javascript','typescript'].includes(filesByPath.get(path)?.language));
+      const assetRoots = [...new Set([...matched.filter(path => ['html','css','svg'].includes(filesByPath.get(path)?.language)), ...knownAssetChanges])];
+            const unanalysed = matched.filter(path => !['javascript','typescript','html','css','svg'].includes(filesByPath.get(path)?.language));
+      const assetConsumers = assetReferences.filter(item => changedLower.has(String(item.to || '').toLowerCase())).map(item => ({ ...item, path: item.from, owner: item.from, changedAsset: item.to, confidence: item.targetIndexed ? 'high' : 'medium' }));
+      const assetOwnerRoots = [...new Set(assetConsumers.map(item=>item.from))];
+      const missingModuleConsumers = [];
+      const normalizeRelative = (from, specifier) => {
+        const parts = specifier.startsWith('/') ? [] : from.split('/').slice(0,-1);
+        for (const part of specifier.replace(/^\//,'').split('/')) { if (!part || part === '.') continue; if (part === '..') { if (!parts.length) return ''; parts.pop(); } else parts.push(part); }
+        return parts.join('/');
+      };
+      for (const file of files) for (const binding of file.importBindings || []) {
+        if (!String(binding.source || '').startsWith('.') && !String(binding.source || '').startsWith('/')) continue;
+        const base = normalizeRelative(file.path, String(binding.source));
+        if (!base) continue;
+        const candidatePaths = [base, ...['.js','.mjs','.cjs','.jsx','.ts','.tsx','.mts','.cts','.d.ts','.json','.css','.svg'].map(ext=>base+ext), ...['index.js','index.mjs','index.ts','index.tsx','index.css','index.svg'].map(name=>`${base.replace(/\/$/,'')}/${name}`)];
+        const missing = changed.find(path => !canonical(path) && candidatePaths.some(candidate=>candidate.toLowerCase()===path.toLowerCase()));
+        if (missing) missingModuleConsumers.push({ changedPath: missing, importer: file.path, specifier: binding.source, imported: binding.imported, confidence: 'unresolved-relative-import', reason: 'An indexed importer still references the removed/renamed module path.' });
+      }
+      const roots = [...new Set([...codeRoots, ...assetRoots.flatMap(path=>reverse.get(path)||[]), ...assetOwnerRoots])];
+      const queue = roots.map(path=>({path,depth:0}));
+      for (const row of queue) distance.set(row.path,0);
+      let traversalTruncated = false;
+      while (queue.length) {
+        if (distance.size >= 5000) { traversalTruncated = true; break; }
         const current = queue.shift();
         for (const importer of reverse.get(current.path) || []) {
           if (distance.has(importer)) continue;
-          distance.set(importer, current.depth + 1);
-          if (current.depth === 0) direct.add(importer); else transitive.add(importer);
-          queue.push({ path: importer, depth: current.depth + 1 });
+          distance.set(importer,current.depth+1);
+          if (current.depth===0) direct.add(importer); else transitive.add(importer);
+          queue.push({path:importer,depth:current.depth+1});
         }
       }
-      const understanding = projectIndexBuildUnderstanding(index);
-      const changedSet = new Set(matched);
-      const assetReferences = Array.isArray(understanding.assetReferences) ? understanding.assetReferences : [];
-      const assetConsumers = assetReferences.filter(item => changedSet.has(item.to)).map(item => ({ path: item.from, changedAsset: item.to, kind: item.kind, indexed: !!item.targetIndexed }));
-      const requestedSymbols = (Array.isArray(changedSymbols) ? changedSymbols : []).slice(0, 100).map(item => ({ path: normalize(item?.path), name: String(item?.name || '').trim().slice(0, 160) })).filter(item => item.path && item.name && matched.includes(item.path));
-      const resolvedBindings = Array.isArray(graph.resolvedBindings) ? graph.resolvedBindings : [];
-      const symbolConsumers = [];
-      for (const item of requestedSymbols) {
-        const consumers = resolvedBindings.filter(binding => binding.to === item.path && (binding.imported === item.name || binding.exported === item.name));
-        for (const binding of consumers.slice(0, 200)) symbolConsumers.push({ changedPath: item.path, symbol: item.name, importer: binding.from, localName: binding.local, importedName: binding.imported, resolution: binding.compiler ? 'typescript-compiler' : 'static-export-binding' });
+      const diffLineRanges = Array.isArray(options.diffLineRanges) ? options.diffLineRanges : [];
+      const inferred = projectIndexInferChangedSymbols(index, { files: diffLineRanges.map(item=>({path:item.path,changedLineRanges:item.ranges||[],removedLines:item.removedLines||[]})) });
+      const requestedSymbols = (Array.isArray(changedSymbols) ? changedSymbols : []).slice(0,100).map(item=>({path:normalize(item?.path),name:String(item?.name||'').trim().slice(0,160),change:'modified-or-added',confidence:'user-supplied'})).filter(item=>item.path&&item.name&&matched.includes(canonical(item.path)));
+      const inferredSymbols = inferred.symbols.filter(item=>matched.includes(canonical(item.path)));
+      const symbolRows = [...new Map([...requestedSymbols,...inferredSymbols].map(item=>[`${item.path.toLowerCase()}|${item.name}`,item])).values()];
+      const symbolFilter = new Map();
+      for (const item of symbolRows) { const list=symbolFilter.get(canonical(item.path))||new Set(); list.add(item.name); symbolFilter.set(canonical(item.path),list); }
+      const symbolConsumers = [], seenSymbols = new Set();
+      const addSymbolConsumer = item => { const key=[item.changedPath,item.symbol,item.importer,item.start||''].join('|'); if(!seenSymbols.has(key)){seenSymbols.add(key);symbolConsumers.push(item);} };
+      const compilerRefs = files.flatMap(file=>file.compilerReferences||[]);
+      for (const reference of compilerRefs) {
+        const targetPath=canonical(reference.targetPath);
+        if (!targetPath || !matched.includes(targetPath)) continue;
+        const filter=symbolFilter.get(targetPath);
+        if (filter?.size && !filter.has(reference.targetName)) continue;
+        addSymbolConsumer({changedPath:targetPath,symbol:reference.targetName||reference.name,importer:reference.path,localName:reference.name,access:reference.access||'read',start:reference.start,end:reference.end,resolution:'typescript-checker-reference',confidence:filter?.size?'high':'file-level-potential'});
       }
-      const impacted = [...new Set([...direct, ...transitive])];
-      const supportedChanges = supported.length ? projectIndexAnalyzeTestImpact(index, supported) : null;
-      const moduleRecords = impacted.slice(0, 500).map(path => ({ path, relationship: direct.has(path) ? 'direct-importer' : 'transitive-importer', distance: distance.get(path) ?? null, language: filesByPath.get(path)?.language || 'unknown' }));
-      const confidence = graph.compilerAnalysis?.supported && !graph.compilerAnalysis?.truncated ? 'compiler-assisted-static-graph' : 'bounded-static-graph';
+      const resolvedBindings = Array.isArray(graph.resolvedBindings) ? graph.resolvedBindings : [];
+      for (const binding of resolvedBindings) {
+        const targetPath=canonical(binding.to);
+        if (!targetPath || !matched.includes(targetPath)) continue;
+        const filter=symbolFilter.get(targetPath);
+        if (filter?.size && !filter.has(binding.imported) && !filter.has(binding.exported)) continue;
+        addSymbolConsumer({changedPath:targetPath,symbol:binding.exported||binding.imported,importer:binding.from,localName:binding.local,importedName:binding.imported,resolution:binding.compiler?'typescript-compiler-binding':'static-export-binding',confidence:filter?.size?'high':'file-level-potential'});
+      }
+      const exportedSymbolChanges = symbolRows.filter(item=>filesByPath.get(canonical(item.path))?.exports?.some(entry=>entry.exported===item.name)).map(item=>({...item,exported:true}));
+      const impacted = [...new Set([...direct,...transitive])];
+      const supportedChanges = (codeRoots.length || assetRoots.length || assetOwnerRoots.length) ? projectIndexAnalyzeTestImpact(index, changed, { changedLineRanges: diffLineRanges.map(item=>({path:item.path,ranges:item.ranges||[]})) }) : null;
+      const moduleRecords = impacted.slice(0,1000).map(path=>({path,relationship:direct.has(path)?'direct-importer':'transitive-importer',distance:distance.get(path)??null,language:filesByPath.get(path)?.language||'unknown'}));
+      const entryPoints = new Set((understanding.entryPoints||[]).map(item=>String(item.path||'').replace(/^\.\//,'')));
+      const entryPointConsumers = moduleRecords.filter(item=>entryPoints.has(item.path));
+      const highCouplingPaths = new Set((understanding.highCouplingModules||[]).map(item=>item.path));
+      const highCouplingConsumers = moduleRecords.filter(item=>highCouplingPaths.has(item.path));
+      const dynamicSignals = (graph.dynamicDependencySignals||[]).filter(item=>matched.includes(canonical(item.path))||impacted.includes(item.path));
+      const unresolvedImports = (graph.unresolvedBindings||[]).filter(item=>matched.includes(canonical(item.from))||impacted.includes(item.from));
+      const parseErrors = files.filter(file=>file.parseError&&['javascript','typescript'].includes(file.language)).map(file=>file.path);
+      const codeFiles = files.filter(file=>['javascript','typescript'].includes(file.language));
+      const compiler = graph.compilerAnalysis || {};
+      const changedMatchRatio = changed.length ? (matched.length+knownAssetChanges.length)/changed.length : 0;
+      const parseRatio = codeFiles.length ? Math.max(0,1-parseErrors.length/codeFiles.length) : 0;
+      const compilerRatio = codeFiles.length ? Math.min(1,(Number(compiler.filesAnalyzed)||0)/codeFiles.length) : 1;
+      const dynamicPenalty = Math.min(18,dynamicSignals.length*2);
+      const assetGraphPenalty = assetReferenceTruncated ? 8 : 0;
+      const unresolvedPenalty = Math.min(14,unresolvedImports.length);
+      const indexPenalty = index.stats?.truncated ? 20 : 0;
+      const compilerPenalty = compiler.supported===false ? 18 : compiler.truncated ? 10 : compilerRatio < 0.9 ? Math.round((1-compilerRatio)*12) : 0;
+      const parsePenalty = Math.round((1-parseRatio)*18);
+      const matchPenalty = Math.round((1-changedMatchRatio)*12);
+      const confidenceScore = Math.max(0,Math.min(100,Math.round(100-indexPenalty-compilerPenalty-parsePenalty-matchPenalty-dynamicPenalty-unresolvedPenalty-assetGraphPenalty)));
+      const confidenceLabel = confidenceScore>=85?'high':confidenceScore>=65?'moderate':'limited';
+      const confidenceDrivers = [];
+      if(indexPenalty)confidenceDrivers.push('Project index scan was truncated.');
+      if(compiler.supported===false)confidenceDrivers.push('TypeScript compiler-assisted cross-file analysis was unavailable.');
+      if(compiler.truncated)confidenceDrivers.push('Compiler analysis covered only a bounded subset of source files.');
+      else if(compiler.supported!==false&&compilerRatio<0.9)confidenceDrivers.push(`TypeScript compiler references cover ${Math.round(compilerRatio*100)}% of indexed source files; symbol-level relationships may be incomplete.`);
+      if(parseErrors.length)confidenceDrivers.push(`${parseErrors.length} supported source file(s) have parser errors.`);
+      if(dynamicSignals.length)confidenceDrivers.push(`${dynamicSignals.length} dynamic dependency construction signal(s) occur in changed or impacted modules.`);
+      if(assetGraphPenalty)confidenceDrivers.push('The local asset-reference graph reached its 2,500-edge scan cap; additional asset relationships may be missing.');
+      if(unresolvedImports.length)confidenceDrivers.push(`${unresolvedImports.length} unresolved local import binding(s) occur in changed or impacted modules.`);
+      if(unknown.length)confidenceDrivers.push(`${unknown.length} changed path(s) are absent from the current index; deleted/renamed paths may be expected.`);
+      if(!confidenceDrivers.length)confidenceDrivers.push('No index truncation, supported-language parse failure or unresolved dynamic dependency signal was observed in the analyzed scope. Static analysis still cannot prove runtime behavior.');
+      const riskFactors = [];
+      const addRisk = (id,weight,description,evidence=[])=>riskFactors.push({id,weight,description,evidence:evidence.slice(0,30)});
+      if(entryPointConsumers.length)addRisk('entry-point-impact',20,`${entryPointConsumers.length} application or package entry-point candidate(s) are affected.`,entryPointConsumers.map(item=>item.path));
+      if(highCouplingConsumers.length)addRisk('high-coupling-impact',Math.min(20,highCouplingConsumers.length*4),`${highCouplingConsumers.length} high-coupling module(s) are in the impact graph.`,highCouplingConsumers.map(item=>item.path));
+      if(direct.size)addRisk('direct-dependents',Math.min(20,direct.size*2),`${direct.size} direct dependent module(s) may require validation.`,[...direct]);
+      if(transitive.size)addRisk('transitive-blast-radius',Math.min(15,transitive.size),`${transitive.size} transitive dependent module(s) may be affected.`,[...transitive]);
+      if(symbolConsumers.length)addRisk('symbol-consumers',Math.min(15,Math.ceil(symbolConsumers.length/2)),`${symbolConsumers.length} cross-file symbol reference or import consumer(s) were identified.`,symbolConsumers.map(item=>`${item.importer}:${item.symbol}`));
+      if(missingModuleConsumers.length)addRisk('removed-module-consumers',15,`${missingModuleConsumers.length} importer(s) still reference a removed or renamed module path.`,missingModuleConsumers.map(item=>item.importer));
+      if(dynamicSignals.length)addRisk('dynamic-dependency-uncertainty',10,`${dynamicSignals.length} dynamic dependency signal(s) limit completeness.`,dynamicSignals.map(item=>item.path));
+      if(assetReferenceTruncated)addRisk('asset-graph-truncated',8,'The asset-reference graph reached its 2,500-edge scan cap.');
+      if(index.stats?.truncated || compiler.truncated)addRisk('analysis-coverage-gap',8,'The project or compiler index is truncated; unindexed relationships may be missing.');
+      const riskScore=Math.min(100,riskFactors.reduce((sum,item)=>sum+item.weight,0));
+      const riskLevel=riskScore>=70?'high':riskScore>=45?'elevated':riskScore>=20?'moderate':'low';
+      const coverage = projectIndexBuildCoverageEvidence(index, diffLineRanges.map(item=>({path:item.path,ranges:item.ranges||[]})));
+      const coverageSources = Array.isArray(coverage.sources) ? coverage.sources : [];
+      const uncoveredChangedLines = coverageSources.reduce((sum,item)=>sum+Math.max(0,(item.changedLinesMeasured||0)-(item.changedLinesCovered||0)),0);
+      const unmeasuredChangedLines = diffLineRanges.reduce((sum,item)=>sum+(item.ranges||[]).filter(range=>range.kind !== 'removed').reduce((count,range)=>count+Math.max(0,range.end-range.start+1),0),0)-(coverage.summary?.changedLinesMeasured||0);
+      if(uncoveredChangedLines)addRisk('changed-lines-without-coverage',Math.min(15,Math.ceil(uncoveredChangedLines/3)),`${uncoveredChangedLines} changed source line(s) have no observed coverage hits in the available reports.`,coverageSources.filter(item=>(item.changedLinesMeasured||0)>(item.changedLinesCovered||0)).map(item=>item.path));
+      const impactCoverage = { indexedFiles:index.stats?.files??files.length, scannedEntries:index.stats?.scanned??null, indexTruncated:!!index.stats?.truncated, supportedSourceFiles:codeFiles.length, parsedSourceFiles:Math.max(0,codeFiles.length-parseErrors.length), parseErrors, compilerFilesAnalyzed:compiler.filesAnalyzed||0, compilerTruncated:!!compiler.truncated, importEdges:edges.length, unresolvedBindings:(graph.unresolvedBindings||[]).length, dynamicDependencySignals:(graph.dynamicDependencySignals||[]).length, assetReferences:assetReferences.length, assetReferenceTruncated, changedPathMatchPercent:Math.round((matched.length+knownAssetChanges.length)/Math.max(1,changed.length)*100), coverageReports:coverage.summary?.coverageFiles||0, changedLinesMeasured:coverage.summary?.changedLinesMeasured||0, changedLinesCovered:coverage.summary?.changedLinesCovered||0, uncoveredChangedLines, unmeasuredChangedLines:Math.max(0,unmeasuredChangedLines), confidenceScore, confidenceLabel, confidenceDrivers };
       return {
-        available: true, root: index.rootName, indexedAt: index.updatedAt, analysisMethod: confidence,
-        changedPaths: changed, matchedChangedPaths: matched, analyzedCodeChanges: supported,
-        unknownChangedPaths: unknown, unanalysedChangedPaths: unanalysed,
-        directDependents: moduleRecords.filter(item => item.relationship === 'direct-importer'),
-        transitiveDependents: moduleRecords.filter(item => item.relationship === 'transitive-importer'),
-        impactedModules: moduleRecords, impactedModuleCount: impacted.length,
-        symbolConsumers: symbolConsumers.slice(0, 1000), assetConsumers: assetConsumers.slice(0, 500),
-        summary: { suppliedChanges: changed.length, matchedChanges: matched.length, analyzedCodeChanges: supported.length, unknownChanges: unknown.length, unanalysedChanges: unanalysed.length, directDependents: direct.size, transitiveDependents: transitive.size, symbolConsumers: symbolConsumers.length, assetConsumers: assetConsumers.length, recommendedTests: supportedChanges?.summary?.recommendedTests || 0 },
-        limitations: [graph.note || 'Static import graph only.', 'Dynamic imports, runtime-generated references, conditional runtime behavior and external package internals may be missed.', 'Symbol-consumer results are included only for explicitly supplied changed_symbols.', 'HTML/CSS/SVG asset links are path-based references, not runtime rendering validation.', 'No files were changed and no tests were executed.']
+        available:true, schemaVersion:2, root:index.rootName, indexedAt:index.updatedAt, analysisMethod:compiler.supported&&!compiler.truncated?'TypeScript-compiler-assisted static graph plus AST, Git hunks, assets and coverage evidence':'Bounded static graph plus AST, Git hunks, assets and coverage evidence',
+        source:options.source||'explicit-paths', git:options.git||null,
+        changedPaths:changed, matchedChangedPaths:matched, analyzedCodeChanges:codeRoots, assetChanges:assetRoots, unindexedAssetChanges:knownAssetChanges, unknownChangedPaths:unknown, unanalysedChangedPaths:unanalysed,
+        changedSymbols:symbolRows, removedSymbolCandidates:inferred.removedCandidates, exportedSymbolChanges,
+        directDependents:moduleRecords.filter(item=>item.relationship==='direct-importer'), transitiveDependents:moduleRecords.filter(item=>item.relationship==='transitive-importer'), impactedModules:moduleRecords, impactedModuleCount:impacted.length, traversalTruncated,
+        symbolConsumers:symbolConsumers.slice(0,2000), assetConsumers:assetConsumers.slice(0,1000), removedModuleConsumers:missingModuleConsumers.slice(0,500),
+        dynamicDependencySignals:dynamicSignals.slice(0,1000), unresolvedImports:unresolvedImports.slice(0,1000),
+        tests:supportedChanges?.tests||[], testImpact:supportedChanges, coverageEvidence:coverage,
+        blastRadius:{impactedModules:impacted.length,directDependents:direct.size,transitiveDependents:transitive.size,entryPointConsumers:entryPointConsumers.length,highCouplingConsumers:highCouplingConsumers.length,symbolConsumers:symbolConsumers.length,assetConsumers:assetConsumers.length,removedModuleConsumers:missingModuleConsumers.length,percentOfIndexedCode:codeFiles.length?Math.round(impacted.length/codeFiles.length*1000)/10:0},
+        risk:{score:riskScore,level:riskLevel,meaning:'Impact exposure and validation scope, not a probability that the change contains a defect.',factors:riskFactors},
+        confidence:{score:confidenceScore,label:confidenceLabel,drivers:confidenceDrivers,coverage:impactCoverage,meaning:'Structural evidence coverage heuristic, not a statistically calibrated probability.'},
+        summary:{suppliedChanges:changed.length,matchedChanges:matched.length,analyzedCodeChanges:codeRoots.length,assetChanges:assetRoots.length,unindexedAssetChanges:knownAssetChanges.length,unknownChanges:unknown.length,unanalysedChanges:unanalysed.length,directDependents:direct.size,transitiveDependents:transitive.size,symbolConsumers:symbolConsumers.length,changedSymbols:symbolRows.length,assetConsumers:assetConsumers.length,removedModuleConsumers:missingModuleConsumers.length,dynamicDependencySignals:dynamicSignals.length,recommendedTests:supportedChanges?.summary?.recommendedTests||0,coverageChangedLinesMeasured:coverage.summary?.changedLinesMeasured||0,coverageChangedLinesCovered:coverage.summary?.changedLinesCovered||0,riskScore,confidenceScore},
+        limitations:[graph.note||'Static import graph only.','Dynamic imports, runtime-generated references, dependency injection, reflection, plugin loading and conditional runtime behavior cannot be proven statically; detected dynamic dependency signals are listed separately.','Symbol consumers combine TypeScript checker references and static import bindings. If no changed symbol could be mapped from the diff, file-level potential consumers are labeled as such.','Deleted/renamed module consumers are inferred from unresolved relative imports and may not catch aliased or generated specifiers.','Coverage reports provide aggregate source-line hits, not test-to-line attribution, unless a future runner supplies per-test tracing.','Risk and confidence scores are transparent evidence heuristics, not probabilities.','No files were changed and no tests were executed.']
       };
     }
 
