@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../raw/main/Assets/Brand/Icon.png" width="104" alt="RunMind logo" />
+  <img src="../main/Assets/Brand/Icon.png" width="104" alt="RunMind logo" />
 </p>
 
 <h1 align="center">RunMind</h1>
