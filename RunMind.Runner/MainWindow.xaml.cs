@@ -8,27 +8,45 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
+using RunMind.Shared;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 
 namespace RunMind.Runner;
 
 public partial class MainWindow : Window
 {
+    private static readonly TimeSpan InlineDebounce = TimeSpan.FromMilliseconds(650);
+    private const int MaximumInlineDisplayCharacters = 180_000;
+
     private readonly ApplicationCatalog _applicationCatalog = new();
-    private readonly ObservableCollection<RunnerItem> _results = new();
+    private readonly RunnerPluginRegistry _pluginRegistry;
+    private readonly RunnerInlineModelClient _inlineClient = new();
+    private readonly ObservableCollection<RunnerPluginResult> _results = new();
+    private readonly WindowThemeSynchronizer _themeSynchronizer;
     private IReadOnlyList<RunnerItem> _catalog = Array.Empty<RunnerItem>();
     private RunnerSettings _settings = RunnerSettings.Load();
+    private RunnerInlineSettings _inlineSettings = RunnerInlineSettingsStore.Load();
+    private RunnerInlineCredentials _inlineCredentials = RunnerInlineCredentialsStore.Load();
     private GlobalHotkey? _globalHotkey;
     private Forms.NotifyIcon? _trayIcon;
     private Icon? _trayIconImage;
+    private RunnerChatWindow? _chatWindow;
+    private CancellationTokenSource? _inlineGeneration;
     private bool _exitRequested;
     private bool _catalogLoaded;
     private string? _hotkeyStatus;
+    private string _lastInlineQuery = string.Empty;
+    private string _lastInlineResponse = string.Empty;
+    private bool _lastInlineError;
+    private bool _inlineIsRunning;
 
     public MainWindow()
     {
         InitializeComponent();
+        _pluginRegistry = new RunnerPluginRegistry(_applicationCatalog);
         ResultsList.ItemsSource = _results;
+        RunnerThemeManager.Apply(this);
+        _themeSynchronizer = new WindowThemeSynchronizer(this);
     }
 
     public void HideAfterStartup()
@@ -41,17 +59,20 @@ public partial class MainWindow : Window
         CreateTrayIcon();
         SearchBox.Focus();
         RefreshSearch();
-        StatusText.Text = _hotkeyStatus ?? $"Esc to close  ·  Enter to open  ·  {_settings.Hotkey} to summon";
+        StatusText.Text = _hotkeyStatus ?? $"Esc to hide  ·  Enter to open  ·  {_settings.Hotkey} to summon";
 
+        // The launcher is usable immediately. Start-menu enumeration runs off the UI thread.
         try
         {
-            _catalog = await Task.Run(_applicationCatalog.Load);
+            var catalog = await Task.Run(_applicationCatalog.Load);
+            _catalog = catalog;
+            _pluginRegistry.SetApplicationCatalog(catalog);
             _catalogLoaded = true;
             RefreshSearch();
         }
         catch (Exception exception)
         {
-            StatusText.Text = "Application catalog could not be loaded: " + exception.Message;
+            StatusText.Text = "Application search is unavailable: " + exception.Message;
         }
     }
 
@@ -75,12 +96,17 @@ public partial class MainWindow : Window
         if (!_exitRequested)
         {
             e.Cancel = true;
+            CancelInlineGeneration();
             Hide();
             return;
         }
 
+        CancelInlineGeneration();
         _globalHotkey?.Dispose();
         _globalHotkey = null;
+        _themeSynchronizer.Dispose();
+        _chatWindow?.Close();
+        _chatWindow = null;
         if (_trayIcon is not null)
         {
             _trayIcon.Visible = false;
@@ -91,10 +117,19 @@ public partial class MainWindow : Window
         _trayIconImage = null;
     }
 
+    private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed)
+        {
+            try { DragMove(); } catch (InvalidOperationException) { }
+        }
+    }
+
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         SearchPlaceholder.Visibility = string.IsNullOrEmpty(SearchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
         RefreshSearch();
+        ScheduleInlineGeneration(SearchBox.Text.Trim());
     }
 
     private void SearchBox_KeyDown(object sender, WpfKeyEventArgs e)
@@ -102,6 +137,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.Escape)
         {
             SearchBox.Clear();
+            CancelInlineGeneration();
             Hide();
             e.Handled = true;
             return;
@@ -127,17 +163,16 @@ public partial class MainWindow : Window
         if (e.Key == Key.Escape)
         {
             SearchBox.Clear();
+            CancelInlineGeneration();
             Hide();
             e.Handled = true;
             return;
         }
-
         if (e.Key == Key.Enter)
         {
             OpenSelectedResult();
             e.Handled = true;
         }
-
         if (e.Key == Key.Up && ResultsList.SelectedIndex <= 0)
         {
             SearchBox.Focus();
@@ -148,37 +183,298 @@ public partial class MainWindow : Window
 
     private void ResultsList_MouseDoubleClick(object sender, MouseButtonEventArgs e) => OpenSelectedResult();
 
-    private void Settings_Click(object sender, RoutedEventArgs e)
+    private void ResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var dialog = new RunnerSettingsWindow(_settings) { Owner = this };
-        if (dialog.ShowDialog() != true)
-            return;
+        if (ResultsList.SelectedItem is RunnerPluginResult { PluginId: "runmind" })
+            StatusText.Text = "RunMind inline answer is shown on the right · Open chat to continue";
+    }
 
-        var candidate = dialog.Settings;
-        if (_globalHotkey is not null && !_globalHotkey.TryRegister(candidate.Hotkey, out var error))
+    private void RefreshSearch()
+    {
+        if (_results is null || SearchBox is null) return;
+        _results.Clear();
+        var query = SearchBox.Text.Trim();
+        var enabled = _settings.EnabledPlugins.ToHashSet(StringComparer.Ordinal);
+        if (!_inlineSettings.Enabled) enabled.Remove("runmind");
+        foreach (var result in _pluginRegistry.Search(query, enabled)) _results.Add(result);
+
+        if (_results.Count == 0)
         {
-            _globalHotkey.TryRegister(_settings.Hotkey, out _);
-            System.Windows.MessageBox.Show(this, error, "RunMind Runner", MessageBoxButton.OK, MessageBoxImage.Warning);
+            EmptyState.Visibility = Visibility.Visible;
+            ResultCountText.Text = _catalogLoaded ? "No matches" : "Indexing apps…";
+        }
+        else
+        {
+            EmptyState.Visibility = Visibility.Collapsed;
+            ResultCountText.Text = $"{_results.Count} found";
+        }
+        ResultsList.SelectedIndex = _results.Count > 0 ? 0 : -1;
+        if (query.Length == 0)
+        {
+            InlineStatusText.Text = "Inline assistant · Ollama / LM Studio";
+            InlineAnswerText.Text = "Type llm followed by a question to get an inline answer. Ordinary searches stay local to the launcher.";
+            InlineAnswerText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerMuted");
+            InlineModelText.Text = string.IsNullOrWhiteSpace(_inlineSettings.Model)
+                ? "Set a model in Settings to enable inline answers"
+                : $"{(_inlineSettings.Provider == "lmstudio" ? "LM Studio" : "Ollama")} · {_inlineSettings.Model}";
+        }
+    }
+
+    private void ScheduleInlineGeneration(string query)
+    {
+        CancelInlineGeneration();
+        if (!RunMindInlinePlugin.TryExtractPrompt(query, out var prompt)
+            || !_inlineSettings.Enabled
+            || !_settings.EnabledPlugins.Contains("runmind", StringComparer.Ordinal))
+        {
+            ResetInlineAnswerForNonRunMindQuery();
             return;
         }
 
+        InlineStatusText.Text = "Preparing inline answer…";
+        InlineAnswerText.Text = "RunMind will answer after you finish typing.";
+        InlineAnswerText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerMuted");
+        CopyAnswerButton.IsEnabled = false;
+        StopButton.Visibility = Visibility.Collapsed;
+        var cancellation = new CancellationTokenSource();
+        _inlineGeneration = cancellation;
+        _ = GenerateInlineAfterDelayAsync(query, prompt, cancellation);
+    }
+
+    private void ResetInlineAnswerForNonRunMindQuery()
+    {
+        if (InlineStatusText is null || InlineAnswerText is null) return;
+        InlineStatusText.Text = "Inline assistant · Ollama / LM Studio";
+        InlineAnswerText.Text = "Type llm followed by a question to get an inline answer. Ordinary searches stay local to the launcher.";
+        InlineAnswerText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerMuted");
+        CopyAnswerButton.IsEnabled = false;
+        StopButton.Visibility = Visibility.Collapsed;
+        if (string.IsNullOrWhiteSpace(_lastInlineQuery)) return;
+        _lastInlineQuery = string.Empty;
+        _lastInlineResponse = string.Empty;
+        _lastInlineError = false;
+    }
+
+    private async Task GenerateInlineAfterDelayAsync(string launcherQuery, string prompt, CancellationTokenSource owner)
+    {
+        try
+        {
+            await Task.Delay(InlineDebounce, owner.Token);
+            if (owner.IsCancellationRequested || !string.Equals(SearchBox.Text.Trim(), launcherQuery, StringComparison.Ordinal)) return;
+            await Dispatcher.InvokeAsync(() =>
+            {
+                _inlineIsRunning = true;
+                UpdateRunMindResult("RunMind", "Generating inline answer…", prompt);
+                _lastInlineQuery = prompt;
+                _lastInlineResponse = string.Empty;
+                _lastInlineError = false;
+                CopyAnswerButton.IsEnabled = false;
+                StopButton.Visibility = Visibility.Visible;
+                InlineStatusText.Text = "Thinking…";
+                InlineAnswerText.Text = string.Empty;
+                InlineAnswerText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerText");
+                InlineModelText.Text = string.IsNullOrWhiteSpace(_inlineSettings.Model)
+                    ? "No default model selected · Settings or > model > prompt"
+                    : $"{(_inlineSettings.Provider == "lmstudio" ? "LM Studio" : "Ollama")} · {_inlineSettings.Model}";
+            });
+
+            var partial = new Progress<string>(chunk =>
+            {
+                if (owner.IsCancellationRequested || !ReferenceEquals(_inlineGeneration, owner)) return;
+                if (InlineAnswerText.Text.Length >= MaximumInlineDisplayCharacters) return;
+                var available = MaximumInlineDisplayCharacters - InlineAnswerText.Text.Length;
+                InlineAnswerText.Text += chunk.Length > available ? chunk[..available] : chunk;
+                InlineAnswerScroll.ScrollToEnd();
+            });
+
+            var response = await _inlineClient.GenerateAsync(prompt, _inlineSettings, _inlineCredentials, partial, owner.Token);
+            if (owner.IsCancellationRequested || !ReferenceEquals(_inlineGeneration, owner)) return;
+            _lastInlineResponse = response;
+            UpdateRunMindResult("RunMind", "Inline answer · " + CreateAnswerPreview(response), prompt);
+            InlineStatusText.Text = "Answer ready";
+            InlineAnswerText.Text = response.Length > MaximumInlineDisplayCharacters
+                ? response[..MaximumInlineDisplayCharacters] + "\n\n[Display limit reached. Open chat to continue.]"
+                : response;
+            InlineAnswerText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerText");
+            CopyAnswerButton.IsEnabled = !string.IsNullOrWhiteSpace(response);
+        }
+        catch (OperationCanceledException) when (owner.IsCancellationRequested)
+        {
+            // A newer query owns the launcher. The old result is intentionally discarded.
+        }
+        catch (Exception exception)
+        {
+            if (!owner.IsCancellationRequested && ReferenceEquals(_inlineGeneration, owner))
+            {
+                _lastInlineError = true;
+                _lastInlineResponse = exception.Message;
+                UpdateRunMindResult("RunMind", "Could not answer · " + CreateAnswerPreview(exception.Message), prompt);
+                InlineStatusText.Text = "RunMind could not answer";
+                InlineAnswerText.Text = exception.Message;
+                InlineAnswerText.Foreground = (System.Windows.Media.Brush)FindResource("RunnerDanger");
+                CopyAnswerButton.IsEnabled = true;
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_inlineGeneration, owner))
+            {
+                _inlineGeneration = null;
+                _inlineIsRunning = false;
+                StopButton.Visibility = Visibility.Collapsed;
+            }
+            owner.Dispose();
+        }
+    }
+
+    private void UpdateRunMindResult(string title, string subtitle, string query)
+    {
+        for (var index = 0; index < _results.Count; index++)
+        {
+            var result = _results[index];
+            if (result.PluginId != "runmind" || !string.Equals(result.Value, query, StringComparison.Ordinal)) continue;
+            _results[index] = result with { Title = title, Subtitle = subtitle, Value = query };
+            return;
+        }
+    }
+
+    private static string CreateAnswerPreview(string value)
+    {
+        var normalized = string.Join(" ", (value ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        const int maximum = 104;
+        return normalized.Length <= maximum ? normalized : normalized[..(maximum - 1)] + "…";
+    }
+
+    private void CancelInlineGeneration()
+    {
+        var active = _inlineGeneration;
+        _inlineGeneration = null;
+        _inlineIsRunning = false;
+        if (active is null) return;
+        try { active.Cancel(); } catch (ObjectDisposedException) { }
+        StopButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void StopInline_Click(object sender, RoutedEventArgs e)
+    {
+        CancelInlineGeneration();
+        InlineStatusText.Text = "Stopped";
+        StatusText.Text = "RunMind generation cancelled.";
+    }
+
+    private void CopyAnswer_Click(object sender, RoutedEventArgs e)
+    {
+        var value = _lastInlineResponse;
+        if (string.IsNullOrWhiteSpace(value)) return;
+        try
+        {
+            Clipboard.SetText(value);
+            StatusText.Text = "RunMind answer copied to clipboard.";
+        }
+        catch (Exception exception) { StatusText.Text = "Could not copy the answer: " + exception.Message; }
+    }
+
+    private void OpenSelectedResult()
+    {
+        if (ResultsList.SelectedItem is not RunnerPluginResult result) return;
+        try
+        {
+            switch (result.Action)
+            {
+                case RunnerPluginAction.OpenTarget when result.Target is not null:
+                    RunnerCommandService.Execute(result.Target);
+                    SearchBox.Clear();
+                    Hide();
+                    break;
+                case RunnerPluginAction.CopyText when result.Value is not null:
+                    Clipboard.SetText(result.Value);
+                    StatusText.Text = "Copied " + result.Value;
+                    break;
+                case RunnerPluginAction.ShowInlineAnswer:
+                    InlineAnswerText.Focus();
+                    InlineAnswerScroll.ScrollToEnd();
+                    StatusText.Text = "RunMind generated its answer inside the launcher. Use Open chat to continue.";
+                    break;
+            }
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = "Could not complete " + result.Title + ": " + exception.Message;
+        }
+    }
+
+    private void Chat_Click(object sender, RoutedEventArgs e)
+    {
+        var prompt = RunMindInlinePlugin.TryExtractPrompt(SearchBox.Text, out var currentPrompt)
+            ? currentPrompt
+            : (_lastInlineQuery.Length > 0 ? _lastInlineQuery : null);
+        OpenChat(prompt);
+    }
+
+    private void OpenChat(string? query)
+    {
+        var contextPrompt = string.IsNullOrWhiteSpace(query) ? null : query.Trim();
+        var wasGenerating = _inlineIsRunning;
+        var partialInlineResponse = wasGenerating ? InlineAnswerText.Text : string.Empty;
+        var responseMatchesPrompt = string.Equals(_lastInlineQuery, contextPrompt, StringComparison.Ordinal);
+        CancelInlineGeneration();
+        if (_chatWindow is not null)
+        {
+            if (_chatWindow.IsVisible)
+            {
+                _chatWindow.Activate();
+                return;
+            }
+            _chatWindow.Close();
+            _chatWindow = null;
+        }
+
+        string? contextResponse = responseMatchesPrompt ? _lastInlineResponse : null;
+        if (responseMatchesPrompt && wasGenerating && !string.IsNullOrWhiteSpace(partialInlineResponse))
+            contextResponse = partialInlineResponse;
+        if (string.IsNullOrWhiteSpace(contextResponse)) contextResponse = null;
+        var contextError = contextResponse is not null && !wasGenerating && _lastInlineError;
+        _chatWindow = new RunnerChatWindow(contextPrompt, contextResponse, contextError,
+            _inlineSettings.Provider, _inlineSettings.Model);
+        _chatWindow.Closed += (_, _) => _chatWindow = null;
+        _chatWindow.Show();
+        Hide();
+    }
+
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new RunnerSettingsWindow(_settings, _inlineSettings, _inlineCredentials) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        var candidate = dialog.Settings;
         var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
+        var previous = _settings;
         try
         {
             if (string.IsNullOrWhiteSpace(executablePath))
                 throw new InvalidOperationException("The Runner executable path could not be determined.");
-
             candidate.ApplyStartupRegistration(executablePath);
             candidate.Save();
+            RunnerInlineSettingsStore.Save(dialog.InlineSettings);
+            RunnerInlineCredentialsStore.Save(dialog.Credentials);
+            if (_globalHotkey is not null && !_globalHotkey.TryRegister(candidate.Hotkey, out var error))
+            {
+                _globalHotkey.TryRegister(previous.Hotkey, out _);
+                previous.ApplyStartupRegistration(executablePath);
+                previous.Save();
+                throw new InvalidOperationException(error);
+            }
             _settings = candidate;
+            _inlineSettings = RunnerInlineSettingsStore.Load();
+            _inlineCredentials = RunnerInlineCredentialsStore.Load();
+            RunnerThemeManager.Apply(this);
             _hotkeyStatus = null;
-            StatusText.Text = $"Esc to close  ·  Enter to open  ·  {_settings.Hotkey} to summon";
+            StatusText.Text = $"Esc to hide  ·  Enter to open  ·  {_settings.Hotkey} to summon";
+            RefreshSearch();
+            if (SearchBox.Text.Length > 0) ScheduleInlineGeneration(SearchBox.Text.Trim());
         }
         catch (Exception exception)
         {
-            try { _settings.ApplyStartupRegistration(executablePath ?? string.Empty); }
-            catch { }
-            _globalHotkey?.TryRegister(_settings.Hotkey, out _);
             System.Windows.MessageBox.Show(this, "Runner settings could not be saved. " + exception.Message,
                 "RunMind Runner", MessageBoxButton.OK, MessageBoxImage.Error);
         }
@@ -187,76 +483,14 @@ public partial class MainWindow : Window
     private void Hide_Click(object sender, RoutedEventArgs e)
     {
         SearchBox.Clear();
+        CancelInlineGeneration();
         Hide();
-    }
-
-    private void RefreshSearch()
-    {
-        if (_results is null || SearchBox is null)
-            return;
-
-        _results.Clear();
-        var query = SearchBox.Text.Trim();
-        if (query.Length == 0)
-        {
-            ShowEmptyState("Your shortcuts, one keystroke away", _catalogLoaded
-                ? "Start typing to find an installed application"
-                : "Loading installed application shortcuts…");
-            return;
-        }
-
-        var directItem = RunnerCommandService.ResolveDirectInput(query);
-        if (directItem is not null)
-            _results.Add(directItem);
-
-        foreach (var item in _applicationCatalog.Search(_catalog, query))
-        {
-            if (_results.Count >= 9)
-                break;
-            if (_results.Any(existing => string.Equals(existing.Target, item.Target, StringComparison.OrdinalIgnoreCase)))
-                continue;
-            _results.Add(item);
-        }
-
-        if (_results.Count == 0)
-            ShowEmptyState("No matching application found", "Try an installed app name, a full file path, a folder path, or an HTTP/HTTPS URL");
-        else
-            EmptyState.Visibility = Visibility.Collapsed;
-
-        ResultsList.SelectedIndex = _results.Count > 0 ? 0 : -1;
-    }
-
-    private void ShowEmptyState(string title, string description)
-    {
-        EmptyTitle.Text = title;
-        EmptyDescription.Text = description;
-        EmptyState.Visibility = Visibility.Visible;
-    }
-
-    private void OpenSelectedResult()
-    {
-        if (ResultsList.SelectedItem is not RunnerItem item)
-            return;
-
-        try
-        {
-            RunnerCommandService.Execute(item);
-            SearchBox.Clear();
-            Hide();
-        }
-        catch (Exception exception)
-        {
-            StatusText.Text = "Could not open " + item.Title + ": " + exception.Message;
-        }
     }
 
     private void ShowLauncher()
     {
-        if (!IsVisible)
-            Show();
-        if (WindowState == WindowState.Minimized)
-            WindowState = WindowState.Normal;
-
+        if (!IsVisible) Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Topmost = true;
         Activate();
         SearchBox.Focus();
@@ -265,23 +499,15 @@ public partial class MainWindow : Window
 
     private void CreateTrayIcon()
     {
-        if (_trayIcon is not null)
-            return;
-
+        if (_trayIcon is not null) return;
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Brand", "Icon.ico");
         _trayIconImage = File.Exists(iconPath) ? new Icon(iconPath) : (Icon)SystemIcons.Application.Clone();
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Open RunMind Runner", null, (_, _) => Dispatcher.BeginInvoke(new Action(ShowLauncher)));
+        menu.Items.Add("Open RunMind chat", null, (_, _) => Dispatcher.BeginInvoke(new Action(() => OpenChat(null))));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Dispatcher.BeginInvoke(new Action(ExitRunner)));
-
-        _trayIcon = new Forms.NotifyIcon
-        {
-            Icon = _trayIconImage,
-            Text = "RunMind Runner",
-            ContextMenuStrip = menu,
-            Visible = true,
-        };
+        _trayIcon = new Forms.NotifyIcon { Icon = _trayIconImage, Text = "RunMind Runner", ContextMenuStrip = menu, Visible = true };
         _trayIcon.MouseUp += (_, args) =>
         {
             if (args.Button == Forms.MouseButtons.Left)
@@ -293,10 +519,9 @@ public partial class MainWindow : Window
 
     public void ShutdownRunner()
     {
-        if (_exitRequested)
-            return;
-
+        if (_exitRequested) return;
         _exitRequested = true;
+        _chatWindow?.Close();
         Close();
         System.Windows.Application.Current.Shutdown();
     }

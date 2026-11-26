@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 
 namespace RunMind.Shared;
 
-internal sealed record ThemeDefinition(string Id, string Name, string Mode, string FileName, string Version, string BackgroundColor);
+internal sealed record ThemeDefinition(string Id, string Name, string Mode, string FileName, string Version, string BackgroundColor, IReadOnlyDictionary<string, string> Palette);
 
 /// <summary>
 /// Discovers self-contained theme files. Each file declares its identity and supported
@@ -70,7 +70,10 @@ internal static class ThemeCatalog
 
                 var version = $"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}";
                 foreach (var palette in palettes)
-                    themes.Add(new ThemeDefinition(id, name, palette.Key, fileName, version, palette.Value));
+                {
+                    if (palette.Value.TryGetValue("--color-bg", out var backgroundColor))
+                        themes.Add(new ThemeDefinition(id, name, palette.Key, fileName, version, backgroundColor, palette.Value));
+                }
             }
             catch
             {
@@ -91,11 +94,11 @@ internal static class ThemeCatalog
         string expectedId,
         out string id,
         out string name,
-        out IReadOnlyDictionary<string, string> palettes)
+        out IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> palettes)
     {
         id = string.Empty;
         name = string.Empty;
-        palettes = new Dictionary<string, string>(StringComparer.Ordinal);
+        palettes = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
         var metadataMatch = MetadataPattern.Match(css);
         if (!metadataMatch.Success) return false;
 
@@ -130,7 +133,7 @@ internal static class ThemeCatalog
             var rules = PaletteRulePattern.Matches(withoutComments);
             var foundModes = new HashSet<string>(StringComparer.Ordinal);
             var invalidModes = new HashSet<string>(StringComparer.Ordinal);
-            var backgroundColors = new Dictionary<string, string>(StringComparer.Ordinal);
+            var paletteValues = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
             foreach (Match rule in rules)
             {
                 var mode = rule.Groups["mode"].Value.ToLowerInvariant();
@@ -139,12 +142,12 @@ internal static class ThemeCatalog
                     return false;
                 var body = rule.Groups["body"].Value;
                 if (!foundModes.Add(mode) || !HasRequiredProperties(body, mode)
-                    || !TryReadBackgroundColor(body, out var backgroundColor))
+                    || !TryReadPaletteValues(body, out var colors))
                 {
                     invalidModes.Add(mode);
                     continue;
                 }
-                backgroundColors[mode] = backgroundColor;
+                paletteValues[mode] = colors;
             }
 
             // A syntactically complete but incomplete palette only disables that mode;
@@ -152,19 +155,19 @@ internal static class ThemeCatalog
             var remainder = PaletteRulePattern.Replace(withoutComments, string.Empty);
             if (!string.IsNullOrWhiteSpace(remainder)) return false;
             var validModes = foundModes.Except(invalidModes)
-                .Where(backgroundColors.ContainsKey)
+                .Where(paletteValues.ContainsKey)
                 .OrderBy(mode => mode, StringComparer.Ordinal)
                 .ToArray();
             if (validModes.Length == 0) return false;
 
-            palettes = validModes.ToDictionary(mode => mode, mode => backgroundColors[mode], StringComparer.Ordinal);
+            palettes = validModes.ToDictionary(mode => mode, mode => paletteValues[mode], StringComparer.Ordinal);
             return true;
         }
         catch
         {
             id = string.Empty;
             name = string.Empty;
-            palettes = new Dictionary<string, string>(StringComparer.Ordinal);
+            palettes = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
             return false;
         }
     }
@@ -181,15 +184,23 @@ internal static class ThemeCatalog
     }
 
 
-    private static bool TryReadBackgroundColor(string body, out string backgroundColor)
+    private static bool TryReadPaletteValues(string body, out IReadOnlyDictionary<string, string> palette)
     {
-        backgroundColor = string.Empty;
-        var match = Regex.Match(
-            body,
-            @"(?:^|;)\s*--color-bg\s*:\s*(?<value>#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})\s*;?",
-            RegexOptions.CultureInvariant | RegexOptions.Multiline);
-        if (!match.Success) return false;
-        backgroundColor = match.Groups["value"].Value;
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var property in RequiredPaletteProperties)
+        {
+            var match = Regex.Match(
+                body,
+                $@"(?:^|;)\s*{Regex.Escape(property)}\s*:\s*(?<value>[^;{{}}]+)\s*;?",
+                RegexOptions.CultureInvariant | RegexOptions.Multiline);
+            if (!match.Success)
+            {
+                palette = new Dictionary<string, string>(StringComparer.Ordinal);
+                return false;
+            }
+            values[property] = match.Groups["value"].Value.Trim();
+        }
+        palette = values;
         return true;
     }
 

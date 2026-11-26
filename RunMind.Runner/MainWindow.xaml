@@ -1,122 +1,147 @@
 <Window x:Class="RunMind.Runner.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="RunMind Runner"
-        Width="760" Height="520" MinWidth="620" MinHeight="400"
-        WindowStartupLocation="CenterScreen"
-        WindowStyle="None" ResizeMode="NoResize"
-        AllowsTransparency="True" Background="Transparent"
-        ShowInTaskbar="False" Topmost="True"
-        SourceInitialized="Window_SourceInitialized"
-        Loaded="Window_Loaded"
-        Closing="Window_Closing">
-  <Border Background="#151A24" BorderBrush="#344052" BorderThickness="1" CornerRadius="18">
+        Title="RunMind Runner" Width="900" Height="650" MinWidth="760" MinHeight="520"
+        WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize"
+        AllowsTransparency="True" Background="Transparent" ShowInTaskbar="False" Topmost="True"
+        SourceInitialized="Window_SourceInitialized" Loaded="Window_Loaded" Closing="Window_Closing">
+  <Border Background="{DynamicResource RunnerBackground}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="18" SnapsToDevicePixels="True">
     <Grid Margin="22">
       <Grid.RowDefinitions>
         <RowDefinition Height="42" />
-        <RowDefinition Height="18" />
-        <RowDefinition Height="72" />
-        <RowDefinition Height="14" />
+        <RowDefinition Height="16" />
+        <RowDefinition Height="68" />
+        <RowDefinition Height="16" />
         <RowDefinition Height="*" />
-        <RowDefinition Height="24" />
+        <RowDefinition Height="30" />
       </Grid.RowDefinitions>
 
-      <Grid Grid.Row="0">
+      <Grid Grid.Row="0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="38" />
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="36" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="32" />
         </Grid.ColumnDefinitions>
-        <Image Grid.Column="0" Width="30" Height="30" Source="pack://siteoforigin:,,,/Assets/Brand/64x64.png" Stretch="Uniform" />
+        <Image Grid.Column="0" Width="29" Height="29" Source="pack://siteoforigin:,,,/Assets/Brand/64x64.png" Stretch="Uniform" />
         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-          <TextBlock Text="RUNMIND" FontSize="12" FontWeight="Bold" Foreground="#DCE6F3" />
-          <TextBlock Text="RUNNER" FontSize="10" Foreground="#8291A7" />
+          <TextBlock Text="RUNMIND" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource RunnerText}" />
+          <TextBlock Text="RUNNER · QUICK AI" FontSize="9" Foreground="{DynamicResource RunnerMuted}" />
         </StackPanel>
-        <Button Grid.Column="2" Content="Settings" Click="Settings_Click" Padding="13,6" Margin="0,0,8,0"
-                Background="#202A39" Foreground="#C9D5E5" BorderBrush="#3A485D" BorderThickness="1" />
-        <Button Grid.Column="3" Content="×" Click="Hide_Click" FontSize="20" Padding="0,-3,0,0"
-                Background="Transparent" Foreground="#9EACC0" BorderThickness="0" />
+        <Button Grid.Column="2" Content="Open chat" Click="Chat_Click" Margin="0,0,8,0" Padding="13,7" />
+        <Button Grid.Column="3" Content="Settings" Click="Settings_Click" Margin="0,0,8,0" Padding="13,7" />
+        <Button Grid.Column="4" Content="×" Click="Hide_Click" FontSize="20" Padding="0,-3,0,0" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource RunnerMuted}" />
       </Grid>
 
-      <TextBlock Grid.Row="1" Text="Find an app, open a location, or jump to a website"
-                 Foreground="#8493A8" FontSize="12" VerticalAlignment="Center" />
+      <TextBlock Grid.Row="1" Text="Search apps, files, folders, URLs and calculations — use llm &lt;prompt&gt; for RunMind" Foreground="{DynamicResource RunnerMuted}" FontSize="12" VerticalAlignment="Center" />
 
-      <Border Grid.Row="2" Background="#202A39" BorderBrush="#4C607B" BorderThickness="1" CornerRadius="12" Padding="16,0">
+      <Border Grid.Row="2" Background="{DynamicResource RunnerInput}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="12" Padding="16,0">
         <Grid>
-          <TextBox x:Name="SearchBox" VerticalContentAlignment="Center" FontSize="21"
-                   Background="Transparent" Foreground="#F0F5FC" CaretBrush="#76A9FA"
-                   BorderThickness="0" TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown"
-                   ToolTip="Search apps, enter a folder or file path, or paste an HTTP/HTTPS URL" />
-          <TextBlock x:Name="SearchPlaceholder" Text="Search apps, paths and URLs…"
-                     Foreground="#708099" FontSize="21" VerticalAlignment="Center"
-                     IsHitTestVisible="False" />
+          <TextBox x:Name="SearchBox" VerticalContentAlignment="Center" FontSize="21" Background="Transparent" BorderThickness="0"
+                   TextChanged="SearchBox_TextChanged" KeyDown="SearchBox_KeyDown"
+                   ToolTip="Search apps, enter a file or folder path, paste a URL, calculate, or type llm &lt;prompt&gt;" />
+          <TextBlock x:Name="SearchPlaceholder" Text="Search or type llm &lt;prompt&gt;…" Foreground="{DynamicResource RunnerMuted}" Opacity="0.72" FontSize="21" VerticalAlignment="Center" IsHitTestVisible="False" />
+          <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="{DynamicResource RunnerSurfaceRaised}" CornerRadius="6" Padding="7,4" Margin="0,0,0,0">
+            <TextBlock Text="RUNMIND  ↵" Foreground="{DynamicResource RunnerMuted}" FontSize="9" FontWeight="SemiBold" />
+          </Border>
         </Grid>
       </Border>
 
-      <Border Grid.Row="4" Background="#1B2330" BorderBrush="#2B3749" BorderThickness="1" CornerRadius="12" Padding="8">
-        <Grid>
-          <ListBox x:Name="ResultsList" Background="Transparent" BorderThickness="0"
-                   Foreground="#E4ECF7" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                   MouseDoubleClick="ResultsList_MouseDoubleClick" KeyDown="ResultsList_KeyDown">
-            <ListBox.Resources>
-              <Style TargetType="ListBoxItem">
-                <Setter Property="Padding" Value="12,10" />
-                <Setter Property="Margin" Value="0,2" />
-                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                <Setter Property="Background" Value="Transparent" />
-                <Setter Property="Foreground" Value="#E4ECF7" />
-                <Setter Property="Template">
-                  <Setter.Value>
-                    <ControlTemplate TargetType="ListBoxItem">
-                      <Border x:Name="ItemBorder" CornerRadius="8" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-                        <ContentPresenter />
-                      </Border>
-                      <ControlTemplate.Triggers>
-                        <Trigger Property="IsSelected" Value="True">
-                          <Setter TargetName="ItemBorder" Property="Background" Value="#2D405A" />
-                        </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                          <Setter TargetName="ItemBorder" Property="Background" Value="#273548" />
-                        </Trigger>
-                      </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                  </Setter.Value>
-                </Setter>
-              </Style>
-            </ListBox.Resources>
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="34" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                  </Grid.ColumnDefinitions>
-                  <Border Width="28" Height="28" CornerRadius="8" Background="#35465E" VerticalAlignment="Center">
-                    <TextBlock Text="↗" Foreground="#BFD5F4" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                  </Border>
-                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="#EAF1FA" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="#8D9DB2" TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
-                  <TextBlock Grid.Column="2" Text="Enter ↵" FontSize="10" Foreground="#77869B" VerticalAlignment="Center" Margin="10,0,2,0" />
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <StackPanel x:Name="EmptyState" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <TextBlock x:Name="EmptyTitle" Text="Your shortcuts, one keystroke away" Foreground="#A8B7CB" FontSize="14" HorizontalAlignment="Center" />
-            <TextBlock x:Name="EmptyDescription" Text="Start typing to find an installed application" Foreground="#728198" FontSize="12" Margin="0,7,0,0" HorizontalAlignment="Center" />
-          </StackPanel>
-        </Grid>
-      </Border>
+      <Grid Grid.Row="4">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="0.95*" />
+          <ColumnDefinition Width="14" />
+          <ColumnDefinition Width="1.35*" />
+        </Grid.ColumnDefinitions>
+        <Border Grid.Column="0" Background="{DynamicResource RunnerSurface}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="12" Padding="8">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <Grid Grid.Row="0" Margin="8,0,8,4">
+              <TextBlock Text="RESULTS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource RunnerMuted}" VerticalAlignment="Center" />
+              <TextBlock x:Name="ResultCountText" Text="Ready" FontSize="10" Foreground="{DynamicResource RunnerMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <ListBox x:Name="ResultsList" Grid.Row="1" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource RunnerText}"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" MouseDoubleClick="ResultsList_MouseDoubleClick"
+                     KeyDown="ResultsList_KeyDown" SelectionChanged="ResultsList_SelectionChanged">
+              <ListBox.Resources>
+                <Style TargetType="ListBoxItem">
+                  <Setter Property="Padding" Value="10,9" />
+                  <Setter Property="Margin" Value="0,2" />
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                  <Setter Property="Background" Value="Transparent" />
+                  <Setter Property="Foreground" Value="{DynamicResource RunnerText}" />
+                  <Setter Property="Template">
+                    <Setter.Value>
+                      <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                          <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                          <Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RunnerSurfaceHover}" /></Trigger>
+                          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RunnerSurfaceRaised}" /></Trigger>
+                        </ControlTemplate.Triggers>
+                      </ControlTemplate>
+                    </Setter.Value>
+                  </Setter>
+                </Style>
+              </ListBox.Resources>
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border Width="28" Height="28" CornerRadius="8" Background="{DynamicResource RunnerSurfaceRaised}" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Icon}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource RunnerText}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Subtitle}" FontSize="10" Foreground="{DynamicResource RunnerMuted}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel x:Name="EmptyState" Grid.Row="1" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="18">
+              <TextBlock Text="Your launcher plugins are ready" Foreground="{DynamicResource RunnerText}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" />
+              <TextBlock Text="Try an app name, 2 × 3, a path, a URL, or llm explain DNS caching." Foreground="{DynamicResource RunnerMuted}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,7,0,0" />
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <Border Grid.Column="2" Background="{DynamicResource RunnerSurface}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="12" Padding="15">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="10"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid Grid.Row="0">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Width="28" Height="28" Background="{DynamicResource RunnerSurfaceRaised}" CornerRadius="8" Margin="0,0,9,0">
+                  <TextBlock Text="✦" Foreground="{DynamicResource RunnerAccent}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel>
+                  <TextBlock Text="RunMind" Foreground="{DynamicResource RunnerText}" FontSize="14" FontWeight="SemiBold" />
+                  <TextBlock x:Name="InlineStatusText" Text="Inline assistant · Ollama / LM Studio" Foreground="{DynamicResource RunnerMuted}" FontSize="10" />
+                </StackPanel>
+              </StackPanel>
+              <Button x:Name="StopButton" Content="Stop" Click="StopInline_Click" HorizontalAlignment="Right" Padding="10,5" Visibility="Collapsed" />
+            </Grid>
+            <Border Grid.Row="2" Background="{DynamicResource RunnerAssistantBubble}" BorderBrush="{DynamicResource RunnerBorder}" BorderThickness="1" CornerRadius="9" Padding="12">
+              <ScrollViewer x:Name="InlineAnswerScroll" VerticalScrollBarVisibility="Auto">
+                <TextBlock x:Name="InlineAnswerText" Text="Type llm followed by a question. RunMind answers here without opening a separate chat window." Foreground="{DynamicResource RunnerMuted}" FontSize="12" TextWrapping="Wrap" />
+              </ScrollViewer>
+            </Border>
+            <Grid Grid.Row="3" Margin="0,10,0,0">
+              <TextBlock x:Name="InlineModelText" Text="Configure a local model in Settings" Foreground="{DynamicResource RunnerMuted}" FontSize="10" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="CopyAnswerButton" Content="Copy" Click="CopyAnswer_Click" Padding="10,5" Margin="0,0,6,0" IsEnabled="False" />
+                <Button Content="Open chat" Click="Chat_Click" Padding="10,5" />
+              </StackPanel>
+            </Grid>
+          </Grid>
+        </Border>
+      </Grid>
 
       <Grid Grid.Row="5" Margin="2,8,2,0">
-        <TextBlock x:Name="StatusText" Text="Esc to close  ·  Enter to open  ·  Ctrl+Alt+Space to summon"
-                   Foreground="#74849A" FontSize="10" VerticalAlignment="Center" />
-        <TextBlock Text="OPTIONAL QUICK LAUNCHER" Foreground="#53647B" FontSize="9"
-                   VerticalAlignment="Center" HorizontalAlignment="Right" />
+        <TextBlock x:Name="StatusText" Text="Esc to hide  ·  Enter to open  ·  Ctrl+Alt+Space to summon" Foreground="{DynamicResource RunnerMuted}" FontSize="10" VerticalAlignment="Center" />
+        <TextBlock Text="PLUGINS · LOCAL FIRST" Foreground="{DynamicResource RunnerMuted}" Opacity="0.7" FontSize="9" VerticalAlignment="Center" HorizontalAlignment="Right" />
       </Grid>
     </Grid>
   </Border>

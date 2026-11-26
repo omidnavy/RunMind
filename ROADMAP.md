@@ -9,19 +9,22 @@ The 3.3.1 patch hardens process-output bounds/timeouts, trusted WebView origins,
 The optional Runner feature work is being developed in an isolated host and does not waive the P0–P6 Windows acceptance suite or the critical security items in the stabilization audit. Do not declare the product production-ready until those gates are resolved.
 
 
-## Active feature milestone: 3.4 — Optional Runner, then Quick Agent
+## Active feature milestone: 3.4 — Optional Runner, then shared Quick Agent
 
-The user has explicitly chosen to begin the optional standalone Runner before introducing Quick Agent to all three quick surfaces. The 3.3.1 Windows certification and credential-protection gates remain open; beginning isolated Runner work does not close or waive them. Do not declare any host production-ready until its Windows acceptance and security gates are completed.
+The user chose to complete the optional standalone Runner first, then add Quick Agentic Mode to all three quick surfaces. The 3.3.1 Windows certification and Full Agent credential-protection gates remain open; isolated Runner work does not close or waive them.
 
-### 3.4.0 Preview 1 — Runner foundation
+### 3.4.0 — Complete optional RunMind Runner
 
-- Add a separate native WPF `RunMind.Runner` executable and solution project.
-- Provide bounded Start Menu shortcut search, explicit app launch, direct rooted file/folder opening, and HTTP/HTTPS URL opening.
-- Add configurable global hotkey, tray lifecycle, single-instance behavior, current-user settings and optional current-user sign-in startup.
-- Add separate current-user install/uninstall scripts and release publish output.
-- Keep Runner launcher-only: no Full Agent, WebView2, AgentHostBridge, workspace bridge, MCP, Skills, developer tools or system-management mutations.
+- Provide an internal first-party launcher plugin contract and registry with Applications, Files & Folders, URLs, safe Calculator and RunMind inline-answer plugins.
+- Match PowerToys Run's explicit `llm <prompt>` activation and support `llm > model > prompt` model override. Ordinary launcher searches do not contact an LLM.
+- Add Runner-only Ollama native and LM Studio inline provider profiles, model discovery, API keys/custom auth headers, reasoning and generation options, and bounded request/discovery timeouts.
+- Protect Runner inline credentials with DPAPI CurrentUser storage; keep them out of the JSON settings file and separate from full-chat provider settings.
+- Reuse the canonical ChatWindow, theme catalogue and appearance preferences; transfer inline results into chat without automatic duplicate generation.
+- Keep Runner native startup fast and WebView2/model initialization lazy; package independent current-user install/uninstall and optional startup.
+- Enforce the Quick Host boundary: no Full Agent, workspace/project context, attachments, MCP, Skills, developer tools, System Manager or arbitrary tool discovery.
+- Complete the Windows build, provider, WebView2, DPAPI, lifecycle, performance and installer acceptance before declaring the Runner certified.
 
-### 3.4.x — Quick Agent shared core (next)
+### Next: shared Quick Agentic Mode across all three quick hosts
 
 - Create a dedicated Quick Agent capability registry and execution boundary.
 - Reuse one Quick Agent Core and approval/security policy across PowerToys Run, Command Palette and Runner.
@@ -30,11 +33,7 @@ The user has explicitly chosen to begin the optional standalone Runner before in
 - Keep global policy authoritative over host-level preferences; sensitive process/service/power actions always require fresh confirmation.
 - Preserve the Full Agent and all developer workflows in Standalone as a separate experience.
 
-### 3.4.x — Host integration
-
-- Integrate Quick Agent into PowerToys Run, Command Palette and Runner without duplicating capability implementations.
-- Add shared conversation/session identity and safe handoff between the quick hosts and Standalone; workspace context remains Full-Agent-only unless explicitly entered in Standalone.
-- Validate host-specific settings, approval prompts, cancellation, idle footprint and clean lifecycle.
+The Runner milestone does not include Quick Agentic system-management execution. This is deliberately postponed so all three quick hosts can share one implementation instead of creating three host-specific agents.
 
 ## Completed milestone: P6 — Development Intelligence
 

@@ -874,3 +874,32 @@
 .mc-unavailable { margin:0; color:var(--color-danger); font-size:10px; }
 @media(max-width:520px) { .mc-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .mc-metric:last-child { grid-column:1/-1; } .mc-header { flex-direction:column; } }
 
+
+
+/* Runner uses the real RunMind chat components in a deliberately restricted Quick Host mode. */
+body.quick-host-mode #agentModeButton,
+body.quick-host-mode #attachButton,
+body.quick-host-mode #agentFolderButton,
+body.quick-host-mode #changeAgentFolder,
+body.quick-host-mode #deepResearchButton,
+body.quick-host-mode #mcpModeButton,
+body.quick-host-mode #researchWorkspaceMenu,
+body.quick-host-mode #agentHistoryMenu,
+body.quick-host-mode #agentSettingsMenu,
+body.quick-host-mode #mcpSettingsMenu,
+body.quick-host-mode #systemManagerMenu,
+body.quick-host-mode #contextManager,
+body.quick-host-mode .agent-settings-panel,
+body.quick-host-mode .research-panel,
+body.quick-host-mode #researchPanel,
+body.quick-host-mode #agentFolderAccessModal,
+body.quick-host-mode #agentApprovalModal,
+body.quick-host-mode #systemManagerPanel {
+  display: none !important;
+}
+body.quick-host-mode .topbar .brand p::after {
+  content: ' · Quick Agent host';
+}
+body.quick-host-mode .app {
+  min-height: 100vh;
+}

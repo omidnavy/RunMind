@@ -229,7 +229,8 @@ internal static class AppearancePreferenceStore
             && uri.IsDefaultPort
             && string.IsNullOrEmpty(uri.UserInfo)
             && string.IsNullOrEmpty(uri.Fragment)
-            && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase);
+            && (uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase)
+                || uri.AbsolutePath.Equals("/Runner.html", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string? ReadString(JsonElement root, string name)

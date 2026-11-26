@@ -1,12 +1,13 @@
-## 3.4.0 Preview 1.2 — Windows compile follow-up
+## 3.4.0 — Complete Optional RunMind Runner
 
-- Add explicit `System.IO` imports to Runner settings and command services so file/path APIs resolve consistently in the WPF + WinForms project.
-- Fully qualify WPF `MessageBox` calls to remove the WPF/WinForms type ambiguity.
-- Make the global-hotkey modifier switch expression consistently `uint`-typed.
-- Restore the `WaitForProcessExit` helper used by the shared bounded diagnostic process runner; a configured timeout of `0` continues to mean no automatic timeout.
-- Rename the scheduled-task inventory script local to avoid C# local-name shadowing with the action script.
-- Extend Runner source-contract regression coverage for all reported Preview 1.1 compile failures. Portable suite: 261/261 passed under Node.js 22.16.0.
-- Windows/.NET 10 compilation has not been run in this packaging environment and must be confirmed on the target Windows machine.
+- Add an internal plugin-based launcher registry with Applications, Files & Folders, URLs, safe Calculator and the actual RunMind inline-answer plugin.
+- Match PowerToys Run activation: type `llm <prompt>`; ordinary launcher searches never start model requests. Support `llm > model > prompt` model overrides.
+- Add Runner-specific Ollama native and LM Studio provider settings, discovery, authentication, reasoning, generation options and bounded timeouts.
+- Protect Runner inline API keys and custom auth headers with Windows DPAPI CurrentUser storage; keep them out of JSON settings.
+- Reuse the canonical RunMind ChatWindow and exact theme catalogue; transfer completed/partial inline answers into the chat handoff.
+- Add Quick Host restrictions at both UI and native message boundaries. Workspace selection, attachments, Full Agent, MCP, Skills, developer tools and System Manager are not exposed.
+- Keep native launcher startup independent of WebView2 and model network initialization; application indexing is asynchronous and ChatWindow is lazy.
+- Include the earlier reported Windows compile fixes and Runner-specific regression tests. Windows/.NET Release x64 build and runtime certification remain target-machine gates.
 
 ## 3.3.1 — Stabilization
 
@@ -59,14 +60,6 @@
 - Windows/.NET compilation and live acceptance remain pending on the target Windows machine.
 
 # RunMind Changelog
-
-## 3.4.0 Preview 1 — Optional RunMind Runner
-
-- Add an independently installable native WPF Runner with bounded Start Menu shortcut discovery, explicit application launch, direct rooted file/folder opening and HTTP/HTTPS URL opening.
-- Add configurable global hotkey (default `Ctrl+Alt+Space`), tray lifecycle, Escape-to-hide, single-instance signaling, per-user JSON settings and opt-in current-user sign-in startup.
-- Add separate current-user install/uninstall scripts and include Runner in the Release x64 solution/publish workflow.
-- Keep this preview launcher-only: no Full Agent, workspace/project access, AgentHostBridge, WebView2, MCP, Skills, developer commands or system-management mutations.
-- Add portable source-contract tests and Windows acceptance guidance. The .NET 10 WPF executable has not been compiled or executed in this Linux environment.
 
 ## 3.0.0 — P3 Developer Infrastructure
 

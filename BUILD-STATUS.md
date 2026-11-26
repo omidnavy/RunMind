@@ -1,49 +1,71 @@
-# RunMind 3.4.0 Preview 1.2 — Runner Build-Fix Status
+# RunMind 3.4.0 — Complete Runner Build Status
 
-## Baseline and change scope
+## Source baseline
 
-- Baseline: RunMind 3.3.1 Stabilization and Runner Preview 1.1 source, extracted from the verified Preview 1.1 archive.
-- Follow-up: Preview 1.2 addresses the second target-machine Release x64 compiler report. See `docs/WINDOWS-BUILD-FIXES-PREVIEW-1.2.md`.
-- Runner remains an optional, separate native WPF executable. Standalone, PowerToys Run and Command Palette share only the existing application source; Quick Agent has not been added.
-- Runner remains launcher-only and does not reference Full Agent, workspace/project intelligence, `AgentHostBridge`, WebView2, MCP or Skills.
-- No new runtime package dependency was added.
+- Input baseline: `RunMind-3.4.0-Runner-Preview-1.2-2026-11-23.zip`.
+- Input SHA-256 verified before modification: `a49d32464a38ed95d1d31da6b34877241131fddc9f1b0ade1a18ff81a5547fd6`.
+- This source package consolidates the Runner work into one 3.4.0 delivery. It supersedes the earlier Preview 1 / 1.1 / 1.2 source packages.
+- Runner is an independently installable optional WPF host. Standalone, PowerToys Run and Command Palette remain included and unchanged in product scope.
+- Quick Agentic system-management execution is not included yet. It remains the next shared milestone for all three quick hosts.
 
-## Preview 1.2 corrections
+## Complete Runner scope in this source
 
-- Explicit `System.IO` imports in Runner settings and path/command operations.
-- Explicit WPF `MessageBox` qualification where WinForms is also enabled.
-- Consistent unsigned type in global hotkey modifier selection.
-- Restored the shared process wait helper for the documented no-automatic-timeout (`0`) mode.
-- Renamed the scheduled-task inventory PowerShell script local to avoid C# local-name shadowing.
-- Extended the source-contract regression test to cover these compiler failures.
+- Internal first-party plugin registry with Applications, Files & Folders, URLs, Calculator and RunMind inline-answer providers.
+- RunMind inline generation follows the PowerToys Run `llm` action keyword. Use `llm <prompt>` to request an answer and `llm > model > prompt` to override the selected model. Ordinary launcher searches do not trigger model requests.
+- Independent Ollama-native and LM Studio inline provider profiles, model discovery, API-key/custom-header support, reasoning/generation parameters, provider-specific temperature bounds, configured request/discovery timeouts and bounded streaming.
+- DPAPI CurrentUser protection for Runner inline credentials. Credentials are separate from non-secret JSON settings and from the full-chat provider profile.
+- Lazy reuse of the canonical RunMind ChatWindow, shared theme catalog and appearance preferences. Completed and partial inline answers can be handed off to full chat.
+- Restricted Quick Host chat boundary: no workspace selection, attachments, Full Agent, MCP, Skills, developer tools, System Manager or arbitrary native tool dispatch.
+- Native launcher startup remains independent of WebView2 startup and provider network calls. App indexing is asynchronous; ChatWindow loads only when requested.
+- Configurable global hotkey, tray/single-instance lifecycle, optional current-user startup and independent Runner installer/uninstaller.
 
-## Validation environment
+## Portable validation performed
 
-The packaging environment is Linux with Node.js 22.16.0 and Python 3.13. No .NET SDK, MSBuild or Windows runtime is installed. Therefore the WPF projects, full Release x64 solution, publish output, PowerShell installer/uninstaller, Win32 hotkey registration, tray behavior and Windows registry integration have **not** been compiled or executed here.
+Environment: Linux container, Node.js `v22.16.0`; Python XML/JSON parsing.
 
-Portable validation: **261/261 tests passed** with `node --test --test-concurrency=1 tests/*.test.cjs` on Node.js 22.16.0. All 11 project/XAML/manifest/config XML files parsed successfully. This is source-level regression validation, not a C# compile or Windows runtime test.
+- Full regression suite: **270/270 passed** using `node --test --test-concurrency=1 tests/*.test.cjs`.
+- Runner-specific contract suite: **15/15 passed** using `node --test tests/runner-contract.test.cjs`.
+- JavaScript syntax: **25 files parsed** using `node --check`.
+- JSON: **4 files parsed**.
+- XML, XAML, MSBuild and manifest files: **11 files parsed**.
+- Runner XAML event-handler references: **21 checked**, all mapped to code-behind methods.
+- No failing tests or parse errors were observed in those checks.
 
-## Windows build and acceptance
+These are portable source-level checks. They do not constitute a .NET compilation or Windows integration test.
 
-On Windows with the .NET 10 SDK and Windows Desktop build components, run:
+## Windows build and acceptance still required
+
+This environment does not have `dotnet`, MSBuild, `csc`, Windows Desktop targeting packs or a Windows runtime. Therefore the updated 3.4.0 source has **not** been compiled or executed here. The previous Preview 1.2 build success on the user's machine does not certify this modified source.
+
+On Windows with .NET 10 SDK and Windows Desktop build components, run:
 
 ```powershell
 .\Build-Release-x64.bat
 ```
 
-If the full solution builds successfully, optionally install Runner separately:
+Then install Runner independently:
 
 ```powershell
 .\Install-RunMind-Runner.ps1
 ```
 
-Then complete `docs/RUNNER-IMPLEMENTATION.md` and the Windows acceptance checklist. Verify Runner independently installs/uninstalls and leaves the other three hosts unchanged.
+Complete the Windows acceptance items in `docs/RUNNER-IMPLEMENTATION.md`, especially:
 
-## Existing 3.3.1 gates remain open
+- Release x64 compilation of all four hosts.
+- Runner installation, upgrade, shortcut, hotkey, tray, single-instance, sign-in startup and uninstall behavior.
+- App/file/folder/URL launch plus safe calculator behavior.
+- `llm <prompt>` inline generation for Ollama and LM Studio; confirm normal launcher text never calls the model.
+- Model override, authentication precedence, request/discovery timeouts, cancellation and streaming limits.
+- DPAPI credential persistence and current-user isolation.
+- Shared theme behavior and completed/partial response handoff to ChatWindow.
+- Quick Host restrictions, first-launch performance and repeated open/close behavior.
+- Verify Runner install/uninstall leaves the other three hosts untouched.
 
-- Credential-at-rest protection with native DPAPI-backed storage and migration/rollback verification remains open for the Full Agent hosts.
-- NuGet/transitive dependency review and SBOM remain open.
-- Windows Release x64 and PowerToys/WebView2 acceptance remains open for all hosts.
-- Accessibility, performance, upgrade, long-session and end-to-end acceptance remain open.
+Do not mark 3.4.0 certified or production-ready until these Windows checks pass.
 
-Adding Runner or fixing source-level compiler errors does not close these gates. Do not declare the product production-ready before they are resolved.
+## Existing platform gates remain open
+
+- Full Agent credential-at-rest migration to native DPAPI-backed storage and rollback verification.
+- Complete NuGet/transitive dependency security review and SBOM.
+- Windows Release x64, WebView2, PowerToys and native System Manager acceptance.
+- Accessibility, upgrade, performance, long-session and end-to-end acceptance.

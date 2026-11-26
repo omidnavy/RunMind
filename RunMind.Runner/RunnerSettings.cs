@@ -11,6 +11,7 @@ internal sealed class RunnerSettings
 
     public string Hotkey { get; set; } = "Ctrl+Alt+Space";
     public bool StartWithWindows { get; set; }
+    public List<string> EnabledPlugins { get; set; } = new() { "applications", "files", "urls", "calculator", "runmind" };
 
     public static string SettingsDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RunMind", "Runner");
@@ -64,6 +65,24 @@ internal sealed class RunnerSettings
         {
             Hotkey = hotkey,
             StartWithWindows = settings.StartWithWindows,
+            EnabledPlugins = NormalizePluginIds(settings.EnabledPlugins),
         };
+    }
+
+    private static List<string> NormalizePluginIds(List<string>? ids)
+    {
+        var result = new List<string>();
+        foreach (var id in ids ?? new List<string>())
+        {
+            if (id == "paths")
+            {
+                result.Add("files");
+                result.Add("urls");
+            }
+            else if (id is "applications" or "files" or "urls" or "calculator" or "runmind")
+                result.Add(id);
+        }
+        if (ids is null) return new List<string> { "applications", "files", "urls", "calculator", "runmind" };
+        return result.Distinct(StringComparer.Ordinal).ToList();
     }
 }

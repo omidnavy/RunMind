@@ -1354,6 +1354,7 @@
       renderAlwaysApprovedAgentTools();
     }
     function setAgentMode(enabled) {
+      if (BOOT?.quickHostMode === true) enabled = false;
       if (enabled && deepResearchEnabled) setDeepResearchMode(false);
       agentModeEnabled = !!enabled;
       agentModeButton.classList.toggle('active', agentModeEnabled);

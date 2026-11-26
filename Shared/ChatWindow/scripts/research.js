@@ -294,6 +294,7 @@
       positionToolbarFlyout(researchWorkspaceMenu);
     }
     function setDeepResearchMode(enabled) {
+      if (BOOT?.quickHostMode === true) enabled = false;
       if (enabled && agentModeEnabled) setAgentMode(false);
       deepResearchEnabled = !!enabled;
       deepResearchButton.classList.toggle('active', deepResearchEnabled);

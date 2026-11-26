@@ -113,7 +113,7 @@
       savePreferences();
     });
     cancelEditButton.addEventListener('click', () => { cancelEditing(); promptInput.focus(); });
-    attachButton.addEventListener('click', () => fileInput.click());
+    attachButton.addEventListener('click', () => { if (BOOT?.quickHostMode === true) return; fileInput.click(); });
     fileInput.addEventListener('change', handleFilesSelected);
     promptInput.addEventListener('input', autoResizePrompt);
     promptInput.addEventListener('keydown', event => {
@@ -263,6 +263,7 @@
       if (agentModeEnabled && settingLmStudioApiMode.value === 'native') showToast('Switch LM Studio to OpenAI-compatible mode to use Agent Mode.');
     });
     agentFolderButton.addEventListener('click', async () => {
+      if (BOOT?.quickHostMode === true) return;
       await workspaceRestorePromise;
       if (agentDirectoryHandle) { showToast(`Workspace ready: ${agentDirectoryHandle.name || 'selected folder'}. Use Agent settings to change or clear it.`); return; }
       const access = await requestFolderAccess(activeController?.signal);
@@ -270,6 +271,7 @@
       else if (access.error) showToast(access.error);
     });
     changeAgentFolderButton.addEventListener('click', async () => {
+      if (BOOT?.quickHostMode === true) return;
       const access = await requestFolderAccess(activeController?.signal, true);
       if (access.error) showToast(access.error);
     });
@@ -676,6 +678,12 @@
       catch (error) { showToast(`Could not clear workspace: ${error?.message || error}`); }
     });
     function updateMcpModeButton() {
+      if (BOOT?.quickHostMode === true) {
+        mcpModeEnabled = false;
+        mcpModeButton.disabled = true;
+        mcpModeButton.setAttribute('aria-pressed', 'false');
+        return;
+      }
       const connected = [...mcpServers.values()].filter(server => server.enabled && server.connected && mcpRuntime.has(server.id)).length;
       const availableNow = connected > 0 && (mcpModeEnabled || agentModeEnabled);
       mcpModeButton.classList.toggle('active', availableNow);
@@ -688,6 +696,7 @@
       mcpModeButton.setAttribute('aria-label', mcpModeButton.title);
     }
     mcpModeButton.addEventListener('click', () => {
+      if (BOOT?.quickHostMode === true) return;
       mcpModeEnabled = !mcpModeEnabled;
       updateMcpModeButton();
       const connected = [...mcpServers.values()].filter(server => server.enabled && server.connected).length;
@@ -822,6 +831,7 @@
     window.addEventListener('storage', event => {
       if (event.key !== 'local-llm.workspace-handle-event' || !event.newValue) return;
       try {
+        if (BOOT?.quickHostMode === true) return;
         const change = JSON.parse(event.newValue);
         if (change.workspaceContextId !== workspaceContext.id) return;
         if (change.action === 'cleared') {
@@ -846,65 +856,91 @@
       configureWindowScopedStorage();
       try { await initializeConversationSessionStorage(); }
       catch (error) { console.warn('RunMind temporary session archive could not initialize.', error); }
-      loadWorkflowState();
-      try {
-        const savedParallelism = Number(localStorage.getItem('runmind.workflow-parallelism.v1'));
-        if (workflowParallelism && [1, 2, 3, 4].includes(savedParallelism)) workflowParallelism.value = String(savedParallelism);
-      } catch (_) {}
-      renderWorkflowView();
+      const quickHostMode = BOOT.quickHostMode === true;
+      if (quickHostMode) {
+        document.body.classList.add('quick-host-mode');
+        attachButton.disabled = true;
+        agentFolderButton.disabled = true;
+        changeAgentFolderButton.disabled = true;
+        // Quick Host is a chat-only surface. The native host intentionally implements
+        // only themes.list and does not register Full Agent, workspace, MCP or system tools.
+      }
+
+      if (!quickHostMode) {
+        loadWorkflowState();
+        try {
+          const savedParallelism = Number(localStorage.getItem('runmind.workflow-parallelism.v1'));
+          if (workflowParallelism && [1, 2, 3, 4].includes(savedParallelism)) workflowParallelism.value = String(savedParallelism);
+        } catch (_) {}
+        renderWorkflowView();
+      }
+
       modelConnections = loadModelConnections();
       renderModelConnections();
       applySavedPreferences();
       await appearanceStylesheetPromise;
-      if (workspaceContext.instructions !== null) {
-        settingSystemPrompt.value = workspaceContext.instructions;
-        updateSystemPromptPreview();
-      }
       updateNemotronConversationalModeControl();
-      applyAgentSettings();
-      workspaceMcpRestorePromise = (async () => {
-        await restoreMcpConfigs(workspaceContext.mcpServers);
-        // Fresh chats retain the existing local MCP startup behavior. A conversation
-        // opened from a file restores descriptors but waits for explicit reconnect.
-        if (!BOOT.initialConversation) {
-          for (const config of mcpServers.values()) {
-            if (config.enabled === false) continue;
-            try { await mcpConnect(config); } catch (_) { /* Retain saved configuration for manual reconnect. */ }
-          }
+
+      if (!quickHostMode) {
+        if (workspaceContext.instructions !== null) {
+          settingSystemPrompt.value = workspaceContext.instructions;
+          updateSystemPromptPreview();
         }
-      })();
-      workspaceRestorePromise = restoreAgentFolderHandle({ allowLegacyMigration: !BOOT.initialConversation?.workspaceContext });
-      void refreshProjectProfiles();
-      void workspaceRestorePromise.then(async () => { await refreshAgentSkillManager(); await refreshProjectIndexStatus(); await refreshDeveloperWorkflowList(); });
-      void loadSharedPermissionPolicy();
-      void loadSystemManagerSettings();
-      void loadSystemManagerAdapters();
-      renderAgentTaskHistory();
-      setAgentMode(false);
-      try {
-        const savedTemplate = localStorage.getItem('runmind.research-template.v1');
-        if (savedTemplate && RESEARCH_TEMPLATES[savedTemplate]) selectedResearchTemplateId = savedTemplate;
-      } catch (_) {}
-      researchTemplateSelect.value = selectedResearchTemplateId;
-      deepResearchTask = await loadResearchTask();
-      await loadResearchCheckpointHistory();
-      if (deepResearchTask && ['running','pausing','resuming','cancelling'].includes(deepResearchTask.status)) {
-        deepResearchTask.status = 'interrupted';
-        deepResearchTask.activity ||= [];
-        deepResearchTask.activity.push({ at: new Date().toISOString(), type: 'interrupted', summary: 'The WebView closed or reloaded during research. Resume from the last saved checkpoint.' });
-        persistResearchTask();
+        applyAgentSettings();
+        workspaceMcpRestorePromise = (async () => {
+          await restoreMcpConfigs(workspaceContext.mcpServers);
+          // Fresh chats retain the existing local MCP startup behavior. A conversation
+          // opened from a file restores descriptors but waits for explicit reconnect.
+          if (!BOOT.initialConversation) {
+            for (const config of mcpServers.values()) {
+              if (config.enabled === false) continue;
+              try { await mcpConnect(config); } catch (_) { /* Retain saved configuration for manual reconnect. */ }
+            }
+          }
+        })();
+        workspaceRestorePromise = restoreAgentFolderHandle({ allowLegacyMigration: !BOOT.initialConversation?.workspaceContext });
+        void refreshProjectProfiles();
+        void workspaceRestorePromise.then(async () => { await refreshAgentSkillManager(); await refreshProjectIndexStatus(); await refreshDeveloperWorkflowList(); });
+        void loadSharedPermissionPolicy();
+        void loadSystemManagerSettings();
+        void loadSystemManagerAdapters();
+        renderAgentTaskHistory();
+        setAgentMode(false);
+        try {
+          const savedTemplate = localStorage.getItem('runmind.research-template.v1');
+          if (savedTemplate && RESEARCH_TEMPLATES[savedTemplate]) selectedResearchTemplateId = savedTemplate;
+        } catch (_) {}
+        researchTemplateSelect.value = selectedResearchTemplateId;
+        deepResearchTask = await loadResearchTask();
+        await loadResearchCheckpointHistory();
+        if (deepResearchTask && ['running','pausing','resuming','cancelling'].includes(deepResearchTask.status)) {
+          deepResearchTask.status = 'interrupted';
+          deepResearchTask.activity ||= [];
+          deepResearchTask.activity.push({ at: new Date().toISOString(), type: 'interrupted', summary: 'The WebView closed or reloaded during research. Resume from the last saved checkpoint.' });
+          persistResearchTask();
+        }
+        if (deepResearchTask) {
+          researchDepth.value = deepResearchTask.depth || 'deep';
+          researchPageBudget.value = String(deepResearchTask.pageBudget || 18);
+          researchCallBudget.value = String(deepResearchTask.callBudget || 30);
+          researchTimeBudget.value = String(deepResearchTask.timeBudgetMinutes || 0);
+          researchPreferredDomains.value = (deepResearchTask.preferredDomains || []).join(', ');
+          researchAllowDomains.value = (deepResearchTask.allowedDomains || []).join(', ');
+          researchBlockDomains.value = (deepResearchTask.blockedDomains || []).join(', ');
+          renderResearchTask();
+        }
+        updateContextSettingForProvider('ollama');
+      } else {
+        // These promises are intentionally inert in Runner. No project folder, MCP server,
+        // Skill, System Manager adapter, or Full Agent permission policy is initialized.
+        workspaceMcpRestorePromise = Promise.resolve();
+        workspaceRestorePromise = Promise.resolve();
+        deepResearchTask = null;
+        mcpModeEnabled = false;
+        setAgentMode(false);
+        setDeepResearchMode(false);
+        updateMcpModeButton();
       }
-      if (deepResearchTask) {
-        researchDepth.value = deepResearchTask.depth || 'deep';
-        researchPageBudget.value = String(deepResearchTask.pageBudget || 18);
-        researchCallBudget.value = String(deepResearchTask.callBudget || 30);
-        researchTimeBudget.value = String(deepResearchTask.timeBudgetMinutes || 0);
-        researchPreferredDomains.value = (deepResearchTask.preferredDomains || []).join(', ');
-        researchAllowDomains.value = (deepResearchTask.allowedDomains || []).join(', ');
-        researchBlockDomains.value = (deepResearchTask.blockedDomains || []).join(', ');
-        renderResearchTask();
-      }
-      updateContextSettingForProvider('ollama');
       const sourceProvider = BOOT.sourceProvider === 'lmstudio' ? 'lmstudio' : (BOOT.initialProvider === 'lmstudio' ? 'lmstudio' : 'ollama');
       const sourceModel = String(BOOT.sourceModel || BOOT.initialModel || '');
       if (BOOT.prompt) messages.push({ role: 'user', content: String(BOOT.prompt), timestamp: Date.now(), provider: sourceProvider, model: sourceModel, initial: true });

@@ -50,7 +50,7 @@ if ($DesktopShortcut) {
 $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\RunMindRunner'
 New-Item -Path $uninstallKey -Force | Out-Null
 Set-ItemProperty -Path $uninstallKey -Name DisplayName -Value 'RunMind Runner'
-Set-ItemProperty -Path $uninstallKey -Name DisplayVersion -Value '3.4.0 Preview 1'
+Set-ItemProperty -Path $uninstallKey -Name DisplayVersion -Value '3.4.0'
 Set-ItemProperty -Path $uninstallKey -Name InstallLocation -Value $installDirectory
 Set-ItemProperty -Path $uninstallKey -Name UninstallString -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $installDirectory 'Uninstall-RunMind-Runner.ps1')`""
 
