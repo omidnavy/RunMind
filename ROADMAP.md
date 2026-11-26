@@ -1,6 +1,6 @@
 # RunMind Roadmap
 
-## Current source baseline: 3.1.0 — P4 Agent Capabilities
+## Current source baseline: 3.2.0 — P5 System Manager Health Intelligence
 
 ## Completed milestone: P0 — Foundation & Reliability
 
@@ -81,9 +81,30 @@ P4 completes the named Agent capability milestone on top of P0–P3. It strength
 - Change impact is static/index-based and can miss runtime-generated/dynamic dependencies.
 - Session timeline contains only RunMind-recorded events; it is not a log warehouse or causal tracing engine.
 - Artifact digest checks establish byte equality only, not trusted provenance.
-- Windows/.NET certification remains pending until the P0–P4 acceptance checklists pass on target Windows.
+- Windows/.NET certification remains pending until the P0–P5 acceptance checklists pass on target Windows.
 
-## Future expansion candidates (not part of P4)
+## Completed milestone: P5 — System Manager Health Intelligence
+
+P5 connects existing native System Manager functions into service, reliability, network and resource intelligence across all three hosts. See `P5-RELEASE-NOTES.md`, `docs/SYSTEM-MANAGER-HEALTH-INTELLIGENCE.md` and `docs/P5-IMPLEMENTATION-AUDIT.md`.
+
+- **Windows Services intelligence:** structured startup mode, service account, binary path, declared dependencies, recovery actions, failure flags and trigger configuration; bounded cycle-safe dependency trees (5 levels / 50 nodes). Service start/stop/restart still require fresh native confirmation and final-state verification.
+- **Reliability & health report:** on-demand read-only health report joining individually enabled Windows service/network/hardware inventory, Application/System event evidence, crash investigation, finite resources and storage health.
+- **Recurring problem detection:** repeated service failures by service identity, application crashes by application/exception/module signature and network failures by provider/event signature.
+- **Evidence correlation:** five-minute Windows event windows plus a finite resource-sample window and leading CPU/memory process observations. Temporal proximity is not a root-cause or causal claim.
+- **Historical comparison:** optional local snapshots, off by default; 30 summaries / 512 KB; aggregate metrics, issue keys and service states only; no raw event messages, executable paths, connection endpoints or command lines.
+- **Network ownership:** bounded non-listening active TCP connections and UDP endpoints with process ownership; possible TCP listener conflicts include candidate wildcard overlaps and remain heuristic. Existing user-directed DNS/route/one-port TCP diagnostics remain bounded and confirmed.
+- **Resource intelligence:** CPU interval deltas, system physical/page-file memory, per-process working-set/private-memory and supported physical-disk I/O counters. Unavailable Windows providers/sensors remain unknown, not healthy.
+
+### P5 validation boundaries
+
+- The report is invoked on demand; no continuous monitor/background daemon, automatic remediation or persistent raw-event warehouse is introduced.
+- Each collection still requires its individual System Manager capability. History is an additional explicit opt-in setting.
+- Process attribution is observational; process start/exit/access limitations remain. This release does not attribute physical-disk queue pressure to individual processes.
+- DNS and route results do not prove application-layer reachability; the optional TCP probe tests only one explicit endpoint. No port scans or destination sweeps.
+- Possible listener overlap can be legitimate because of socket reuse or dual-stack behavior.
+- Portable tests and source checks do not certify Windows service, Event Log, CIM provider or performance-counter behavior. Run `docs/P5-WINDOWS-ACCEPTANCE.md` and P0–P4 checklists with Node.js 24+ / .NET 10 on Windows.
+
+## Future expansion candidates (not part of P5)
 
 - Optional MySQL/PostgreSQL adapters after SQLite proves its long-term interface and Windows runtime integration.
 - Signed artifact and provenance verification through trusted signing identities, certificate policy and reproducible build evidence.

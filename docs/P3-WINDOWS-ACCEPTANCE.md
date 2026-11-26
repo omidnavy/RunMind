@@ -1,4 +1,4 @@
-# RunMind 3.1.0 — P3 Windows acceptance checklist
+# RunMind 3.2.0 — P3 Windows acceptance checklist
 
 Run on the target Windows machine with Node.js 24+ and .NET 10. Capture the complete console output and use the exact packaged source tree.
 
@@ -6,7 +6,7 @@ Run on the target Windows machine with Node.js 24+ and .NET 10. Capture the comp
 
 - [ ] Run `./Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` from PowerShell.
 - [ ] Confirm Standalone, PowerToys Run and Command Palette compile successfully.
-- [ ] Confirm package versions are 3.1.0 and Command Palette Appx version is 3.1.0.0.
+- [ ] Confirm package versions are 3.2.0 and Command Palette Appx version is 3.2.0.0.
 - [ ] Confirm `DeveloperInfrastructure.cs`, `SqliteRunner.cjs`, `OpenApiTestRunner.cjs`, `ApiTestRunner.cjs` and `PlaywrightRunner.cjs` are present beside each host's output executable.
 - [ ] Open each host, select one canonical workspace, and confirm all five P3 workflows/tools use it without a second folder picker.
 - [ ] Verify each P3 operation displays fresh approval before execution; verify Deep Research/delegated tasks cannot invoke restricted infrastructure tools.

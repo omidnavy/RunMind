@@ -27,6 +27,9 @@ public sealed partial class AgentHostBridge
     private static string SystemManagerCatalogPath => Path.Combine(SystemManagerRoot, "applications.json");
     private static string SystemManagerAdaptersRoot => Path.Combine(SystemManagerRoot, "Adapters");
     private static string SystemManagerAdapterOverridesRoot => Path.Combine(SystemManagerAdaptersRoot, "Overrides");
+    private static string SystemManagerHealthHistoryPath => Path.Combine(SystemManagerRoot, "health-history.json");
+    private static string SystemManagerHealthHistoryMutexName => "Local\\RunMind.SystemManager.HealthHistory." + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(SystemManagerRoot.ToUpperInvariant())));
+    private static readonly object SystemManagerHealthHistorySync = new();
     private sealed record SystemApplicationRecord(string id, string name, string path, string source, string version, string[]? aliases = null, string? appUserModelId = null);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -155,7 +158,7 @@ public sealed partial class AgentHostBridge
             ["systemInformation"] = true, ["environmentInformation"] = false, ["serviceInformation"] = false, ["networkInformation"] = false,
             ["eventLogInformation"] = false, ["crashInvestigation"] = false, ["resourceMonitoring"] = false,
             ["scheduledTaskInformation"] = false, ["scheduledTaskManagement"] = false, ["storageHealth"] = false,
-            ["securityPosture"] = false, ["targetedNetworkDiagnostics"] = false
+            ["securityPosture"] = false, ["targetedNetworkDiagnostics"] = false, ["healthHistory"] = false
         },
         ["permissions"] = new JsonObject { ["launchApplications"] = "ask", ["openTargets"] = "ask" },
         ["applicationBehaviors"] = new JsonObject(),
@@ -180,7 +183,7 @@ public sealed partial class AgentHostBridge
             defaults["profile"] = profile is "restricted" or "balanced" or "custom" ? profile : "restricted";
             foreach (var group in new[] { "applications", "processes", "diagnostics" })
                 defaults["groups"]![group] = saved["groups"]?[group]?.GetValue<bool>() ?? (bool)defaults["groups"]![group]!;
-            foreach (var capability in new[] { "discoverApplications", "launchApplications", "openTargets", "listProcesses", "inspectProcesses", "terminateProcesses", "systemInformation", "environmentInformation", "serviceInformation", "networkInformation", "eventLogInformation", "crashInvestigation", "resourceMonitoring", "scheduledTaskInformation", "scheduledTaskManagement", "storageHealth", "securityPosture", "targetedNetworkDiagnostics" })
+            foreach (var capability in new[] { "discoverApplications", "launchApplications", "openTargets", "listProcesses", "inspectProcesses", "terminateProcesses", "systemInformation", "environmentInformation", "serviceInformation", "networkInformation", "eventLogInformation", "crashInvestigation", "resourceMonitoring", "scheduledTaskInformation", "scheduledTaskManagement", "storageHealth", "securityPosture", "targetedNetworkDiagnostics", "healthHistory" })
                 defaults["capabilities"]![capability] = saved["capabilities"]?[capability]?.GetValue<bool>() ?? (bool)defaults["capabilities"]![capability]!;
             foreach (var permission in new[] { "launchApplications", "openTargets" })
             {
@@ -235,7 +238,7 @@ public sealed partial class AgentHostBridge
         }
         foreach (var group in new[] { "applications", "processes", "diagnostics" })
             if (input.TryGetProperty("groups", out var groups) && groups.ValueKind == JsonValueKind.Object && groups.TryGetProperty(group, out var groupValue) && (groupValue.ValueKind is JsonValueKind.True or JsonValueKind.False)) current["groups"]![group] = groupValue.GetBoolean();
-        foreach (var capability in new[] { "discoverApplications", "launchApplications", "openTargets", "listProcesses", "inspectProcesses", "terminateProcesses", "systemInformation", "environmentInformation", "serviceInformation", "networkInformation", "eventLogInformation", "crashInvestigation", "resourceMonitoring", "scheduledTaskInformation", "scheduledTaskManagement", "storageHealth", "securityPosture", "targetedNetworkDiagnostics" })
+        foreach (var capability in new[] { "discoverApplications", "launchApplications", "openTargets", "listProcesses", "inspectProcesses", "terminateProcesses", "systemInformation", "environmentInformation", "serviceInformation", "networkInformation", "eventLogInformation", "crashInvestigation", "resourceMonitoring", "scheduledTaskInformation", "scheduledTaskManagement", "storageHealth", "securityPosture", "targetedNetworkDiagnostics", "healthHistory" })
             if (input.TryGetProperty("capabilities", out var capabilities) && capabilities.ValueKind == JsonValueKind.Object && capabilities.TryGetProperty(capability, out var capabilityValue) && (capabilityValue.ValueKind is JsonValueKind.True or JsonValueKind.False)) current["capabilities"]![capability] = capabilityValue.GetBoolean();
         foreach (var permission in new[] { "launchApplications", "openTargets" })
             if (input.TryGetProperty("permissions", out var permissions) && permissions.ValueKind == JsonValueKind.Object && permissions.TryGetProperty(permission, out var permissionValue) && permissionValue.ValueKind == JsonValueKind.String && (permissionValue.GetString() is "allow" or "ask")) current["permissions"]![permission] = permissionValue.GetString();
@@ -1314,13 +1317,110 @@ public sealed partial class AgentHostBridge
         return match.Success ? match.Groups[1].Value : null;
     }
 
+    private static string? ParseServiceControlField(string output, string field)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(output, @"(?im)^\s*" + System.Text.RegularExpressions.Regex.Escape(field) + @"\s*:\s*(.*?)\s*$");
+        return match.Success ? match.Groups[1].Value.Trim() : null;
+    }
+
+    private static object ParseServiceConfiguration(string output)
+    {
+        var startType = ParseServiceControlField(output, "START_TYPE");
+        var startToken = startType?.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+        var startupMode = startToken switch
+        {
+            "BOOT_START" => "Boot",
+            "SYSTEM_START" => "System",
+            "AUTO_START" => "Automatic",
+            "DEMAND_START" => "Manual",
+            "DISABLED" => "Disabled",
+            _ => "Unavailable"
+        };
+        return new
+        {
+            serviceName = ParseServiceControlField(output, "SERVICE_NAME"),
+            displayName = ParseServiceControlField(output, "DISPLAY_NAME"),
+            serviceType = ParseServiceControlField(output, "TYPE"),
+            startupMode,
+            startTypeRaw = startType,
+            errorControl = ParseServiceControlField(output, "ERROR_CONTROL"),
+            binaryPath = ParseServiceControlField(output, "BINARY_PATH_NAME"),
+            loadOrderGroup = ParseServiceControlField(output, "LOAD_ORDER_GROUP"),
+            dependencies = ParseServiceDependencies(output),
+            serviceAccount = ParseServiceControlField(output, "SERVICE_START_NAME")
+        };
+    }
+
+    private sealed class ServiceDependencyBudget
+    {
+        public int Remaining { get; private set; }
+        public bool Truncated { get; set; }
+        public ServiceDependencyBudget(int maximum) => Remaining = maximum;
+        public bool Take() { if (Remaining <= 0) { Truncated = true; return false; } Remaining--; return true; }
+    }
+
+    private static string[] ParseServiceDependencies(string output)
+    {
+        var lines = output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+        var values = new List<string>();
+        var collecting = false;
+        foreach (var line in lines)
+        {
+            if (System.Text.RegularExpressions.Regex.IsMatch(line, @"^\s*DEPENDENCIES\s*:", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                collecting = true;
+                var separator = line.IndexOf(':');
+                var first = separator >= 0 ? line[(separator + 1)..].Trim() : string.Empty;
+                if (first.Length > 0) values.Add(first);
+                continue;
+            }
+            if (collecting && System.Text.RegularExpressions.Regex.IsMatch(line, @"^\s*[A-Z][A-Z _-]{1,30}\s*:")) break;
+            if (collecting)
+            {
+                var candidate = line.Trim();
+                if (candidate.Length == 0) continue;
+                values.Add(candidate);
+            }
+        }
+        return values.Select(value => value.Trim())
+            .Where(value => value.Length > 0 && value.Length <= 128)
+            .Distinct(StringComparer.OrdinalIgnoreCase).Take(32).ToArray();
+    }
+
+    private async Task<object> ReadServiceDependencyTreeAsync(string service, int depth, HashSet<string> visited, ServiceDependencyBudget budget, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (depth > 5) { budget.Truncated = true; return new { name = service, truncated = true, dependencies = Array.Empty<object>() }; }
+        if (!budget.Take()) return new { name = service, truncated = true, dependencies = Array.Empty<object>() };
+        if (!visited.Add(service)) return new { name = service, cycle = true, dependencies = Array.Empty<object>() };
+        try
+        {
+            var config = await RunServiceControlAsync(new[] { "qc", service }, cancellationToken).ConfigureAwait(false);
+            if (config.exitCode != 0) return new { name = service, available = false, error = Limit(config.error, 300), dependencies = Array.Empty<object>() };
+            var dependencies = new List<object>();
+            foreach (var dependency in ParseServiceDependencies(config.output))
+            {
+                if (dependency.StartsWith('+'))
+                {
+                    dependencies.Add(new { name = dependency, kind = "load-order-group", dependencies = Array.Empty<object>() });
+                    continue;
+                }
+                if (!System.Text.RegularExpressions.Regex.IsMatch(dependency, "^[A-Za-z0-9_.-]{1,128}$")) continue;
+                dependencies.Add(await ReadServiceDependencyTreeAsync(dependency, depth + 1, visited, budget, cancellationToken).ConfigureAwait(false));
+                if (budget.Remaining <= 0) break;
+            }
+            return new { name = service, available = true, dependencies };
+        }
+        finally { visited.Remove(service); }
+    }
+
     private async Task<object> SystemManagerServiceActionAsync(JsonElement args, CancellationToken cancellationToken)
     {
         RequireSystemCapability("diagnostics", "serviceInformation");
         var action = ReadString(args, "action", 20).ToLowerInvariant();
         var service = ReadString(args, "service", 128);
-        if (action is not ("list" or "inspect" or "start" or "stop" or "restart" or "config" or "dependents"))
-            throw new InvalidDataException("Supported service actions are list, inspect, config, dependents, start, stop, and restart.");
+        if (action is not ("list" or "inspect" or "start" or "stop" or "restart" or "config" or "dependents" or "dependencies"))
+            throw new InvalidDataException("Supported service actions are list, inspect, config, dependents, dependencies, start, stop, and restart.");
         if (action != "list" && !System.Text.RegularExpressions.Regex.IsMatch(service, "^[A-Za-z0-9_.-]{1,128}$"))
             throw new InvalidDataException("A valid Windows service name is required.");
 
@@ -1329,17 +1429,34 @@ public sealed partial class AgentHostBridge
             var result = await RunServiceControlAsync(new[] { "query", "state=", "all" }, cancellationToken).ConfigureAwait(false);
             return new { success = result.exitCode == 0, accepted = result.exitCode == 0, action, completed = true, verified = result.exitCode == 0, exitCode = result.exitCode, output = result.output, error = result.error, message = result.exitCode == 0 ? "Service enumeration completed." : "Service enumeration failed." };
         }
+        if (action == "dependencies")
+        {
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var budget = new ServiceDependencyBudget(50);
+            var tree = await ReadServiceDependencyTreeAsync(service, 0, visited, budget, cancellationToken).ConfigureAwait(false);
+            return new { success = true, accepted = true, action, target = service, completed = true, verified = true, dependencyTree = tree, maxDepth = 5, maxNodes = 50, truncated = budget.Truncated, note = "Dependency traversal is read-only, cycle-safe, and bounded. Load-order groups are retained as group entries and are not recursively expanded." };
+        }
         if (action == "config" || action == "dependents")
         {
-            var command = action == "config" ? new[] { "qc", service } : new[] { "enumdepend", service };
-            var result = await RunServiceControlAsync(command, cancellationToken).ConfigureAwait(false);
-            return new { success = result.exitCode == 0, accepted = result.exitCode == 0, action, target = service, completed = true, verified = result.exitCode == 0, exitCode = result.exitCode, output = result.output, error = result.error, message = result.exitCode == 0 ? (action == "config" ? "Service configuration retrieved." : "Dependent services retrieved.") : "The service query failed." };
+            if (action == "dependents")
+            {
+                var result = await RunServiceControlAsync(new[] { "enumdepend", service }, cancellationToken).ConfigureAwait(false);
+                return new { success = result.exitCode == 0, accepted = result.exitCode == 0, action, target = service, completed = true, verified = result.exitCode == 0, exitCode = result.exitCode, output = result.output, error = result.error, message = result.exitCode == 0 ? "Dependent services retrieved." : "The service query failed." };
+            }
+            var config = await RunServiceControlAsync(new[] { "qc", service }, cancellationToken).ConfigureAwait(false);
+            var failure = await RunServiceControlAsync(new[] { "qfailure", service }, cancellationToken).ConfigureAwait(false);
+            var failureFlag = await RunServiceControlAsync(new[] { "qfailureflag", service }, cancellationToken).ConfigureAwait(false);
+            var triggers = await RunServiceControlAsync(new[] { "qtriggerinfo", service }, cancellationToken).ConfigureAwait(false);
+            return new { success = config.exitCode == 0, accepted = config.exitCode == 0, action, target = service, completed = true, verified = config.exitCode == 0, exitCode = config.exitCode, configuration = config.output, configurationDetails = ParseServiceConfiguration(config.output), failureActions = failure.output, failureActionFlag = failureFlag.output, triggerConfiguration = triggers.output, warnings = new[] { failure.error, failureFlag.error, triggers.error }.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray(), error = config.error, message = config.exitCode == 0 ? "Structured startup mode, declared dependencies, service account, recovery actions and trigger configuration retrieved." : "The service configuration query failed." };
         }
         if (action == "inspect")
         {
             var query = await RunServiceControlAsync(new[] { "queryex", service }, cancellationToken).ConfigureAwait(false);
             var config = await RunServiceControlAsync(new[] { "qc", service }, cancellationToken).ConfigureAwait(false);
-            return new { success = query.exitCode == 0, accepted = query.exitCode == 0, action, target = service, completed = true, verified = query.exitCode == 0, actualState = ParseServiceState(query.output), queryExitCode = query.exitCode, query = query.output, configuration = config.output, error = string.Join("\n", new[] { query.error, config.error }.Where(value => !string.IsNullOrWhiteSpace(value))), message = query.exitCode == 0 ? "Service state and configuration retrieved." : "Service inspection failed." };
+            var failure = await RunServiceControlAsync(new[] { "qfailure", service }, cancellationToken).ConfigureAwait(false);
+            var failureFlag = await RunServiceControlAsync(new[] { "qfailureflag", service }, cancellationToken).ConfigureAwait(false);
+            var triggers = await RunServiceControlAsync(new[] { "qtriggerinfo", service }, cancellationToken).ConfigureAwait(false);
+            return new { success = query.exitCode == 0, accepted = query.exitCode == 0, action, target = service, completed = true, verified = query.exitCode == 0, actualState = ParseServiceState(query.output), queryExitCode = query.exitCode, query = query.output, configuration = config.output, configurationDetails = ParseServiceConfiguration(config.output), failureActions = failure.output, failureActionFlag = failureFlag.output, triggerConfiguration = triggers.output, warnings = new[] { config.error, failure.error, failureFlag.error, triggers.error }.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray(), error = query.error, message = query.exitCode == 0 ? "Service state, structured startup configuration, dependency declaration and recovery configuration retrieved." : "Service inspection failed." };
         }
 
         if (!ConfirmSystemManagerAction("launchApplications", $"RunMind · {action} Windows service", $"Service: {service}\nAction: {action}\nThis changes Windows service state and may affect applications or the operating system.", alwaysAsk: true))
@@ -1826,7 +1943,39 @@ public sealed partial class AgentHostBridge
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GetSystemTimes(out NativeFileTime idleTime, out NativeFileTime kernelTime, out NativeFileTime userTime);
 
-    private sealed record ResourceProcessSample(int ProcessId, long StartedAtTicks, long CpuTicks, long WorkingSetBytes, string Name);
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct NativeMemoryStatusEx
+    {
+        public uint Length; public uint MemoryLoad; public ulong TotalPhysical; public ulong AvailablePhysical;
+        public ulong TotalPageFile; public ulong AvailablePageFile; public ulong TotalVirtual; public ulong AvailableVirtual;
+        public ulong AvailableExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GlobalMemoryStatusEx(ref NativeMemoryStatusEx buffer);
+
+    private static object? ReadSystemMemoryStatus()
+    {
+        var status = new NativeMemoryStatusEx { Length = (uint)Marshal.SizeOf<NativeMemoryStatusEx>() };
+        if (!GlobalMemoryStatusEx(ref status) || status.TotalPhysical == 0) return null;
+        return new { totalPhysicalBytes = status.TotalPhysical, availablePhysicalBytes = status.AvailablePhysical, usedPhysicalBytes = status.TotalPhysical - status.AvailablePhysical, memoryLoadPercent = status.MemoryLoad, totalPageFileBytes = status.TotalPageFile, availablePageFileBytes = status.AvailablePageFile };
+    }
+
+    private static object ReadDiskIoTelemetry()
+    {
+        const string script = """
+$rows = @()
+try {
+  $rows = @(Get-CimInstance -ClassName Win32_PerfFormattedData_PerfDisk_PhysicalDisk -ErrorAction Stop | Select-Object -First 32 | ForEach-Object { [pscustomobject]@{ name=$_.Name; percentDiskTime=$_.PercentDiskTime; readBytesPerSecond=$_.DiskReadBytesPersec; writeBytesPerSecond=$_.DiskWriteBytesPersec; averageQueueLength=$_.AvgDiskQueueLength; currentQueueLength=$_.CurrentDiskQueueLength } })
+  $result = [pscustomobject]@{ available=($rows.Count -gt 0); disks=$rows; source='Win32_PerfFormattedData_PerfDisk_PhysicalDisk'; warning=$null }
+} catch { $result = [pscustomobject]@{ available=$false; disks=@(); source='Win32_PerfFormattedData_PerfDisk_PhysicalDisk'; warning=([string]$_.Exception.Message).Substring(0,[Math]::Min(300,([string]$_.Exception.Message).Length)) } }
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 4 -Compress))
+""";
+        try { return RunPowerShellJson(script, new { }, 10000); }
+        catch (Exception error) { return new { available = false, disks = Array.Empty<object>(), source = "Win32_PerfFormattedData_PerfDisk_PhysicalDisk", warning = Limit(error.Message, 300) }; }
+    }
+
+    private sealed record ResourceProcessSample(int ProcessId, long StartedAtTicks, long CpuTicks, long WorkingSetBytes, long PrivateMemoryBytes, string Name);
     private sealed class ResourceProcessAggregate
     {
         public required int ProcessId { get; init; }
@@ -1834,6 +1983,7 @@ public sealed partial class AgentHostBridge
         public required string Name { get; init; }
         public double CpuSeconds { get; set; }
         public long WorkingSetBytes { get; set; }
+        public long PrivateMemoryBytes { get; set; }
     }
 
     private static void RequireSystemManagerCapability(string capability)
@@ -1902,22 +2052,28 @@ $result = [pscustomobject]@{ logName=[string]$request.logName; hours=[int]$reque
         const string script = """
 $since = (Get-Date).AddDays(-[int]$request.days)
 $rows = @()
-$queries = @(@{ LogName='Application'; Id=@(1000,1001,1026); StartTime=$since }, @{ LogName='System'; Id=@(7031,7034); StartTime=$since })
+$queries = @(@{ LogName='Application'; Id=@(1000,1001,1026); StartTime=$since }, @{ LogName='System'; Id=@(7000,7001,7023,7024,7031,7034,7038,7043); StartTime=$since })
 foreach ($filter in $queries) {
   try {
     $rows += @(Get-WinEvent -FilterHashtable $filter -MaxEvents ([int]$request.maxEvents) -ErrorAction Stop | ForEach-Object {
       $message = [string]$_.Message
-      $app = ''; $module = ''; $exception = ''
+      $app = ''; $module = ''; $exception = ''; $service = ''
       if ($message -match '(?im)(?:Faulting application name|Application):\s*([^,\r\n]+)') { $app = $Matches[1].Trim() }
       if ($message -match '(?im)(?:Faulting module name|Faulting module):\s*([^,\r\n]+)') { $module = $Matches[1].Trim() }
       if ($message -match '(?im)exception code:\s*(0x[0-9a-f]+)') { $exception = $Matches[1].Trim() }
-      [pscustomobject]@{ logName=$_.LogName; eventId=$_.Id; provider=$_.ProviderName; timeCreatedUtc=$_.TimeCreated.ToUniversalTime().ToString('o'); recordId=$_.RecordId; application=$app; faultingModule=$module; exceptionCode=$exception; message=$message.Substring(0,[Math]::Min(1400,$message.Length)) }
+      if ($_.LogName -eq 'System' -and $_.Id -in @(7000,7001,7023,7024,7031,7034,7038,7043)) {
+        if ($message -match '(?im)^The .+? service depends on the (.+?) service which failed to start') { $service = $Matches[1].Trim() }
+        elseif ($message -match '(?im)^(?:The )?(.+?) service (?:terminated|failed|did not|was unable|cannot|could not)') { $service = $Matches[1].Trim() }
+        elseif ($message -match '(?im)service name:\s*([^\r\n]+)') { $service = $Matches[1].Trim() }
+      }
+      [pscustomobject]@{ logName=$_.LogName; eventId=$_.Id; provider=$_.ProviderName; timeCreatedUtc=$_.TimeCreated.ToUniversalTime().ToString('o'); recordId=$_.RecordId; application=$app; serviceName=$service; faultingModule=$module; exceptionCode=$exception; message=$message.Substring(0,[Math]::Min(1400,$message.Length)) }
     })
   } catch { if ($_.FullyQualifiedErrorId -notmatch 'NoMatchingEventsFound') { throw } }
 }
 $ordered = @($rows | Sort-Object timeCreatedUtc -Descending | Select-Object -First ([int]$request.maxEvents))
 $patterns = @($ordered | Where-Object { $_.application -or $_.exceptionCode } | Group-Object { ($_.application.ToLowerInvariant() + '|' + $_.exceptionCode.ToLowerInvariant()) } | ForEach-Object { [pscustomobject]@{ key=$_.Name; occurrences=$_.Count; firstSeenUtc=($_.Group | Sort-Object timeCreatedUtc | Select-Object -First 1).timeCreatedUtc; lastSeenUtc=($_.Group | Sort-Object timeCreatedUtc -Descending | Select-Object -First 1).timeCreatedUtc } } | Sort-Object occurrences -Descending)
-$result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$ordered.Count; recurringPatterns=$patterns; eventSources=@('Application Error 1000','Windows Error Reporting 1001','.NET Runtime 1026','Service Control Manager 7031/7034') }
+$serviceFailures = @($ordered | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.serviceName) } | Group-Object { $_.serviceName.ToLowerInvariant() } | ForEach-Object { [pscustomobject]@{ serviceName=$_.Group[0].serviceName; occurrences=$_.Count; eventIds=@($_.Group | Select-Object -ExpandProperty eventId -Unique); firstSeenUtc=($_.Group | Sort-Object timeCreatedUtc | Select-Object -First 1).timeCreatedUtc; lastSeenUtc=($_.Group | Sort-Object timeCreatedUtc -Descending | Select-Object -First 1).timeCreatedUtc } } | Sort-Object occurrences -Descending)
+$result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$ordered.Count; recurringPatterns=$patterns; recurringServiceFailures=$serviceFailures; eventSources=@('Application Error 1000','Windows Error Reporting 1001','.NET Runtime 1026','Service Control Manager 7000/7001/7023/7024/7031/7034/7038/7043') }
 [Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 6 -Compress))
 """;
         var report = RunPowerShellJson(script, new { days, maxEvents = maximum }, 30000);
@@ -1939,8 +2095,10 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
                 long cpu = -1;
                 try { cpu = process.TotalProcessorTime.Ticks; } catch { }
                 long memory = 0;
+                long privateMemory = 0;
                 try { memory = process.WorkingSet64; } catch { }
-                result[process.Id] = new ResourceProcessSample(process.Id, started, cpu, memory, process.ProcessName);
+                try { privateMemory = process.PrivateMemorySize64; } catch { }
+                result[process.Id] = new ResourceProcessSample(process.Id, started, cpu, memory, privateMemory, process.ProcessName);
             }
             catch { }
             finally { process.Dispose(); }
@@ -1962,8 +2120,10 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
         if (duration is < 1 or > 60) throw new InvalidDataException("Resource sample duration must be between 1 and 60 seconds.");
         if (interval is < 1 or > 10 || interval > duration) throw new InvalidDataException("Resource sample interval must be between 1 and 10 seconds and no longer than the requested duration.");
         var samples = new List<object>();
+        var cpuReadings = new List<double>();
         var aggregates = new Dictionary<string, ResourceProcessAggregate>(StringComparer.OrdinalIgnoreCase);
         var previousProcesses = ReadResourceProcessSnapshot(out _);
+        var latestProcesses = previousProcesses;
         var previousSystem = ReadSystemCpuTimes();
         var previousAt = Stopwatch.GetTimestamp();
         var timer = Stopwatch.StartNew();
@@ -2000,11 +2160,16 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
                 }
                 aggregate.CpuSeconds += cpuSeconds;
                 aggregate.WorkingSetBytes = current.WorkingSetBytes;
+                aggregate.PrivateMemoryBytes = current.PrivateMemoryBytes;
             }
             var totalWorkingSet = currentProcesses.Values.Sum(item => Math.Max(0, item.WorkingSetBytes));
+            var totalPrivateMemory = currentProcesses.Values.Sum(item => Math.Max(0, item.PrivateMemoryBytes));
+            var memoryStatus = ReadSystemMemoryStatus();
+            if (machineCpu.HasValue) cpuReadings.Add(machineCpu.Value);
             sampleCount++;
-            samples.Add(new { elapsedSeconds = Math.Round(timer.Elapsed.TotalSeconds, 2), sampledAtUtc = DateTimeOffset.UtcNow, cpuPercent = machineCpu, processCount = currentProcesses.Count, processListTruncated, totalProcessWorkingSetBytes = totalWorkingSet, measuredProcessCpuSeconds = Math.Round(totalProcessCpuSeconds, 3) });
+            samples.Add(new { elapsedSeconds = Math.Round(timer.Elapsed.TotalSeconds, 2), sampledAtUtc = DateTimeOffset.UtcNow, cpuPercent = machineCpu, memory = memoryStatus, processCount = currentProcesses.Count, processListTruncated, totalProcessWorkingSetBytes = totalWorkingSet, totalProcessPrivateMemoryBytes = totalPrivateMemory, measuredProcessCpuSeconds = Math.Round(totalProcessCpuSeconds, 3) });
             previousProcesses = currentProcesses;
+            latestProcesses = currentProcesses;
             previousSystem = currentSystem;
             previousAt = currentAt;
             if (samples.Count >= 60) break;
@@ -2012,9 +2177,15 @@ $result = [pscustomobject]@{ days=[int]$request.days; events=$ordered; count=$or
         var measuredSeconds = Math.Max(1, timer.Elapsed.TotalSeconds);
         var topProcesses = aggregates.Values.OrderByDescending(item => item.CpuSeconds).Take(20).Select(item => new
         {
-            processId = item.ProcessId, name = item.Name, cpuSeconds = Math.Round(item.CpuSeconds, 3), averageMachineCpuPercent = Math.Round(item.CpuSeconds * 100d / (measuredSeconds * Math.Max(1, Environment.ProcessorCount)), 2), workingSetBytes = item.WorkingSetBytes, startedAtUtc = item.StartedAtTicks > 0 ? new DateTimeOffset(item.StartedAtTicks, TimeSpan.Zero) : (DateTimeOffset?)null
+            processId = item.ProcessId, name = item.Name, cpuSeconds = Math.Round(item.CpuSeconds, 3), averageMachineCpuPercent = Math.Round(item.CpuSeconds * 100d / (measuredSeconds * Math.Max(1, Environment.ProcessorCount)), 2), workingSetBytes = item.WorkingSetBytes, privateMemoryBytes = item.PrivateMemoryBytes, startedAtUtc = item.StartedAtTicks > 0 ? new DateTimeOffset(item.StartedAtTicks, TimeSpan.Zero) : (DateTimeOffset?)null
         }).ToArray();
-        return new { success = true, accepted = true, completed = true, verified = true, durationSeconds = Math.Round(timer.Elapsed.TotalSeconds, 2), requestedDurationSeconds = duration, intervalSeconds = interval, sampleCount, processorCount = Environment.ProcessorCount, samples, topProcesses, notes = new[] { "Sampling is finite and read-only; RunMind does not install a service or continue monitoring after this request.", "Process CPU values are interval deltas and may omit processes that started or exited between samples; records are limited to the first 1,000 processes returned by Windows.", "Processes with inaccessible start times are excluded from CPU aggregation to avoid PID-reuse misattribution.", "Windows system CPU sampling is unavailable when GetSystemTimes cannot be read; such samples report null rather than zero." } };
+        var topWorkingSetProcesses = latestProcesses.Values.OrderByDescending(item => item.WorkingSetBytes).Take(20).Select(item => new { processId = item.ProcessId, name = item.Name, workingSetBytes = item.WorkingSetBytes, privateMemoryBytes = item.PrivateMemoryBytes, startedAtUtc = item.StartedAtTicks > 0 ? new DateTimeOffset(item.StartedAtTicks, TimeSpan.Zero) : (DateTimeOffset?)null }).ToArray();
+        var topPrivateMemoryProcesses = latestProcesses.Values.OrderByDescending(item => item.PrivateMemoryBytes).Take(20).Select(item => new { processId = item.ProcessId, name = item.Name, privateMemoryBytes = item.PrivateMemoryBytes, workingSetBytes = item.WorkingSetBytes, startedAtUtc = item.StartedAtTicks > 0 ? new DateTimeOffset(item.StartedAtTicks, TimeSpan.Zero) : (DateTimeOffset?)null }).ToArray();
+        var averageCpuPercent = cpuReadings.Count > 0 ? Math.Round(cpuReadings.Average(), 2) : (double?)null;
+        var peakCpuPercent = cpuReadings.Count > 0 ? Math.Round(cpuReadings.Max(), 2) : (double?)null;
+        var finalMemory = ReadSystemMemoryStatus();
+        var diskIo = ReadDiskIoTelemetry();
+        return new { success = true, accepted = true, completed = true, verified = true, durationSeconds = Math.Round(timer.Elapsed.TotalSeconds, 2), requestedDurationSeconds = duration, intervalSeconds = interval, sampleCount, processorCount = Environment.ProcessorCount, averageCpuPercent, peakCpuPercent, memory = finalMemory, diskIo, samples, topProcesses, topWorkingSetProcesses, topPrivateMemoryProcesses, notes = new[] { "Sampling is finite and read-only; RunMind does not install a service or continue monitoring after this request.", "CPU and memory figures are Windows host measurements; process working-set/private-memory values are sampled per accessible process.", "Disk I/O telemetry depends on the Windows performance CIM provider and is reported unavailable when the provider is missing or inaccessible.", "Process CPU values are interval deltas and may omit processes that started or exited between samples; records are limited to the first 1,000 processes returned by Windows.", "Processes with inaccessible start times are excluded from CPU aggregation to avoid PID-reuse misattribution.", "Windows system CPU sampling is unavailable when GetSystemTimes cannot be read; such samples report null rather than zero." } };
     }
 
     private static object SystemManagerScheduledTasks(JsonElement args)
@@ -2194,6 +2365,60 @@ $result = [pscustomobject]@{ available=($null -ne $selected); remoteAddress=[str
         return new { success = !hasPort || tcpConnected, accepted = true, completed = true, verified = true, host, dnsResolved = addresses.Length > 0, dnsElapsedMilliseconds = dnsElapsed, resolvedAddresses = addresses.Select(address => address.ToString()).Distinct().Take(16).ToArray(), route, routeWarning, tcpProbe, message = !hasPort ? "DNS resolution completed; route selection is included when Windows exposes it." : tcpConnected ? "DNS resolution and TCP connection succeeded." : "DNS resolution succeeded, but the TCP connection did not." };
     }
 
+    private sealed record NetworkEndpoint(string Local, string? Remote, string State, int ProcessId, string? ProcessName, string? ExecutablePath, DateTime? StartedAtUtc);
+
+    private static bool TryParseLocalEndpoint(string endpoint, out string address, out int port)
+    {
+        address = string.Empty;
+        port = 0;
+        if (string.IsNullOrWhiteSpace(endpoint)) return false;
+        var value = endpoint.Trim();
+        if (value.StartsWith("[", StringComparison.Ordinal))
+        {
+            var close = value.IndexOf(']');
+            if (close <= 1 || close + 2 >= value.Length || value[close + 1] != ':') return false;
+            address = value[1..close];
+            return int.TryParse(value[(close + 2)..], NumberStyles.None, CultureInfo.InvariantCulture, out port) && port is >= 1 and <= 65535;
+        }
+        var separator = value.LastIndexOf(':');
+        if (separator <= 0 || separator == value.Length - 1) return false;
+        address = value[..separator];
+        return int.TryParse(value[(separator + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out port) && port is >= 1 and <= 65535;
+    }
+
+    private static object[] FindPotentialTcpListenerConflicts(IEnumerable<NetworkEndpoint> listeners)
+    {
+        var parsed = listeners.Select(endpoint =>
+        {
+            var valid = TryParseLocalEndpoint(endpoint.Local, out var address, out var port);
+            return new { endpoint, valid, address, port };
+        }).Where(item => item.valid).GroupBy(item => item.port);
+        var conflicts = new List<object>();
+        foreach (var group in parsed)
+        {
+            var rows = group.ToArray();
+            var overlaps = new List<object>();
+            for (var left = 0; left < rows.Length; left++)
+            for (var right = left + 1; right < rows.Length; right++)
+            {
+                var a = rows[left]; var b = rows[right];
+                if (a.endpoint.ProcessId == b.endpoint.ProcessId) continue;
+                var sameAddress = a.address.Equals(b.address, StringComparison.OrdinalIgnoreCase);
+                var aWildcard = a.address is "0.0.0.0" or "::" or "*";
+                var bWildcard = b.address is "0.0.0.0" or "::" or "*";
+                var sameFamily = a.address.Contains(':') == b.address.Contains(':');
+                var dualStackWildcardOverlap = a.address == "::" && b.address == "0.0.0.0" || b.address == "::" && a.address == "0.0.0.0";
+                var wildcardOverlap = aWildcard && (a.address == "*" || sameFamily) || bWildcard && (b.address == "*" || sameFamily) || dualStackWildcardOverlap;
+                if (!sameAddress && !wildcardOverlap) continue;
+                overlaps.Add(new { first = new { local = a.endpoint.Local, processId = a.endpoint.ProcessId, processName = a.endpoint.ProcessName }, second = new { local = b.endpoint.Local, processId = b.endpoint.ProcessId, processName = b.endpoint.ProcessName } });
+            }
+            if (overlaps.Count > 0)
+                conflicts.Add(new { protocol = "tcp", port = group.Key, classification = "possible-listener-conflict", endpointPairs = overlaps.Take(20).ToArray(), note = "Overlapping listener endpoints owned by different processes can indicate a bind conflict. Socket reuse and Windows dual-stack behavior can allow legitimate coexistence; verify the actual bind result and application logs." });
+            if (conflicts.Count >= 50) break;
+        }
+        return conflicts.ToArray();
+    }
+
     private static object SystemManagerDiagnostics()
     {
         var settings = ReadSystemManagerSettings();
@@ -2232,7 +2457,7 @@ $result = [pscustomobject]@{ available=($null -ne $selected); remoteAddress=[str
                 data["driverDiagnosticWarning"] = "Driver inventory is unavailable or exceeded its diagnostic timeout.";
             }
             var powerShell = Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
-            const string hardwareScript = "$ErrorActionPreference='Stop'; $classes='Win32_Processor','Win32_PhysicalMemory','Win32_VideoController','Win32_DiskDrive'; $items=@(); foreach($class in $classes){ Get-CimInstance -ClassName $class -ErrorAction SilentlyContinue | ForEach-Object { $items += ($_ | Select-Object @{n='class';e={$class}},Name,Manufacturer,Model,NumberOfCores,NumberOfLogicalProcessors,Capacity,AdapterRAM,DriverVersion,Size | ConvertTo-Json -Compress -Depth 2 | ConvertFrom-Json) } }; ConvertTo-Json -InputObject $items -Compress -Depth 3";
+            const string hardwareScript = "$ErrorActionPreference='Stop'; $classes='Win32_Processor','Win32_PhysicalMemory','Win32_VideoController','Win32_DiskDrive'; $items=@(); foreach($class in $classes){ Get-CimInstance -ClassName $class -ErrorAction SilentlyContinue | ForEach-Object { $items += ($_ | Select-Object @{n='class';e={$class}},Name,Manufacturer,Model,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,Capacity,Speed,ConfiguredClockSpeed,SMBIOSMemoryType,AdapterRAM,DriverVersion,Size | ConvertTo-Json -Compress -Depth 2 | ConvertFrom-Json) } }; ConvertTo-Json -InputObject $items -Compress -Depth 3";
             var hardware = RunFixedDiagnosticCommand(powerShell, new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", hardwareScript }, 20000);
             if (hardware.ExitCode == 0 && hardware.Output.Length > 0)
             {
@@ -2271,34 +2496,497 @@ $result = [pscustomobject]@{ available=($null -ne $selected); remoteAddress=[str
             var properties = IPGlobalProperties.GetIPGlobalProperties();
             var netstatPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "netstat.exe");
             var netstat = RunFixedDiagnosticCommand(netstatPath, new[] { "-ano", "-p", "tcp" });
-            var listeners = new List<object>();
+            var activeConnections = new List<NetworkEndpoint>();
+            var listeners = new List<NetworkEndpoint>();
+            var includeExecutableIdentity = (bool?)capabilities?["inspectProcesses"] == true;
+            var tcpRowsProcessed = 0;
             if (netstat.ExitCode == 0)
             {
                 foreach (var line in netstat.Output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
                 {
+                    if (++tcpRowsProcessed > 500) break;
                     var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length < 5 || !parts[0].Equals("TCP", StringComparison.OrdinalIgnoreCase) || !parts[^2].Equals("LISTENING", StringComparison.OrdinalIgnoreCase) || !int.TryParse(parts[^1], out var pid)) continue;
-                    string? processName = null; try { using var owner = Process.GetProcessById(pid); processName = owner.ProcessName; } catch { }
-                    listeners.Add(new { local = parts[1], processId = pid, processName });
-                    if (listeners.Count >= 200) break;
+                    if (parts.Length < 5 || !parts[0].Equals("TCP", StringComparison.OrdinalIgnoreCase) || !int.TryParse(parts[^1], NumberStyles.None, CultureInfo.InvariantCulture, out var pid)) continue;
+                    var local = parts[1]; var remote = parts[2]; var state = parts[^2];
+                    string? processName = null; string? executablePath = null; DateTime? startedAtUtc = null;
+                    try { using var owner = Process.GetProcessById(pid); processName = owner.ProcessName; try { startedAtUtc = owner.StartTime.ToUniversalTime(); } catch { } if (includeExecutableIdentity) { try { executablePath = owner.MainModule?.FileName; } catch { } } } catch { }
+                    var endpoint = new NetworkEndpoint(local, remote, state, pid, processName, executablePath, startedAtUtc);
+                    if (state.Equals("LISTENING", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (listeners.Count < 200) listeners.Add(endpoint);
+                    }
+                    else if (activeConnections.Count < 200) activeConnections.Add(endpoint);
                 }
             }
             var udpNetstat = RunFixedDiagnosticCommand(netstatPath, new[] { "-ano", "-p", "udp" });
-            var udpListeners = new List<object>();
+            var udpEndpoints = new List<NetworkEndpoint>();
             if (udpNetstat.ExitCode == 0)
             {
                 foreach (var line in udpNetstat.Output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
                 {
                     var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length < 4 || !parts[0].Equals("UDP", StringComparison.OrdinalIgnoreCase) || !int.TryParse(parts[^1], out var pid)) continue;
-                    string? processName = null; try { using var owner = Process.GetProcessById(pid); processName = owner.ProcessName; } catch { }
-                    udpListeners.Add(new { local = parts[1], processId = pid, processName });
-                    if (udpListeners.Count >= 200) break;
+                    if (parts.Length < 4 || !parts[0].Equals("UDP", StringComparison.OrdinalIgnoreCase) || !int.TryParse(parts[^1], NumberStyles.None, CultureInfo.InvariantCulture, out var pid)) continue;
+                    string? processName = null; string? executablePath = null; DateTime? startedAtUtc = null;
+                    try { using var owner = Process.GetProcessById(pid); processName = owner.ProcessName; try { startedAtUtc = owner.StartTime.ToUniversalTime(); } catch { } if (includeExecutableIdentity) { try { executablePath = owner.MainModule?.FileName; } catch { } } } catch { }
+                    udpEndpoints.Add(new NetworkEndpoint(parts[1], parts.Length >= 4 ? parts[2] : null, "BOUND", pid, processName, executablePath, startedAtUtc));
+                    if (udpEndpoints.Count >= 200) break;
                 }
             }
-            data["network"] = new { hostName = properties.HostName, domainName = properties.DomainName, adapters, activeTcpConnections = properties.GetActiveTcpConnections().Take(200).Select(item => new { local = item.LocalEndPoint.ToString(), remote = item.RemoteEndPoint.ToString(), state = item.State.ToString() }).ToArray(), tcpListeners = listeners, tcpListenerCount = listeners.Count, tcpListenerSource = netstat.ExitCode == 0 ? "netstat -ano" : "unavailable", udpListeners, udpListenerCount = udpListeners.Count, udpListenerSource = udpNetstat.ExitCode == 0 ? "netstat -ano" : "unavailable" };
+            var tcpPortConflicts = FindPotentialTcpListenerConflicts(listeners);
+            var udpListeners = udpEndpoints.Where(item => string.IsNullOrWhiteSpace(item.Remote) || item.Remote == "*:*" || item.Remote == "0.0.0.0:0")
+                .Select(item => new { local = item.Local, processId = item.ProcessId, processName = item.ProcessName, executablePath = item.ExecutablePath, startedAtUtc = item.StartedAtUtc }).ToArray();
+            data["network"] = new { hostName = properties.HostName, domainName = properties.DomainName, adapters,
+                activeTcpConnections = activeConnections, activeTcpConnectionCount = activeConnections.Count, activeTcpConnectionSource = netstat.ExitCode == 0 ? "netstat -ano" : "unavailable",
+                tcpListeners = listeners.Select(item => new { local = item.Local, processId = item.ProcessId, processName = item.ProcessName, executablePath = item.ExecutablePath, startedAtUtc = item.StartedAtUtc }).ToArray(), tcpListenerCount = listeners.Count,
+                tcpListenerSource = netstat.ExitCode == 0 ? "netstat -ano" : "unavailable", possibleTcpListenerConflicts = tcpPortConflicts,
+                udpEndpoints, udpEndpointCount = udpEndpoints.Count, udpEndpointSource = udpNetstat.ExitCode == 0 ? "netstat -ano" : "unavailable",
+                udpListeners, udpListenerCount = udpListeners.Length, udpListenerSource = udpNetstat.ExitCode == 0 ? "netstat -ano" : "unavailable", processExecutableIdentityEnabled = includeExecutableIdentity };
         }
         return new { diagnostics = data, note = "Read-only Windows and process diagnostics. Service and network details are included only when their individual capabilities are enabled." };
+    }
+
+    private sealed record HealthEvidenceEvent(string Source, string LogName, int EventId, string Provider, string TimeCreatedUtc, string? Subject, string Message, long? RecordId);
+
+    private static bool TryGetJsonString(JsonElement value, string property, out string text)
+    {
+        text = string.Empty;
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(property, out var item) || item.ValueKind != JsonValueKind.String) return false;
+        text = item.GetString() ?? string.Empty;
+        return true;
+    }
+
+    private static int TryGetJsonInt(JsonElement value, string property)
+        => value.ValueKind == JsonValueKind.Object && value.TryGetProperty(property, out var item) && item.TryGetInt32(out var result) ? result : 0;
+
+    private static double? TryGetJsonDouble(JsonElement value, string property)
+        => value.ValueKind == JsonValueKind.Object && value.TryGetProperty(property, out var item) && item.ValueKind == JsonValueKind.Number && item.TryGetDouble(out var result) ? result : null;
+
+    private static JsonElement GetInvestigationRoot(JsonElement result)
+        => result.ValueKind == JsonValueKind.Object && result.TryGetProperty("investigation", out var investigation) ? investigation : result;
+
+    private static void AppendHealthEvidence(List<HealthEvidenceEvent> events, HashSet<string> seen, JsonElement result, string source)
+    {
+        var investigation = GetInvestigationRoot(result);
+        if (investigation.ValueKind != JsonValueKind.Object || !investigation.TryGetProperty("events", out var rows) || rows.ValueKind != JsonValueKind.Array) return;
+        foreach (var row in rows.EnumerateArray().Take(200))
+        {
+            var logName = TryGetJsonString(row, "logName", out var log) ? log : string.Empty;
+            var eventId = TryGetJsonInt(row, "eventId");
+            var provider = TryGetJsonString(row, "provider", out var providerValue) ? providerValue : string.Empty;
+            var timestamp = TryGetJsonString(row, "timeCreatedUtc", out var time) ? time : string.Empty;
+            var message = TryGetJsonString(row, "message", out var messageValue) ? Limit(messageValue, 1400) : string.Empty;
+            var subject = TryGetJsonString(row, "serviceName", out var serviceName) && serviceName.Length > 0 ? serviceName : (TryGetJsonString(row, "application", out var application) && application.Length > 0 ? application : null);
+            if (subject is null && provider.Contains("Service Control Manager", StringComparison.OrdinalIgnoreCase))
+            {
+                var failedDependency = System.Text.RegularExpressions.Regex.Match(message, @"(?im)^The .+? service depends on the (.+?) service which failed to start");
+                var serviceMatch = failedDependency.Success ? failedDependency : System.Text.RegularExpressions.Regex.Match(message, @"(?im)^(?:The )?(.+?) service (?:terminated|failed|did not|was unable|cannot|could not)");
+                if (serviceMatch.Success) subject = serviceMatch.Groups[1].Value.Trim();
+            }
+            if (subject is null && logName.Equals("Application", StringComparison.OrdinalIgnoreCase))
+            {
+                var applicationMatch = System.Text.RegularExpressions.Regex.Match(message, @"(?im)(?:Faulting application name|Application name|Application):\s*([^,\r\n]+)");
+                if (applicationMatch.Success) subject = applicationMatch.Groups[1].Value.Trim();
+            }
+            long? recordId = row.ValueKind == JsonValueKind.Object && row.TryGetProperty("recordId", out var record) && record.TryGetInt64(out var id) ? id : null;
+            var identity = logName + "|" + eventId.ToString(CultureInfo.InvariantCulture) + "|" + (recordId?.ToString(CultureInfo.InvariantCulture) ?? timestamp + "|" + provider);
+            if (!seen.Add(identity)) continue;
+            events.Add(new HealthEvidenceEvent(source, logName, eventId, provider, timestamp, subject, message, recordId));
+        }
+    }
+
+    private static double? ReadJsonNodeNumber(JsonNode? node)
+    {
+        if (node is not JsonValue value) return null;
+        try { return value.GetValue<double>(); } catch { try { return value.GetValue<long>(); } catch { return null; } }
+    }
+
+    private static JsonArray ReadHealthHistory(out string? warning)
+    {
+        warning = null;
+        Directory.CreateDirectory(SystemManagerRoot);
+        EnsureNoReparseAncestors(SystemManagerRoot);
+        if (!File.Exists(SystemManagerHealthHistoryPath)) return new JsonArray();
+        if (IsReparsePoint(SystemManagerHealthHistoryPath)) throw new InvalidDataException("Health history cannot be read through a symbolic link or reparse point.");
+        var info = new FileInfo(SystemManagerHealthHistoryPath);
+        if (info.Length > 512 * 1024) throw new InvalidDataException("Health history exceeded the 512 KB safety limit and was not loaded.");
+        var root = JsonNode.Parse(File.ReadAllText(SystemManagerHealthHistoryPath, Encoding.UTF8)) as JsonObject;
+        if (root is null || (int?)root["formatVersion"] != 1 || root["snapshots"] is not JsonArray snapshots)
+            throw new InvalidDataException("Health history has an unsupported or invalid format; the existing file was preserved.");
+        return (JsonArray)snapshots.DeepClone();
+    }
+
+    private static void WriteHealthHistory(JsonArray snapshots)
+    {
+        Directory.CreateDirectory(SystemManagerRoot);
+        EnsureNoReparseAncestors(SystemManagerRoot);
+        var temporary = SystemManagerHealthHistoryPath + ".tmp";
+        if ((File.Exists(SystemManagerHealthHistoryPath) && IsReparsePoint(SystemManagerHealthHistoryPath)) || (File.Exists(temporary) && IsReparsePoint(temporary)))
+            throw new InvalidDataException("Health history cannot be written through a symbolic link or reparse point.");
+        string content;
+        do
+        {
+            content = new JsonObject { ["formatVersion"] = 1, ["snapshots"] = snapshots.DeepClone() }.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
+            if (Encoding.UTF8.GetByteCount(content) <= 512 * 1024) break;
+            if (snapshots.Count <= 1) throw new InvalidDataException("A single health snapshot exceeds the 512 KB safety limit and was not saved.");
+            snapshots.RemoveAt(0);
+        } while (true);
+        File.WriteAllText(temporary, content, new UTF8Encoding(false));
+        File.Move(temporary, SystemManagerHealthHistoryPath, true);
+    }
+
+    private static JsonObject BuildHealthSnapshot(DateTimeOffset timestamp, string status, double? cpuPercent, double? memoryPercent, double? diskQueue, int serviceFailureCount, int crashCount, int networkFailureCount, int issueCount, Dictionary<string, string> serviceStates, IEnumerable<string> issueKeys)
+    {
+        var services = new JsonObject();
+        foreach (var pair in serviceStates.Take(250)) services[pair.Key] = pair.Value;
+        var issues = new JsonArray();
+        foreach (var issue in issueKeys.Distinct(StringComparer.Ordinal).Take(50)) issues.Add(issue);
+        return new JsonObject
+        {
+            ["timestampUtc"] = timestamp.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+            ["status"] = status,
+            ["metrics"] = new JsonObject
+            {
+                ["cpuPercent"] = cpuPercent is null ? null : JsonValue.Create(cpuPercent.Value),
+                ["memoryPercent"] = memoryPercent is null ? null : JsonValue.Create(memoryPercent.Value),
+                ["diskQueue"] = diskQueue is null ? null : JsonValue.Create(diskQueue.Value)
+            },
+            ["counts"] = new JsonObject
+            {
+                ["serviceFailureEvents"] = serviceFailureCount,
+                ["applicationCrashEvents"] = crashCount,
+                ["networkFailureEvents"] = networkFailureCount,
+                ["issues"] = issueCount
+            },
+            ["serviceStates"] = services,
+            ["issueKeys"] = issues
+        };
+    }
+
+    private static object BuildHealthComparison(JsonObject? previous, JsonObject current)
+    {
+        if (previous is null) return new { available = false, reason = "No earlier health snapshot is available yet." };
+        var previousMetrics = previous["metrics"] as JsonObject;
+        var currentMetrics = current["metrics"] as JsonObject;
+        double? Delta(string key)
+        {
+            var before = ReadJsonNodeNumber(previousMetrics?[key]);
+            var after = ReadJsonNodeNumber(currentMetrics?[key]);
+            return before is null || after is null ? null : Math.Round(after.Value - before.Value, 2);
+        }
+        int CountDelta(string key)
+        {
+            var before = (int?)previous["counts"]?[key] ?? 0;
+            var after = (int?)current["counts"]?[key] ?? 0;
+            return after - before;
+        }
+        var changedServices = new List<object>();
+        var oldStates = previous["serviceStates"] as JsonObject;
+        var newStates = current["serviceStates"] as JsonObject;
+        if (oldStates is not null && newStates is not null)
+        {
+            foreach (var pair in newStates)
+            {
+                var before = (string?)oldStates[pair.Key];
+                var after = (string?)pair.Value;
+                if (before is not null && after is not null && !before.Equals(after, StringComparison.OrdinalIgnoreCase))
+                    changedServices.Add(new { service = pair.Key, previousState = before, currentState = after });
+            }
+        }
+        var previousTime = (string?)previous["timestampUtc"];
+        return new
+        {
+            available = true,
+            previousSnapshotUtc = previousTime,
+            currentSnapshotUtc = (string?)current["timestampUtc"],
+            metricDelta = new { cpuPercentPoints = Delta("cpuPercent"), memoryPercentPoints = Delta("memoryPercent"), diskQueue = Delta("diskQueue") },
+            countDelta = new { serviceFailureEvents = CountDelta("serviceFailureEvents"), applicationCrashEvents = CountDelta("applicationCrashEvents"), networkFailureEvents = CountDelta("networkFailureEvents"), issues = CountDelta("issues") },
+            changedServiceStates = changedServices.Take(50).ToArray(),
+            note = "Changes compare two on-demand snapshots. They do not establish that a change caused another event or that the entire interval was continuously monitored."
+        };
+    }
+
+    private static async Task<object> SystemManagerHealthReportAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        var settings = ReadSystemManagerSettings();
+        if (!(bool?)settings["enabled"] ?? false) throw new UnauthorizedAccessException("Windows System Manager is disabled in the System Manager menu.");
+        if (!(bool?)settings["groups"]?["diagnostics"] ?? false) throw new UnauthorizedAccessException("System Diagnostics is disabled.");
+        var capabilities = settings["capabilities"];
+        bool Enabled(string name) => (bool?)capabilities?[name] == true;
+        var canCollect = new[] { "systemInformation", "serviceInformation", "networkInformation", "eventLogInformation", "crashInvestigation", "resourceMonitoring", "storageHealth" }.Any(Enabled);
+        if (!canCollect) throw new UnauthorizedAccessException("Enable at least one System Manager diagnostic capability before requesting a health report.");
+
+        var now = DateTimeOffset.UtcNow;
+        var warnings = new List<object>();
+        JsonElement diagnostics = default;
+        JsonElement? crashInvestigation = null;
+        JsonElement? applicationEvents = null;
+        JsonElement? systemEvents = null;
+        JsonElement? resourceSampling = null;
+        JsonElement? storageHealth = null;
+        var diagnosticCapabilities = new[] { "systemInformation", "serviceInformation", "networkInformation" };
+        if (diagnosticCapabilities.Any(Enabled))
+        {
+            try
+            {
+                diagnostics = JsonSerializer.SerializeToElement(SystemManagerDiagnostics());
+                if (diagnostics.TryGetProperty("diagnostics", out var data)) diagnostics = data.Clone();
+            }
+            catch (Exception error) { warnings.Add(new { category = "system-inventory", message = Limit(error.Message, 300) }); }
+        }
+
+        var days = args.TryGetProperty("days", out var daysValue) && daysValue.TryGetInt32(out var requestedDays) ? requestedDays : 7;
+        if (days is < 1 or > 30) throw new InvalidDataException("Health report history window must be between 1 and 30 days.");
+        if (Enabled("crashInvestigation"))
+        {
+            try { crashInvestigation = JsonSerializer.SerializeToElement(SystemManagerInvestigateCrashes(JsonSerializer.SerializeToElement(new { days, max_events = 200 }))); }
+            catch (Exception error) { warnings.Add(new { category = "crash-and-service-failures", message = Limit(error.Message, 300) }); }
+        }
+        if (Enabled("eventLogInformation"))
+        {
+            foreach (var logName in new[] { "Application", "System" })
+            {
+                try
+                {
+                    var logResult = JsonSerializer.SerializeToElement(SystemManagerReadEventLog(JsonSerializer.SerializeToElement(new { log_name = logName, hours = Math.Min(720, days * 24), max_events = 150, event_id = 0, query = string.Empty })));
+                    if (logName == "Application") applicationEvents = logResult; else systemEvents = logResult;
+                }
+                catch (Exception error) { warnings.Add(new { category = logName + "-event-log", message = Limit(error.Message, 300) }); }
+            }
+        }
+        if (Enabled("resourceMonitoring"))
+        {
+            var duration = args.TryGetProperty("duration_seconds", out var durationValue) && durationValue.TryGetInt32(out var requestedDuration) ? requestedDuration : 3;
+            if (duration is < 1 or > 15) throw new InvalidDataException("Health report resource sampling must be between 1 and 15 seconds.");
+            try { resourceSampling = JsonSerializer.SerializeToElement(await SystemManagerSampleResourcesAsync(JsonSerializer.SerializeToElement(new { duration_seconds = duration, interval_seconds = 1 }), cancellationToken).ConfigureAwait(false)); }
+            catch (Exception error) { warnings.Add(new { category = "resource-sampling", message = Limit(error.Message, 300) }); }
+        }
+        if (Enabled("storageHealth"))
+        {
+            try { storageHealth = JsonSerializer.SerializeToElement(SystemManagerStorageHealth()); }
+            catch (Exception error) { warnings.Add(new { category = "storage-health", message = Limit(error.Message, 300) }); }
+        }
+
+        var allEvents = new List<HealthEvidenceEvent>();
+        var seenEvents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (crashInvestigation.HasValue) AppendHealthEvidence(allEvents, seenEvents, crashInvestigation.Value, "crash-investigation");
+        if (applicationEvents.HasValue) AppendHealthEvidence(allEvents, seenEvents, applicationEvents.Value, "application-event-log");
+        if (systemEvents.HasValue) AppendHealthEvidence(allEvents, seenEvents, systemEvents.Value, "system-event-log");
+        var serviceFailureIds = new HashSet<int> { 7000, 7001, 7023, 7024, 7031, 7034, 7038, 7043 };
+        var networkFailureIds = new HashSet<int> { 1014, 4227, 4231 };
+        var serviceFailures = allEvents.Where(item => serviceFailureIds.Contains(item.EventId) || (item.Provider.Contains("Service Control Manager", StringComparison.OrdinalIgnoreCase) && item.Subject is not null)).ToArray();
+        var crashEvents = allEvents.Where(item => item.LogName.Equals("Application", StringComparison.OrdinalIgnoreCase) && (item.EventId is 1000 or 1001 or 1026)).ToArray();
+        var networkFailures = allEvents.Where(item => networkFailureIds.Contains(item.EventId) || item.Provider.Contains("DNS Client", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var recurringServiceFailures = serviceFailures.Where(item => !string.IsNullOrWhiteSpace(item.Subject))
+            .GroupBy(item => item.Subject!, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new { serviceName = group.Key, occurrences = group.Count(), eventIds = group.Select(item => item.EventId).Distinct().OrderBy(value => value).ToArray(), firstSeenUtc = group.Select(item => item.TimeCreatedUtc).OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault(), lastSeenUtc = group.Select(item => item.TimeCreatedUtc).OrderByDescending(value => value, StringComparer.Ordinal).FirstOrDefault() })
+            .OrderByDescending(item => item.occurrences).Take(50).ToArray();
+        string CrashSignature(HealthEvidenceEvent item)
+        {
+            var exception = System.Text.RegularExpressions.Regex.Match(item.Message, @"(?i)exception code:\s*(0x[0-9a-f]+)").Groups[1].Value;
+            var module = System.Text.RegularExpressions.Regex.Match(item.Message, @"(?im)(?:Faulting module name|Faulting module):\s*([^,\r\n]+)").Groups[1].Value.Trim();
+            return string.Join("|", item.Subject ?? "unknown-application", exception, module);
+        }
+        var recurringApplicationCrashes = crashEvents.Select(item => new { item, signature = CrashSignature(item) })
+            .Where(item => !item.signature.Equals("unknown-application||", StringComparison.OrdinalIgnoreCase)
+                && !item.signature.EndsWith("||", StringComparison.Ordinal))
+            .GroupBy(item => item.signature, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new { signature = group.Key, application = group.Select(item => item.item.Subject).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)), occurrences = group.Count(), eventIds = group.Select(item => item.item.EventId).Distinct().OrderBy(value => value).ToArray(), firstSeenUtc = group.Select(item => item.item.TimeCreatedUtc).OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault(), lastSeenUtc = group.Select(item => item.item.TimeCreatedUtc).OrderByDescending(value => value, StringComparer.Ordinal).FirstOrDefault() })
+            .OrderByDescending(item => item.occurrences).Take(50).ToArray();
+        var recurringNetworkFailures = networkFailures.GroupBy(item => item.Provider + "|" + item.EventId.ToString(CultureInfo.InvariantCulture), StringComparer.OrdinalIgnoreCase)
+            .Select(group => new { provider = group.First().Provider, eventId = group.First().EventId, occurrences = group.Count(), firstSeenUtc = group.Select(item => item.TimeCreatedUtc).OrderBy(value => value, StringComparer.Ordinal).FirstOrDefault(), lastSeenUtc = group.Select(item => item.TimeCreatedUtc).OrderByDescending(value => value, StringComparer.Ordinal).FirstOrDefault() })
+            .OrderByDescending(item => item.occurrences).Take(50).ToArray();
+
+        double? averageCpu = null;
+        double? peakCpu = null;
+        double? memoryPercent = null;
+        double? diskQueue = null;
+        if (resourceSampling is JsonElement resource)
+        {
+            averageCpu = TryGetJsonDouble(resource, "averageCpuPercent");
+            peakCpu = TryGetJsonDouble(resource, "peakCpuPercent");
+            if (resource.TryGetProperty("memory", out var memory) && memory.ValueKind == JsonValueKind.Object) memoryPercent = TryGetJsonDouble(memory, "memoryLoadPercent");
+            if (resource.TryGetProperty("diskIo", out var disk) && disk.ValueKind == JsonValueKind.Object && disk.TryGetProperty("disks", out var diskRows) && diskRows.ValueKind == JsonValueKind.Array)
+            {
+                var queueValues = diskRows.EnumerateArray().Select(row => TryGetJsonDouble(row, "averageQueueLength")).Where(value => value.HasValue).Select(value => value!.Value).ToArray();
+                if (queueValues.Length > 0) diskQueue = queueValues.Max();
+            }
+        }
+
+        var drives = diagnostics.ValueKind == JsonValueKind.Object && diagnostics.TryGetProperty("drives", out var driveRows) && driveRows.ValueKind == JsonValueKind.Array ? driveRows : default;
+        double? minimumFreeDrivePercent = null;
+        if (drives.ValueKind == JsonValueKind.Array)
+        {
+            var freeRatios = drives.EnumerateArray().Select(drive =>
+            {
+                var total = drive.TryGetProperty("totalBytes", out var totalValue) && totalValue.TryGetDouble(out var totalBytes) ? totalBytes : 0;
+                var available = drive.TryGetProperty("availableBytes", out var freeValue) && freeValue.TryGetDouble(out var freeBytes) ? freeBytes : 0;
+                return total > 0 ? (double?)(available * 100d / total) : null;
+            }).Where(value => value.HasValue).Select(value => value!.Value).ToArray();
+            if (freeRatios.Length > 0) minimumFreeDrivePercent = Math.Round(freeRatios.Min(), 2);
+        }
+
+        string ProcessHotspotEvidence(string property, string metric, string unit)
+        {
+            if (!resourceSampling.HasValue || resourceSampling.Value.ValueKind != JsonValueKind.Object ||
+                !resourceSampling.Value.TryGetProperty(property, out var rows) || rows.ValueKind != JsonValueKind.Array)
+                return "Process attribution was unavailable for this sample.";
+            var entries = new List<string>();
+            foreach (var row in rows.EnumerateArray().Take(3))
+            {
+                var name = TryGetJsonString(row, "name", out var processName) ? processName : "unknown process";
+                var processId = TryGetJsonInt(row, "processId");
+                var amount = TryGetJsonDouble(row, metric);
+                if (!amount.HasValue) continue;
+                var formatted = unit == "bytes"
+                    ? $"{amount.Value / (1024d * 1024d):0.0} MB"
+                    : $"{amount.Value:0.0} s";
+                entries.Add($"{name} (PID {processId}, {formatted})");
+            }
+            return entries.Count > 0 ? "Top sampled processes: " + string.Join(", ", entries) + "." : "No process hotspot was recorded in the sample.";
+        }
+        var cpuProcessEvidence = ProcessHotspotEvidence("topProcesses", "cpuSeconds", "seconds");
+        var memoryProcessEvidence = ProcessHotspotEvidence("topWorkingSetProcesses", "workingSetBytes", "bytes");
+        var privateMemoryProcessEvidence = ProcessHotspotEvidence("topPrivateMemoryProcesses", "privateMemoryBytes", "bytes");
+        var issues = new List<object>();
+        var issueKeys = new List<string>();
+        void AddIssue(string severity, string code, string title, string evidence)
+        {
+            issues.Add(new { severity, code, title, evidence });
+            issueKeys.Add(code);
+        }
+        var repeatedServices = recurringServiceFailures.Where(item => item.occurrences >= 3).ToArray();
+        var repeatedApplications = recurringApplicationCrashes.Where(item => item.occurrences >= 3).ToArray();
+        var repeatedNetworkPatterns = recurringNetworkFailures.Where(item => item.occurrences >= 3).ToArray();
+        if (repeatedServices.Length > 0) AddIssue("high", "repeated-service-failures", "Repeated Windows service failures", string.Join("; ", repeatedServices.Take(5).Select(item => $"{item.serviceName}: {item.occurrences} events")));
+        else if (serviceFailures.Length > 0) AddIssue("warning", "service-failures", "Windows service failure events", $"{serviceFailures.Length} service failure event(s) were observed; inspect the service name and event details.");
+        if (repeatedApplications.Length > 0) AddIssue("high", "repeated-application-crashes", "Repeated application crash signatures", string.Join("; ", repeatedApplications.Take(5).Select(item => $"{item.application ?? item.signature}: {item.occurrences} events")));
+        else if (crashEvents.Length > 0) AddIssue("warning", "application-crashes", "Application crash events", $"{crashEvents.Length} application crash/report event(s) were observed.");
+        if (repeatedNetworkPatterns.Length > 0) AddIssue("high", "repeated-network-failures", "Repeated DNS/network failure events", string.Join("; ", repeatedNetworkPatterns.Take(5).Select(item => $"{item.provider} {item.eventId}: {item.occurrences} events")));
+        else if (networkFailures.Length > 0) AddIssue("warning", "network-failures", "DNS/network failure events", $"{networkFailures.Length} DNS/network event(s) were observed in the System log.");
+        if (averageCpu is >= 90) AddIssue("high", "sustained-cpu-pressure", "High average CPU utilization", $"Average CPU utilization during the finite sample was {averageCpu:0.0}% (peak {peakCpu:0.0}%). {cpuProcessEvidence}");
+        else if (peakCpu is >= 90) AddIssue("warning", "cpu-spike", "High CPU sample observed", $"Peak CPU utilization during the finite sample was {peakCpu:0.0}%. {cpuProcessEvidence}");
+        if (memoryPercent is >= 90) AddIssue("high", "memory-pressure", "High physical memory load", $"Windows reported physical memory load at {memoryPercent:0.0}%. {memoryProcessEvidence} {privateMemoryProcessEvidence}");
+        if (minimumFreeDrivePercent is <= 10) AddIssue("warning", "low-free-disk-space", "Low free space on a drive", $"The lowest available drive-space ratio was {minimumFreeDrivePercent:0.0}%.");
+        if (diskQueue is >= 2) AddIssue("warning", "disk-queue-pressure", "Elevated physical disk queue", $"The highest sampled average physical-disk queue length was {diskQueue:0.00}.");
+
+        var timeline = allEvents.Select(item =>
+        {
+            var parsed = DateTimeOffset.TryParse(item.TimeCreatedUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var timestamp);
+            return new { item, parsed, timestamp };
+        }).Where(item => item.parsed).GroupBy(item => item.timestamp.UtcDateTime.Ticks / TimeSpan.FromMinutes(5).Ticks)
+            .Where(group => group.Count() >= 2)
+            .OrderByDescending(group => group.Key).Take(40)
+            .Select(group => new { windowStartUtc = new DateTimeOffset(group.Key * TimeSpan.FromMinutes(5).Ticks, TimeSpan.Zero), evidenceCount = group.Count(), sources = group.Select(item => item.item.Source).Distinct().ToArray(), eventIds = group.Select(item => item.item.EventId).Distinct().Order().ToArray(), subjects = group.Select(item => item.item.Subject).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).Take(10).ToArray(), note = "Events share a five-minute time bucket; temporal proximity is not proof of causality." }).ToArray();
+
+        DateTimeOffset? resourceSampleStartUtc = null;
+        DateTimeOffset? resourceSampleEndUtc = null;
+        if (resourceSampling.HasValue && resourceSampling.Value.ValueKind == JsonValueKind.Object && resourceSampling.Value.TryGetProperty("samples", out var resourceSamples) && resourceSamples.ValueKind == JsonValueKind.Array)
+        {
+            var sampleTimes = resourceSamples.EnumerateArray()
+                .Select(row => TryGetJsonString(row, "sampledAtUtc", out var sampledAt) && DateTimeOffset.TryParse(sampledAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsedAt) ? (DateTimeOffset?)parsedAt : null)
+                .Where(value => value.HasValue).Select(value => value!.Value).OrderBy(value => value).ToArray();
+            if (sampleTimes.Length > 0) { resourceSampleStartUtc = sampleTimes[0]; resourceSampleEndUtc = sampleTimes[^1]; }
+        }
+        var nearbyResourceEvents = new List<object>();
+        if (resourceSampleStartUtc.HasValue && resourceSampleEndUtc.HasValue)
+        {
+            foreach (var item in allEvents
+                .Where(item => DateTimeOffset.TryParse(item.TimeCreatedUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var eventTime) && eventTime >= resourceSampleStartUtc.Value.AddMinutes(-5) && eventTime <= resourceSampleEndUtc.Value.AddMinutes(5))
+                .OrderByDescending(item => item.TimeCreatedUtc, StringComparer.Ordinal)
+                .Take(50))
+            {
+                nearbyResourceEvents.Add(new { item.TimeCreatedUtc, item.LogName, item.EventId, item.Provider, item.Subject, source = item.Source });
+            }
+        }
+        var resourceEventCorrelation = new
+        {
+            available = resourceSampleStartUtc.HasValue && resourceSampleEndUtc.HasValue,
+            sampleStartUtc = resourceSampleStartUtc,
+            sampleEndUtc = resourceSampleEndUtc,
+            nearbyEventCount = nearbyResourceEvents.Count,
+            nearbyEvents = nearbyResourceEvents,
+            note = "Windows events within five minutes of the finite resource sample are surfaced as nearby evidence only; time overlap does not attribute resource pressure to an event or process."
+        };
+
+        var serviceStates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (diagnostics.ValueKind == JsonValueKind.Object && diagnostics.TryGetProperty("services", out var serviceInventory) && serviceInventory.ValueKind == JsonValueKind.Object && serviceInventory.TryGetProperty("services", out var serviceRows) && serviceRows.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var serviceRow in serviceRows.EnumerateArray().Take(250))
+            {
+                var name = TryGetJsonString(serviceRow, "name", out var serviceName) ? serviceName : string.Empty;
+                var state = TryGetJsonString(serviceRow, "state", out var serviceState) ? serviceState : string.Empty;
+                if (name.Length > 0 && state.Length > 0) serviceStates[name] = state;
+            }
+        }
+
+        JsonElement possibleTcpListenerConflicts = default;
+        if (diagnostics.ValueKind == JsonValueKind.Object && diagnostics.TryGetProperty("network", out var networkData) && networkData.ValueKind == JsonValueKind.Object && networkData.TryGetProperty("possibleTcpListenerConflicts", out var conflicts))
+            possibleTcpListenerConflicts = conflicts.Clone();
+        var status = warnings.Count > 0 && issues.Count == 0 ? "Incomplete" : issues.Any(item => item.GetType().GetProperty("severity")?.GetValue(item)?.ToString() == "high") ? "Attention" : issues.Count > 0 ? "Warning" : "NoCriticalFindings";
+        var timestampUtc = now.ToString("O", CultureInfo.InvariantCulture);
+        var currentSnapshot = BuildHealthSnapshot(now, status, averageCpu, memoryPercent, diskQueue, serviceFailures.Length, crashEvents.Length, networkFailures.Length, issues.Count, serviceStates, issueKeys);
+        object comparison = new { available = false, reason = "Local health history is disabled. Enable the opt-in history setting to compare future on-demand reports." };
+        var historySaved = false;
+        var historyCount = 0;
+        string? historyWarning = null;
+        if (Enabled("healthHistory"))
+        {
+            try
+            {
+                using var mutex = new Mutex(false, SystemManagerHealthHistoryMutexName);
+                var mutexAcquired = false;
+                try
+                {
+                    try { mutexAcquired = mutex.WaitOne(TimeSpan.FromSeconds(5)); }
+                    catch (AbandonedMutexException) { mutexAcquired = true; }
+                    if (!mutexAcquired) throw new IOException("Another RunMind host is updating health history; this snapshot was not saved. Retry the report once the other update finishes.");
+                    lock (SystemManagerHealthHistorySync)
+                    {
+                        var snapshots = ReadHealthHistory(out historyWarning);
+                        var previous = snapshots.LastOrDefault() as JsonObject;
+                        comparison = BuildHealthComparison(previous, currentSnapshot);
+                        snapshots.Add(currentSnapshot.DeepClone());
+                        while (snapshots.Count > 30) snapshots.RemoveAt(0);
+                        WriteHealthHistory(snapshots);
+                        historySaved = true;
+                        historyCount = snapshots.Count;
+                    }
+                }
+                finally { if (mutexAcquired) mutex.ReleaseMutex(); }
+            }
+            catch (Exception error)
+            {
+                historyWarning = Limit(error.Message, 300);
+                warnings.Add(new { category = "local-health-history", message = historyWarning });
+            }
+        }
+
+        var coverage = new List<string>();
+        if (diagnosticCapabilities.Any(Enabled)) coverage.Add("Windows service/network/hardware inventory, limited to individually enabled categories");
+        if (Enabled("eventLogInformation")) coverage.Add("Application and System Event Logs");
+        if (Enabled("crashInvestigation")) coverage.Add("Application crash and Windows service failure events");
+        if (Enabled("resourceMonitoring")) coverage.Add("Finite CPU, physical memory, process and supported disk-I/O sampling");
+        if (Enabled("storageHealth")) coverage.Add("Physical disk reliability and volume health where Windows exposes it");
+        var report = new
+        {
+            success = true, accepted = true, completed = true, verified = true,
+            generatedAtUtc = timestampUtc, status,
+            summary = new { issueCount = issues.Count, serviceFailureEvents = serviceFailures.Length, applicationCrashEvents = crashEvents.Length, networkFailureEvents = networkFailures.Length, averageCpuPercent = averageCpu, peakCpuPercent = peakCpu, memoryLoadPercent = memoryPercent, minimumFreeDrivePercent, maximumDiskQueueLength = diskQueue },
+            issues,
+            correlation = new { fiveMinuteEvidenceWindows = timeline, resourceSample = resourceEventCorrelation, note = "RunMind reports evidence that overlaps in time. It does not infer root cause, network causality, or service-to-process causality from temporal proximity alone. CPU and memory pressure findings include the highest sampled process contributors as observational context, not proof of fault." },
+            serviceFailures = serviceFailures.Take(100).ToArray(), recurringServiceFailures,
+            applicationCrashes = crashEvents.Take(100).ToArray(), recurringApplicationCrashes,
+            networkFailures = networkFailures.Take(100).ToArray(), recurringNetworkFailures,
+            possibleTcpListenerConflicts = possibleTcpListenerConflicts.ValueKind == JsonValueKind.Undefined ? (JsonElement?)null : possibleTcpListenerConflicts,
+            resourceHotspots = resourceSampling.HasValue && resourceSampling.Value.ValueKind == JsonValueKind.Object ? new { topCpuProcesses = resourceSampling.Value.TryGetProperty("topProcesses", out var cpuRows) ? cpuRows.Clone() : default, topWorkingSetProcesses = resourceSampling.Value.TryGetProperty("topWorkingSetProcesses", out var workingSetRows) ? workingSetRows.Clone() : default, topPrivateMemoryProcesses = resourceSampling.Value.TryGetProperty("topPrivateMemoryProcesses", out var privateMemoryRows) ? privateMemoryRows.Clone() : default } : null,
+            diagnostics = diagnostics.ValueKind == JsonValueKind.Undefined ? (JsonElement?)null : diagnostics,
+            crashInvestigation, applicationEvents, systemEvents, resourceSampling, storageHealth,
+            localHistory = new { enabled = Enabled("healthHistory"), saved = historySaved, retainedSnapshots = historyCount, comparison, warning = historyWarning },
+            coverage, warnings,
+            networkFollowUp = Enabled("targetedNetworkDiagnostics") ? "For a selected hostname and optional TCP port, use the explicit targeted DNS/route/TCP diagnostic. No unsolicited remote probe or port scan was performed by this report." : "Targeted hostname/DNS/route/TCP probing is not enabled; no remote probe or port scan was performed.",
+            notes = new[] { "This is an on-demand evidence report, not a continuous monitor, compliance certification or root-cause determination.", "Only categories enabled in the System Manager settings are queried. Unsupported hardware or performance counters remain unavailable rather than being reported as healthy.", "Local history stores bounded summary metrics, service states and issue identifiers only; it does not persist raw Event Log messages, executable paths, connection endpoints or process command lines.", "Historical comparisons compare on-demand snapshots only; they do not imply continuous observation between reports." }
+        };
+        return report;
     }
 
     private static bool WaitForProcessExit(Process process)

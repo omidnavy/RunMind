@@ -1,3 +1,16 @@
+## 3.2.0 — P5 System Manager Health Intelligence
+
+- Extend Windows service inspection with structured startup mode, service account, binary path, declared dependencies, recovery/failure configuration and trigger information; add bounded, cycle-safe recursive dependency trees.
+- Expand Service Control Manager failure event coverage and group recurring failures by service identity; continue grouping application crashes by application/exception/module signature.
+- Add the read-only, on-demand `system_manager_health_report` Agent tool, combining only individually enabled service/network/hardware inventory, Application/System events, crash investigation, finite resource samples and storage health.
+- Add five-minute event evidence windows and nearby-event correlation against the finite resource sample. Correlation remains observational and makes no causal/root-cause claim.
+- Add optional local health history, off by default, with up to 30 summaries / 512 KB, summary-only contents, reparse-point checks, atomic replacement and cross-process mutex serialization.
+- Add bounded active TCP connection and UDP endpoint ownership with PID/process names, optional executable paths, and possible TCP listener conflict candidates.
+- Extend resource telemetry with system physical/page-file memory, process working set/private memory, CPU interval deltas and supported physical-disk I/O/queue counters; include leading CPU/memory process observations in pressure evidence.
+- Preserve selected-target DNS/route/one-port TCP diagnostics, with mandatory confirmation for TCP; no scans, continuous monitoring, automatic remediation or new runtime dependencies.
+- Synchronize Standalone, PowerToys Run and Command Palette package versions to 3.2.0 / 3.2.0.0 and add P5-focused regression tests and Windows acceptance guidance.
+- Portable suite 237/237 and P5 suite 13/13 passed in Node.js 22.16.0; Windows/.NET 10 x64 build and live acceptance remain pending.
+
 ## 3.1.0 — P4 Agent Capabilities
 
 - Expand MCP discovery to protocol/server metadata, paginated tools/resources/resource templates/prompts, safe template expansion, metadata search and accurate discovery completeness; remote reads/tool calls still require fresh approval.

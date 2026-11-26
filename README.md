@@ -41,6 +41,16 @@ Example theme header:
 
 For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
 
+## RunMind 3.2.0 — P5 System Manager Health Intelligence (P0–P4 retained)
+
+RunMind 3.2.0 connects Windows service, event, crash, resource, network and storage evidence into a shared on-demand diagnostic workflow across Standalone, PowerToys Run and PowerToys Command Palette.
+
+P5 adds structured Windows service startup/dependency/recovery inspection, bounded dependency trees, recurring service/application/network failure groups, a read-only evidence-based health report, five-minute event correlation, optional bounded local history, active TCP/UDP process ownership, possible listener-conflict candidates, targeted DNS/route/single-endpoint TCP diagnosis, and expanded CPU/physical memory/per-process/disk telemetry. CPU/memory pressure findings include the leading sampled processes when available. Time overlap is presented as investigative context, not causality.
+
+Health history is disabled by default. When explicitly enabled, it stores at most 30 compact local summaries within 512 KB. The report runs only on demand; it does not install a background monitor. Service start/stop/restart and the optional TCP endpoint probe retain fresh native confirmation. See `P5-RELEASE-NOTES.md`, `docs/SYSTEM-MANAGER-HEALTH-INTELLIGENCE.md`, `docs/P5-IMPLEMENTATION-AUDIT.md` and `docs/P5-WINDOWS-ACCEPTANCE.md`.
+
+Source checks are reported in `BUILD-STATUS.md`. Windows/.NET 10 certification remains a target-machine gate; run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete the P0–P5 acceptance checklists in all three hosts before calling the release Windows-certified.
+
 ## RunMind 3.1.0 — P4 Agent Capabilities (P0–P3 retained)
 
 RunMind 3.1.0 strengthens the shared Agent Core across Standalone, PowerToys Run and PowerToys Command Palette. It retains P0 reliability, P1 Project Intelligence/Mission Control, P2 System Manager Intelligence and P3 Developer Infrastructure.
@@ -56,7 +66,7 @@ P4 adds eight Agent capabilities:
 - **Development Session Timeline:** chronological checkpoint, tool-operation/dependency-layer and sub-agent events shown in Workflow and exposed as a read-only Agent tool.
 - **Artifact Verification:** structural checks and SHA-256 over exact artifact bytes, optional independently supplied expected digest comparison and a bounded receipt. A matching digest is not proof of provenance or signature authenticity.
 
-P4 adds no package/runtime dependency. Project analysis remains JavaScript, TypeScript, JSX/TSX, HTML and CSS, with SVG as a vector asset. See `P4-RELEASE-NOTES.md`, `docs/AGENT-CAPABILITIES-P4.md` and `docs/P4-IMPLEMENTATION-AUDIT.md`. Windows/.NET certification remains a target-machine gate; complete `docs/P4-WINDOWS-ACCEPTANCE.md` alongside the P0–P3 checklists before calling the three Windows hosts certified.
+P4 adds no package/runtime dependency. Project analysis remains JavaScript, TypeScript, JSX/TSX, HTML and CSS, with SVG as a vector asset. See `P4-RELEASE-NOTES.md`, `docs/AGENT-CAPABILITIES-P4.md` and `docs/P4-IMPLEMENTATION-AUDIT.md`. Windows/.NET certification remains a target-machine gate; complete `docs/P4-WINDOWS-ACCEPTANCE.md` alongside the P0–P3 regression checklists before calling the three Windows hosts certified.
 
 ## RunMind 3.0.0 — P3 Developer Infrastructure (P0 + P1 + P2 retained)
 

@@ -26,7 +26,7 @@ test('graceful process close is routed through native identity validation', () =
 });
 
 test('service restart and inspection operations are exposed with state verification', () => {
-  assert.match(providers, /enum:\['list','inspect','config','dependents','start','stop','restart'\]/);
+  assert.match(providers, /enum:\['list','inspect','config','dependents','dependencies','start','stop','restart'\]/);
   assert.match(native, /"restart" or "config" or "dependents"/);
   assert.match(native, /ParseServiceState/);
   assert.match(native, /requestedState = desiredState, actualState/);
@@ -68,7 +68,7 @@ test('mixed container and service tools request read-only approval for inspectio
   assert.match(tools, /Allow read-only container inspection/);
   assert.match(tools, /Allow read-only Windows service inspection/);
   assert.match(tools, /!\['start','stop','restart'\]\.includes\(action\)/);
-  assert.match(tools, /\['list','inspect','config','dependents'\]\.includes\(action\)/);
+  assert.match(tools, /\['list','inspect','config','dependents','dependencies'\]\.includes\(action\)/);
 });
 
 test('service restart is only verified after an observed stop/start cycle', () => {

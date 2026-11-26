@@ -1,4 +1,4 @@
-# RunMind 3.1.0 — P4 implementation audit
+# RunMind 3.2.0 — P4 implementation audit
 
 ## Scope
 
@@ -17,8 +17,8 @@ This audit maps every P4 request to shipped source behavior. P4 reuses the share
 
 ## Shared-host deployment
 
-- Standalone, PowerToys Run and PowerToys Command Palette project versions are `3.1.0`.
-- Command Palette Appx identity is `3.1.0.0`.
+- Standalone, PowerToys Run and PowerToys Command Palette project versions are `3.2.0`.
+- Command Palette Appx identity is `3.2.0.0`.
 - `p4-logic.js` and all Agent HTML/JS/CSS assets are included by the shared ChatWindow content deployment in all hosts.
 - All P4 Agent definitions and dispatch routes live in shared provider/tool files.
 - No new npm package/runtime dependency was added.

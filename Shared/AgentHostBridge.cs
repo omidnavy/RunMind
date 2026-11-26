@@ -147,6 +147,7 @@ public sealed partial class AgentHostBridge : IDisposable
             "systemManager.eventLog" => Task.FromResult(SystemManagerReadEventLog(args)),
             "systemManager.crashes" => Task.FromResult(SystemManagerInvestigateCrashes(args)),
             "systemManager.resources" => SystemManagerSampleResourcesAsync(args, cancellationToken),
+            "systemManager.healthReport" => SystemManagerHealthReportAsync(args, cancellationToken),
             "systemManager.scheduledTasks" => Task.FromResult(SystemManagerScheduledTasks(args)),
             "systemManager.storage" => Task.FromResult(SystemManagerStorageHealth()),
             "systemManager.security" => Task.FromResult(SystemManagerSecurityPosture()),

@@ -1,6 +1,6 @@
-# RunMind 3.1.0 — Feature Matrix (P0 foundation + P1 Project Intelligence + P2 System Manager Intelligence + P3 Developer Infrastructure + P4 Agent Capabilities)
+# RunMind 3.2.0 — Feature Matrix (P0–P5)
 
-| Area | Capability | Status in current 3.1.0 source bundle | Notes |
+| Area | Capability | Status in current 3.2.0 source bundle | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
@@ -103,7 +103,7 @@
 
 ## 2.6.1 changes
 
-| Area | Capability | Status in current 3.1.0 source bundle | Notes |
+| Area | Capability | Status in current 3.2.0 source bundle | Notes |
 |---|---|---|---|
 | System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
 | System Manager | First-party RunMind adapter | Extended | Sends prompts, opens a validated `.runmind` session, or starts a fresh Standalone conversation |
@@ -202,4 +202,29 @@
 
 ## Developer language scope
 
-RunMind project understanding and project-specific developer workflows are intentionally focused on JavaScript, TypeScript, JSX/TSX, HTML, CSS and SVG. SVG is indexed as a vector asset with local references, not a programming language. No additional language parsers, semantic engines, debuggers or language-specific build/test workflows are introduced in 3.1.0. Existing generic package-manifest/lockfile recognition may observe other ecosystem metadata but does not imply language support.
+RunMind project understanding and project-specific developer workflows are intentionally focused on JavaScript, TypeScript, JSX/TSX, HTML, CSS and SVG. SVG is indexed as a vector asset with local references, not a programming language. P5 adds no additional language parsers, semantic engines, debuggers or language-specific build/test workflows. Existing generic package-manifest/lockfile recognition may observe other ecosystem metadata but does not imply language support.
+
+
+## P5 System Manager Health Intelligence — RunMind 3.2.0
+
+| Area | Capability | Status | Notes |
+|---|---|---|---|
+| System Manager | Structured Windows service configuration | Implemented | Startup mode, service account, binary path, type, error-control and load-order fields; unavailable fields remain explicit |
+| System Manager | Service recovery and trigger configuration | Implemented | `sc qfailure`, `qfailureflag`, `qtriggerinfo`; warnings retained independently |
+| System Manager | Recursive service dependencies | Implemented | Cycle-safe read-only tree; maximum depth 5 and 50 nodes; load-order groups not expanded |
+| System Manager | Repeated service failure detection | Implemented | Expanded SCM event coverage; groups by service identity |
+| System Manager | Approved service start/stop/restart | Implemented | Always fresh native confirmation and queried final-state verification |
+| System Manager | Integrated health report | Implemented | Read-only, on-demand, individually capability-gated report with coverage/warnings |
+| System Manager | Crash/service/network recurrence | Implemented | Application/exception/module; service identity; network provider/event signatures; repeated count threshold is 3 |
+| System Manager | Windows event correlation | Implemented | Five-minute event windows; temporal overlap is not causality |
+| System Manager | Resource/event correlation | Implemented | Events within five minutes of finite resource sample; not causal attribution |
+| System Manager | Historical health comparison | Implemented | Separate opt-in; last 30 summaries / 512 KB; aggregate data only; cross-host mutex |
+| System Manager | Active TCP connection ownership | Implemented | Bounded netstat rows with PID/process name; executable path gated by process-detail permission |
+| System Manager | UDP endpoint ownership | Implemented | Bounded endpoint list with PID/process name |
+| System Manager | Possible TCP listener conflict candidates | Implemented | Local binding overlap heuristic; not definitive conflict detection |
+| System Manager | Selected-target DNS and route diagnostics | Implemented | One selected host/IP; Windows-selected route/interface/next hop |
+| System Manager | Selected-target TCP endpoint check | Implemented | Optional one-port connection; fresh native confirmation; no scans |
+| System Manager | CPU and physical/page-file memory telemetry | Expanded | System CPU intervals and GlobalMemoryStatusEx |
+| System Manager | Per-process resource observations | Expanded | CPU deltas, working set and private memory; top contributor summaries |
+| System Manager | Physical-disk I/O telemetry | Expanded | Windows CIM performance provider; queue and throughput where available; unavailable if provider/counters missing |
+| System Manager | Continuous monitoring / auto-remediation | Not included | Reports are on demand; no background agent or automatic system changes |

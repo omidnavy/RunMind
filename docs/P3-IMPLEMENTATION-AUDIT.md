@@ -1,4 +1,4 @@
-# RunMind 3.1.0 — P3 implementation audit
+# RunMind 3.2.0 — P3 implementation audit
 
 ## Scope result
 
@@ -18,7 +18,7 @@ Five corresponding built-in developer workflows have been added to `Shared/ChatW
 
 - All three host projects compile `Shared/DeveloperInfrastructure.cs`.
 - All three package `SqliteRunner.cjs` and `OpenApiTestRunner.cjs` next to their existing Agent/native bridge files.
-- Host package versions are 3.1.0; Command Palette package identity is 3.1.0.0.
+- Host package versions are 3.2.0; Command Palette package identity is 3.2.0.0.
 - Native dispatch routes are `containers.workbench`, `sqlite.run` and `openapi.test.run`.
 
 ## Safety and limits

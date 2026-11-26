@@ -1,11 +1,11 @@
-# RunMind 3.1.0 — P4 Windows acceptance checklist
+# RunMind 3.2.0 — P4 Windows acceptance checklist
 
-Run after extracting the 3.1.0 source on Windows with Node.js 24+ and .NET 10. Repeat interactive checks in Standalone, PowerToys Run and PowerToys Command Palette.
+Run after extracting the 3.2.0 source on Windows with Node.js 24+ and .NET 10. Repeat interactive checks in Standalone, PowerToys Run and PowerToys Command Palette.
 
 ## Build and version
 
 - [ ] Run `.\Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` from the repository root in PowerShell.
-- [ ] Confirm all three hosts compile/package with version `3.1.0` and Command Palette Appx identity `3.1.0.0`.
+- [ ] Confirm all three hosts compile/package with version `3.2.0` and Command Palette Appx identity `3.2.0.0`.
 - [ ] Verify `p4-logic.js`, updated Agent scripts and Workflow UI are present in all three host outputs.
 - [ ] Run `node --test --test-concurrency=1` using the installed Node.js 24 runtime.
 
