@@ -1,6 +1,7 @@
 #nullable enable
 
 using System.Diagnostics;
+using System.IO;
 using Microsoft.Win32;
 using RunMind.Shared;
 

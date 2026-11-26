@@ -66,3 +66,11 @@ test('Standalone handoff pipe is user-scoped and validates bounded prompt/respon
   assert.match(app, /HasOtherStandaloneProcess\(\)/);
   assert.match(app, /new MainWindow\(runnerHandoff\.Prompt, runnerHandoff\.Response/);
 });
+
+test('StandaloneLocator explicitly imports System.IO for filesystem path discovery', async () => {
+  const locator = await read('RunMind.Runner/StandaloneLocator.cs');
+  assert.match(locator, /^using System\.IO;$/m);
+  assert.match(locator, /Path\.Combine\(/);
+  assert.match(locator, /new DirectoryInfo\(/);
+  assert.match(locator, /File\.Exists\(/);
+});

@@ -21,8 +21,8 @@
 
 Latest portable validation on the final source tree and extracted archive:
 
-- Full Node regression suite: **292/292 passed**.
-- Runner-specific contract, window UX and handoff suite: **37/37 passed**.
+- Full Node regression suite: **293/293 passed**.
+- Runner-specific contract, window UX and handoff suite: **38/38 passed**.
 - JavaScript syntax checks: **58/58 passed**.
 - JSON files: **4/4 parsed**.
 - XML/XAML/project/manifest files: **11/11 parsed**.
@@ -37,6 +37,13 @@ The reported `MC3074` error referenced `RunMind.Runner/RunnerChatWindow.xaml`, b
 The Runner project now excludes both retired files using `DefaultItemExcludesInProjectFolder`, plus explicit `Page Remove` and `Compile Remove` entries. `Build-Release-x64.bat` also deletes the stale XAML and code-behind before restore/build if they remain in a reused source folder. This prevents WPF default item discovery from compiling stale chat-window artifacts even when the source directory is reused. The handoff regression suite asserts the project exclusions and build-script cleanup.
 
 This is a source/project-level correction. The current environment does not contain .NET SDK/MSBuild or Windows Desktop targeting packs, so the Windows Release x64 build remains unverified here.
+
+
+## Latest Windows build correction — Standalone locator filesystem imports (2026-11-24)
+
+The Windows build report identified missing `Path`, `File` and `DirectoryInfo` symbols in `RunMind.Runner/StandaloneLocator.cs`. The file now imports `System.IO` explicitly instead of relying on SDK implicit-using behavior. The handoff contract suite includes a regression assertion for this explicit import and the filesystem discovery operations it supports. A source scan of Runner C# files confirmed that other files using filesystem APIs already import `System.IO`.
+
+Portable validation on this source tree: **293/293** full regression tests and **38/38** Runner-specific tests passed. This environment still has no .NET SDK/MSBuild or Windows runtime; therefore the actual Windows Release x64 compilation remains to be confirmed on the user's machine.
 
 ## Complete Runner scope in this source
 
@@ -57,7 +64,7 @@ This is a source/project-level correction. The current environment does not cont
 Environment: Linux container, Node.js `v22.16.0`; Python XML parsing. The latest checks ran directly against this modified source tree.
 
 - Full regression suite: **292/292 passed** using `node --test`.
-- Runner-specific contract, window UX and handoff suite: **37/37 passed** using `node --test tests/runner-contract.test.cjs tests/runner-window-ux.test.cjs tests/runner-standalone-handoff.test.cjs`.
+- Runner-specific contract, window UX and handoff suite: **37/37 passed** using `node --test tests/runner-contract.test.cjs tests/runner-window-ux.test.cjs tests/runner-standalone-handoff.test.cjs tests/runner-inline-model.test.cjs`.
 - XML, XAML, MSBuild project and manifest parsing: checked again after the latest edits.
 - Runner XAML named controls and code-behind bindings: checked for unique names and the new monitor, sizing, provider and ranking controls.
 - Contract tests cover WindowChrome, cursor-monitor selection, auto sizing, conditional provider settings, plugin ranking, themed controls, blank empty state, removal of the duplicate Runner chat host, bounded current-user IPC, executable discovery and prompt/answer handoff.
