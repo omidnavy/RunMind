@@ -23,8 +23,8 @@
 
 Environment: Linux container, Node.js `v22.16.0`; Python XML/JSON parsing.
 
-- Full regression suite: **271/271 passed** using `node --test --test-concurrency=1 tests/*.test.cjs`.
-- Runner-specific contract suite: **16/16 passed** using `node --test tests/runner-contract.test.cjs`.
+- Full regression suite: **272/272 passed** using `node --test --test-concurrency=1 tests/*.test.cjs`.
+- Runner-specific contract suite: **17/17 passed** using `node --test tests/runner-contract.test.cjs`.
 - JavaScript syntax: **56 files parsed** using `node --check`.
 - JSON: **4 files parsed**.
 - XML, XAML, MSBuild and manifest files: **11 files parsed**.
@@ -79,4 +79,20 @@ The user-provided build output showed that Standalone, PowerToys Run and Command
 - `RunnerInlineModelClient.cs`: explicitly import `System.IO` and `System.Net.Http` for `StreamReader`, `HttpClient`, `HttpRequestMessage`, `HttpResponseMessage` and `HttpContent`.
 - Add a Runner regression contract test for these explicit aliases and imports.
 
-The portable suite now reports 271/271 overall and 16/16 Runner-specific tests. This environment still has no .NET SDK/MSBuild or Windows Desktop targeting packs, so these source corrections have **not** been compiled here. Re-run `Build-Release-x64.bat` on Windows before treating the correction as verified by compilation.
+The portable suite at that correction stage reported 271/271 overall and 16/16 Runner-specific tests. This environment still has no .NET SDK/MSBuild or Windows Desktop targeting packs, so these source corrections have **not** been compiled here. Re-run `Build-Release-x64.bat` on Windows before treating the correction as verified by compilation.
+
+## Follow-up correction from the next Windows Release x64 build report
+
+The user-provided log again showed that Standalone, PowerToys Run and Command Palette compiled successfully, while Runner reported 24 errors and one nullable warning. This archive includes these additional source corrections:
+
+- `RunnerInlineCredentialsStore.cs` and `RunnerInlineSettings.cs`: added explicit `System.IO` imports for filesystem APIs and IO exception types.
+- `RunnerThemeManager.cs`: aliased `System.Windows.Application` as `WpfApplication` to avoid collisions from Windows Forms global usings.
+- `MainWindow.xaml.cs`: aliased and used `System.Windows.Clipboard` as `WpfClipboard` for both clipboard actions.
+- `RunnerPlugins.cs`: renamed the parenthesized expression local to `parenthesizedValue` to avoid CS0136 with the later `out var value`.
+- `RunnerInlineModelClient.cs`: changed nullable HTTP status formatting to capture a non-null pattern variable, addressing CS8629.
+- Added a Runner regression contract test for these cases.
+
+The current portable test counts are recorded in the validation report accompanying this archive. No .NET compiler is available in this environment; Windows Release x64 compilation remains unverified until the user reruns `Build-Release-x64.bat`.
+
+
+For the current Fix 2 source, validation reports **272/272** full-suite tests and **17/17** Runner-specific contract tests. See `docs/WINDOWS-BUILD-FIX-COMPLETE-RUNNER-2.md`.

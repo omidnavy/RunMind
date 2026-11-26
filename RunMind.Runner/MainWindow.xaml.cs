@@ -10,6 +10,7 @@ using System.Windows.Threading;
 using Forms = System.Windows.Forms;
 using RunMind.Shared;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
+using WpfClipboard = System.Windows.Clipboard;
 
 namespace RunMind.Runner;
 
@@ -368,7 +369,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(value)) return;
         try
         {
-            Clipboard.SetText(value);
+            WpfClipboard.SetText(value);
             StatusText.Text = "RunMind answer copied to clipboard.";
         }
         catch (Exception exception) { StatusText.Text = "Could not copy the answer: " + exception.Message; }
@@ -387,7 +388,7 @@ public partial class MainWindow : Window
                     Hide();
                     break;
                 case RunnerPluginAction.CopyText when result.Value is not null:
-                    Clipboard.SetText(result.Value);
+                    WpfClipboard.SetText(result.Value);
                     StatusText.Text = "Copied " + result.Value;
                     break;
                 case RunnerPluginAction.ShowInlineAnswer:

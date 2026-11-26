@@ -283,10 +283,10 @@ internal sealed class SafeArithmetic
         SkipWhiteSpace();
         if (Take('('))
         {
-            var value = ParseExpression();
+            var parenthesizedValue = ParseExpression();
             SkipWhiteSpace();
             if (!Take(')')) throw new FormatException("Missing closing parenthesis.");
-            return value;
+            return parenthesizedValue;
         }
 
         var start = _position;

@@ -267,3 +267,26 @@ test('Runner explicitly qualifies WPF drawing controls and imports HTTP/IO APIs'
     assert.ok(client.includes(type), `inline model client should use ${type}`);
   }
 });
+
+test('Runner uses explicit IO and WPF types to avoid Windows Forms global-using collisions', async () => {
+  const credentials = await read('RunMind.Runner/RunnerInlineCredentialsStore.cs');
+  const settings = await read('RunMind.Runner/RunnerInlineSettings.cs');
+  const theme = await read('RunMind.Runner/RunnerThemeManager.cs');
+  const main = await read('RunMind.Runner/MainWindow.xaml.cs');
+  const plugins = await read('RunMind.Runner/RunnerPlugins.cs');
+  const client = await read('RunMind.Runner/RunnerInlineModelClient.cs');
+
+  assert.match(credentials, /^#nullable enable\s+using System\.IO;/);
+  assert.match(settings, /^#nullable enable\s+using System\.IO;/);
+  assert.match(theme, /using WpfApplication = System\.Windows\.Application;/);
+  assert.match(theme, /WpfApplication\.Current\.Resources/);
+  assert.doesNotMatch(theme, /(?<!Wpf)\bApplication\.Current\.Resources/);
+  assert.match(main, /using WpfClipboard = System\.Windows\.Clipboard;/);
+  assert.match(main, /WpfClipboard\.SetText\(/);
+  assert.doesNotMatch(main, /(?<!Wpf)\bClipboard\.SetText\(/);
+  assert.match(plugins, /var parenthesizedValue = ParseExpression\(\);/);
+  assert.match(plugins, /return parenthesizedValue;/);
+  assert.match(client, /HttpRequestException when|HttpRequestException \{ StatusCode: null \}/);
+  assert.match(client, /StatusCode is \{ \} statusCode/);
+  assert.doesNotMatch(client, /\(int\)http\.StatusCode\b/);
+});

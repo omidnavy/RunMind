@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Media;
 using MediaColor = System.Windows.Media.Color;
 using MediaColorConverter = System.Windows.Media.ColorConverter;
+using WpfApplication = System.Windows.Application;
 using RunMind.Shared;
 
 namespace RunMind.Runner;
@@ -76,11 +77,11 @@ internal static class RunnerThemeManager
     private static void SetBrush(string key, IReadOnlyDictionary<string, string> palette, string property, string fallback)
     {
         var value = palette.TryGetValue(property, out var configured) ? configured : fallback;
-        Application.Current.Resources[key] = new SolidColorBrush(ParseColor(value, fallback));
+        WpfApplication.Current.Resources[key] = new SolidColorBrush(ParseColor(value, fallback));
     }
 
     private static SolidColorBrush GetBrush(string key)
-        => Application.Current.Resources[key] as SolidColorBrush ?? new SolidColorBrush(Colors.Transparent);
+        => WpfApplication.Current.Resources[key] as SolidColorBrush ?? new SolidColorBrush(Colors.Transparent);
 
     private static MediaColor ParseColor(string value, string fallback)
     {

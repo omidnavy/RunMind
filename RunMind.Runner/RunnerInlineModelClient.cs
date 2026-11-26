@@ -615,8 +615,8 @@ internal sealed class RunnerInlineModelClient
     private static string ProviderName(RunnerInlineSettings settings) => settings.Provider == "lmstudio" ? "LM Studio" : "Ollama";
     private static string UsefulMessage(Exception exception) => exception switch
     {
-        HttpRequestException http when http.StatusCode is null => "Connection failed. Check that the selected provider is running and the endpoint is correct.",
-        HttpRequestException http => $"HTTP {(int)http.StatusCode} {http.StatusCode}: {TrimForError(http.Message)}",
+        HttpRequestException { StatusCode: null } => "Connection failed. Check that the selected provider is running and the endpoint is correct.",
+        HttpRequestException http when http.StatusCode is { } statusCode => $"HTTP {(int)statusCode} {statusCode}: {TrimForError(http.Message)}",
         OperationCanceledException => "The request was cancelled.",
         _ => TrimForError(exception.Message),
     };
