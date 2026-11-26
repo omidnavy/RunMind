@@ -9,8 +9,8 @@
     <PlatformTarget>$(Platform)</PlatformTarget>
     <AssemblyName>RunMind.CommandPalette</AssemblyName>
     <RootNamespace>RunMind.CommandPalette</RootNamespace>
-    <Version>2.6.1</Version>
-    <AppxPackageVersion>2.6.1.0</AppxPackageVersion>
+    <Version>2.6.2</Version>
+    <AppxPackageVersion>2.6.2.0</AppxPackageVersion>
     <AppxPackageIdentityName>RunMind.CommandPalette</AppxPackageIdentityName>
     <AppxPackagePublisher>CN=Omid Navy</AppxPackagePublisher>
     <EnableMsixTooling>true</EnableMsixTooling>
@@ -29,6 +29,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="..\Skills\**\*.*" Link="Skills\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.CommandPalette.Extensions" Version="0.12.260812002" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" />

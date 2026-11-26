@@ -1,4 +1,12 @@
-## [2.6.1] — System Manager UI & Model Compatibility (2026-11-18)
+# Changelog
+
+## 2.6.2 — System Management Skills & Capability Contracts
+
+- Added bundled `system-management`, `container-management`, and `runmind-management` Agent Skills, discoverable and loadable on demand alongside global and project skills.
+- Added a concise shared System Management instruction policy; skills guide behavior but never grant permissions or replace native enforcement.
+- Enriched adapter inventory with operation parameters, state-change classification, confirmation policy, and expected result fields. Native validation remains authoritative.
+- Included bundled skills in Standalone, Command Palette, and PowerToys Run host outputs.
+
 
 ### Reliability and compatibility
 - Keep all System Manager policy in the single leading Agent system message. This avoids model chat templates rejecting a second system message while preserving the same action policy.

@@ -736,8 +736,20 @@ public sealed partial class AgentHostBridge
     private static object SystemManagerListAdapters()
     {
         RequireSystemCapability("applications", "launchApplications");
-        var adapters = ReadSystemApplicationAdapters().Select(item => new { item.id, item.displayName, item.match, operations = item.operations.Keys.ToArray(), item.builtIn }).ToArray();
-        return new { adapters, count = adapters.Length, customAdapterDirectory = SystemManagerAdaptersRoot, format = "JSON manifests; argument arrays only; no scripts or shell commands" };
+        var adapters = ReadSystemApplicationAdapters().Select(item => new
+        {
+            item.id, item.displayName, item.match, item.builtIn,
+            operations = item.operations.Keys.Select(operation => new
+            {
+                name = operation,
+                required = new[] { "target" },
+                optional = operation == "open-file" ? new[] { "line" } : Array.Empty<string>(),
+                access = "application-action",
+                confirmation = "native System Manager permission policy",
+                resultFields = new[] { "accepted", "launched", "verified", "outcome", "message" }
+            }).ToArray()
+        }).ToArray();
+        return new { adapters, count = adapters.Length, customAdapterDirectory = SystemManagerAdaptersRoot, format = "JSON manifests; argument arrays only; no scripts or shell commands", operationMetadata = "Required/optional parameters, access classification, confirmation policy, and result fields are descriptive; native validation and permissions remain authoritative." };
     }
 
     private static object SystemManagerLaunchAdapter(JsonElement args)

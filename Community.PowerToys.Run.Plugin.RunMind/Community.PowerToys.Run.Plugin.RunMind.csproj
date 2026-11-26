@@ -8,7 +8,7 @@
 	<UseWindowsForms>true</UseWindowsForms>
 	<RootNamespace>Community.PowerToys.Run.Plugin.RunMind</RootNamespace>
 	<AssemblyName>Community.PowerToys.Run.Plugin.RunMind</AssemblyName>
-	<Version>2.6.1</Version>
+	<Version>2.6.2</Version>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
@@ -16,6 +16,7 @@
  
 
   <ItemGroup>
+    <Content Include="..\Skills\**\*.*" Link="Skills\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Compile Include="..\Shared\ConversationSaveDialog.cs" Link="Shared\ConversationSaveDialog.cs" />
     <Compile Include="..\Shared\WebView2RuntimeBootstrapper.cs" Link="Shared\WebView2RuntimeBootstrapper.cs" />
     <Compile Include="..\Shared\WindowLayout.cs" Link="Shared\WindowLayout.cs" />

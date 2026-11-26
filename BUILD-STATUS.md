@@ -47,3 +47,8 @@ See `VALIDATION-REPORT.md` for exact checks and limitations. Windows/.NET compil
 - Discovery now includes Windows uninstall registry entries and executable candidates under registered install locations, improving coverage for apps such as Steam.
 - Existing process PIDs are snapshotted before launch. A surviving old PID alone is no longer treated as a verified launch; launcher exit/handoff and process-running states are reported separately.
 - Default-handler opens report request acceptance only; they do not claim an application, visible window, focus, or navigation was verified.
+
+
+## 2.6.2 validation status
+
+Source updates include three bundled Agent Skills, native skill discovery/loading, shared System Management prompt guidance, adapter operation metadata, and content packaging for all three hosts. Static validation is performed in the accompanying report. Windows/.NET compilation and runtime behavior require Windows testing.

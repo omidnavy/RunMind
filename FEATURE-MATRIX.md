@@ -75,3 +75,10 @@
 | System Manager | Installed application discovery | Implemented | Includes App Paths, uninstall registry entries, Start Menu shortcuts and PATH; search query is mandatory. |
 | System Manager | Launch verification | Implemented | New process startup and unverified existing-instance handoff are distinct outcomes. A running process does not prove visible focus. |
 | System Manager | Default-handler open | Implemented | Reports Windows request acceptance without claiming application/window/navigation verification. |
+
+
+| Capability | 2.6.2 |
+|---|---|
+| Bundled on-demand System Management skills | Yes |
+| Adapter operation metadata (arguments, state-change, confirmation, result fields) | Yes |
+| Native permission enforcement independent of skill instructions | Yes |

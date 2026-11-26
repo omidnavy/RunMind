@@ -826,7 +826,7 @@
           const row = document.createElement('div'); row.className = 'capability-row system-manager-adapter-row';
           const copy = document.createElement('div'); copy.className = 'capability-copy';
           const title = document.createElement('strong'); title.textContent = adapter.displayName || adapter.id;
-          const detail = document.createElement('span'); detail.textContent = `${adapter.builtIn ? 'Built-in' : 'Custom'} · matches ${adapter.match} · ${(adapter.operations || []).join(', ')}`;
+          const detail = document.createElement('span'); detail.textContent = `${adapter.builtIn ? 'Built-in' : 'Custom'} · matches ${adapter.match} · ${(adapter.operations || []).map(operation => typeof operation === 'string' ? operation : operation?.name).filter(Boolean).join(', ')}`;
           copy.append(title, detail); row.append(copy);
           if (!adapter.builtIn) {
             const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'setting-reset'; remove.textContent = 'Remove'; remove.dataset.adapterRemove = adapter.id; row.append(remove);
@@ -1138,8 +1138,8 @@
     }
     async function loadAgentSkill(name, scope, references = [], signal) {
       if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(name || ''))) throw new Error('Invalid Agent Skill name.');
-      if (scope === 'global') {
-        const loaded = await callAgentHost('skills.load', { name, references }, signal);
+      if (scope === 'builtin' || scope === 'global') {
+        const loaded = await callAgentHost('skills.load', { name, scope, references }, signal);
         workspaceContext.enabledSkills = [...new Set([...workspaceContext.enabledSkills, name])].slice(0, 50);
         agentSkillsStatus.textContent = `${workspaceContext.enabledSkills.length} skill(s) loaded in this conversation.`;
         return loaded;

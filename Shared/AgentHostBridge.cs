@@ -138,7 +138,7 @@ public sealed partial class AgentHostBridge : IDisposable
             "systemManager.diagnostics" => Task.FromResult(SystemManagerDiagnostics()),
             "themes.list" => Task.FromResult(ListThemes()),
             "skills.list" => Task.FromResult(ListGlobalSkills()),
-            "skills.load" => Task.FromResult(LoadGlobalSkill(ReadString(args, "name", 100), ReadStringArray(args, "references", 10, 160))),
+            "skills.load" => Task.FromResult(LoadGlobalSkill(ReadString(args, "name", 100), ReadString(args, "scope", 20), ReadStringArray(args, "references", 10, 160))),
             "skills.install" => Task.FromResult(InstallGlobalSkill()),
             "skills.previewUrl" => PreviewSkillUrlAsync(ReadString(args, "url", 2048), cancellationToken),
             "skills.installContent" => Task.FromResult(InstallGlobalSkillContent(args.TryGetProperty("content", out var skillContent) && skillContent.ValueKind == JsonValueKind.String ? skillContent.GetString() ?? string.Empty : string.Empty, ReadString(args, "source", 2048))),
@@ -429,6 +429,19 @@ public sealed partial class AgentHostBridge : IDisposable
         Directory.CreateDirectory(root);
         EnsureNoReparseAncestors(root);
         var skills = new List<object>();
+        var bundledRoot = Path.Combine(AppContext.BaseDirectory, "Skills");
+        if (Directory.Exists(bundledRoot) && !IsReparsePoint(bundledRoot))
+        {
+            foreach (var directory in Directory.EnumerateDirectories(bundledRoot).Take(50))
+            {
+                if (IsReparsePoint(directory)) continue;
+                var skillPath = Path.Combine(directory, "SKILL.md");
+                if (!File.Exists(skillPath) || IsReparsePoint(skillPath) || new FileInfo(skillPath).Length > 128 * 1024) continue;
+                var metadata = ParseSkillFrontmatter(File.ReadAllText(skillPath, Encoding.UTF8));
+                var name = Path.GetFileName(directory);
+                if (metadata.Name == name && metadata.Description.Length > 0) skills.Add(new { name, description = metadata.Description, scope = "builtin" });
+            }
+        }
         foreach (var directory in Directory.EnumerateDirectories(root).Take(200))
         {
             if (IsReparsePoint(directory)) continue;
@@ -654,10 +667,11 @@ public sealed partial class AgentHostBridge : IDisposable
         return new { deleted = true, name, scope = "global" };
     }
 
-    private static object LoadGlobalSkill(string name, List<string> references)
+    private static object LoadGlobalSkill(string name, string scope, List<string> references)
     {
         if (!IsSafeSkillName(name)) throw new InvalidDataException("Invalid Agent Skill name.");
-        var root = GlobalSkillsRoot;
+        var root = scope == "builtin" ? Path.Combine(AppContext.BaseDirectory, "Skills") : GlobalSkillsRoot;
+        if (scope is not ("builtin" or "global")) throw new InvalidDataException("Only built-in and global skills can be loaded through the native bridge.");
         var directory = Path.GetFullPath(Path.Combine(root, name));
         EnsureNoReparseComponents(root, directory);
         if (!Directory.Exists(directory)) throw new DirectoryNotFoundException("The selected global Agent Skill directory was not found.");
@@ -679,7 +693,7 @@ public sealed partial class AgentHostBridge : IDisposable
             if (info.Length > 128 * 1024) throw new InvalidDataException($"Skill reference '{relative}' exceeds the 128 KB limit.");
             loadedReferences.Add(new { path = relative.Replace('\\', '/'), content = File.ReadAllText(path, Encoding.UTF8) });
         }
-        return new { name, scope = "global", instructions = instruction, references = loadedReferences };
+        return new { name, scope, instructions = instruction, references = loadedReferences };
     }
 
     private static (string Name, string Description) ParseSkillFrontmatter(string content)

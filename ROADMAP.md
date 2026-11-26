@@ -44,3 +44,10 @@ RunMind 2.6.1 completes the adapter management surface and improves cross-model 
 - System Manager is optional and disabled by default.
 - No shell execution is hidden behind application discovery or ordinary read-only diagnostics.
 - No arbitrary scripts, forced focus, GUI automation, administrator elevation, registry modification, or service control.
+
+
+## 2.6.2 — System Management Skills & Capability Contracts
+
+- Bundled on-demand system-management, container-management, and runmind-management skills.
+- Shared Agent policy describes safe discovery, operation selection, permission boundaries, and verification.
+- Adapter inventory reports descriptive operation contracts; native enforcement remains authoritative.
