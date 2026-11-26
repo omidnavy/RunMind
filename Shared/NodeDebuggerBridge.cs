@@ -359,8 +359,8 @@ internal sealed class NodeDebuggerSession : IDisposable
             var response = await completion.Task.WaitAsync(TimeSpan.FromSeconds(15), cancellationToken).ConfigureAwait(false);
             if (response.TryGetProperty("error", out var error))
             {
-                var message = error.TryGetProperty("message", out var messageValue) ? messageValue.GetString() : "Unknown Inspector error.";
-                throw new InvalidOperationException($"Node Inspector {method} failed: {message}");
+                var errorMessage = error.TryGetProperty("message", out var messageValue) ? messageValue.GetString() : "Unknown Inspector error.";
+                throw new InvalidOperationException($"Node Inspector {method} failed: {errorMessage}");
             }
             return response.TryGetProperty("result", out var result) ? result.Clone() : response.Clone();
         }

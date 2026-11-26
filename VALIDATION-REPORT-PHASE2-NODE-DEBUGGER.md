@@ -63,3 +63,11 @@ The script now runs all bundled Node tests (Phase 1 plus the current Phase 2 inc
 - Added/retained regression coverage for the source contract.
 - Re-ran the complete bundled Node test suite after the correction: **70/70 passed**.
 - Windows/.NET compilation still requires execution on the user's Windows machine.
+
+
+## Second Windows build-log correction (2026-11-21)
+
+- Fixed C# compiler error CS0136 in `Shared/NodeDebuggerBridge.cs` within `SendCommandAsync`: renamed the error-response local from `message` to `errorMessage` to avoid colliding with the enclosing request-payload local.
+- This is a local identifier-only change; the Inspector request/response behavior and emitted error text are unchanged.
+- Re-ran the complete bundled Node test suite after the correction: **70/70 passed**.
+- Windows/.NET compilation remains unverified in this environment and must be rerun on Windows.
