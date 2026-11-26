@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Collections.Concurrent;
@@ -203,6 +203,7 @@ public sealed partial class AgentHostBridge : IDisposable
             && uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
             && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
             && uri.IsDefaultPort && string.IsNullOrEmpty(uri.UserInfo)
+            && string.IsNullOrEmpty(uri.Fragment)
             && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase);
     }
 

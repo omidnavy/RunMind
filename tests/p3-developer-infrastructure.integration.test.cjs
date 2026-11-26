@@ -1,4 +1,4 @@
- 'use strict';
+﻿ 'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -19,10 +19,10 @@ test('P3 native infrastructure bridge is compiled and its runners are bundled by
     assert.match(xml, /Compile Include="\.\.\\Shared\\DeveloperInfrastructure\.cs"/i, project);
     assert.match(xml, /Content Include="\.\.\\Shared\\SqliteRunner\.cjs"/i, project);
     assert.match(xml, /Content Include="\.\.\\Shared\\OpenApiTestRunner\.cjs"/i, project);
-    assert.match(xml, /<Version>3\.3\.0<\/Version>/, project);
+    assert.match(xml, /<Version>3\.3\.1<\/Version>/, project);
   }
   const palette = read(projects[2]);
-  assert.match(palette, /<AppxPackageVersion>3\.3\.0\.0<\/AppxPackageVersion>/);
+  assert.match(palette, /<AppxPackageVersion>3\.3\.1\.0<\/AppxPackageVersion>/);
   const bridge = read('Shared/AgentHostBridge.cs');
   for (const route of ['containers.workbench','sqlite.run','openapi.test.run']) assert.ok(bridge.includes(route), `Missing native route ${route}`);
 });

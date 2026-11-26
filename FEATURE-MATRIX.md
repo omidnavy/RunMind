@@ -1,6 +1,9 @@
-# RunMind 3.3.0 — Feature Matrix (P0–P6)
+# RunMind 3.3.1 — Feature Matrix (P0–P6)
 
-## P6 Development Intelligence — RunMind 3.3.0
+
+> **Current release status (3.3.1):** P0–P6 capabilities are retained. The stabilization patch hardens native process-output bounds/timeouts, WebView trust/navigation/CSP and WebView2 installer coordination. Portable regression tests pass 255/255; Windows/.NET certification and credential-at-rest protection remain open. See `docs/STABILIZATION-AUDIT.md`.
+
+## P6 Development Intelligence — introduced in RunMind 3.3.0; retained in 3.3.1
 
 | Area | Capability | Status in 3.3.0 source bundle | Notes |
 |---|---|---|---|

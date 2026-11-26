@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -718,26 +718,49 @@ public sealed partial class AgentHostBridge
 
     private static (int ExitCode, string Output) RunFixedDiagnosticCommand(string executable, IEnumerable<string> arguments, int timeoutMilliseconds = 15000)
     {
-        if (!File.Exists(executable)) return (-1, string.Empty);
+        if (!File.Exists(executable)) return (-1, $"Diagnostic utility '{Path.GetFileName(executable)}' was not found.");
+        using var readerCancellation = new CancellationTokenSource();
         try
         {
-            var start = new ProcessStartInfo(executable) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+            var start = new ProcessStartInfo(executable)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
+            };
             foreach (var argument in arguments) start.ArgumentList.Add(argument);
             using var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start diagnostic utility '{Path.GetFileName(executable)}'.");
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(timeoutMilliseconds)) { try { process.Kill(entireProcessTree: true); } catch { } return (-2, string.Empty); }
+            // Drain both pipes concurrently and retain at most 512 KB from each;
+            // clipping only after collecting the full stream would still allocate without bound.
+            var outputTask = ReadBoundedProcessOutputAsync(process.StandardOutput, readerCancellation.Token);
+            var errorTask = ReadBoundedProcessOutputAsync(process.StandardError, readerCancellation.Token);
+            var hasExited = timeoutMilliseconds > 0
+                ? process.WaitForExit(timeoutMilliseconds)
+                : WaitForProcessExit(process);
+            if (!hasExited)
+            {
+                try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+                try { process.WaitForExit(5000); } catch { }
+                readerCancellation.Cancel();
+                try { Task.WhenAll(outputTask, errorTask).Wait(TimeSpan.FromSeconds(5)); } catch { }
+                return (-2, $"Diagnostic utility '{Path.GetFileName(executable)}' exceeded its {timeoutMilliseconds} ms timeout and was terminated.");
+            }
+
             var output = outputTask.GetAwaiter().GetResult();
             var error = errorTask.GetAwaiter().GetResult();
-            const int outputLimit = 1024 * 1024;
-            if (process.ExitCode != 0 && !string.IsNullOrWhiteSpace(error))
-            {
-                var boundedError = error.Length > 64 * 1024 ? error[..(64 * 1024)] : error;
-                output = string.IsNullOrWhiteSpace(output) ? boundedError : output + Environment.NewLine + "[stderr] " + boundedError;
-            }
-            return (process.ExitCode, output.Length > outputLimit ? output[..outputLimit] : output);
+            var combined = output.text;
+            if (process.ExitCode != 0 && !string.IsNullOrWhiteSpace(error.text))
+                combined = string.IsNullOrWhiteSpace(combined) ? "[stderr] " + error.text : combined + Environment.NewLine + "[stderr] " + error.text;
+            return (process.ExitCode, combined);
         }
-        catch { return (-1, string.Empty); }
+        catch (Exception error)
+        {
+            readerCancellation.Cancel();
+            return (-1, $"Diagnostic utility '{Path.GetFileName(executable)}' failed: {error.Message}");
+        }
     }
 
     private static string[] ParseCsvDiagnosticRow(string line)
@@ -2989,26 +3012,18 @@ $result = [pscustomobject]@{ available=($null -ne $selected); remoteAddress=[str
         return report;
     }
 
-    private static bool WaitForProcessExit(Process process)
-    {
-        process.WaitForExit();
-        return true;
-    }
-
     private static object ReadWindowsServices()
     {
         var scPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "sc.exe");
         if (!File.Exists(scPath)) throw new FileNotFoundException("Windows Service Control (sc.exe) was not found in the system directory.");
-        var start = new ProcessStartInfo(scPath) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-        start.ArgumentList.Add("query"); start.ArgumentList.Add("type="); start.ArgumentList.Add("service"); start.ArgumentList.Add("state="); start.ArgumentList.Add("all");
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the Windows Service Control utility.");
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
         var timeoutSeconds = (int?)ReadSystemManagerSettings()["commandTimeoutSeconds"] ?? 0;
-        var exited = timeoutSeconds > 0 ? process.WaitForExit(checked(timeoutSeconds * 1000)) : WaitForProcessExit(process);
-        if (!exited) { try { process.Kill(true); } catch { } throw new TimeoutException($"Windows service enumeration exceeded the configured {timeoutSeconds}-second timeout."); }
-        var output = outputTask.GetAwaiter().GetResult();
-        _ = errorTask.GetAwaiter().GetResult();
+        var timeoutMilliseconds = timeoutSeconds > 0 ? checked(timeoutSeconds * 1000) : 0;
+        var result = RunFixedDiagnosticCommand(scPath, new[] { "query", "type=", "service", "state=", "all" }, timeoutMilliseconds);
+        if (result.ExitCode == -2)
+            throw new TimeoutException(timeoutSeconds == 0 ? "Windows service enumeration was interrupted." : $"Windows service enumeration exceeded the configured {timeoutSeconds}-second timeout.");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException("Windows service enumeration failed. " + result.Output);
+        var output = result.Output;
         var services = new List<object>();
         string? name = null; string? display = null; string? state = null;
         foreach (var line in output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
@@ -3024,7 +3039,7 @@ $result = [pscustomobject]@{ available=($null -ne $selected); remoteAddress=[str
             }
             if (services.Count >= 250) break;
         }
-        return new { services, count = services.Count, truncated = services.Count >= 250, exitCode = process.ExitCode };
+        return new { services, count = services.Count, truncated = services.Count >= 250 || output.Contains("[output truncated at 512 KB]", StringComparison.Ordinal), exitCode = result.ExitCode };
     }
 
 }

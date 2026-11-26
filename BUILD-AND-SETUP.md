@@ -149,6 +149,12 @@ Branch comparison selects the latest assistant response that follows each branch
 
 ### Command Palette provider authentication
 
+### Credential storage security limitation
+
+RunMind currently persists sensitive connection values in more than one host-owned store. Full-chat provider API keys and authentication headers, Jina/custom Reader credentials, and MCP bearer tokens are persisted in the WebView2 profile's `localStorage`. Command Palette and PowerToys Run inline model credentials are persisted in `%LOCALAPPDATA%\RunMind\Shared\inline-model-settings.json`. The Command Palette settings JSON is not DPAPI-encrypted; neither is the browser-backed WebView storage protected by a RunMind DPAPI secret-vault abstraction. These values are not intentionally written to diagnostic logs, but they remain readable to code/processes running as the same Windows user and should be treated as plaintext-at-rest for the current release.
+
+Do not use a shared Windows account/profile for RunMind secrets. Before production deployment, implement a native Windows DPAPI-backed credential store with explicit access scoped to the current user, migrate existing secrets safely, remove browser/settings copies after successful verification, and test backup/restore, profile separation, upgrade failure and rollback on Windows. Until that work is implemented and tested, credential-at-rest protection is a production blocker.
+
 The Command Palette extension settings have separate optional **API key** and **custom authentication header** fields for both Ollama and LM Studio. Secret inputs are masked in the form. The API key is sent using `Authorization: Bearer`. A custom header accepts a complete `Header-Name: value` line and is used for both model discovery and generation. If the custom header is also named `Authorization`, it replaces the automatically generated Bearer header. Credentials are not written to diagnostics, but are stored in the per-user RunMind settings JSON without DPAPI encryption; protect the Windows user profile containing the file. PowerToys Run settings saves explicitly preserve these Command Palette-only credential fields.
 
 ### Enter and Shift+Enter in inline conversations

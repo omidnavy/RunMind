@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -20,6 +20,8 @@ internal static class WebView2RuntimeBootstrapper
 {
     private const string BootstrapperUrl = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
     private const long MaximumBootstrapperBytes = 20L * 1024 * 1024;
+    private static readonly TimeSpan InstallLockWaitTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan InstallerExecutionTimeout = TimeSpan.FromMinutes(5);
     private static readonly SemaphoreSlim ProcessGate = new(1, 1);
     private static readonly HttpClient Http = new(new HttpClientHandler
     {
@@ -71,7 +73,8 @@ internal static class WebView2RuntimeBootstrapper
     {
         if (IsRuntimeAvailable()) return;
 
-        await ProcessGate.WaitAsync().ConfigureAwait(false);
+        if (!await ProcessGate.WaitAsync(InstallLockWaitTimeout).ConfigureAwait(false))
+            throw new TimeoutException("Another RunMind window is still preparing WebView2. Close the other window or retry after its startup has completed.");
         try
         {
             if (IsRuntimeAvailable()) return;
@@ -103,7 +106,17 @@ internal static class WebView2RuntimeBootstrapper
                     WorkingDirectory = installFolder,
                 }) ?? throw new InvalidOperationException("Microsoft's WebView2 installer could not be started.");
 
-                await process.WaitForExitAsync().ConfigureAwait(false);
+                using var installerTimeout = new CancellationTokenSource(InstallerExecutionTimeout);
+                try
+                {
+                    await process.WaitForExitAsync(installerTimeout.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+                    try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false); } catch { }
+                    throw new TimeoutException($"Microsoft's WebView2 installer exceeded its {InstallerExecutionTimeout.TotalMinutes:0}-minute execution limit and was terminated.");
+                }
                 var installed = false;
                 for (var attempt = 0; attempt < 20; attempt++)
                 {
@@ -154,6 +167,7 @@ internal static class WebView2RuntimeBootstrapper
 
     private static async Task<FileStream> AcquireInstallLockAsync(string lockPath)
     {
+        using var timeout = new CancellationTokenSource(InstallLockWaitTimeout);
         while (true)
         {
             try
@@ -162,7 +176,14 @@ internal static class WebView2RuntimeBootstrapper
             }
             catch (IOException)
             {
-                await Task.Delay(300).ConfigureAwait(false);
+                try
+                {
+                    await Task.Delay(300, timeout.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw new TimeoutException("Another RunMind process kept the WebView2 installation lock for more than two minutes. Close the other process or retry after it exits.");
+                }
             }
         }
     }

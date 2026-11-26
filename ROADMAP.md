@@ -1,6 +1,13 @@
 # RunMind Roadmap
 
-## Current source baseline: 3.3.0 — P6 Development Intelligence
+## Current source baseline: 3.3.1 — Stabilization (P0–P6 retained)
+
+## Current milestone: Stabilization & Certification
+
+The 3.3.1 patch hardens process-output bounds/timeouts, trusted WebView origins, Standalone navigation policy, chat-page CSP and WebView2 installer coordination. Portable regression coverage is 255/255 in the packaging environment. This is a source/portable-test milestone only: .NET 10 Release x64 builds, live Windows behavior, PowerToys compatibility, credential-at-rest protection and final release certification remain open. See `STABILIZATION-RELEASE-NOTES.md`, `docs/STABILIZATION-AUDIT.md` and `docs/STABILIZATION-WINDOWS-ACCEPTANCE.md`.
+
+Do not start another feature phase or declare the product production-ready until the P0–P6 Windows acceptance suite is completed and the critical security items in the stabilization audit are resolved.
+
 
 ## Completed milestone: P6 — Development Intelligence
 

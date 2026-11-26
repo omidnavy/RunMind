@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Collections.Concurrent;
@@ -457,8 +457,11 @@ public sealed class NativePageReader : IDisposable
 
     private static bool IsTrustedSource(string? source) =>
         Uri.TryCreate(source, UriKind.Absolute, out var uri)
-        && uri.Scheme == Uri.UriSchemeHttps
+        && uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
         && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        && uri.IsDefaultPort
+        && string.IsNullOrEmpty(uri.UserInfo)
+        && string.IsNullOrEmpty(uri.Fragment)
         && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase);
 
     private static async Task PostResultAsync(CoreWebView2 core, Dispatcher dispatcher, object result)

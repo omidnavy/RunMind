@@ -1,4 +1,4 @@
-const test = require('node:test');
+﻿const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -56,10 +56,10 @@ test('PowerShell diagnostics execute fixed scripts and pass user values as Base6
 });
 
 
-test('native diagnostic runner preserves bounded stderr for actionable PowerShell failures', () => {
-  assert.match(native, /var error = errorTask\.GetAwaiter\(\)\.GetResult\(\)/);
-  assert.match(native, /process\.ExitCode != 0 && !string\.IsNullOrWhiteSpace\(error\)/);
-  assert.match(native, /boundedError = error\.Length > 64 \* 1024/);
+test('native diagnostic runner drains stderr with the shared bounded output reader and keeps actionable failures', () => {
+  assert.match(native, /ReadBoundedProcessOutputAsync\(process\.StandardError/);
+  assert.match(bridge, /const int maximum = 512 \* 1024/);
+  assert.match(native, /process\.ExitCode != 0 && !string\.IsNullOrWhiteSpace\(error\.text\)/);
 });
 
 test('Event Log investigation restricts logs, time span and result count', () => {

@@ -161,19 +161,29 @@ public partial class MainWindow : Window
             };
             core.NavigationStarting += (_, args) =>
             {
+                // Deny every navigation by default. Only the exact mapped chat origin
+                // may remain in WebView2; unsupported/custom schemes never reach Windows.
+                args.Cancel = true;
                 if (!Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri)) return;
-                if (uri.Scheme == Uri.UriSchemeHttps && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-                    && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase)) return;
-                if (uri.Scheme is "http" or "https" or "mailto")
+                if (IsTrustedChatPageUri(uri))
                 {
-                    args.Cancel = true;
-                    OpenExternal(uri);
+                    args.Cancel = false;
+                    return;
                 }
+                if (string.IsNullOrEmpty(uri.UserInfo)
+                    && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                        || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                        || uri.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase)))
+                    OpenExternal(uri);
             };
             core.NewWindowRequested += (_, args) =>
             {
                 args.Handled = true;
-                if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" or "mailto")
+                if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri)
+                    && string.IsNullOrEmpty(uri.UserInfo)
+                    && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                        || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                        || uri.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase)))
                     OpenExternal(uri);
             };
             core.NavigationCompleted += async (_, args) =>
@@ -244,7 +254,7 @@ public partial class MainWindow : Window
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
     {
-        if (_closing) return;
+        if (_closing || !IsTrustedChatPageSource(args.Source)) return;
         try
         {
             if (_windowThemeSynchronizer.TryHandleWebMessage(args.Source, args.WebMessageAsJson))
@@ -255,12 +265,6 @@ public partial class MainWindow : Window
                 return;
             if (ConversationSaveDialog.TryHandleMessage(args.Source, args.WebMessageAsJson, this, _webView.CoreWebView2))
                 return;
-            if (!Uri.TryCreate(args.Source, UriKind.Absolute, out var source)
-                || source.Scheme != Uri.UriSchemeHttps
-                || !source.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-                || !source.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase))
-                return;
-
             var messageJson = args.WebMessageAsJson;
             if (string.IsNullOrWhiteSpace(messageJson)
                 || Encoding.UTF8.GetByteCount(messageJson) > 55 * 1024 * 1024)
@@ -349,6 +353,18 @@ public partial class MainWindow : Window
             && messages.ValueKind == JsonValueKind.Array
             && messages.GetArrayLength() is > 0 and <= 10000;
     }
+
+    private static bool IsTrustedChatPageSource(string? source) =>
+        Uri.TryCreate(source, UriKind.Absolute, out var uri) && IsTrustedChatPageUri(uri);
+
+    private static bool IsTrustedChatPageUri(Uri uri) =>
+        uri.IsAbsoluteUri
+        && uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+        && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        && uri.IsDefaultPort
+        && string.IsNullOrEmpty(uri.UserInfo)
+        && string.IsNullOrEmpty(uri.Fragment)
+        && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase);
 
     private static void OpenExternal(Uri uri)
     {

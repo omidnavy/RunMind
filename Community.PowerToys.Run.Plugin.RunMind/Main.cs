@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -2126,6 +2126,7 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
             && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
             && uri.IsDefaultPort
             && string.IsNullOrEmpty(uri.UserInfo)
+            && string.IsNullOrEmpty(uri.Fragment)
             && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -2739,9 +2740,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     return;
                 }
 
-                if (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
-                    || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
-                    || uri.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrEmpty(uri.UserInfo)
+                    && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                        || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                        || uri.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase)))
                 {
                     try
                     {
@@ -2761,9 +2763,10 @@ public sealed class Main : IPlugin, IDelayedExecutionPlugin, ISettingProvider, I
                     return;
                 }
 
-                if (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
-                    || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
-                    || uri.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrEmpty(uri.UserInfo)
+                    && (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                        || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                        || uri.Scheme.Equals(Uri.UriSchemeMailto, StringComparison.OrdinalIgnoreCase)))
                 {
                     try
                     {

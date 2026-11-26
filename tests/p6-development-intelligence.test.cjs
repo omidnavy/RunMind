@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -218,11 +218,11 @@ test('P6 release versions, shared native/JS assets and exact supported language 
     'Community.PowerToys.Run.Plugin.RunMind/Community.PowerToys.Run.Plugin.RunMind.csproj',
     'RunMind.CommandPalette/RunMind.CommandPalette.csproj'
   ];
-  for (const file of projects) assert.match(read(file), /<Version>3\.3\.0<\/Version>/, file);
-  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>3\.3\.0\.0<\/AppxPackageVersion>/);
-  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="3\.3\.0\.0"/);
-  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"3\.3\.0"/);
-  assert.match(read('Shared/ChatWindow/scripts/agent/mcp.js'), /version: '3\.3\.0'/);
+  for (const file of projects) assert.match(read(file), /<Version>3\.3\.1<\/Version>/, file);
+  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>3\.3\.1\.0<\/AppxPackageVersion>/);
+  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="3\.3\.1\.0"/);
+  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"3\.3\.1"/);
+  assert.match(read('Shared/ChatWindow/scripts/agent/mcp.js'), /version: '3\.3\.1'/);
   assert.match(read('ROADMAP.md'), /JavaScript, TypeScript, JSX\/TSX, HTML and CSS/);
   assert.match(read('ROADMAP.md'), /SVG is a first-class vector asset/);
 });

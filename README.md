@@ -41,6 +41,12 @@ Example theme header:
 
 For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
 
+## RunMind 3.3.1 — Stabilization (P0–P6 retained)
+
+RunMind 3.3.1 is a stabilization patch, not a new feature phase. It hardens bounded native process output and timeout cleanup, closes Standalone WebView2 navigation by default, applies strict trusted-origin checks before native message dispatch across hosts, removes inline JavaScript from the chat page CSP, and bounds WebView2 bootstrapper lock/installer waits. The same shared fixes are used by Standalone, PowerToys Run and PowerToys Command Palette.
+
+Portable regression coverage is **255/255 passed** in the packaging environment (Node.js 22.16.0). This does not certify the .NET 10 Windows builds or live WebView2/PowerToys behavior. Windows certification remains pending, and credentials stored in WebView localStorage or the Command Palette per-user settings JSON are not DPAPI-encrypted. Do not treat 3.3.1 as production-ready until the credential-protection and Windows acceptance gates in `docs/STABILIZATION-AUDIT.md` and `docs/STABILIZATION-WINDOWS-ACCEPTANCE.md` are closed. See `STABILIZATION-RELEASE-NOTES.md`.
+
 ## RunMind 3.3.0 — P6 Development Intelligence (P0–P5 retained)
 
 RunMind 3.3.0 adds Git-aware change review with architecture/test/asset impact, build/test script intelligence, local flakiness and repeated-failure signals, supplied CI result comparison, dependency/lockfile and approved advisory/outdated checks, JavaScript toolchain environment probes, before/after Agent change receipts and bounded local project decisions/checkpoint continuity. The same tools and five new developer workflows are shared across all three hosts. Git review is read-only; script execution, dependency audits, environment probes, decision memory and backup restoration require the applicable approval. CI is not queried automatically, package dependencies are never updated automatically, and interrupted operations are never automatically replayed. See `P6-RELEASE-NOTES.md` and `docs/DEVELOPMENT-INTELLIGENCE.md`.
@@ -53,7 +59,7 @@ P5 adds structured Windows service startup/dependency/recovery inspection, bound
 
 Health history is disabled by default. When explicitly enabled, it stores at most 30 compact local summaries within 512 KB. The report runs only on demand; it does not install a background monitor. Service start/stop/restart and the optional TCP endpoint probe retain fresh native confirmation. See `P5-RELEASE-NOTES.md`, `docs/SYSTEM-MANAGER-HEALTH-INTELLIGENCE.md`, `docs/P5-IMPLEMENTATION-AUDIT.md` and `docs/P5-WINDOWS-ACCEPTANCE.md`.
 
-Source checks are reported in `BUILD-STATUS.md`. Windows/.NET 10 certification remains a target-machine gate; run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete the P0–P5 acceptance checklists in all three hosts before calling the release Windows-certified.
+Source checks are reported in `BUILD-STATUS.md`. Windows/.NET 10 certification remains a target-machine gate; run `Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` with Node.js 24+ and .NET 10, then complete the P0–P6 acceptance checklists in all three hosts before calling the release Windows-certified.
 
 ## RunMind 3.1.0 — P4 Agent Capabilities (P0–P3 retained)
 

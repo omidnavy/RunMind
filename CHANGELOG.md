@@ -1,3 +1,15 @@
+## 3.3.1 — Stabilization
+
+- Replace unbounded Windows diagnostic/service process stream reads with concurrent bounded stdout/stderr draining (512 KB retained per stream), finite timeout handling, process-tree termination and bounded cleanup. Preserve the user-configured no-automatic-timeout option.
+- Deny Standalone WebView2 navigation by default; allow only the exact mapped HTTPS localhost chat document in the embedded view, and route only credential-free HTTP/HTTPS/mailto navigation externally. Handle new-window requests under the same rule.
+- Require the exact trusted local chat origin (HTTPS localhost, default port, no userinfo/fragment, exact path) before dispatching native WebView messages across all three host integrations.
+- Remove `unsafe-inline` from the chat page's script CSP; keep inline styles only where currently required.
+- Bound WebView2 per-process install coordination, cross-process installer lock waits and installer execution; terminate a timed-out installer process tree and return a clear error.
+- Synchronize Standalone, PowerToys Run and Command Palette package versions, the Appx identity and the MCP client version to 3.3.1 / 3.3.1.0.
+- Add eight stabilization hardening regression tests and update carried-forward version/contract assertions. Full portable suite: 255/255 passed under Node.js 22.16.0.
+- No new runtime dependencies, no project-language expansion and no feature-phase scope increase.
+- Windows/.NET 10 certification, a DPAPI-backed credential-store migration and complete NuGet vulnerability/build compatibility verification remain open gates.
+
 ## 3.3.0 — P6 Development Intelligence
 
 - Add fixed, bounded Git review snapshots for branch/status, staged and unstaged diffs, untracked paths, merge conflicts and whitespace findings; expose an architecture-aware review tool.

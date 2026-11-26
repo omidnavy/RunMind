@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.IO;
@@ -145,8 +145,11 @@ internal static class ConversationSaveDialog
     private static bool IsChatPage(string source)
     {
         return Uri.TryCreate(source, UriKind.Absolute, out var uri)
-            && uri.Scheme == Uri.UriSchemeHttps
+            && uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
             && uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            && uri.IsDefaultPort
+            && string.IsNullOrEmpty(uri.UserInfo)
+            && string.IsNullOrEmpty(uri.Fragment)
             && uri.AbsolutePath.Equals("/ChatWindow.html", StringComparison.OrdinalIgnoreCase);
     }
 
