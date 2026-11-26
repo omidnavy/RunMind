@@ -8,10 +8,15 @@ The runner is a small bundled CommonJS file (`Shared/PlaywrightRunner.cjs`). It 
 
 ## Project setup
 
-From the project directory selected as the native execution workspace, install Playwright and its browser binary using the project's normal package manager. For npm and Chromium:
+From the project directory selected as the native execution workspace, install the Playwright package using the project's normal package manager. For npm:
 
 ```powershell
 npm install --save-dev playwright
+```
+
+By default, RunMind tries an installed Microsoft Edge channel, then Google Chrome, then the Playwright-bundled Chromium binary. This avoids a browser download when a compatible system browser is already installed. To select one explicitly, set the Playwright tool's `channel` to `msedge`, `chrome`, or `bundled`. If no compatible system browser is available, install the bundled browser:
+
+```powershell
 npx playwright install chromium
 ```
 
@@ -22,7 +27,7 @@ npx playwright install firefox
 npx playwright install webkit
 ```
 
-The workspace must be selected in RunMind with `select_native_workspace`. If the app already has a different native workspace selected, select the project that owns the Playwright dependency. The optional `working_directory` argument is relative to that selected root and is useful for monorepos where the package is installed in a subproject.
+The native execution workspace must currently be selected with `select_native_workspace`; this remains a separate selection from the Agent's browser file workspace in this source version. The optional `working_directory` argument is relative to that native root and is useful for monorepos where the package is installed in a subproject. The separate-prompt issue is tracked in `UNIFIED-WORKSPACE-SELECTION.md` and is not considered solved by path normalization.
 
 ## Supported structured actions
 
@@ -70,11 +75,12 @@ Example Agent action plan:
 ## Dependencies and limitations
 
 - Node.js must be on PATH; the existing native Node toolchain requirement applies.
-- The project must have a locally resolvable `playwright` package and the selected browser binary installed. `playwright-core` alone, a globally installed package, remote browser services, and package-manager Plug'n'Play layouts are not currently supported.
-- Chromium is the default. Firefox and WebKit work when the project package and matching browser binaries are installed.
+- The project must have a locally resolvable `playwright` package. `playwright-core` alone, a globally installed package, remote browser services, and package-manager Plug'n'Play layouts are not currently supported.
+- Chromium is the default. The `auto` channel tries installed Microsoft Edge, installed Google Chrome, then bundled Chromium. Explicit Edge/Chrome channels require the corresponding browser to be installed. Firefox and WebKit work when the project package and matching browser binaries are installed.
+- If a browser CDN returns HTTP 403, this is an external browser-download restriction; use an installed Edge/Chrome channel instead of repeatedly retrying the same download.
 - The current increment is a bounded workflow runner, not a persistent interactive browser session. Each call starts from a clean context.
 - Authentication flows requiring an existing user profile, persistent cookies, downloads, file uploads, arbitrary `page.evaluate`, browser extensions, and GUI-visible headed mode are outside this increment.
-- API/backend testing and development-server lifecycle management remain separate Phase 2 increments.
+- API/backend testing and development-server lifecycle management are implemented as separate tools in the same Phase 2 Agent Core. They share the native workspace resolver; the unified Agent-file/native-process workspace remains a separate architectural migration.
 
 ## Validation
 

@@ -945,7 +945,7 @@ public sealed partial class AgentHostBridge : IDisposable
         var script = ReadString(args, "script", 100_000);
         if (script.Length == 0) throw new InvalidDataException("A non-empty PowerShell script is required.");
         script = script.TrimStart('\uFEFF');
-        script = "$ErrorActionPreference = 'Stop'\r\n" + script;
+        script = "$ErrorActionPreference = 'Stop'\r\n$PSNativeCommandUseErrorActionPreference = $false\r\n" + script;
         var working = GetProcessWorkingDirectory(args);
         var executable = FindExecutable("pwsh.exe") ?? FindPowerShellExecutable()
             ?? throw new FileNotFoundException("PowerShell was not found. Install PowerShell 7 (pwsh) or enable Windows PowerShell.");
@@ -1094,6 +1094,10 @@ public sealed partial class AgentHostBridge : IDisposable
         var browser = ReadString(args, "browser", 20).ToLowerInvariant();
         if (browser.Length == 0) browser = "chromium";
         if (browser is not ("chromium" or "firefox" or "webkit")) throw new InvalidDataException("Browser must be chromium, firefox, or webkit.");
+        var channel = ReadString(args, "channel", 30).ToLowerInvariant();
+        if (channel.Length == 0) channel = "auto";
+        if (channel is not ("auto" or "bundled" or "msedge" or "chrome")) throw new InvalidDataException("Browser channel must be auto, bundled, msedge, or chrome.");
+        if (browser != "chromium" && channel is not ("auto" or "bundled")) throw new InvalidDataException("Installed Edge/Chrome channels are available only with Chromium.");
         var node = FindExecutable("node.exe") ?? throw new FileNotFoundException("Node.js was not found on PATH. Install Node.js 24 or later and reopen RunMind.");
         var runner = Path.Combine(AppContext.BaseDirectory, "PlaywrightRunner.cjs");
         if (!File.Exists(runner)) throw new FileNotFoundException("The bundled RunMind Playwright runner is missing from the host output directory.");

@@ -225,3 +225,11 @@ test('native process stdin uses UTF-8 without a BOM and PowerShell strips a supp
   assert.equal((bridge.match(/StandardInputEncoding = Utf8NoBom/g) || []).length, 3);
   assert.match(bridge, /script = script\.TrimStart\('\\uFEFF'\)/);
 });
+
+
+test('PowerShell keeps native stderr warnings from becoming terminating errors', () => {
+  const root = path.resolve(__dirname, '..');
+  const bridge = fs.readFileSync(path.join(root, 'Shared/AgentHostBridge.cs'), 'utf8');
+  assert.match(bridge, /\$PSNativeCommandUseErrorActionPreference = \$false/);
+  assert.match(bridge, /script = script\.TrimStart\('\\uFEFF'\)/);
+});

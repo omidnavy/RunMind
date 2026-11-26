@@ -76,19 +76,17 @@
     }
 
     function safeRelativePath(value) {
-      const raw = String(value || '').replace(/\\/g, '/').trim();
-      if (!raw || raw.startsWith('/') || /^[a-z]:/i.test(raw) || raw.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('A safe relative path is required. Absolute paths and . / .. segments are not allowed.');
-      return raw.split('/');
+      const parts = RunMindWorkspacePaths.safeSegments(value);
+      if (!parts.length) throw new Error('A safe relative file path is required.');
+      return parts;
     }
     async function getDirectoryAtPath(root, relativePath) {
-      let handle = root;
-      if (relativePath) for (const part of safeRelativePath(relativePath)) handle = await handle.getDirectoryHandle(part);
-      return handle;
+      const resolved = await RunMindWorkspacePaths.resolve(root, relativePath || '', 'directory');
+      return resolved.handle;
     }
     async function getFileAtPath(root, relativePath) {
-      const parts = safeRelativePath(relativePath); const name = parts.pop();
-      const dir = await getDirectoryAtPath(root, parts.join('/'));
-      return { dir, name, handle: await dir.getFileHandle(name) };
+      const resolved = await RunMindWorkspacePaths.resolve(root, relativePath, 'file');
+      return { dir: resolved.directory, name: resolved.name, handle: resolved.handle };
     }
     function findConversationAttachment(path) {
       const requested = String(path || '').trim();

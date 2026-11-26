@@ -42,6 +42,8 @@ The 2.6.3 baseline includes the Phase 1 Developer Workbench and System Manager c
 
 ### Next candidates
 
+- **Unified workspace selection (new requirement):** one Agent workspace selection must establish the folder used by file operations, Git where applicable, PowerShell, native executables, development servers, API tests, Node debugging, and Playwright. Remove the second native folder prompt; any subdirectory must be a relative path inside the same authorized root. This requires replacing the browser-only `FileSystemDirectoryHandle` as the authority with a native-host-owned canonical workspace root and a narrow, path-contained file RPC for the Agent's existing file operations. Do not infer absolute paths from `FileSystemDirectoryHandle.name`; the browser API does not expose them. Keep per-operation approval for process execution and file mutations.
+- Complete Windows build/runtime validation for Playwright Browser Integration and API & Backend Testing across all three hosts.
 - Complete Windows build/runtime validation for Playwright Browser Integration and API & Backend Testing across all three hosts.
 - Windows validation of Development Server Management across all three hosts; broaden project-type discovery in a later increment if required.
 - Windows-targeted automated integration tests for discovery, launch, activation, close, and all three hosts.

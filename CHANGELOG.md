@@ -1,3 +1,17 @@
+## 2.6.3 — Phase 2 follow-up refinements (2026-11-22)
+
+- Make native workspace selection idempotent per chat context: if the native execution root is already selected, the Agent receives the existing selection instead of opening the native folder picker again. The separate Agent-browser/native selection remains unresolved pending the host-owned workspace RPC migration.
+- Development-server discovery now returns both its absolute resolved path for display and `working_directory_relative` for safe follow-up calls. Starting a server reuses the relative value rather than sending the absolute path back through the workspace resolver.
+- Clarify tool guidance so nested-project workflows reuse the relative directory returned by discovery.
+
+## 2.6.3 — Phase 2 workspace and browser follow-up (2026-11-22)
+
+- Added safe selected-folder prefix normalization for Agent file paths, supporting parent-workspace and nested-project path forms while preferring valid direct paths and retaining traversal protection.
+- Playwright Chromium now automatically tries installed Microsoft Edge, Google Chrome, and then bundled Chromium; explicit browser channel selection is available and download restrictions produce actionable guidance.
+- PowerShell no longer treats native-command stderr warnings as terminating errors by default; cmdlet/script errors remain governed by `$ErrorActionPreference`.
+- Added tests for workspace path normalization, browser channel selection/fallback, and PowerShell native stderr handling.
+- Added the unified-workspace requirement and migration design. The separate native folder prompt remains a known architectural gap until Agent file operations move behind the native workspace RPC.
+
 ## Unreleased — Native workspace and WebView2 startup fixes (2026-11-21)
 
 - Fix native workspace path resolution when the selected native workspace is itself a nested project folder. Development-server management, API tests, Playwright, PowerShell/native commands, and Node debugger now share the same normalisation while retaining workspace containment and reparse-point checks.

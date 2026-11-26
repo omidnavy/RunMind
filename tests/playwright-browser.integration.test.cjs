@@ -8,7 +8,8 @@ const path = require('node:path');
 const childProcess = require('node:child_process');
 const { validateRequest, parseInputJson, run, MAX_ACTIONS } = require('../Shared/PlaywrightRunner.cjs');
 
-function makeFakePlaywright() {
+function makeFakePlaywright(options = {}) {
+  const failChannels = new Set(options.failChannels || []);
   const calls = [];
   const handlers = new Map();
   const page = {
@@ -36,7 +37,7 @@ function makeFakePlaywright() {
   const routes = [];
   const context = { async route(pattern, handler) { routes.push({ pattern, handler }); }, async newPage() { return page; }, async close() { calls.push(['context.close']); } };
   const browser = { async newContext(options) { calls.push(['newContext', options]); return context; }, async close() { closed = true; calls.push(['browser.close']); } };
-  return { calls, handlers, routes, browser, page, get closed() { return closed; }, playwright: { chromium: { async launch(options) { calls.push(['launch', options]); return browser; } }, firefox: {}, webkit: {} } };
+  return { calls, handlers, routes, browser, page, get closed() { return closed; }, playwright: { chromium: { async launch(launchOptions) { calls.push(['launch', launchOptions]); const channel = launchOptions.channel || 'bundled'; if (failChannels.has(channel)) { const error = new Error(`Executable doesn't exist for ${channel}`); error.code = 'ENOENT'; throw error; } return browser; } }, firefox: {}, webkit: {} } };
 }
 
 test('local browser fixture is a real accessible HTML application with a matching dev script', () => {
@@ -60,7 +61,25 @@ test('Playwright request validation accepts a bounded structured workflow', () =
     { action: 'screenshot', name: 'landing-page' }
   ] });
   assert.equal(result.browser, 'chromium');
+  assert.equal(result.channel, 'auto');
   assert.equal(result.actions.length, 4);
+});
+
+test('Playwright selects installed Edge/Chrome before bundled Chromium and supports explicit channels', () => {
+  assert.equal(validateRequest({ channel: 'msedge', actions: [{ action: 'inspect_page' }] }).channel, 'msedge');
+  assert.equal(validateRequest({ channel: 'chrome', actions: [{ action: 'inspect_page' }] }).channel, 'chrome');
+  assert.throws(() => validateRequest({ browser: 'firefox', channel: 'msedge', actions: [{ action: 'inspect_page' }] }), /only with Chromium/);
+  assert.throws(() => validateRequest({ channel: 'safari', actions: [{ action: 'inspect_page' }] }), /channel must be/);
+});
+
+test('Playwright auto channel falls back from installed Edge to Chrome before bundled Chromium', async () => {
+  const fake = makeFakePlaywright({ failChannels: ['msedge'] });
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'runmind-playwright-channels-'));
+  try {
+    const result = await run({ actions: [{ action: 'inspect_page' }] }, { playwright: fake.playwright, artifactDirectory: directory });
+    assert.equal(result.success, true);
+    assert.deepEqual(fake.calls.filter(call => call[0] === 'launch').map(call => call[1].channel), ['msedge', 'chrome']);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
 test('Playwright JSON input accepts a UTF-8 BOM without weakening JSON validation', () => {
@@ -183,9 +202,11 @@ test('Playwright runner reports a missing project dependency with exact setup gu
   await assert.rejects(() => run({ actions: [{ action: 'goto', value: 'http://localhost/' }] }, { requireFromWorkspace() { throw error; } }), /npm install --save-dev playwright/);
 });
 
-test('Playwright runner reports a missing browser binary with install guidance', async () => {
-  const playwright = { chromium: { async launch() { throw new Error(`browserType.launch: Executable doesn't exist at C:\\browser\\chrome.exe`); } } };
+test('Playwright runner reports missing system and bundled browsers with actionable guidance', async () => {
+  const attempts = [];
+  const playwright = { chromium: { async launch(options) { attempts.push(options.channel || 'bundled'); const error = new Error(`browserType.launch: Executable doesn't exist at C:\\browser\\chrome.exe`); error.code = 'ENOENT'; throw error; } } };
   await assert.rejects(() => run({ actions: [{ action: 'goto', value: 'http://localhost/' }] }, { playwright }), /npx playwright install chromium/);
+  assert.deepEqual(attempts, ['msedge','chrome','bundled']);
 });
 
 test('Playwright runner uses an ephemeral context with downloads disabled and service workers blocked', async () => {
@@ -201,6 +222,7 @@ test('all three native hosts deploy the same Playwright runner and dispatch rout
   assert.match(bridge, /"playwright\.run"\s*=>\s*PlaywrightRunAsync/);
   assert.match(bridge, /PlaywrightRunner\.cjs/);
   assert.match(bridge, /StandardInputEncoding = Utf8NoBom/);
+  assert.match(bridge, /var channel = ReadString\(args, \"channel\", 30\)/);
   assert.match(bridge, /private static readonly UTF8Encoding Utf8NoBom = new\(encoderShouldEmitUTF8Identifier: false\)/);
   for (const file of [
     'RunMind.Standalone/RunMind.Standalone.csproj',
@@ -228,6 +250,7 @@ test('Agent exposes Playwright as a structured, approval-gated primary-agent too
   const tools = fs.readFileSync(path.join(root, 'Shared/ChatWindow/scripts/agent/tools.js'), 'utf8');
   assert.match(providers, /name: 'playwright_run'/);
   assert.match(providers, /'goto','inspect_page','click','fill','press','check','uncheck','select_option'/);
+  assert.match(providers, /auto prefers installed Microsoft Edge, then Google Chrome/);
   assert.match(tools, /name === 'playwright_run'/);
   assert.match(tools, /alwaysAsk: true/);
   assert.match(tools, /subAgentDepth/);

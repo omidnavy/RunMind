@@ -154,9 +154,11 @@
           const script = String(args.script || '');
           if (!script) throw new Error('Run discover first, then provide the selected package script name.');
           const discovery = await callAgentHost('developmentServer.manage', { action: 'discover', working_directory: String(args.working_directory || ''), contextId }, signal, 15000);
+          const discoveredRelativeDirectory = String(discovery?.working_directory_relative ?? args.working_directory ?? '');
           const selectedScript = (discovery?.scripts || []).find(item => item.name === script);
           if (!selectedScript) throw new Error(`The project does not define package script '${script}'. Run discover to inspect available scripts.`);
           const lifecycleHooks = (discovery?.scripts || []).filter(item => item.name === `pre${script}` || item.name === `post${script}`);
+          payload.working_directory = discoveredRelativeDirectory;
           payload.script = script;
           payload.expected_command = String(selectedScript.command || '');
           payload.expected_pre_command = String(lifecycleHooks.find(item => item.name === `pre${script}`)?.command || '');
@@ -164,7 +166,7 @@
           payload.readiness_url = String(args.readiness_url || '');
           payload.port = args.port;
           payload.readiness_timeout_seconds = args.readiness_timeout_seconds;
-          const approved = await requireAgentApproval({ title: 'Start this development server?', subtitle: `${script} · project package script`, detail: `Working directory: ${String(args.working_directory || '(workspace root)')}\nPackage script: ${script}\nActual command: ${String(selectedScript.command || '(not available)')}\nLifecycle hooks: ${lifecycleHooks.length ? lifecycleHooks.map(item => `${item.name}: ${item.command}`).join(' | ') : '(none detected)'}\nReadiness URL: ${payload.readiness_url || '(not configured)'}\nPort preflight: ${args.port || '(not supplied)'}\n
+          const approved = await requireAgentApproval({ title: 'Start this development server?', subtitle: `${script} · project package script`, detail: `Working directory: ${discoveredRelativeDirectory || '(workspace root)'}\nPackage script: ${script}\nActual command: ${String(selectedScript.command || '(not available)')}\nLifecycle hooks: ${lifecycleHooks.length ? lifecycleHooks.map(item => `${item.name}: ${item.command}`).join(' | ') : '(none detected)'}\nReadiness URL: ${payload.readiness_url || '(not configured)'}\nPort preflight: ${args.port || '(not supplied)'}\n
 RunMind will execute this project-defined package.json script using Node.js/npm. Project scripts can execute arbitrary code and inherit your Windows user permissions. The server will remain running after this request. RunMind records the exact process it starts and will not stop external processes.`, risky: true, alwaysAsk: true }, signal);
           if (!approved) return { cancelled: true, message: 'Development server startup was declined.' };
         } else if (action === 'stop') {
@@ -182,10 +184,11 @@ RunMind will terminate the process tree only if this host originally launched an
         const actions = Array.isArray(args.actions) ? args.actions.slice(0, 30) : [];
         if (!actions.length || actions.length > 30) throw new Error('Provide between 1 and 30 structured Playwright actions.');
         const browser = ['chromium','firefox','webkit'].includes(String(args.browser || 'chromium').toLowerCase()) ? String(args.browser || 'chromium').toLowerCase() : 'chromium';
+        const channel = ['auto','bundled','msedge','chrome'].includes(String(args.channel || 'auto').toLowerCase()) ? String(args.channel || 'auto').toLowerCase() : 'auto';
         const preview = actions.map((item, index) => `${index + 1}. ${String(item.action || 'unknown')}${item.selector ? ` · ${String(item.selector).slice(0, 160)}` : ''}${item.value ? ` · ${String(item.value).slice(0, 240)}` : ''}`).join('\n');
-        const approved = await requireAgentApproval({ title: 'Run this Playwright browser test?', subtitle: `${browser} · isolated temporary browser context`, detail: `Project workspace: ${workspaceContext.folderName || '(native workspace selected separately)'}\nWorking directory: ${String(args.working_directory || '(workspace root)')}\nTimeout: ${Math.max(15, Math.min(300, Number(args.timeout_seconds) || 120))} seconds\n\nActions:\n${preview}\n\nWeb pages execute their own code and may perform network or application-side effects. RunMind uses a fresh ephemeral context, does not persist cookies or login state, and exposes no arbitrary JavaScript evaluation. Screenshots are saved locally. Every run is separately approved.`, risky: true, alwaysAsk: true }, signal);
+        const approved = await requireAgentApproval({ title: 'Run this Playwright browser test?', subtitle: `${browser} · ${channel} browser channel · isolated temporary context`, detail: `Project workspace: ${workspaceContext.folderName || '(native workspace selected separately)'}\nWorking directory: ${String(args.working_directory || '(workspace root)')}\nTimeout: ${Math.max(15, Math.min(300, Number(args.timeout_seconds) || 120))} seconds\n\nActions:\n${preview}\n\nWeb pages execute their own code and may perform network or application-side effects. RunMind uses a fresh ephemeral context, does not persist cookies or login state, and exposes no arbitrary JavaScript evaluation. Screenshots are saved locally. Every run is separately approved.`, risky: true, alwaysAsk: true }, signal);
         if (!approved) return { cancelled: true, message: 'Playwright browser run was declined.' };
-        return await callAgentHost('playwright.run', { browser, actions, working_directory: String(args.working_directory || ''), timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(30000, Math.min(315000, (Number(args.timeout_seconds) || 120) * 1000 + 15000)));
+        return await callAgentHost('playwright.run', { browser, channel, actions, working_directory: String(args.working_directory || ''), timeout_seconds: args.timeout_seconds, contextId: workspaceContext.id }, signal, Math.max(30000, Math.min(315000, (Number(args.timeout_seconds) || 120) * 1000 + 15000)));
       }
       if (name === 'api_test_run') {
         if (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth) throw new Error('API/backend testing is disabled in Deep Research and delegated sub-agent tasks. Run it from the primary Agent session with explicit approval.');
@@ -277,9 +280,12 @@ RunMind will terminate the process tree only if this host originally launched an
       if (['select_native_workspace','powershell_execute','run_native_command'].includes(name) && (deepResearchEnabled || taskContext?.deepResearch))
         throw new Error('Native process execution is disabled in Deep Research and delegated sub-agent tasks. Use Agent Mode for explicitly approved local execution.');
       if (name === 'select_native_workspace') {
-        const approved = await requireAgentApproval({ title: 'Select a native execution workspace?', subtitle: 'Native process access · this chat window only', detail: 'Choose the local project directory in which approved PowerShell scripts and native executables may run. The OS folder picker is separate from browser workspace access. This does not sandbox processes.', risky: true, alwaysAsk: true }, signal);
+        const contextId = workspaceContext.id;
+        const existing = await callAgentHost('process.workspace.status', { contextId }, signal, 10000);
+        if (existing?.selected) return { ...existing, alreadySelected: true, message: `Native execution workspace '${existing.folder || 'selected folder'}' is already selected for this chat. No second folder picker was opened.` };
+        const approved = await requireAgentApproval({ title: 'Select a native execution workspace?', subtitle: 'Native process access · this chat window only', detail: 'Choose the local project directory in which approved PowerShell scripts and native executables may run. This current release keeps the browser file workspace and native execution workspace separate because the browser folder handle does not expose an absolute Windows path. This does not sandbox processes.', risky: true, alwaysAsk: true }, signal);
         if (!approved) return { cancelled: true };
-        const result = await callAgentHost('process.selectWorkspace', { contextId: workspaceContext.id }, signal);
+        const result = await callAgentHost('process.selectWorkspace', { contextId }, signal);
         if (result?.selected) return { ...result, message: `Native execution workspace selected: ${result.folder}. Every process invocation will still require fresh approval.` };
         return result;
       }

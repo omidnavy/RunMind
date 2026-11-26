@@ -41,6 +41,13 @@ test('tool schema exposes the complete lifecycle without arbitrary command input
   assert.doesNotMatch(providers.slice(providers.indexOf("name: 'development_server_manage'"), providers.indexOf("name: 'api_test_run'")), /command_line|shell_script|executable:/);
 });
 
+test('native workspace selection is idempotent within a chat and does not reopen the picker', () => {
+  assert.match(tools, /const existing = await callAgentHost\('process\.workspace\.status'/);
+  assert.match(tools, /if \(existing\?\.selected\) return/);
+  assert.match(tools, /No second folder picker was opened/);
+  assert.match(providers, /returns it without opening another folder picker/);
+});
+
 test('project startup is resolved only from an existing package.json script', () => {
   assert.match(bridge, /Path\.Combine\(working, "package\.json"\)/);
   assert.match(bridge, /TryGetProperty\("scripts"/);
@@ -50,6 +57,14 @@ test('project startup is resolved only from an existing package.json script', ()
   assert.match(tools, /payload\.expected_command = String\(selectedScript\.command/);
   assert.match(bridge, /script\.Any\(ch => !\(char\.IsLetterOrDigit\(ch\) \|\| ch is '-' or '_' or ':' or '\.'\)\)/);
   assert.doesNotMatch(bridge, /ProcessStartInfo\([^\n]*ReadString\(args, "command/);
+});
+
+test('discovery returns the workspace-relative directory so follow-up calls do not reuse absolute paths', () => {
+  assert.match(bridge, /working_directory_relative = relativeWorkingDirectory/);
+  assert.match(tools, /discovery\?\.working_directory_relative \?\? args\.working_directory/);
+  assert.match(tools, /payload\.working_directory = discoveredRelativeDirectory/);
+  const schema = providers.slice(providers.indexOf("name: 'development_server_manage'"), providers.indexOf("name: 'api_test_run'"));
+  assert.match(schema, /reuse working_directory_relative/);
 });
 
 test('discovery recommends conventional scripts without assuming they exist', () => {

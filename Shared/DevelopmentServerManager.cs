@@ -46,8 +46,9 @@ public sealed partial class AgentHostBridge
     private object DevelopmentServerDiscover(JsonElement args)
     {
         var working = GetProcessWorkingDirectory(args);
+        var relativeWorkingDirectory = ReadString(args, "working_directory", 1024).Trim();
         var packagePath = Path.Combine(working, "package.json");
-        if (!File.Exists(packagePath)) return new { detected = false, working_directory = working, message = "No package.json was found in this directory. This increment currently discovers Node.js package scripts." };
+        if (!File.Exists(packagePath)) return new { detected = false, working_directory = working, working_directory_relative = relativeWorkingDirectory, message = "No package.json was found in this directory. This increment currently discovers Node.js package scripts." };
         if (IsReparsePoint(packagePath)) throw new InvalidDataException("package.json cannot be a symbolic link or reparse point.");
         if (new FileInfo(packagePath).Length > 1024 * 1024) throw new InvalidDataException("package.json exceeds the 1 MB discovery limit.");
         using var package = JsonDocument.Parse(File.ReadAllText(packagePath));
@@ -61,7 +62,7 @@ public sealed partial class AgentHostBridge
         }
         var suggested = new[] { "dev", "start", "serve" }.FirstOrDefault(name => root.TryGetProperty("scripts", out var list) && list.ValueKind == JsonValueKind.Object && list.TryGetProperty(name, out _));
         var packageManager = root.TryGetProperty("packageManager", out var manager) && manager.ValueKind == JsonValueKind.String ? manager.GetString() : null;
-        return new { detected = scripts.Count > 0, working_directory = working, project = root.TryGetProperty("name", out var projectName) ? projectName.ToString() : Path.GetFileName(working), package_manager = packageManager ?? DetectPackageManager(working), suggested_script = suggested, scripts };
+        return new { detected = scripts.Count > 0, working_directory = working, working_directory_relative = relativeWorkingDirectory, project = root.TryGetProperty("name", out var projectName) ? projectName.ToString() : Path.GetFileName(working), package_manager = packageManager ?? DetectPackageManager(working), suggested_script = suggested, scripts };
     }
 
     private static string DetectPackageManager(string directory)

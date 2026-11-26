@@ -21,6 +21,9 @@ function validateRequest(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('A Playwright request object is required.');
   const browser = String(input.browser || 'chromium').toLowerCase();
   if (!['chromium', 'firefox', 'webkit'].includes(browser)) throw new Error('Browser must be chromium, firefox, or webkit.');
+  const channel = String(input.channel || 'auto').toLowerCase();
+  if (!['auto', 'bundled', 'msedge', 'chrome'].includes(channel)) throw new Error('Browser channel must be auto, bundled, msedge, or chrome.');
+  if (browser !== 'chromium' && !['auto', 'bundled'].includes(channel)) throw new Error('Installed Edge/Chrome channels are available only with Chromium.');
   if (!Array.isArray(input.actions) || input.actions.length < 1 || input.actions.length > MAX_ACTIONS) throw new Error(`Provide between 1 and ${MAX_ACTIONS} browser actions.`);
   const allowed = new Set(['goto','inspect_page','click','fill','press','check','uncheck','select_option','wait_for','expect_text','expect_url','expect_title','expect_visible','expect_hidden','read_text','count','screenshot']);
   const actions = input.actions.map((raw, index) => {
@@ -45,7 +48,7 @@ function validateRequest(input) {
     if (action === 'screenshot' && raw.name != null && !/^[a-zA-Z0-9_-]{1,60}$/.test(String(raw.name))) throw new Error(`Action ${index + 1} screenshot name may contain only letters, numbers, underscores, and hyphens.`);
     return { action, selector, value, state: String(raw.state || 'visible'), match: String(raw.match || 'contains'), name: String(raw.name || `step-${index + 1}`) };
   });
-  return { browser, actions };
+  return { browser, channel, actions };
 }
 
 function createArtifactDirectory(env = process.env) {
@@ -165,12 +168,31 @@ async function run(input, dependencies = {}) {
   if (!browserType) throw new Error(`The installed Playwright package does not provide ${request.browser}.`);
   const artifactDirectory = dependencies.artifactDirectory || createArtifactDirectory();
   let browser;
-  try { browser = await browserType.launch({ headless: true }); }
-  catch (error) {
-    if (/Executable doesn't exist|browser executable.*not found/i.test(String(error.message || error)))
-      throw new Error(`The ${request.browser} browser binary is not installed. Run \`npx playwright install ${request.browser}\` in the selected project. ${String(error.message || error).slice(0, 1000)}`);
-    throw error;
+  const channels = request.browser !== 'chromium' || request.channel === 'bundled'
+    ? [null]
+    : request.channel === 'auto' ? ['msedge', 'chrome', null] : [request.channel];
+  const launchErrors = [];
+  for (const channel of channels) {
+    try {
+      browser = await browserType.launch({ headless: true, ...(channel ? { channel } : {}) });
+      break;
+    } catch (error) {
+      launchErrors.push({ channel: channel || 'bundled', error });
+      const message = String(error?.message || error);
+      const missingBrowser = error?.code === 'ENOENT' || /Executable doesn't exist|browser executable.*not found|could not find.*(?:browser|chrome|msedge)|browser has not been found/i.test(message);
+      if (!missingBrowser || channel === channels.at(-1)) {
+        if (missingBrowser) {
+          const attempted = channels.map(item => item || 'Playwright bundled browser').join(', ');
+          const hint = request.browser === 'chromium'
+            ? 'Install Microsoft Edge or Google Chrome and use channel "auto", or install the bundled browser with `npx playwright install chromium`. A CDN HTTP 403 is a browser-download restriction; using an installed browser avoids that download.'
+            : `Install the browser with ` + '`npx playwright install ${request.browser}`' + `.`;
+          throw new Error(`No usable ${request.browser} browser was found. Tried: ${attempted}. ${hint} ${message.slice(0, 700)}`);
+        }
+        throw error;
+      }
+    }
   }
+  if (!browser) throw new Error(`Could not launch ${request.browser}. ${launchErrors.map(item => `${item.channel}: ${String(item.error?.message || item.error).slice(0, 300)}`).join(' | ')}`);
   let context;
   try {
     context = await browser.newContext({ acceptDownloads: false, serviceWorkers: 'block' });
