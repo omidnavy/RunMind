@@ -1,8 +1,10 @@
-# RunMind 2.5.0 validation report
+# RunMind 2.5.0.2 build-hotfix validation report
 
 ## Release
 
 **RunMind 2.5.0 — Debugging, Quality, Skills & System Manager**
+
+Hotfix bundle: **2.5.0.2** (source/product version remains 2.5.0). This hotfix explicitly qualifies the WPF `System.Windows.MessageBox.Show` call in `Shared/SystemManager.cs`, complementing the earlier WPF qualification of `System.Windows.Application`. This resolves the Forms/WPF `MessageBox` name collision reported by the Windows solution build.
 
 Source baseline: verified `RunMind-2.4.0-Developer-Workbench-Native-Automation.zip`.
 
@@ -17,6 +19,7 @@ Source baseline: verified `RunMind-2.4.0-Developer-Workbench-Native-Automation.z
 | Version synchronization | Passed | Standalone, Command Palette, PowerToys Run plugin, plugin metadata, and MSIX manifest report 2.5.0 / 2.5.0.0 consistently. |
 | System Manager tool wiring | Passed | Verified conditional tool definitions, JS executor routes, native dispatch entries, shared source inclusion in all three host projects, and settings gating. |
 | Skill installer wiring | Passed | Verified URL preview/content install dispatch, URL and pasted-content UI flows, frontmatter validation route, and Global/Project scope handlers. |
+| WPF/Windows Forms namespace collision | Passed (source inspection) | `Application` and `MessageBox` are explicitly qualified as `System.Windows.Application` and `System.Windows.MessageBox`; this specifically addresses both reported CS0104 collisions. A Windows compiler run is still required to confirm. |
 | C# lexical delimiter check | Passed | Braces, parentheses, and brackets balance in `AgentHostBridge.cs` and `SystemManager.cs` after ignoring comments and string literals. This is not a compiler check. |
 | Workflow definitions | Passed | Build, test, static analysis, Playwright CLI, API smoke-test, and dependency audit workflows are present in the shared developer workflow catalog. |
 | Source count | Passed | 133 files in the release source tree; all three host projects and shared source directories retained. |

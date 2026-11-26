@@ -79,7 +79,7 @@ public sealed partial class AgentHostBridge
         var approved = false;
         application.Dispatcher.Invoke(() =>
         {
-            var result = MessageBox.Show(application.MainWindow, detail + "\n\nRunMind will perform this action using your current Windows account permissions.", title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            var result = System.Windows.MessageBox.Show(application.MainWindow, detail + "\n\nRunMind will perform this action using your current Windows account permissions.", title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             approved = result == MessageBoxResult.Yes;
         });
         return approved;
