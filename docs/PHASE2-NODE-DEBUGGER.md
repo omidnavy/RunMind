@@ -38,7 +38,7 @@ RunMind queries `http://127.0.0.1:<port>/json/list`, accepts only targets with `
 - A paused target cannot be silently detached. Resume it first, or explicitly terminate a RunMind-launched target.
 - When the host exits, RunMind-launched debug processes are cleaned up. An explicit detach while a launched process is running leaves it running and keeps its process handle tracked until it exits or the user terminates it.
 - Current launch entry files are limited to `.js`, `.mjs`, and `.cjs`; TypeScript execution/transpilation and source-map breakpoint mapping are not included. Use a project runtime script or prebuilt JavaScript entry file for now.
-- This increment does not yet implement CPU/heap profiling, Playwright automation, API testing, or development-server lifecycle management.
+- Runtime diagnostics and profiling are documented in [PHASE2-RUNTIME-DIAGNOSTICS-PROFILING.md](PHASE2-RUNTIME-DIAGNOSTICS-PROFILING.md). Playwright automation, API testing, and development-server lifecycle management remain later Phase 2 increments.
 
 ## Validation
 

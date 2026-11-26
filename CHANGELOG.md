@@ -47,6 +47,14 @@
 
 # RunMind Changelog
 
+## Unreleased — Phase 2 Runtime Diagnostics & Profiling
+
+- Extend the existing shared Node Inspector sessions with V8 heap diagnostics, CPU sampling profiles, streamed heap snapshots, and timestamped memory sampling.
+- Export Chrome DevTools-compatible `.cpuprofile` and `.heapsnapshot` artifacts under `%LOCALAPPDATA%\RunMind\RuntimeArtifacts`; bound CPU profiles to 32 MB, heap snapshots to 128 MB, artifact retention to 20 files, and memory sampling to 120 samples.
+- Require fresh approval to start CPU profiling and memory monitoring, and always require fresh approval for heap snapshots. Stop/read actions remain available without approval.
+- Keep runtime profiling in the existing Agent Core and disable it in Deep Research and delegated sub-agent tasks.
+- Add real Node Inspector integration tests for heap usage, CPU profile samples, and streamed heap snapshot chunks.
+
 ## Unreleased — Phase 1 Developer Workbench & System Manager hardening
 
 - Upgrade the persistent JavaScript project index to schema/key v4. Record AST-derived direct/member/constructor call sites, local declaration links, and bounded circular module dependency cycles; expose call sites and cycles through `project_symbol_graph`.

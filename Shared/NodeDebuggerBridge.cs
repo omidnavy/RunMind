@@ -237,6 +237,120 @@ public sealed partial class AgentHostBridge
         }
     }
 
+    private async Task<object> NodeRuntimeDiagnosticsAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        var session = GetNodeDebuggerSession(args);
+        var heap = await session.SendCommandAsync("Runtime.getHeapUsage", new JsonObject(), cancellationToken).ConfigureAwait(false);
+        return new { sessionId = session.Id, state = session.State, paused = session.IsPaused, heap };
+    }
+
+    private async Task<object> NodeRuntimeCpuProfileAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        var session = GetNodeDebuggerSession(args);
+        var action = ReadString(args, "action", 16).Trim().ToLowerInvariant();
+        if (action == "start")
+            return await session.StartCpuProfileAsync(cancellationToken).ConfigureAwait(false);
+        if (action != "stop") throw new InvalidDataException("CPU profile action must be start or stop.");
+
+        var profile = await session.StopCpuProfileAsync(cancellationToken).ConfigureAwait(false);
+        var json = profile.GetRawText();
+        var bytes = Encoding.UTF8.GetByteCount(json);
+        if (bytes > 32 * 1024 * 1024) throw new InvalidDataException("CPU profile exceeded the 32 MB artifact limit and was not saved.");
+        var path = CreateRuntimeArtifactPath("cpu-profile", ".cpuprofile");
+        await File.WriteAllTextAsync(path, json, new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
+        return BuildCpuProfileSummary(session.Id, profile, path, bytes);
+    }
+
+    private async Task<object> NodeRuntimeHeapSnapshotAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        var session = GetNodeDebuggerSession(args);
+        var path = CreateRuntimeArtifactPath("heap-snapshot", ".heapsnapshot");
+        await session.SendCommandAsync("HeapProfiler.enable", new JsonObject(), cancellationToken).ConfigureAwait(false);
+        session.BeginHeapSnapshotCapture(path);
+        try
+        {
+            await session.SendCommandAsync("HeapProfiler.takeHeapSnapshot", new JsonObject
+            {
+                ["reportProgress"] = false,
+                ["captureNumericValue"] = true,
+            }, cancellationToken, TimeSpan.FromMinutes(3)).ConfigureAwait(false);
+            var result = session.CompleteHeapSnapshotCapture();
+            if (result.Truncated) throw new InvalidDataException("Heap snapshot exceeded the 128 MB artifact limit. The incomplete snapshot was discarded.");
+            if (result.Bytes == 0)
+            {
+                try { File.Delete(result.Path); } catch { }
+                throw new InvalidDataException("Node Inspector completed the heap snapshot without returning any snapshot data.");
+            }
+            return new { sessionId = session.Id, artifactPath = result.Path, bytes = result.Bytes, format = "V8 heap snapshot", complete = true };
+        }
+        catch
+        {
+            session.AbortHeapSnapshotCapture();
+            throw;
+        }
+    }
+
+    private async Task<object> NodeRuntimeMemoryMonitorAsync(JsonElement args, CancellationToken cancellationToken)
+    {
+        var session = GetNodeDebuggerSession(args);
+        var action = ReadString(args, "action", 16).Trim().ToLowerInvariant();
+        if (action == "start")
+        {
+            var interval = args.TryGetProperty("interval_ms", out var intervalValue) && intervalValue.TryGetInt32(out var requestedInterval) ? requestedInterval : 2000;
+            var duration = args.TryGetProperty("duration_seconds", out var durationValue) && durationValue.TryGetInt32(out var requestedDuration) ? requestedDuration : 60;
+            return await session.StartMemoryMonitorAsync(interval, duration, cancellationToken).ConfigureAwait(false);
+        }
+        if (action == "stop") return await session.StopMemoryMonitorAsync().ConfigureAwait(false);
+        if (action == "read") return session.ReadMemoryMonitor();
+        throw new InvalidDataException("Memory monitor action must be start, stop, or read.");
+    }
+
+    private static string CreateRuntimeArtifactPath(string prefix, string extension)
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(local)) throw new InvalidOperationException("Local AppData is unavailable; runtime artifacts cannot be saved.");
+        var runMindDirectory = Path.Combine(local, "RunMind");
+        Directory.CreateDirectory(runMindDirectory);
+        if ((File.GetAttributes(runMindDirectory) & FileAttributes.ReparsePoint) != 0) throw new InvalidDataException("The RunMind local data directory cannot be a symbolic link or reparse point.");
+        var directory = Path.Combine(runMindDirectory, "RuntimeArtifacts");
+        Directory.CreateDirectory(directory);
+        if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) throw new InvalidDataException("The RunMind runtime artifact directory cannot be a symbolic link or reparse point.");
+        var files = new DirectoryInfo(directory).GetFiles().Where(file => file.Extension is ".cpuprofile" or ".heapsnapshot").OrderByDescending(file => file.LastWriteTimeUtc).ToArray();
+        foreach (var old in files.Skip(19)) { try { old.Delete(); } catch { } }
+        return Path.Combine(directory, $"{prefix}-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}{extension}");
+    }
+
+    private static object BuildCpuProfileSummary(string sessionId, JsonElement profile, string path, int bytes)
+    {
+        var nodes = profile.TryGetProperty("nodes", out var nodeArray) && nodeArray.ValueKind == JsonValueKind.Array ? nodeArray.EnumerateArray().ToArray() : Array.Empty<JsonElement>();
+        var samples = profile.TryGetProperty("samples", out var sampleArray) && sampleArray.ValueKind == JsonValueKind.Array ? sampleArray.EnumerateArray().ToArray() : Array.Empty<JsonElement>();
+        var deltas = profile.TryGetProperty("timeDeltas", out var deltaArray) && deltaArray.ValueKind == JsonValueKind.Array ? deltaArray.EnumerateArray().ToArray() : Array.Empty<JsonElement>();
+        var nodeById = nodes.Where(node => node.TryGetProperty("id", out _)).ToDictionary(node => node.GetProperty("id").GetInt32(), node => node);
+        var totals = new Dictionary<int, long>();
+        for (var index = 0; index < samples.Length; index++)
+        {
+            if (!samples[index].TryGetInt32(out var id)) continue;
+            var delta = index < deltas.Length && deltas[index].TryGetInt64(out var micros) ? micros : 0;
+            totals[id] = totals.TryGetValue(id, out var current) ? current + delta : delta;
+        }
+        var hotspots = totals.OrderByDescending(pair => pair.Value).Take(20).Select(pair =>
+        {
+            var node = nodeById[pair.Key];
+            var frame = node.TryGetProperty("callFrame", out var callFrame) ? callFrame : default;
+            return new
+            {
+                function = frame.ValueKind == JsonValueKind.Object && frame.TryGetProperty("functionName", out var functionName) ? functionName.GetString() : "(anonymous)",
+                url = frame.ValueKind == JsonValueKind.Object && frame.TryGetProperty("url", out var url) ? url.GetString() : string.Empty,
+                line = frame.ValueKind == JsonValueKind.Object && frame.TryGetProperty("lineNumber", out var line) ? line.GetInt32() + 1 : 0,
+                sampledMicroseconds = pair.Value,
+                samples = samples.Count(sample => sample.TryGetInt32(out var id) && id == pair.Key),
+            };
+        }).ToArray();
+        var start = profile.TryGetProperty("startTime", out var startTime) && startTime.TryGetInt64(out var startValue) ? startValue : 0;
+        var end = profile.TryGetProperty("endTime", out var endTime) && endTime.TryGetInt64(out var endValue) ? endValue : 0;
+        return new { sessionId, artifactPath = path, bytes, format = "V8 CPU profile (.cpuprofile)", nodeCount = nodes.Length, sampleCount = samples.Length, durationMilliseconds = Math.Max(0, end - start) / 1000.0, topSelfTime = hotspots };
+    }
+
     private async Task<object> NodeDebuggerStopAsync(JsonElement args)
     {
         var session = GetNodeDebuggerSession(args);
@@ -261,7 +375,7 @@ public sealed partial class AgentHostBridge
 internal sealed class NodeDebuggerSession : IDisposable
 {
     private const int MaximumEventCount = 256;
-    private const int MaximumMessageBytes = 4 * 1024 * 1024;
+    private const int MaximumMessageBytes = 36 * 1024 * 1024;
     private const int MaximumOutputCharacters = 64 * 1024;
     private const int MaximumEventBytes = 64 * 1024;
     private readonly Process? _process;
@@ -276,6 +390,19 @@ internal sealed class NodeDebuggerSession : IDisposable
     private readonly TaskCompletionSource<string> _endpointReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<bool> _firstPause = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly StringBuilder _stderrProbe = new();
+    private readonly object _snapshotLock = new();
+    private FileStream? _heapSnapshotStream;
+    private string _heapSnapshotPath = string.Empty;
+    private long _heapSnapshotBytes;
+    private bool _heapSnapshotTruncated;
+    private readonly object _profileLock = new();
+    private bool _cpuProfileActive;
+    private bool _cpuProfileStarting;
+    private bool _cpuProfileStopping;
+    private CancellationTokenSource? _memoryMonitorCancellation;
+    private Task? _memoryMonitorTask;
+    private readonly ConcurrentQueue<JsonElement> _memorySamples = new();
+    private int _memorySampleCount;
     private int _nextCommandId;
     private int _eventCount;
     private int _scriptCount;
@@ -343,7 +470,7 @@ internal sealed class NodeDebuggerSession : IDisposable
         }
     }
 
-    public async Task<JsonElement> SendCommandAsync(string method, JsonObject parameters, CancellationToken cancellationToken)
+    public async Task<JsonElement> SendCommandAsync(string method, JsonObject parameters, CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
         if (_closed || _socket.State != WebSocketState.Open) throw new InvalidOperationException("The Node.js Inspector connection is closed.");
         var id = Interlocked.Increment(ref _nextCommandId);
@@ -356,7 +483,7 @@ internal sealed class NodeDebuggerSession : IDisposable
             await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try { await _socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false); }
             finally { _sendLock.Release(); }
-            var response = await completion.Task.WaitAsync(TimeSpan.FromSeconds(15), cancellationToken).ConfigureAwait(false);
+            var response = await completion.Task.WaitAsync(timeout ?? TimeSpan.FromSeconds(15), cancellationToken).ConfigureAwait(false);
             if (response.TryGetProperty("error", out var error))
             {
                 var errorMessage = error.TryGetProperty("message", out var messageValue) ? messageValue.GetString() : "Unknown Inspector error.";
@@ -400,6 +527,11 @@ internal sealed class NodeDebuggerSession : IDisposable
 
     private void StoreEvent(JsonElement value, string method)
     {
+        if (method == "HeapProfiler.addHeapSnapshotChunk")
+        {
+            AppendHeapSnapshotChunk(value);
+            return;
+        }
         var serialized = JsonSerializer.SerializeToUtf8Bytes(value);
         if (serialized.Length > MaximumEventBytes)
         {
@@ -450,6 +582,149 @@ internal sealed class NodeDebuggerSession : IDisposable
         _events.Enqueue(value.Clone());
         while (Interlocked.Increment(ref _eventCount) > MaximumEventCount) { if (_events.TryDequeue(out _)) Interlocked.Decrement(ref _eventCount); else break; }
     }
+
+    public async Task<object> StartCpuProfileAsync(CancellationToken cancellationToken)
+    {
+        lock (_profileLock)
+        {
+            if (_cpuProfileActive || _cpuProfileStarting) throw new InvalidOperationException("A CPU profile is already running or starting for this session.");
+            _cpuProfileStarting = true;
+        }
+        try
+        {
+            await SendCommandAsync("Profiler.enable", new JsonObject(), cancellationToken).ConfigureAwait(false);
+            await SendCommandAsync("Profiler.setSamplingInterval", new JsonObject { ["interval"] = 1000 }, cancellationToken).ConfigureAwait(false);
+            await SendCommandAsync("Profiler.start", new JsonObject(), cancellationToken).ConfigureAwait(false);
+            lock (_profileLock) { _cpuProfileActive = true; _cpuProfileStarting = false; }
+            return new { sessionId = Id, started = true, samplingIntervalMicroseconds = 1000, message = "CPU profiling started. Stop the profile to save the V8 .cpuprofile artifact." };
+        }
+        catch { lock (_profileLock) _cpuProfileStarting = false; throw; }
+    }
+
+    public async Task<JsonElement> StopCpuProfileAsync(CancellationToken cancellationToken)
+    {
+        lock (_profileLock)
+        {
+            if (!_cpuProfileActive || _cpuProfileStopping) throw new InvalidOperationException("No CPU profile is running, or the profile is already stopping.");
+            _cpuProfileStopping = true;
+        }
+        try
+        {
+            var result = await SendCommandAsync("Profiler.stop", new JsonObject(), cancellationToken).ConfigureAwait(false);
+            if (!result.TryGetProperty("profile", out var profile) || profile.ValueKind != JsonValueKind.Object) throw new InvalidDataException("Node Inspector did not return a valid CPU profile.");
+            return profile.Clone();
+        }
+        finally { lock (_profileLock) { _cpuProfileActive = false; _cpuProfileStopping = false; } }
+    }
+
+    public void BeginHeapSnapshotCapture(string path)
+    {
+        lock (_snapshotLock)
+        {
+            if (_heapSnapshotStream is not null) throw new InvalidOperationException("A heap snapshot is already being captured for this session.");
+            _heapSnapshotPath = path;
+            _heapSnapshotBytes = 0;
+            _heapSnapshotTruncated = false;
+            _heapSnapshotStream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
+        }
+    }
+
+    private void AppendHeapSnapshotChunk(JsonElement value)
+    {
+        if (!value.TryGetProperty("params", out var parameters) || !parameters.TryGetProperty("chunk", out var chunkValue) || chunkValue.ValueKind != JsonValueKind.String) return;
+        var chunk = chunkValue.GetString() ?? string.Empty;
+        var bytes = Encoding.UTF8.GetBytes(chunk);
+        lock (_snapshotLock)
+        {
+            if (_heapSnapshotStream is null || _heapSnapshotTruncated) return;
+            if (_heapSnapshotBytes + bytes.Length > 128L * 1024 * 1024)
+            {
+                _heapSnapshotTruncated = true;
+                _heapSnapshotStream.Dispose();
+                _heapSnapshotStream = null;
+                return;
+            }
+            _heapSnapshotStream.Write(bytes, 0, bytes.Length);
+            _heapSnapshotBytes += bytes.Length;
+        }
+    }
+
+    public (string Path, long Bytes, bool Truncated) CompleteHeapSnapshotCapture()
+    {
+        lock (_snapshotLock)
+        {
+            _heapSnapshotStream?.Flush(true);
+            _heapSnapshotStream?.Dispose();
+            _heapSnapshotStream = null;
+            var path = _heapSnapshotPath;
+            var bytes = _heapSnapshotBytes;
+            var truncated = _heapSnapshotTruncated;
+            _heapSnapshotPath = string.Empty;
+            if (truncated) { try { File.Delete(path); } catch { } }
+            return (path, bytes, truncated);
+        }
+    }
+
+    public void AbortHeapSnapshotCapture()
+    {
+        lock (_snapshotLock)
+        {
+            try { _heapSnapshotStream?.Dispose(); } catch { }
+            _heapSnapshotStream = null;
+            if (_heapSnapshotPath.Length > 0) { try { File.Delete(_heapSnapshotPath); } catch { } }
+            _heapSnapshotPath = string.Empty;
+            _heapSnapshotBytes = 0;
+            _heapSnapshotTruncated = false;
+        }
+    }
+
+    public async Task<object> StartMemoryMonitorAsync(int intervalMilliseconds, int durationSeconds, CancellationToken cancellationToken)
+    {
+        if (intervalMilliseconds is < 1000 or > 60000) throw new InvalidDataException("Memory monitor interval must be between 1,000 and 60,000 milliseconds.");
+        if (durationSeconds is < 5 or > 600) throw new InvalidDataException("Memory monitor duration must be between 5 and 600 seconds.");
+        lock (_memorySamples) { if (_memoryMonitorTask is { IsCompleted: false }) throw new InvalidOperationException("A memory monitor is already running for this session."); }
+        var monitor = new CancellationTokenSource();
+        lock (_memorySamples)
+        {
+            _memoryMonitorCancellation?.Dispose();
+            _memoryMonitorCancellation = monitor;
+            while (_memorySamples.TryDequeue(out _)) Interlocked.Decrement(ref _memorySampleCount);
+            _memoryMonitorTask = Task.Run(() => MemoryMonitorLoopAsync(intervalMilliseconds, durationSeconds, monitor.Token));
+        }
+        return new { sessionId = Id, started = true, intervalMilliseconds, durationSeconds, maximumRetainedSamples = 120 };
+    }
+
+    private async Task MemoryMonitorLoopAsync(int intervalMilliseconds, int durationSeconds, CancellationToken cancellationToken)
+    {
+        var end = DateTimeOffset.UtcNow.AddSeconds(durationSeconds);
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested && DateTimeOffset.UtcNow < end && !IsClosed)
+            {
+                var heap = await SendCommandAsync("Runtime.getHeapUsage", new JsonObject(), cancellationToken).ConfigureAwait(false);
+                var sample = JsonSerializer.SerializeToElement(new { timestamp = DateTimeOffset.UtcNow.ToString("O"), heap });
+                _memorySamples.Enqueue(sample);
+                while (Interlocked.Increment(ref _memorySampleCount) > 120) { if (_memorySamples.TryDequeue(out _)) Interlocked.Decrement(ref _memorySampleCount); else break; }
+                await Task.Delay(intervalMilliseconds, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch { }
+    }
+
+    public async Task<object> StopMemoryMonitorAsync()
+    {
+        CancellationTokenSource? cancellation;
+        Task? task;
+        lock (_memorySamples) { cancellation = _memoryMonitorCancellation; task = _memoryMonitorTask; cancellation?.Cancel(); }
+        if (task is not null) { try { await task.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false); } catch { } }
+        var stopped = task is null || task.IsCompleted;
+        if (stopped) cancellation?.Dispose();
+        lock (_memorySamples) { if (stopped && ReferenceEquals(_memoryMonitorCancellation, cancellation)) _memoryMonitorCancellation = null; }
+        return new { sessionId = Id, stopped, sampleCount = _memorySampleCount };
+    }
+
+    public object ReadMemoryMonitor() => new { sessionId = Id, running = _memoryMonitorTask is { IsCompleted: false }, sampleCount = _memorySampleCount, samples = _memorySamples.ToArray() };
 
     public JsonElement[] DrainEvents(int maximum)
     {
@@ -525,6 +800,11 @@ internal sealed class NodeDebuggerSession : IDisposable
 
     public async Task StopAsync(bool terminateProcess)
     {
+        try { await StopMemoryMonitorAsync().ConfigureAwait(false); } catch { }
+        AbortHeapSnapshotCapture();
+        var stopCpuProfile = false;
+        lock (_profileLock) { stopCpuProfile = _cpuProfileActive && !_cpuProfileStopping; _cpuProfileStopping = stopCpuProfile; }
+        if (stopCpuProfile) { try { await SendCommandAsync("Profiler.stop", new JsonObject(), CancellationToken.None, TimeSpan.FromSeconds(3)).ConfigureAwait(false); } catch { } finally { lock (_profileLock) { _cpuProfileActive = false; _cpuProfileStopping = false; } } }
         if (Interlocked.Exchange(ref _stopStarted, 1) == 0)
         {
             _closed = true;

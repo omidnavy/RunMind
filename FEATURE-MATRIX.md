@@ -1,4 +1,4 @@
-# RunMind 2.6.3 — Feature Matrix (Phase 1 baseline + Phase 2 development; Windows host validation required)
+# RunMind 2.6.3 — Feature Matrix (Phase 1 baseline + Phase 2 development)
 
 | Area | Capability | Status in current 2.6.3 working bundle | Notes |
 |---|---|---|---|
@@ -57,7 +57,11 @@
 | Debugger | Expression evaluation | Implemented with limits | Separate fresh approval; V8 side-effect check; not a sandbox |
 | Debugger | Events and process output | Implemented with limits | Exceptions, console, script and pause events; bounded 256 events, 64 KB stdout/stderr each |
 | Debugger | Multiple sessions | Implemented with limits | Maximum eight sessions per host; attached processes are never terminated by RunMind |
-| Runtime quality | CPU/heap profiling and leak analysis | Not yet implemented | Planned next increment |
+| Runtime quality | Runtime diagnostics | Implemented in working bundle; Windows build pending | V8 heap usage and session state through the shared Node Inspector session |
+| Runtime quality | CPU profiling | Implemented in working bundle; Windows build pending | V8 sampling profile; `.cpuprofile` export; top sampled self-time frames; 32 MB artifact cap |
+| Runtime quality | Heap snapshots | Implemented in working bundle; Windows build pending | Streamed `.heapsnapshot` output; 128 MB cap; fresh approval; incomplete snapshots discarded |
+| Runtime quality | Memory-over-time sampling | Implemented in working bundle; Windows build pending | Timestamped V8 heap samples; 1–60 second interval; 5–600 second duration; 120-sample ring |
+| Runtime quality | Heap dominator/leak UI | Not included | Open exported V8 snapshots in Chrome/Edge DevTools; native analysis UI is a later candidate |
 | Browser quality | Playwright browser automation | Not yet implemented | Planned after runtime profiling |
 | API quality | Dedicated HTTP/API test client | Not yet implemented | Planned after browser automation |
 | Development servers | Start/readiness/log/health/stop lifecycle | Not yet implemented | Planned after API testing |

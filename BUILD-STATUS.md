@@ -1,3 +1,11 @@
+## Phase 2 — Runtime Diagnostics & Profiling — 2026-11-21
+
+- Added Node runtime heap diagnostics, V8 CPU profiling with `.cpuprofile` export, streamed heap snapshots, and bounded timestamped heap sampling to the existing shared Node debugger session.
+- Complete portable Node test suite: **72/72 passed**; runtime Inspector tests verify heap usage, CPU profile samples, and valid streamed heap snapshot JSON.
+- JavaScript syntax checks passed for the changed Agent tool definitions and new integration test.
+- Native C# compilation and Windows runtime validation have not been run in this environment. Build all three hosts on Windows with `Validate-Phase1-Windows.ps1` before treating this increment as verified.
+- Details: `docs/PHASE2-RUNTIME-DIAGNOSTICS-PROFILING.md` and `VALIDATION-REPORT-PHASE2-NODE-DEBUGGER.md`.
+
 ## Windows Release x64 compiler-error correction — 2026-11-21
 
 - Added the missing `SupportsNewWindowBehavior` helper with a narrow executable allowlist and validated executable resolution.

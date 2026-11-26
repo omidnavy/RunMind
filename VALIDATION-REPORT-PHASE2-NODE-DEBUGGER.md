@@ -71,3 +71,28 @@ The script now runs all bundled Node tests (Phase 1 plus the current Phase 2 inc
 - This is a local identifier-only change; the Inspector request/response behavior and emitted error text are unchanged.
 - Re-ran the complete bundled Node test suite after the correction: **70/70 passed**.
 - Windows/.NET compilation remains unverified in this environment and must be rerun on Windows.
+
+
+## Runtime Diagnostics & Profiling increment — 2026-11-21
+
+- Added shared Agent Core tools for runtime heap diagnostics, V8 CPU profile start/stop, streamed heap snapshot capture, and bounded timestamped memory sampling.
+- Added explicit fresh approvals for CPU profiling start, memory monitor start, and every heap snapshot. Runtime tools are disabled in Deep Research and delegated sub-agent tasks.
+- CPU profiles are exported as `.cpuprofile` files with sampled self-time hotspots; heap snapshots stream to `.heapsnapshot` files without entering the bounded debugger event queue.
+- Artifact limits: 32 MB CPU profile, 128 MB heap snapshot, 20 retained artifacts. Memory monitor: 1–60 second interval, 5–600 second duration, maximum 120 retained samples.
+- Added `tests/node-runtime-profiling.integration.test.cjs`, which uses a real Node Inspector process to verify V8 heap usage, CPU profile nodes/samples, and complete JSON reconstruction from streamed heap snapshot chunks.
+
+| Check | Result |
+|---|---:|
+| Complete Node test suite | **72/72 passed** |
+| Runtime profiling Inspector integration | Passed |
+| CPU profile data | Nodes, samples, and time deltas present |
+| Heap snapshot stream | Reassembled and parsed as valid V8 snapshot JSON |
+| Runtime tool schemas and native dispatch contracts | Passed |
+| JavaScript syntax (`Shared/ChatWindow/scripts`) | **17/17 passed** |
+| JSON files | **2/2 parsed** |
+| XML project/manifest/XAML files | **6/6 parsed** |
+| C# lexical delimiter balance | Passed (not compilation) |
+| C# compilation | **Not performed** — no .NET SDK/compiler in this environment |
+| Windows three-host build/runtime | **Pending user validation** |
+
+Run `node --test tests/*.test.cjs` and then `.\Validate-Phase1-Windows.ps1 -Configuration Release -Platform x64` from the extracted project root on Windows. The Node integration test validates the actual Node Inspector protocol, not the native C# implementation.

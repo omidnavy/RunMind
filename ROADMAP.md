@@ -2,19 +2,17 @@
 
 ## Current source baseline: 2.6.3 — Developer Intelligence & System Manager
 
-## Active milestone: Phase 1 Developer Workbench completion + System Manager hardening
+## Active milestone: Phase 2 — Debugging & Quality
 
-The 2.6.3 source baseline includes the adapter management surface, cross-model prompt compatibility, truthful action outcomes, generic application discovery, JavaScript project intelligence, expanded System Manager operations, and the shared Agent Core/native bridge across all three hosts. The current bundle includes the final Phase 1 JavaScript/TypeScript and System Manager extensions and remains a completion candidate pending Windows build/runtime validation.
+The 2.6.3 baseline includes the Phase 1 Developer Workbench and System Manager capabilities. The Node Debugger increment has been built successfully by the user on Windows across all three hosts. Runtime Diagnostics & Profiling is the active increment and is awaiting the next three-host Windows build/runtime validation.
 
 ### Milestone scope and implementation direction
 
-This milestone coordinates the remaining Phase 1 Developer Workbench work with System Manager hardening. It does not include Phases 2–6. The implementation should remain shared across Standalone, PowerToys Run, and PowerToys Command Palette.
-
-- Improve project intelligence with bounded incremental indexing, package-manager/lockfile detection, declared script discovery, Acorn AST analysis for `.js/.mjs/.cjs`; bundled TypeScript compiler API parsing for JSX/TSX/TS; bounded project checker references and `tsconfig` paths; Node ESM/CommonJS runtime resolution through an approved fixed script; named public API rename across resolved importers; circular-dependency and module-edge analysis.
-- Keep build, test, lint, Playwright, API, and dependency-audit execution behind the existing native workspace selection and fresh PowerShell/native command approval. Static validation must never imply execution.
-- Preserve Git/workspace operations, Skills, Profiles, MCP, workflow/task recovery foundations, and existing three-host shared architecture.
-- Harden System Manager process handling, adapter validation, container lifecycle execution, reversible startup Run/RunOnce and Startup-folder management, hardware/driver and TCP/UDP listener diagnostics, truthful operational result contracts, and native permission checks.
-- Keep full TypeScript diagnostics/type-checking and project-reference builds, custom Node loaders/runtime-generated resolution, full debugging/profiling, embedded Playwright, database work, MCP advanced protocol features, and sub-agent orchestration outside this milestone unless separately agreed. JavaScript AST analysis and conservative refactoring are now included.
+- Extend the existing Node Inspector sessions with V8 heap diagnostics, CPU sampling profiles, streamed heap snapshots, and bounded timestamped memory sampling.
+- Keep profiling tools in the shared Agent Core across Standalone, PowerToys Run, and PowerToys Command Palette; do not introduce a second agent or duplicate session manager.
+- Require fresh approval for profiling starts and heap snapshots, bound all retained samples/artifacts, and keep runtime profiling unavailable to Deep Research and delegated sub-agent tasks.
+- Complete the remaining Phase 2 increments in sequence: Playwright browser integration, dedicated API/backend testing, and development-server lifecycle management.
+- Preserve the existing Phase 1 Developer Workbench, Git, Skills, Profiles, MCP, workflows, and System Manager capabilities without broad rewrites.
 
 ### Included in this source bundle
 
@@ -44,6 +42,8 @@ This milestone coordinates the remaining Phase 1 Developer Workbench work with S
 
 ### Next candidates
 
+- Complete Windows build/runtime validation for Runtime Diagnostics & Profiling across all three hosts.
+- Phase 2 Playwright browser integration, followed by API/backend testing and development-server lifecycle management.
 - Windows-targeted automated integration tests for discovery, launch, activation, close, and all three hosts.
 - Better app-specific adapters where a real user workflow justifies them.
 - Full Skill repository/archive import with referenced resources and update checks, if needed.
@@ -71,6 +71,11 @@ This milestone coordinates the remaining Phase 1 Developer Workbench work with S
 Implemented in this source snapshot: Windows Notepad adapter, File Explorer folder/file actions, Docker/Podman container lifecycle/read operations, and four coding skills. The adapter editor/override UI and native conversation-session management remain follow-up work; RunMind conversations currently live in WebView IndexedDB and are not exposed as a native session store.
 
 
+## Phase 2 progress — 2026-11-21
+
+- Node Debugger: implemented and confirmed by the user to build successfully across all three Windows hosts.
+- Runtime Diagnostics & Profiling: added V8 heap diagnostics, CPU profile export, streamed heap snapshots, and bounded timestamped memory sampling. Node Inspector integration tests pass; Windows compilation/runtime validation is pending.
+
 ## Phase 1 completion candidate — 2026-11-21
 
-Implemented in the current source increment: JavaScript AST rename/import organization/conservative extract-function previews; cross-file reference edges for resolved static imports; reversible HKCU/HKLM Run startup toggles; hardware/driver and TCP/UDP listener diagnostics; normalized System Manager outcomes; real local Git workflow tests; and a Windows validation script for all three projects. The release gate remains open until the Windows solution build and three-host runtime scenarios pass.
+Implemented in the source increment: JavaScript AST rename/import organization/conservative extract-function previews; cross-file reference edges for resolved static imports; reversible HKCU/HKLM Run startup toggles; hardware/driver and TCP/UDP listener diagnostics; normalized System Manager outcomes; real local Git workflow tests; and a Windows validation script for all three projects. The user subsequently confirmed the three-host Node Debugger build succeeds.

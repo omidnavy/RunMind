@@ -136,8 +136,34 @@
         git_fetch: ['fetch','gitRemote'], git_pull: ['pull','gitRemote'], git_push: ['push','gitRemote'], git_reset_hard: ['reset_hard','gitDestructive'], git_clean: ['clean','gitDestructive'], git_restore: ['restore','gitDestructive'], git_delete_branch: ['delete_branch','gitDestructive']
       };
       const debuggerTools = new Set(['node_debugger_launch','node_debugger_attach','node_debugger_list_sessions','node_debugger_command','node_debugger_events','node_debugger_stop']);
-      if (debuggerTools.has(name) && (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth))
-        throw new Error('Node.js debugger access is disabled in Deep Research and delegated sub-agent tasks. Use the primary Agent session with explicit approval.');
+      const runtimeTools = new Set(['node_runtime_diagnostics','node_runtime_cpu_profile','node_runtime_heap_snapshot','node_runtime_memory_monitor']);
+      if ((debuggerTools.has(name) || runtimeTools.has(name)) && (deepResearchEnabled || taskContext?.deepResearch || taskContext?.subAgentDepth))
+        throw new Error('Node.js debugger and runtime profiling access is disabled in Deep Research and delegated sub-agent tasks. Use the primary Agent session with explicit approval.');
+      if (name === 'node_runtime_diagnostics')
+        return await callAgentHost('debugger.runtime.diagnostics', { session_id: String(args.session_id || '') }, signal, 20000);
+      if (name === 'node_runtime_cpu_profile') {
+        const action = String(args.action || '').toLowerCase();
+        if (!['start','stop'].includes(action)) throw new Error('CPU profile action must be start or stop.');
+        if (action === 'start') {
+          const approved = await requireAgentApproval({ title: 'Start Node.js CPU profiling?', subtitle: 'V8 Profiler · adds runtime overhead', detail: `Session: ${String(args.session_id || '')}\nSampling interval: 1,000 microseconds\n\nProfiling continues until explicitly stopped or the debugger session closes.`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, message: 'CPU profiling was declined.' };
+        }
+        return await callAgentHost('debugger.runtime.cpuProfile', { session_id: String(args.session_id || ''), action }, signal, 45000);
+      }
+      if (name === 'node_runtime_heap_snapshot') {
+        const approved = await requireAgentApproval({ title: 'Capture a Node.js heap snapshot?', subtitle: 'V8 HeapProfiler · may pause the target and consume substantial memory', detail: `Session: ${String(args.session_id || '')}\nMaximum artifact size: 128 MB\n\nThe snapshot is stored locally under %LOCALAPPDATA%\\RunMind\\RuntimeArtifacts.`, risky: true, alwaysAsk: true }, signal);
+        if (!approved) return { cancelled: true, message: 'Heap snapshot capture was declined.' };
+        return await callAgentHost('debugger.runtime.heapSnapshot', { session_id: String(args.session_id || '') }, signal, 180000);
+      }
+      if (name === 'node_runtime_memory_monitor') {
+        const action = String(args.action || '').toLowerCase();
+        if (!['start','stop','read'].includes(action)) throw new Error('Memory monitor action must be start, stop, or read.');
+        if (action === 'start') {
+          const approved = await requireAgentApproval({ title: 'Start Node.js memory monitoring?', subtitle: 'Runtime sampling · bounded background collection', detail: `Session: ${String(args.session_id || '')}\nInterval: ${Math.max(1000, Math.min(60000, Number(args.interval_ms) || 2000))} ms\nDuration: ${Math.max(5, Math.min(600, Number(args.duration_seconds) || 60))} seconds\nRetained samples: maximum 120`, risky: true, alwaysAsk: true }, signal);
+          if (!approved) return { cancelled: true, message: 'Memory monitoring was declined.' };
+        }
+        return await callAgentHost('debugger.runtime.memoryMonitor', { session_id: String(args.session_id || ''), action, interval_ms: args.interval_ms, duration_seconds: args.duration_seconds }, signal, 20000);
+      }
       if (name === 'node_debugger_launch') {
         const scriptPath = String(args.script_path || '').trim();
         if (!scriptPath || scriptPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(scriptPath)) throw new Error('Provide a workspace-relative script_path.');
