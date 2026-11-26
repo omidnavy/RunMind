@@ -1,3 +1,15 @@
+## 2.6.4 — Phase 2 reliability and System Manager diagnostics (2026-11-22)
+
+- Fix the Playwright tool-schema/runner contract: every action object now requires explicit `action`, `selector`, and `value` properties. Empty selector/value strings are documented for actions that do not consume them; locator actions still require non-empty selectors during native preflight validation.
+- Improve Playwright preflight errors with the exact action index and action name, plus an explanation of the missing field. Invalid action sequences are rejected before browser launch.
+- Fix the Playwright fixture's submission status: the programmatic form reset after submission no longer overwrites the success message; a user-initiated Clear form action still reports `Form cleared.`
+- Add read-only System Manager `system_manager_find_port_owner` for targeted TCP/UDP local-port ownership lookup, including process identity metadata when Windows permits access.
+- Add read-only System Manager `system_manager_process_tree` for a bounded parent chain and child-descendant view with process identity, executable path, start time, and memory information where accessible.
+- Route both new diagnostics through the existing process/list-process capability and read-only approval model. They do not terminate or modify processes.
+- Add Playwright schema-contract, fixture behavior, and System Manager tool-wiring regression tests.
+- Bump all three host project package versions to 2.6.4.
+- Unified browser/native workspace selection and persistent development-server orphan reconciliation remain planned follow-up work; they are not claimed as completed in this release.
+
 ## 2.6.3 — Phase 2 follow-up refinements (2026-11-22)
 
 - Make native workspace selection idempotent per chat context: if the native execution root is already selected, the Agent receives the existing selection instead of opening the native folder picker again. The separate Agent-browser/native selection remains unresolved pending the host-owned workspace RPC migration.

@@ -95,3 +95,12 @@ Implemented in the source increment: JavaScript AST rename/import organization/c
 - Added the shared `development_server_manage` Agent tool and native process-bridge implementation for Node.js package-script discovery/start, multiple owned server sessions, bounded stdout/stderr logs, HTTP readiness/health checks, port-conflict detection, and explicit stop.
 - Startup and stop require fresh approval. Startup approval displays the actual `package.json` script command. Termination is restricted to process trees launched and tracked by the current RunMind host.
 - Portable lifecycle contract tests: 12/12 passed. Windows C# compilation and live process behavior remain pending.
+
+
+## Phase 2 reliability increment — 2.6.4 (2026-11-22)
+
+- Corrected the Playwright action schema so `selector` and `value` are explicit required fields for every action object; empty strings are used only where the action does not consume the field. Native preflight errors now identify the action index and action name.
+- Corrected the browser fixture's submission/reset status interaction so the programmatic reset after submission does not replace the success confirmation.
+- Added targeted read-only System Manager port-owner and process-tree tools, using the existing process/list-process capability and approval path.
+- Portable Node test suite: 130/130 passed. .NET/Windows validation remains required.
+- Unified browser/native workspace migration and persistent development-server orphan reconciliation remain open architecture tasks; this increment does not claim either as complete.

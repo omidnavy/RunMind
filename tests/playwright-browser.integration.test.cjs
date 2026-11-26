@@ -50,6 +50,7 @@ test('local browser fixture is a real accessible HTML application with a matchin
   assert.equal(manifest.scripts.dev, 'node server.cjs 4320');
   for (const marker of ['<html lang="en">','<main id="main">','<nav aria-label="Primary navigation">','<label for="request-name">','aria-live="polite"','id="request-list"']) assert.ok(html.includes(marker), marker);
   assert.match(app, /addEventListener\('submit'/);
+  assert.match(app, /if \(event\.isTrusted\) status\.textContent = 'Form cleared\.'/);
   assert.match(server, /pathname === '\/health'/);
 });
 
@@ -63,6 +64,13 @@ test('Playwright request validation accepts a bounded structured workflow', () =
   assert.equal(result.browser, 'chromium');
   assert.equal(result.channel, 'auto');
   assert.equal(result.actions.length, 4);
+});
+
+test('Playwright action schema requires selector and value fields on every action object', () => {
+  const providers = fs.readFileSync(path.join(__dirname, '..', 'Shared', 'ChatWindow', 'scripts', 'providers.js'), 'utf8');
+  assert.match(providers, /required: \['action','selector','value'\], additionalProperties: false \} \} \}, required: \['actions'\]/);
+  assert.match(providers, /use an empty string only for goto, inspect_page, expect_url, expect_title, and screenshot/i);
+  assert.match(providers, /use an empty string for actions that do not consume a value/i);
 });
 
 test('Playwright selects installed Edge/Chrome before bundled Chromium and supports explicit channels', () => {
@@ -101,8 +109,8 @@ test('Playwright request validation rejects non-web schemes and embedded credent
 
 test('Playwright request validation rejects unsupported or malformed actions', () => {
   assert.throws(() => validateRequest({ actions: [{ action: 'evaluate', value: 'process.exit()' }] }), /unsupported action/);
-  assert.throws(() => validateRequest({ actions: [{ action: 'click' }] }), /requires a selector/);
-  assert.throws(() => validateRequest({ actions: [{ action: 'fill', selector: '#name' }] }), /requires a value/);
+  assert.throws(() => validateRequest({ actions: [{ action: 'click' }] }), /action 1 \('click'\) requires a non-empty selector/);
+  assert.throws(() => validateRequest({ actions: [{ action: 'fill', selector: '#name' }] }), /action 1 \('fill'\) requires a non-empty value/);
   assert.throws(() => validateRequest({ actions: [{ action: 'wait_for', selector: '#name', state: 'magic' }] }), /invalid wait state/);
 });
 

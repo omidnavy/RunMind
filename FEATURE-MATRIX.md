@@ -1,6 +1,6 @@
-# RunMind 2.6.3 — Feature Matrix (Phase 1 baseline + Phase 2 development)
+# RunMind 2.6.4 — Feature Matrix (Phase 1 baseline + Phase 2 development)
 
-| Area | Capability | Status in current 2.6.3 working bundle | Notes |
+| Area | Capability | Status in current 2.6.4 working bundle | Notes |
 |---|---|---|---|
 | Hosts | Standalone | Preserved | Shared Agent Core |
 | Hosts | PowerToys Run | Preserved | Shared Agent Core |
@@ -11,6 +11,7 @@
 | Developer | Static project validation | Implemented with limits | JSON/XML and selected manifest checks; test discovery; package manager/lockfile detection; no build/test execution |
 | Developer | Approved PowerShell/native execution | Implemented | Existing 2.4.0 bridge |
 | Developer | Build/test workflows | Implemented with limits | Workflow-guided approved PowerShell/native execution; commands are selected from project evidence and require fresh approval |
+| Developer | Project Doctor / structured multi-language build runner | Planned | Candidate for a later increment; not included in 2.6.4 |
 | Developer | Static analysis/lint workflow | Implemented | Discovers configured tools; read-only checks first |
 | Developer | Playwright test-runner workflow | Implemented | Workflow-guided project CLI commands remain available |
 | Developer | API smoke-test workflow | Implemented | Uses approved PowerShell; no dedicated API client UI |
@@ -29,6 +30,8 @@
 | System Manager | Application launch | Implemented | Uses stable application IDs; revalidates executable; reuses/activates existing windows by default; distinguishes startup, activation and unverified handoff |
 | System Manager | Open files/folders/HTTPS URLs | Implemented | Windows default-handler request accepted; target application/window/focus/navigation are not verified |
 | System Manager | Process inspection | Expanded | Parent PID, working/private memory, cumulative CPU time, threads, handles, priority, responsiveness, executable path and start time; detail fields individually gated |
+| System Manager | Targeted port-owner lookup | Added in 2.6.4 | Read-only TCP/UDP local-port lookup with endpoint state and process identity metadata where accessible |
+| System Manager | Process tree inspection | Added in 2.6.4 | Bounded parent chain and child descendants with PID relationships, executable path, start time and memory where accessible |
 | System Manager | Graceful process close | Added | Identity-checked main-window close request; mandatory confirmation; never force-kills |
 | System Manager | Process termination | Implemented | Disabled by default; mandatory fresh confirmation and identity revalidation |
 | System Manager | OS/environment/service/network diagnostics | Expanded | Uptime, drive capacity, gateways and DNS added; individual switches; read-only |
@@ -62,13 +65,13 @@
 | Runtime quality | Heap snapshots | Implemented; Windows build/runtime verified by user | Streamed `.heapsnapshot` output; 128 MB cap; fresh approval; incomplete snapshots discarded |
 | Runtime quality | Memory-over-time sampling | Implemented; Windows build/runtime verified by user | Timestamped V8 heap samples; 1–60 second interval; 5–600 second duration; 120-sample ring |
 | Runtime quality | Heap dominator/leak UI | Not included | Open exported V8 snapshots in Chrome/Edge DevTools; native analysis UI is a later candidate |
-| Browser quality | Structured Playwright automation | Implemented in working bundle; Windows build pending | Shared native runner; Chromium/Firefox/WebKit; 1–30 structured actions; fresh approval per run; ephemeral contexts; assertions, console/network diagnostics and screenshots; project-installed package required |
+| Browser quality | Structured Playwright automation | Implemented in 2.6.4 working bundle; Windows build pending | Shared native runner; Chromium/Firefox/WebKit; 1–30 structured actions; action schema requires action/selector/value; preflight validation identifies action index/type; fresh approval per run; ephemeral contexts; assertions, console/network diagnostics and screenshots; project-installed package required |
 | API quality | Structured HTTP/API test runner | Implemented in working bundle; Windows build pending | Shared native Node fetch runner; 1–20 sequential requests; status/header/JSON/body assertions; env-backed secrets; same-origin redirects; fresh approval per suite |
 | Development servers | Start/readiness/log/health/stop lifecycle | Implemented in working bundle; Windows build pending | Shared native process bridge; package.json script discovery; up to eight owned servers; bounded stdout/stderr; loopback readiness/health; port preflight; fresh approval for start/stop; npm CLI required |
 
 ## 2.6.1 changes
 
-| Area | Capability | Status in current 2.6.3 working bundle | Notes |
+| Area | Capability | Status in current 2.6.4 working bundle | Notes |
 |---|---|---|---|
 | System Manager | Adapter inventory and custom manifest management | Implemented | Dedicated UI; native confirmation for install/removal; built-ins protected |
 | System Manager | First-party RunMind adapter | Extended | Sends prompts, opens a validated `.runmind` session, or starts a fresh Standalone conversation |

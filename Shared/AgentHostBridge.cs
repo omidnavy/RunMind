@@ -140,6 +140,8 @@ public sealed partial class AgentHostBridge : IDisposable
             "systemManager.apps.close" => Task.FromResult(SystemManagerCloseApplication(args)),
             "systemManager.open.target" => Task.FromResult(SystemManagerOpenTarget(args)),
             "systemManager.process.list" => Task.FromResult(SystemManagerListProcesses(ReadString(args, "query", 120))),
+            "systemManager.process.tree" => Task.FromResult(SystemManagerProcessTree(args)),
+            "systemManager.port.owner" => Task.FromResult(SystemManagerFindPortOwner(args)),
             "systemManager.process.close" => Task.FromResult(SystemManagerCloseProcess(args)),
             "systemManager.process.terminate" => Task.FromResult(SystemManagerTerminateProcess(args)),
             "systemManager.diagnostics" => Task.FromResult(SystemManagerDiagnostics()),

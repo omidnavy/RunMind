@@ -32,7 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
     nameField.focus();
   });
 
-  form.addEventListener('reset', () => {
-    status.textContent = 'Form cleared.';
+  form.addEventListener('reset', event => {
+    // form.reset() is also used after successful submission. Only a user-initiated
+    // reset should replace the submission confirmation with the clear message.
+    if (event.isTrusted) status.textContent = 'Form cleared.';
   });
 });

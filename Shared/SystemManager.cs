@@ -1681,6 +1681,108 @@ public sealed partial class AgentHostBridge
         return new { success = true, accepted = true, action = "list-processes", completed = true, verified = true, processes = rows, count = rows.Count, truncated = rows.Count >= 500, detailFieldsEnabled = includeDetails, message = $"Retrieved {rows.Count} process records." };
     }
 
+    private static object SystemManagerProcessTree(JsonElement args)
+    {
+        RequireSystemCapability("processes", "listProcesses");
+        if (!args.TryGetProperty("processId", out var pidElement) || !pidElement.TryGetInt32(out var rootPid) || rootPid <= 0)
+            throw new InvalidDataException("A valid process ID is required.");
+
+        var parentIds = ReadProcessParentIds();
+        var includeDetails = (bool?)ReadSystemManagerSettings()["capabilities"]?["inspectProcesses"] == true;
+        var processes = new Dictionary<int, (string Name, string? Path, DateTime? Started, long Memory, long PrivateMemory)>();
+        foreach (var process in Process.GetProcesses())
+        {
+            using (process)
+            {
+                try
+                {
+                    string? executable = null; DateTime? started = null; long memory = 0; long privateMemory = 0;
+                    if (includeDetails) { try { executable = process.MainModule?.FileName; } catch { } }
+                    try { started = process.StartTime.ToUniversalTime(); } catch { }
+                    try { memory = process.WorkingSet64; } catch { }
+                    try { privateMemory = process.PrivateMemorySize64; } catch { }
+                    processes[process.Id] = (process.ProcessName, executable, started, memory, privateMemory);
+                }
+                catch { }
+            }
+        }
+        if (!processes.ContainsKey(rootPid))
+            return new { success = true, accepted = true, completed = true, verified = true, processId = rootPid, found = false, processes = Array.Empty<object>(), message = "The requested process is no longer running or is not accessible." };
+
+        var selected = new Dictionary<int, (string Relation, int Depth)> { [rootPid] = ("target", 0) };
+        var cursor = rootPid;
+        for (var depth = 1; depth <= 32 && parentIds.TryGetValue(cursor, out var parentId) && parentId > 0 && processes.ContainsKey(parentId) && !selected.ContainsKey(parentId); depth++)
+        {
+            selected[parentId] = ("ancestor", -depth);
+            cursor = parentId;
+        }
+        var queue = new Queue<(int Pid, int Depth)>();
+        queue.Enqueue((rootPid, 0));
+        while (queue.Count > 0 && selected.Count < 200)
+        {
+            var current = queue.Dequeue();
+            foreach (var child in parentIds.Where(pair => pair.Value == current.Pid).Select(pair => pair.Key).OrderBy(pid => pid))
+            {
+                if (!processes.ContainsKey(child) || selected.ContainsKey(child)) continue;
+                var depth = current.Depth + 1;
+                selected[child] = ("descendant", depth);
+                queue.Enqueue((child, depth));
+                if (selected.Count >= 200) break;
+            }
+        }
+        var rows = selected.OrderBy(pair => pair.Value.Depth).ThenBy(pair => pair.Key).Select(pair =>
+        {
+            var info = processes[pair.Key];
+            return (object)new { processId = pair.Key, parentProcessId = parentIds.TryGetValue(pair.Key, out var parent) ? parent : (int?)null,
+                name = info.Name, executablePath = info.Path, startedAtUtc = info.Started, memoryBytes = info.Memory,
+                privateMemoryBytes = info.PrivateMemory, relationship = pair.Value.Relation, depth = pair.Value.Depth };
+        }).ToArray();
+        var ancestorCount = selected.Values.Count(value => value.Relation == "ancestor");
+        return new { success = true, accepted = true, completed = true, verified = true, processId = rootPid, found = true,
+            processes = rows, count = rows.Length, truncated = selected.Count >= 200, detailFieldsEnabled = includeDetails,
+            message = $"Retrieved the target process, {ancestorCount} ancestor(s), and descendant process relationships." };
+    }
+
+    private static object SystemManagerFindPortOwner(JsonElement args)
+    {
+        RequireSystemCapability("processes", "listProcesses");
+        if (!args.TryGetProperty("port", out var portElement) || !portElement.TryGetInt32(out var port) || port is < 1 or > 65535)
+            throw new InvalidDataException("A TCP/UDP port between 1 and 65535 is required.");
+        var protocol = ReadString(args, "protocol", 8).Trim().ToLowerInvariant();
+        if (protocol is not ("tcp" or "udp")) throw new InvalidDataException("Protocol must be tcp or udp.");
+        var netstatPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "netstat.exe");
+        var result = RunFixedDiagnosticCommand(netstatPath, new[] { "-ano", "-p", protocol }, 10000);
+        if (result.ExitCode != 0)
+            return new { success = false, accepted = true, completed = true, verified = false, port, protocol, matches = Array.Empty<object>(),
+                message = result.ExitCode == -2 ? "The targeted netstat inspection timed out." : "Windows netstat could not be executed; port ownership is unavailable." };
+        var includeDetails = (bool?)ReadSystemManagerSettings()["capabilities"]?["inspectProcesses"] == true;
+        var matches = new List<object>();
+        foreach (var line in result.Output.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < (protocol == "tcp" ? 5 : 4) || !parts[0].Equals(protocol, StringComparison.OrdinalIgnoreCase)) continue;
+            var local = parts[1];
+            var separator = local.LastIndexOf(':');
+            if (separator < 0 || !int.TryParse(local[(separator + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var localPort) || localPort != port) continue;
+            var pidText = parts[^1];
+            if (!int.TryParse(pidText, NumberStyles.None, CultureInfo.InvariantCulture, out var pid) || pid < 0) continue;
+            var state = protocol == "tcp" ? parts[^2] : "BOUND";
+            string? processName = null; string? executablePath = null; DateTime? startedAtUtc = null;
+            try
+            {
+                using var owner = Process.GetProcessById(pid);
+                processName = owner.ProcessName;
+                if (includeDetails) { try { executablePath = owner.MainModule?.FileName; } catch { } }
+                try { startedAtUtc = owner.StartTime.ToUniversalTime(); } catch { }
+            }
+            catch { }
+            matches.Add(new { protocol, localEndpoint = local, state, processId = pid, processName, executablePath, startedAtUtc });
+            if (matches.Count >= 100) break;
+        }
+        return new { success = true, accepted = true, completed = true, verified = true, port, protocol,
+            matches, count = matches.Count, detailFieldsEnabled = includeDetails, message = matches.Count == 0 ? $"No {protocol.ToUpperInvariant()} endpoint was found using local port {port}." : $"Found {matches.Count} {protocol.ToUpperInvariant()} endpoint(s) using local port {port}." };
+    }
+
     private static object SystemManagerCloseProcess(JsonElement args)
     {
         RequireSystemCapability("processes", "terminateProcesses");
