@@ -4,11 +4,12 @@
 
 ![Screenshot](screenshots/Screenshot-1.png)
 
-RunMind is available through three Windows entry points:
+RunMind is available through four Windows entry points:
 
 - **Standalone Windows app** — a full chat window that can be launched independently, with support for multiple windows.
+- **RunMind Runner (optional preview)** — a separate, lightweight quick launcher with a global shortcut, Start Menu application search, path/URL opening and a tray lifecycle. It does not require PowerToys and is installed independently. This first preview is launcher-only; Quick Agent is intentionally not wired into it yet. See `docs/RUNNER-IMPLEMENTATION.md`.
 - **PowerToys Run plugin** — start a RunMind conversation directly from PowerToys Run using `llm <prompt>` or search for RunMind. The retained inline query can be opened in multiple independent chat windows, including after the first window takes over an in-progress answer.
-- **PowerToys Command Palette extension** — an independent host with a branded **RunMind** inline fallback, **Open chat with empty context**, and an extension settings page for the shared provider/model configuration. The fallback streams local model answers directly into a Command Palette conversation page and supports follow-up turns. It starts its own chat process from the packaged Command Palette executable and hosts the canonical shared chat UI; it does not launch or require the Standalone executable. Inline settings are shared with PowerToys Run. The helper package is hidden from Start and Windows Search because it is a COM host, not a separately launchable app. `Build-Release-x64.bat` builds all three Release x64 hosts and creates/signs the Command Palette MSIX without installing it. `Install-RunMind-PowerToys-Run.bat` separately installs the already-built PowerToys Run plugin after checking that PowerToys is closed; `Install-RunMind-CommandPalette.bat` separately installs or uninstalls the already-built Command Palette package.
+- **PowerToys Command Palette extension** — an independent host with a branded **RunMind** inline fallback, **Open chat with empty context**, and an extension settings page for the shared provider/model configuration. The fallback streams local model answers directly into a Command Palette conversation page and supports follow-up turns. It starts its own chat process from the packaged Command Palette executable and hosts the canonical shared chat UI; it does not launch or require the Standalone executable. Inline settings are shared with PowerToys Run. The helper package is hidden from Start and Windows Search because it is a COM host, not a separately launchable app. `Build-Release-x64.bat` builds the three existing Release x64 hosts, publishes the optional Runner, and creates/signs the Command Palette MSIX without installing any host. `Install-RunMind-PowerToys-Run.bat` separately installs the already-built PowerToys Run plugin after checking that PowerToys is closed; `Install-RunMind-CommandPalette.bat` separately installs or uninstalls the already-built Command Palette package. `Install-RunMind-Runner.ps1` independently installs Runner for the current user.
 
 ## What you can do with RunMind
 
@@ -40,6 +41,13 @@ Example theme header:
 ```
 
 For a single-mode theme, list only that mode and provide only its matching palette rule. The native bridge discovers the name and modes from the file itself.
+
+
+## RunMind Runner — 3.4.0 Preview 1
+
+The optional Runner is the first step toward a fourth RunMind entry point. It is a separate native WPF launcher that can be installed without PowerToys, searches bounded Start Menu shortcuts, opens explicit paths and HTTP/HTTPS URLs, and supports a configurable global hotkey, tray lifecycle and opt-in sign-in startup. It does not load the Full Agent or expose developer, workspace, MCP or Skills capabilities. Windows build/runtime acceptance is pending; see `docs/RUNNER-IMPLEMENTATION.md`.
+
+The next increment will add the restricted Quick Agent to Runner, PowerToys Run and Command Palette through one shared capability registry and approval boundary. Each quick host will have its own mode setting, while global policy remains authoritative. Full Agent in Standalone remains a separate, richer experience.
 
 ## RunMind 3.3.1 — Stabilization (P0–P6 retained)
 

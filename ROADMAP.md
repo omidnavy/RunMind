@@ -6,8 +6,35 @@
 
 The 3.3.1 patch hardens process-output bounds/timeouts, trusted WebView origins, Standalone navigation policy, chat-page CSP and WebView2 installer coordination. Portable regression coverage is 255/255 in the packaging environment. This is a source/portable-test milestone only: .NET 10 Release x64 builds, live Windows behavior, PowerToys compatibility, credential-at-rest protection and final release certification remain open. See `STABILIZATION-RELEASE-NOTES.md`, `docs/STABILIZATION-AUDIT.md` and `docs/STABILIZATION-WINDOWS-ACCEPTANCE.md`.
 
-Do not start another feature phase or declare the product production-ready until the P0–P6 Windows acceptance suite is completed and the critical security items in the stabilization audit are resolved.
+The optional Runner feature work is being developed in an isolated host and does not waive the P0–P6 Windows acceptance suite or the critical security items in the stabilization audit. Do not declare the product production-ready until those gates are resolved.
 
+
+## Active feature milestone: 3.4 — Optional Runner, then Quick Agent
+
+The user has explicitly chosen to begin the optional standalone Runner before introducing Quick Agent to all three quick surfaces. The 3.3.1 Windows certification and credential-protection gates remain open; beginning isolated Runner work does not close or waive them. Do not declare any host production-ready until its Windows acceptance and security gates are completed.
+
+### 3.4.0 Preview 1 — Runner foundation
+
+- Add a separate native WPF `RunMind.Runner` executable and solution project.
+- Provide bounded Start Menu shortcut search, explicit app launch, direct rooted file/folder opening, and HTTP/HTTPS URL opening.
+- Add configurable global hotkey, tray lifecycle, single-instance behavior, current-user settings and optional current-user sign-in startup.
+- Add separate current-user install/uninstall scripts and release publish output.
+- Keep Runner launcher-only: no Full Agent, WebView2, AgentHostBridge, workspace bridge, MCP, Skills, developer tools or system-management mutations.
+
+### 3.4.x — Quick Agent shared core (next)
+
+- Create a dedicated Quick Agent capability registry and execution boundary.
+- Reuse one Quick Agent Core and approval/security policy across PowerToys Run, Command Palette and Runner.
+- Keep workspace/project intelligence, developer tools, MCP, Skills and arbitrary tool discovery inaccessible to Quick Agent at the native execution layer.
+- Add independent per-host modes: Chat only, Agentic (approval required), and Quick actions (explicitly allow-listed low-risk actions only).
+- Keep global policy authoritative over host-level preferences; sensitive process/service/power actions always require fresh confirmation.
+- Preserve the Full Agent and all developer workflows in Standalone as a separate experience.
+
+### 3.4.x — Host integration
+
+- Integrate Quick Agent into PowerToys Run, Command Palette and Runner without duplicating capability implementations.
+- Add shared conversation/session identity and safe handoff between the quick hosts and Standalone; workspace context remains Full-Agent-only unless explicitly entered in Standalone.
+- Validate host-specific settings, approval prompts, cancellation, idle footprint and clean lifecycle.
 
 ## Completed milestone: P6 — Development Intelligence
 

@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RunMind.Standalone", "RunMi
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RunMind.CommandPalette", "RunMind.CommandPalette\RunMind.CommandPalette.csproj", "{A8276AE1-DAF0-45D5-A6FC-C5C6FCD4A6B8}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RunMind.Runner", "RunMind.Runner\RunMind.Runner.csproj", "{D35A5C8E-6AE7-4F30-9E80-21E1E5AC66B1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,14 @@ Global
 		{A8276AE1-DAF0-45D5-A6FC-C5C6FCD4A6B8}.Release|Any CPU.ActiveCfg = Release|x64
 		{A8276AE1-DAF0-45D5-A6FC-C5C6FCD4A6B8}.Release|x64.ActiveCfg = Release|x64
 		{A8276AE1-DAF0-45D5-A6FC-C5C6FCD4A6B8}.Release|x64.Build.0 = Release|x64
+		{D35A5C8E-6AE7-4F30-9E80-21E1E5AC66B1}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{D35A5C8E-6AE7-4F30-9E80-21E1E5AC66B1}.Debug|Any CPU.Build.0 = Debug|x64
+		{D35A5C8E-6AE7-4F30-9E80-21E1E5AC66B1}.Debug|x64.ActiveCfg = Debug|x64
+		{D35A5C8E-6AE7-4F30-9E80-21E1E5AC66B1}.Debug|x64.Build.0 = Debug|x64
+		{D35A5C8E-6AE7-4F30-9E80-21E1E5AC66B1}.Release|Any CPU.ActiveCfg = Release|x64
+		{D35A5C8E-6AE7-4F30-9E80-21E1E5AC66B1}.Release|Any CPU.Build.0 = Release|x64
+		{D35A5C8E-6AE7-4F30-9E80-21E1E5AC66B1}.Release|x64.ActiveCfg = Release|x64
+		{D35A5C8E-6AE7-4F30-9E80-21E1E5AC66B1}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

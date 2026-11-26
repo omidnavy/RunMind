@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <PlatformTarget>$(Platform)</PlatformTarget>
+    <AssemblyName>RunMind.Runner</AssemblyName>
+    <AssemblyTitle>RunMind Runner</AssemblyTitle>
+    <Product>RunMind</Product>
+    <ApplicationIcon>..\Assets\Brand\Icon.ico</ApplicationIcon>
+    <RootNamespace>RunMind.Runner</RootNamespace>
+    <Version>3.4.0-preview.1</Version>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" />
+    <Content Include="..\Assets\Brand\Icon.ico" Link="Assets\Brand\Icon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Assets\Brand\64x64.png" Link="Assets\Brand\64x64.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

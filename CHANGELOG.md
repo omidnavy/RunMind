@@ -50,6 +50,14 @@
 
 # RunMind Changelog
 
+## 3.4.0 Preview 1 — Optional RunMind Runner
+
+- Add an independently installable native WPF Runner with bounded Start Menu shortcut discovery, explicit application launch, direct rooted file/folder opening and HTTP/HTTPS URL opening.
+- Add configurable global hotkey (default `Ctrl+Alt+Space`), tray lifecycle, Escape-to-hide, single-instance signaling, per-user JSON settings and opt-in current-user sign-in startup.
+- Add separate current-user install/uninstall scripts and include Runner in the Release x64 solution/publish workflow.
+- Keep this preview launcher-only: no Full Agent, workspace/project access, AgentHostBridge, WebView2, MCP, Skills, developer commands or system-management mutations.
+- Add portable source-contract tests and Windows acceptance guidance. The .NET 10 WPF executable has not been compiled or executed in this Linux environment.
+
 ## 3.0.0 — P3 Developer Infrastructure
 
 - Preserve P0 reliability, P1 Project Intelligence/Mission Control, P2 Windows System Manager Intelligence and SVG local-reference mapping in all three Windows hosts.

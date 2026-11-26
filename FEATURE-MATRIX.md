@@ -3,6 +3,17 @@
 
 > **Current release status (3.3.1):** P0–P6 capabilities are retained. The stabilization patch hardens native process-output bounds/timeouts, WebView trust/navigation/CSP and WebView2 installer coordination. Portable regression tests pass 255/255; Windows/.NET certification and credential-at-rest protection remain open. See `docs/STABILIZATION-AUDIT.md`.
 
+## Optional host — RunMind Runner (3.4.0 Preview 1)
+
+| Area | Capability | Status | Notes |
+|---|---|---|---|
+| Host | Independent optional Runner executable | Implemented in source; Windows validation pending | Separate WPF project; does not require PowerToys or the Standalone executable |
+| Launcher | Start Menu application search | Implemented in source | Current-user and common Start Menu `.lnk` entries; depth and item-count bounds; reparse points skipped |
+| Launcher | Explicit app launch, file/folder and URL opening | Implemented in source | Direct input restricted to rooted paths and HTTP/HTTPS URLs; executable/script targets blocked as direct file input |
+| Lifecycle | Global hotkey, tray and single-instance behavior | Implemented in source; Windows validation pending | Default `Ctrl+Alt+Space`; configurable per user; Escape hides; tray Exit shuts down |
+| Settings | Optional Windows sign-in startup | Implemented in source; Windows validation pending | Disabled by default; current-user Run registry value only |
+| Agent | Quick Agent / Agentic Mode | Not implemented in this preview | Planned as a separate restricted Core shared by Runner, PowerToys Run and Command Palette; no Full Agent/workspace/MCP/Skills access |
+
 ## P6 Development Intelligence — introduced in RunMind 3.3.0; retained in 3.3.1
 
 | Area | Capability | Status in 3.3.0 source bundle | Notes |

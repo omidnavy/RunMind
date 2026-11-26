@@ -5,7 +5,8 @@ rem One release entry point for all RunMind hosts:
 rem   1) Standalone desktop app
 rem   2) PowerToys Run plugin
 rem   3) PowerToys Command Palette extension (signed MSIX)
-rem Installation is intentionally separate: Install-RunMind-PowerToys-Run.bat and Install-RunMind-CommandPalette.bat.
+rem   4) Optional RunMind Runner launcher
+rem Installation is intentionally separate: use the host-specific installers, including Install-RunMind-Runner.ps1.
 cd /d "%~dp0"
 
 rem Opt out of .NET CLI telemetry and suppress first-run/logo noise for this
@@ -24,7 +25,7 @@ if /I "%ACTION%"=="help" goto :help
 if /I not "%ACTION%"=="build" goto :help_error
 
 echo ================================================
-echo  Building RunMind Release x64 (all three hosts)
+echo  Building RunMind Release x64 (three existing hosts + Runner)
 echo ================================================
 echo.
 
@@ -57,6 +58,7 @@ for %%P in (
     "Community.PowerToys.Run.Plugin.RunMind\Community.PowerToys.Run.Plugin.RunMind.csproj"
     "RunMind.Standalone\RunMind.Standalone.csproj"
     "RunMind.CommandPalette\RunMind.CommandPalette.csproj"
+    "RunMind.Runner\RunMind.Runner.csproj"
 ) do (
     if not exist "%%~P" (
         echo [ERROR] Required RunMind host project is missing: %%~P
@@ -65,7 +67,7 @@ for %%P in (
     )
 )
 
-echo [1/5] Preparing pinned PDF.js, Tesseract.js, English and Persian OCR resources...
+echo [1/7] Preparing pinned PDF.js, Tesseract.js, English and Persian OCR resources...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Prepare-RunMind-OCR.ps1"
 if errorlevel 1 (
     echo.
@@ -75,7 +77,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/5] Restoring the full solution and the Windows x64 runtime pack...
+echo [2/7] Restoring the full solution and the Windows x64 runtime pack...
 dotnet restore "%SOLUTION%" --runtime win-x64 -p:Configuration=Release -p:Platform=x64
 if errorlevel 1 (
     echo.
@@ -85,7 +87,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/5] Cleaning all three Release x64 projects...
+echo [3/7] Cleaning all Release x64 projects...
 dotnet clean "%SOLUTION%" --configuration Release -p:Platform=x64
 if errorlevel 1 (
     echo.
@@ -95,10 +97,11 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/5] Building the complete Release x64 solution...
+echo [4/7] Building the complete Release x64 solution...
 echo        - RunMind Standalone
 echo        - PowerToys Run plugin
 echo        - PowerToys Command Palette extension
+echo        - Optional RunMind Runner
 dotnet build "%SOLUTION%" --configuration Release -p:Platform=x64
 if errorlevel 1 (
     echo.
@@ -108,7 +111,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/5] Packaging and signing the Command Palette MSIX (not installing)...
+echo [5/7] Packaging and signing the Command Palette MSIX (not installing)...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Build-RunMind-CommandPalette.ps1" -Configuration Release -Platform x64
 if errorlevel 1 (
     echo.
@@ -118,11 +121,29 @@ if errorlevel 1 (
 )
 
 echo.
-echo [SUCCESS] All three RunMind hosts were built for Release x64.
+echo [6/7] Publishing the optional RunMind Runner (framework-dependent win-x64)...
+dotnet publish "RunMind.Runner\RunMind.Runner.csproj" --configuration Release --runtime win-x64 --self-contained false --no-restore -p:Platform=x64 -o "Release\Runner\win-x64\publish"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] RunMind Runner publish failed.
+    set "EXITCODE=1"
+    goto :finish
+)
+
+echo.
+echo [7/7] Verifying the optional Runner executable...
+if not exist "Release\Runner\win-x64\publish\RunMind.Runner.exe" (
+    echo [ERROR] RunMind Runner executable was not produced.
+    set "EXITCODE=1"
+    goto :finish
+)
+
+echo.
+echo [SUCCESS] All three existing RunMind hosts and the optional Runner were built for Release x64.
 echo [SUCCESS] The Command Palette MSIX and public signing certificate are in:
 echo          "%~dp0Release\CommandPalette\x64"
 echo.
-echo Nothing was installed. Use Install-RunMind-PowerToys-Run.bat and Install-RunMind-CommandPalette.bat separately.
+echo Nothing was installed. Use Install-RunMind-PowerToys-Run.bat, Install-RunMind-CommandPalette.bat, and Install-RunMind-Runner.ps1 separately.
 goto :finish
 
 :help_error
@@ -132,7 +153,7 @@ echo.
 :help
 echo Usage: Build-Release-x64.bat [build^|help]
 echo.
-echo   No argument  Build all three Release x64 hosts and package/sign the Command Palette MSIX.
+echo   No argument  Build all Release x64 hosts, publish Runner, and package/sign the Command Palette MSIX.
 echo   build        Same as the default action.
 echo   help         Show this help.
 if /I not "%ACTION%"=="help" set "EXITCODE=1"
