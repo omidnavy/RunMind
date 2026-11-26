@@ -4,13 +4,13 @@ Process Intelligence extends the **Live Monitor** in Windows System Manager. It 
 
 ## Process list
 
-During an explicitly started Live Resource Intelligence session, the process list contains a bounded union of the 100 highest observed CPU-share processes and the 100 largest working-set processes. The UI displays up to 100 entries at a time and supports filtering by process name or PID and sorting by CPU share or memory. CPU share is normalized against total machine capacity. The list reuses the live session's existing process samples; it does not start another collector.
+During an explicitly started Live Resource Intelligence session, the process list contains a bounded union of the 100 highest observed CPU-share processes and the 100 largest working-set processes. The UI displays up to 100 entries at a time in a bounded, independently scrollable list and supports filtering by process name or PID. The sort selector supports CPU share, working set, private memory, process name and PID; numeric resource sorts are descending, while name and PID sorts are ascending. CPU share is normalized against total machine capacity. The list reuses the live session's existing process samples; it does not start another collector.
 
 Process selection is enabled only when the process sample includes a verifiable start time and the user has enabled the System Manager master switch, Process Management group and `inspectProcesses` capability.
 
 ## On-demand inspection
 
-Selecting a process asks the shared native Windows bridge for details. The inspection revalidates process name, PID and start time before returning information. Where Windows permits access, the detail panel shows:
+Selecting a process opens a separate inspection modal and asks the shared native Windows bridge for details. The modal can be moved by its header and resized from its corner. It remains open while Live Monitor samples update, when the System Manager flyout closes, and when tabs change; only its explicit Close button dismisses it. A verified process exit does not dismiss the modal. The inspection revalidates process name, PID and start time before returning information. Where Windows permits access, the modal shows:
 
 - Process identity, start time, parent PID/name and observed child processes.
 - Executable path, original command line/arguments and file metadata (version, product, company, size and timestamp).
@@ -55,9 +55,9 @@ The shared implementation is available in Standalone, PowerToys Run and Command 
 
 - `Shared/SystemManager.cs`: process identity verification, process metadata, token integrity/elevation, service-host checks, file signature lookup and process actions.
 - `Shared/AgentHostBridge.cs`: shared dispatch for inspect, reveal, close, terminate and restart.
-- `Shared/ChatWindow.html`: Process Intelligence list and detail/action surface within Live Monitor.
-- `Shared/ChatWindow/scripts/application.js`: filtering, sorting, on-demand inspection, live metric updates and action status.
-- `Shared/ChatWindow/styles/chat.css`: responsive list, detail and action styling.
+- `Shared/ChatWindow.html`: Process Intelligence list and separate inspection modal.
+- `Shared/ChatWindow/scripts/application.js`: filtering, selectable sort subjects, bounded-list rendering, modal drag behavior, on-demand inspection, live metric updates and action status.
+- `Shared/ChatWindow/styles/chat.css`: responsive charts, bounded process list, and movable/resizable modal styling.
 - `tests/live-resource-intelligence.test.cjs`: source-contract coverage for process inspection, bounded live list, permissions and action safeguards.
 
 ## Windows acceptance

@@ -101,7 +101,7 @@ test('native telemetry remains bounded and does not persist samples', () => {
 });
 
 test('dashboard has explicit Start/Stop, interval and duration controls, charts, process ranking and export', () => {
-  for (const id of ['liveResourceStart','liveResourceStop','liveResourceDuration','liveResourceInterval','liveResourceCpuLine','liveResourceMemoryLine','liveResourceReceiveLine','liveResourceSendLine','liveResourceIoReadLine','liveResourceIoWriteLine','liveResourceGpuUtilization','liveResourceGpuMemory','liveResourceGpuUtilizationLine','liveResourceGpuDedicatedLine','liveResourceGpuSharedLine','liveResourceSortCpu','liveResourceSortMemory','liveResourceProcesses','liveResourceExport'])
+  for (const id of ['liveResourceStart','liveResourceStop','liveResourceDuration','liveResourceInterval','liveResourceCpuLine','liveResourceMemoryLine','liveResourceReceiveLine','liveResourceSendLine','liveResourceIoReadLine','liveResourceIoWriteLine','liveResourceGpuUtilization','liveResourceGpuMemory','liveResourceGpuUtilizationLine','liveResourceGpuDedicatedLine','liveResourceGpuSharedLine','liveResourceProcessSort','liveResourceProcesses','liveResourceExport'])
     assert.match(html, new RegExp(`id="${id}"`));
   assert.match(html, /<option value="60">1 minute/);
   assert.match(html, /<option value="300" selected>5 minutes/);
@@ -151,13 +151,32 @@ test('live monitoring survives tab changes and flyout closure but stops on expli
 test('charts and process ranking are rendered without an external chart library', () => {
   assert.match(application, /function liveResourceChartPoints/);
   assert.match(application, /setAttribute\('d', path\.trim\(\)\)/);
-  assert.match(application, /liveResourceProcessSort === 'memory'/);
+  assert.match(application, /liveResourceProcessSort === 'workingSet'/);
+  assert.match(application, /liveResourceProcessSort === 'privateMemory'/);
   assert.match(application, /liveResourceProcessFilter/);
-  assert.match(application, /liveResourceSortMemory.*addEventListener\('click'/);
+  assert.match(application, /liveResourceProcessSort.*addEventListener\('change'/);
   assert.match(application, /new Blob\(\[rows\.join/);
   assert.match(styles, /\.live-resource-chart-card svg/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
   assert.doesNotMatch(html, /(?:chart\.js|recharts|echarts|highcharts|d3\.min\.js|cdn\.jsdelivr\.net|unpkg\.com)/i);
+});
+
+test('Process Intelligence UI bounds its list, exposes sort subjects, and opens a persistent movable/resizable inspection modal', () => {
+  for (const option of ['cpu', 'workingSet', 'privateMemory', 'name', 'pid'])
+    assert.match(html, new RegExp(`<option value="${option}"`));
+  assert.match(styles, /\.live-resource-process-table-wrap\s*\{[^}]*max-height:\s*min\(38vh,\s*320px\)[^}]*overflow:\s*auto/);
+  assert.match(styles, /\.live-resource-process-table th\s*\{[^}]*position:\s*sticky/);
+  assert.match(html, /<article class="live-resource-chart-card"><header><strong>GPU memory usage/);
+  assert.match(html, /id="liveResourceProcessModal" hidden/);
+  assert.match(html, /role="dialog" aria-modal="true"/);
+  assert.match(styles, /\.live-resource-process-modal-panel\s*\{[^}]*resize:\s*both/);
+  assert.match(application, /handle\.addEventListener\('pointerdown'/);
+  assert.match(application, /handle\.addEventListener\('pointermove'/);
+  assert.match(application, /if \(event\.key !== 'Tab'\) return/);
+  assert.match(application, /liveResourceProcessDetailsClose.*addEventListener\('click'/);
+  assert.doesNotMatch(application, /modal\.addEventListener\('click',[\s\S]{0,240}?hidden\s*=\s*true/);
+  assert.doesNotMatch(application, /event\.key\s*===\s*'Escape'[\s\S]{0,120}?modal\.hidden\s*=\s*true/);
+  assert.doesNotMatch(application, /function resetLiveResourceMonitorView\(\)[\s\S]{0,420}?liveResourceProcessModal[\s\S]{0,80}?hidden\s*=\s*true/);
 });
 
 test('Agent guidance distinguishes finite tool reports from UI-started live sessions', () => {
@@ -189,6 +208,7 @@ test('Process Intelligence exposes a bounded selectable list with on-demand nati
     'liveResourceProcessTerminate','liveResourceProcessRestart'
   ]) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(application, /callAgentHost\('systemManager\.process\.inspect'/);
+  assert.match(application, /for \(const id of \['liveResourceProcessReveal','liveResourceProcessCopyPath','liveResourceProcessCopyCommand','liveResourceProcessClose','liveResourceProcessTerminate','liveResourceProcessRestart'\]\)[\s\S]{0,180}?button\.disabled = true/);
   assert.match(application, /callAgentHost\(selected\[0\], identity/);
   assert.match(application, /slice\(0, 100\)/);
   assert.match(html, /Command lines may contain passwords, tokens or other secrets/);

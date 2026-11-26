@@ -1,4 +1,4 @@
-﻿    'use strict';
+    'use strict';
 
     const standaloneCss = `
       :root{color-scheme:light dark;--bg:#101216;--surface:#171a21;--text:#e9edf5;--muted:#a0a8b7;--border:#323a49;--accent:#9aabff;--user:#232b42;--code:#11141a;--radius:12px;--font:Segoe UI,system-ui,sans-serif;--mono:Consolas,Cascadia Code,monospace}
@@ -714,6 +714,7 @@
     const liveResourceHistory = [];
     const LIVE_RESOURCE_HISTORY_LIMIT = 900;
     let liveResourceProcessSort = 'cpu';
+    let liveResourceSelectedProcessExited = false;
     let liveResourceProcessFilter = '';
     let liveResourceSelectedProcess = null;
     let liveResourceSelectedDetails = null;
@@ -820,11 +821,25 @@
       if (body) {
         const source = Array.isArray(latest.processes?.entries)
           ? latest.processes.entries
-          : (liveResourceProcessSort === 'memory' ? latest.processes?.topMemory : latest.processes?.topCpu);
+          : (liveResourceProcessSort === 'workingSet' || liveResourceProcessSort === 'privateMemory' ? latest.processes?.topMemory : latest.processes?.topCpu);
         const sorted = Array.isArray(source) ? [...source] : [];
-        sorted.sort((left, right) => liveResourceProcessSort === 'memory'
-          ? (Number(right.workingSetBytes) || 0) - (Number(left.workingSetBytes) || 0)
-          : (Number(right.machineCpuSharePercent) || 0) - (Number(left.machineCpuSharePercent) || 0));
+        const numericValue = (process, key) => {
+          const value = Number(process?.[key]);
+          return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+        };
+        sorted.sort((left, right) => {
+          if (liveResourceProcessSort === 'name') {
+            return String(left.name || '').localeCompare(String(right.name || ''), undefined, { sensitivity: 'base' })
+              || (Number(left.processId) || 0) - (Number(right.processId) || 0);
+          }
+          if (liveResourceProcessSort === 'pid') {
+            return (Number(left.processId) || 0) - (Number(right.processId) || 0);
+          }
+          const key = liveResourceProcessSort === 'workingSet' ? 'workingSetBytes'
+            : liveResourceProcessSort === 'privateMemory' ? 'privateMemoryBytes'
+            : 'machineCpuSharePercent';
+          return numericValue(right, key) - numericValue(left, key);
+        });
         const filter = liveResourceProcessFilter.trim().toLowerCase();
         const processes = sorted.filter(process => !filter || String(process.name || '').toLowerCase().includes(filter) || String(process.processId ?? '').includes(filter)).slice(0, 100);
         body.replaceChildren();
@@ -872,11 +887,6 @@
       }
       const progress = document.getElementById('liveResourceProgress');
       if (progress) progress.style.width = '0';
-      liveResourceInspectSequence++;
-      liveResourceSelectedProcess = null;
-      liveResourceSelectedDetails = null;
-      const detailsPanel = document.getElementById('liveResourceProcessDetails');
-      if (detailsPanel) detailsPanel.hidden = true;
       const body = document.getElementById('liveResourceProcesses');
       if (body) {
         const row = document.createElement('tr');
@@ -908,8 +918,8 @@
     }
     function renderLiveProcessDetails(process, note = '', options = {}) {
       liveResourceSelectedDetails = process;
-      const panel = document.getElementById('liveResourceProcessDetails');
-      if (panel) panel.hidden = false;
+      const modal = document.getElementById('liveResourceProcessModal');
+      if (modal) modal.hidden = false;
       setLiveProcessDetailText('liveResourceProcessTitle', `${process.name || 'Process'} · PID ${process.processId}`);
       setLiveProcessDetailText('liveResourceProcessSubtitle', note || 'Native Windows process inspection');
       setLiveProcessDetailText('liveResourceProcessParent', process.parentProcessId ? `${process.parentName || 'Unknown'} · PID ${process.parentProcessId}` : 'Unavailable');
@@ -941,12 +951,12 @@
       const serviceInventoryAvailable = process.serviceInventoryAvailable === true;
       const serviceHosted = Array.isArray(process.services) && process.services.length > 0;
       for (const [id, enabled] of Object.entries({
-        liveResourceProcessReveal: hasPath && canInspect,
+        liveResourceProcessReveal: !liveResourceSelectedProcessExited && hasPath && canInspect,
         liveResourceProcessCopyPath: hasPath,
         liveResourceProcessCopyCommand: !!process.commandLine,
-        liveResourceProcessClose: canAct && serviceInventoryAvailable && !serviceHosted,
-        liveResourceProcessTerminate: canAct && serviceInventoryAvailable && !serviceHosted,
-        liveResourceProcessRestart: canAct && serviceInventoryAvailable && !serviceHosted && hasPath && !!process.commandLine
+        liveResourceProcessClose: !liveResourceSelectedProcessExited && canAct && serviceInventoryAvailable && !serviceHosted,
+        liveResourceProcessTerminate: !liveResourceSelectedProcessExited && canAct && serviceInventoryAvailable && !serviceHosted,
+        liveResourceProcessRestart: !liveResourceSelectedProcessExited && canAct && serviceInventoryAvailable && !serviceHosted && hasPath && !!process.commandLine
       })) {
         const button = document.getElementById(id);
         if (button) button.disabled = !enabled || liveResourceProcessActionBusy;
@@ -964,11 +974,17 @@
       const sequence = ++liveResourceInspectSequence;
       liveResourceSelectedProcess = { processId: Number(process.processId), name: String(process.name || ''), startedAtUtc: String(process.startedAtUtc) };
       liveResourceSelectedDetails = null;
-      const panel = document.getElementById('liveResourceProcessDetails');
-      if (panel) panel.hidden = false;
+      liveResourceSelectedProcessExited = false;
+      const modal = document.getElementById('liveResourceProcessModal');
+      if (modal) modal.hidden = false;
+      $('#liveResourceProcessDetailsClose')?.focus({ preventScroll: true });
       setLiveProcessDetailText('liveResourceProcessTitle', `${liveResourceSelectedProcess.name} · PID ${liveResourceSelectedProcess.processId}`);
       setLiveProcessDetailText('liveResourceProcessSubtitle', 'Loading native process details…');
       for (const id of ['liveResourceProcessParent','liveResourceProcessStarted','liveResourceProcessOwner','liveResourceProcessSession','liveResourceProcessSecurity','liveResourceProcessMetrics','liveResourceProcessPath','liveResourceProcessWorkingDirectory','liveResourceProcessCommandLine','liveResourceProcessFile','liveResourceProcessSignature','liveResourceProcessChildren','liveResourceProcessServices']) setLiveProcessDetailText(id, 'Loading…');
+      for (const id of ['liveResourceProcessReveal','liveResourceProcessCopyPath','liveResourceProcessCopyCommand','liveResourceProcessClose','liveResourceProcessTerminate','liveResourceProcessRestart']) {
+        const button = document.getElementById(id);
+        if (button) button.disabled = true;
+      }
       setLiveProcessActionStatus('Reading process metadata from Windows…');
       try {
         const result = await callAgentHost('systemManager.process.inspect', liveProcessIdentityArgs(), undefined, 30000);
@@ -1007,18 +1023,10 @@
         const result = await callAgentHost(selected[0], identity, undefined, action === 'restart' ? 45000 : 20000);
         const message = result?.message || (result?.success ? 'The native action completed.' : 'The native action did not complete.');
         setLiveProcessActionStatus(message, !result?.success && !result?.cancelled);
-        if (action === 'restart' && result?.success) {
-          liveResourceSelectedProcess = null;
-          liveResourceSelectedDetails = null;
-          const panel = document.getElementById('liveResourceProcessDetails');
-          if (panel) panel.hidden = true;
-        } else if (action === 'close' || action === 'terminate') {
-          if (result?.verified || result?.actualState === 'exited') {
-            liveResourceSelectedProcess = null;
-            liveResourceSelectedDetails = null;
-            const panel = document.getElementById('liveResourceProcessDetails');
-            if (panel) panel.hidden = true;
-          }
+        if ((action === 'restart' && result?.success)
+          || ((action === 'close' || action === 'terminate') && (result?.verified || result?.actualState === 'exited'))) {
+          liveResourceSelectedProcessExited = true;
+          setLiveProcessActionStatus(`${message} The inspected process instance has exited. This window remains open; select another process from the list to inspect it.`);
         }
       } catch (error) {
         setLiveProcessActionStatus(`${action === 'restart' ? 'Restart' : action === 'reveal' ? 'Open location' : action === 'close' ? 'Graceful close' : 'Termination'} failed: ${error?.message || error}`, true);
@@ -1128,20 +1136,10 @@
     $('#liveResourceStart')?.addEventListener('click', () => { void startLiveResourceMonitor(); });
     $('#liveResourceStop')?.addEventListener('click', () => { void stopLiveResourceMonitor(); });
     $('#liveResourceExport')?.addEventListener('click', exportLiveResourceCsv);
-    $('#liveResourceSortCpu')?.addEventListener('click', () => {
-      liveResourceProcessSort = 'cpu';
-      $('#liveResourceSortCpu')?.classList.add('active');
-      $('#liveResourceSortMemory')?.classList.remove('active');
-      $('#liveResourceSortCpu')?.setAttribute('aria-pressed', 'true');
-      $('#liveResourceSortMemory')?.setAttribute('aria-pressed', 'false');
-      renderLiveResourceMonitor();
-    });
-    $('#liveResourceSortMemory')?.addEventListener('click', () => {
-      liveResourceProcessSort = 'memory';
-      $('#liveResourceSortMemory')?.classList.add('active');
-      $('#liveResourceSortCpu')?.classList.remove('active');
-      $('#liveResourceSortMemory')?.setAttribute('aria-pressed', 'true');
-      $('#liveResourceSortCpu')?.setAttribute('aria-pressed', 'false');
+    $('#liveResourceProcessSort')?.addEventListener('change', event => {
+      liveResourceProcessSort = ['cpu', 'workingSet', 'privateMemory', 'name', 'pid'].includes(event.target.value)
+        ? event.target.value
+        : 'cpu';
       renderLiveResourceMonitor();
     });
     $('#liveResourceProcessSearch')?.addEventListener('input', event => { liveResourceProcessFilter = String(event.target.value || '').slice(0,120); renderLiveResourceMonitor(); });
@@ -1157,8 +1155,10 @@
     });
     $('#liveResourceProcessDetailsClose')?.addEventListener('click', () => {
       liveResourceInspectSequence++;
-      liveResourceSelectedProcess = null; liveResourceSelectedDetails = null;
-      const panel = $('#liveResourceProcessDetails'); if (panel) panel.hidden = true;
+      liveResourceSelectedProcess = null;
+      liveResourceSelectedDetails = null;
+      liveResourceSelectedProcessExited = false;
+      const modal = $('#liveResourceProcessModal'); if (modal) modal.hidden = true;
       renderLiveResourceMonitor();
     });
     $('#liveResourceProcessReveal')?.addEventListener('click', () => { void runLiveProcessAction('reveal'); });
@@ -1167,6 +1167,65 @@
     $('#liveResourceProcessClose')?.addEventListener('click', () => { void runLiveProcessAction('close'); });
     $('#liveResourceProcessTerminate')?.addEventListener('click', () => { void runLiveProcessAction('terminate'); });
     $('#liveResourceProcessRestart')?.addEventListener('click', () => { void runLiveProcessAction('restart'); });
+    (() => {
+      const modal = $('#liveResourceProcessModal');
+      const panel = modal?.querySelector('.live-resource-process-modal-panel');
+      const handle = $('#liveResourceProcessModalHeader');
+      if (!modal || !panel || !handle) return;
+      let drag = null;
+      const clampPanel = () => {
+        if (modal.hidden || !panel.style.left || !panel.style.top) return;
+        const rect = panel.getBoundingClientRect();
+        const left = Math.max(8, Math.min(window.innerWidth - Math.min(rect.width, 120) - 8, rect.left));
+        const top = Math.max(8, Math.min(window.innerHeight - Math.min(rect.height, 72) - 8, rect.top));
+        panel.style.left = `${left}px`;
+        panel.style.top = `${top}px`;
+      };
+      handle.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || event.target.closest('button')) return;
+        const rect = panel.getBoundingClientRect();
+        drag = { pointerId: event.pointerId, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top };
+        panel.style.left = `${rect.left}px`;
+        panel.style.top = `${rect.top}px`;
+        panel.style.transform = 'none';
+        handle.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      });
+      handle.addEventListener('pointermove', event => {
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const rect = panel.getBoundingClientRect();
+        const left = Math.max(8, Math.min(window.innerWidth - Math.min(rect.width, 120) - 8, event.clientX - drag.offsetX));
+        const top = Math.max(8, Math.min(window.innerHeight - Math.min(rect.height, 72) - 8, event.clientY - drag.offsetY));
+        panel.style.left = `${left}px`;
+        panel.style.top = `${top}px`;
+      });
+      const endDrag = event => { if (drag?.pointerId === event.pointerId) drag = null; };
+      handle.addEventListener('pointerup', endDrag);
+      handle.addEventListener('pointercancel', endDrag);
+      window.addEventListener('resize', clampPanel);
+      modal.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = [...panel.querySelectorAll('button:not([disabled])')];
+        if (!focusable.length) {
+          event.preventDefault();
+          panel.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      });
+    })();
     window.addEventListener('pagehide', () => {
       if (!liveResourceSession) return;
       try { window.chrome?.webview?.postMessage({ type: 'runmind.agentHostRequest', requestId: `live-monitor-stop-${Date.now()}`, operation: 'systemManager.liveResources.stop', args: { session_id: liveResourceSession.sessionId } }); } catch (_) {}

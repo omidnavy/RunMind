@@ -14,13 +14,14 @@ Complete this checklist on Windows 10/11 with the .NET 10 SDK, using the same so
 - [ ] With System Manager disabled, process inspection and actions are rejected by the native bridge.
 - [ ] Enable System Manager and Process Management, but disable `inspectProcesses`; confirm process rows cannot be selected and native inspect is rejected.
 - [ ] Enable `inspectProcesses`; select a normal user process and confirm inspection works.
+- [ ] Confirm inspection opens in a separate modal that can be moved and resized, stays open when the System Manager flyout closes or tabs change, and dismisses only through its explicit Close button.
 - [ ] Keep `terminateProcesses` disabled; confirm close, terminate and restart remain disabled and native calls are rejected.
 - [ ] Enable `terminateProcesses`; confirm every action still shows a fresh native confirmation.
 
 ## Inspection
 
 - [ ] Start a bounded Live Monitor session and confirm the process list updates without starting an additional collector.
-- [ ] Filter by process name and PID; sort by CPU and memory.
+- [ ] Filter by process name and PID; sort by CPU, working set, private memory, process name and PID. Confirm the process list scrolls inside its bounded panel without extending the Live Monitor flyout.
 - [ ] Select a normal user process. Compare PID, name, executable path, command line, owner, session and start time with Windows Task Manager / Process Explorer.
 - [ ] Verify file version/company and Authenticode signer/status where present.
 - [ ] Compare parent and child relationships with a known process tree; note that this is a point-in-time snapshot.
@@ -28,6 +29,8 @@ Complete this checklist on Windows 10/11 with the .NET 10 SDK, using the same so
 - [ ] Confirm the working-directory field explicitly says unavailable rather than displaying the executable folder as though it were the live current directory.
 - [ ] Confirm command-line secrets are warned about and are not written to disk or included in exported telemetry CSV.
 - [ ] Confirm inaccessible/unsupported fields show unavailable rather than fabricated values.
+
+- [ ] Drag the inspection modal by its header and resize it from the bottom-right corner. Click outside it and switch System Manager tabs; confirm it remains open until the explicit Close button is pressed.
 
 ## Actions
 
