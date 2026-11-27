@@ -117,6 +117,7 @@ try {
     New-RunMindReleaseZip 'runner' {
         param($stage)
         Copy-ReleaseTree 'Release\Runner\win-x64\publish' 'Release\Runner\win-x64\publish' $stage
+        Copy-ReleaseTree 'Release\Standalone\win-x64\publish' 'Release\Runner\win-x64\publish\Standalone\win-x64\publish' $stage
         Copy-ReleaseTree 'Release\Standalone\win-x64\publish' 'Standalone\win-x64\publish' $stage
         Copy-ReleaseFile 'Install-RunMind-Runner.ps1' 'Install-RunMind-Runner.ps1' $stage
         Copy-ReleaseFile 'Uninstall-RunMind-Runner.ps1' 'Uninstall-RunMind-Runner.ps1' $stage

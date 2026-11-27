@@ -6,14 +6,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSCommandPath
 $source = Join-Path $root 'Release\Runner\win-x64\publish'
-$standaloneSource = Join-Path $root 'Standalone\win-x64\publish'
+$standaloneSource = Join-Path $source 'Standalone\win-x64\publish'
 $executable = Join-Path $source 'RunMind.Runner.exe'
 $standaloneExecutable = Join-Path $standaloneSource 'RunMind.exe'
 $installDirectory = Join-Path $env:LOCALAPPDATA 'Programs\RunMind Runner'
 $installedStandaloneDirectory = Join-Path $installDirectory 'Standalone\win-x64\publish'
 $startMenuDirectory = Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs'
 $startMenuShortcut = Join-Path $startMenuDirectory 'RunMind Runner.lnk'
-$desktopShortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'RunMind Runner.lnk'
+$desktopShortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'RunMind Runner.lnk'
 
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
     throw "The Runner release files were not found: $executable`nRun Build-Release-x64.bat first. This installer does not build the application."
@@ -44,8 +44,6 @@ if ($runningBundledStandalone.Count -gt 0) {
 
 New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
 Copy-Item -Path (Join-Path $source '*') -Destination $installDirectory -Recurse -Force
-New-Item -ItemType Directory -Path $installedStandaloneDirectory -Force | Out-Null
-Copy-Item -Path (Join-Path $standaloneSource '*') -Destination $installedStandaloneDirectory -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $root 'Uninstall-RunMind-Runner.ps1') -Destination (Join-Path $installDirectory 'Uninstall-RunMind-Runner.ps1') -Force
 $installedExecutable = Join-Path $installDirectory 'RunMind.Runner.exe'
 if (-not (Test-Path -LiteralPath $installedExecutable -PathType Leaf)) {
@@ -62,7 +60,7 @@ $shortcut.Description = 'Optional RunMind quick launcher'
 $shortcut.Save()
 
 if ($DesktopShortcut) {
-    $desktop = $shell.CreateShortcut($desktopShortcut)
+    $desktop = $shell.CreateShortcut($desktopShortcutPath)
     $desktop.TargetPath = $installedExecutable
     $desktop.WorkingDirectory = $installDirectory
     $desktop.IconLocation = (Join-Path $installDirectory 'Assets\Brand\Icon.ico')

@@ -45,7 +45,7 @@ test('Runner and Standalone archives contain the correct published outputs and R
   const packager = read('Package-RunMind-GitHub-Releases.ps1');
   assert.match(packager, /Copy-ReleaseTree 'Release\\Standalone\\win-x64\\publish'/);
   assert.match(packager, /Copy-ReleaseTree 'Release\\Runner\\win-x64\\publish'/);
-  assert.match(packager, /Copy-ReleaseTree 'Release\\Standalone\\win-x64\\publish' 'Standalone\\win-x64\\publish'/);
+  assert.match(packager, /Copy-ReleaseTree 'Release\\Standalone\\win-x64\\publish' 'Release\\Runner\\win-x64\\publish\\Standalone\\win-x64\\publish'/);
   assert.match(packager, /Copy-ReleaseFile 'Install-RunMind-Runner\.ps1'/);
   assert.match(packager, /Copy-ReleaseFile 'Uninstall-RunMind-Runner\.ps1'/);
 });
@@ -75,9 +75,12 @@ test('Command Palette release installer reads identity from its packaged manifes
 test('Runner release installs a private Standalone companion without replacing a separate Standalone install', () => {
   const installer = read('Install-RunMind-Runner.ps1');
   const locator = read('RunMind.Runner/StandaloneLocator.cs');
-  assert.match(installer, /Standalone\\win-x64\\publish/);
+  assert.match(installer, /Join-Path \$source 'Standalone\\win-x64\\publish'/);
   assert.match(installer, /bundled chat host/i);
   assert.match(installer, /installedStandaloneDirectory/);
+  assert.match(installer, /desktopShortcutPath/);
+  assert.doesNotMatch(installer, /\$desktopShortcut\s*=/);
   assert.match(locator, /FindBundledStandalonePaths/);
   assert.match(locator, /AppContext\.BaseDirectory/);
+  assert.match(locator, /\"Standalone\"/);
 });
