@@ -46,6 +46,11 @@ The repository includes real product captures from earlier development iteration
 
 ### Workspace and Agent
 
+
+![RunMind workspace with an Agent conversation, tool activity and research results](./screenshots/RunMind-Screenshot.png)
+
+![RunMind workspace with an Agent conversation, tool activity and research results](./screenshots/Screenshot-RunMind.png)
+
 ![RunMind workspace with an Agent conversation, tool activity and research results](./screenshots/README-Workspace.png)
 
 *Earlier workspace capture. The 3.5.0 codebase continues the shared workspace and Agent experience; exact layout and labels may differ.*
