@@ -142,11 +142,11 @@ test('project script execution uses Node/npm arguments rather than a user-provid
 });
 
 
-test('System Manager timeout input uses shared field styling and settings tabs use four columns', () => {
+test('System Manager timeout input uses shared field styling and settings tabs use five columns', () => {
   const html = read('Shared/ChatWindow.html');
   const css = read('Shared/ChatWindow/styles/chat.css');
   assert.match(html, /class="agent-settings-field setting-field"><span>Native command timeout/);
-  assert.match(css, /\.agent-settings-tabs \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.agent-settings-tabs \{[^}]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
 });
 
 

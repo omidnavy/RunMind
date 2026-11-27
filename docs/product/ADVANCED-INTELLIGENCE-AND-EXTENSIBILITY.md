@@ -1,6 +1,6 @@
-# RunMind 3.4.1 — Advanced Intelligence & Extensibility
+# RunMind 3.5.0 — Advanced Intelligence & Extensibility
 
-This guide describes five capabilities introduced in the 3.4.0 feature line and carried forward in the current 3.4.1 source: Change Impact Explorer, Development Session Timeline, System Intelligence, Advanced Agent Orchestration, and the RunMind extension model. They are not separate applications or parallel agent engines. They reuse the shared Agent Core, native host bridge, workspace identity, project index, approval policy, tool ledger, and existing local persistence.
+This guide describes five capabilities introduced in the 3.4.0 feature line and carried forward in the current 3.5.0 source: Change Impact Explorer, Development Session Timeline, System Intelligence, Advanced Agent Orchestration, and the RunMind extension model. They are not separate applications or parallel agent engines. They reuse the shared Agent Core, native host bridge, workspace identity, project index, approval policy, tool ledger, and existing local persistence.
 
 The word *complete* in this guide means that the shipped contract is implemented, exposed, bounded, and tested. It does not mean unrestricted machine access, arbitrary third-party code execution, continuous surveillance, or guaranteed inference where the underlying evidence is unavailable.
 

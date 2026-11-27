@@ -276,9 +276,10 @@
             </header>
             <div class="agent-settings-tabs" role="tablist" aria-label="Agent settings sections">
               <button type="button" class="agent-settings-tab" id="agentSettingsTabAgent" role="tab" aria-controls="agentSettingsPageAgent" aria-selected="true" tabindex="0"><span aria-hidden="true">01</span> Agent</button>
-              <button type="button" class="agent-settings-tab" id="agentSettingsTabProject" role="tab" aria-controls="agentSettingsPageProject" aria-selected="false" tabindex="-1"><span aria-hidden="true">02</span> Project</button>
-              <button type="button" class="agent-settings-tab" id="agentSettingsTabSkills" role="tab" aria-controls="agentSettingsPageSkills" aria-selected="false" tabindex="-1"><span aria-hidden="true">03</span> Skills</button>
-              <button type="button" class="agent-settings-tab" id="agentSettingsTabSecurity" role="tab" aria-controls="agentSettingsPageSecurity" aria-selected="false" tabindex="-1"><span aria-hidden="true">04</span> Security</button>
+              <button type="button" class="agent-settings-tab" id="agentSettingsTabTools" role="tab" aria-controls="agentSettingsPageTools" aria-selected="false" tabindex="-1"><span aria-hidden="true">02</span> Tools</button>
+              <button type="button" class="agent-settings-tab" id="agentSettingsTabProject" role="tab" aria-controls="agentSettingsPageProject" aria-selected="false" tabindex="-1"><span aria-hidden="true">03</span> Project</button>
+              <button type="button" class="agent-settings-tab" id="agentSettingsTabSkills" role="tab" aria-controls="agentSettingsPageSkills" aria-selected="false" tabindex="-1"><span aria-hidden="true">04</span> Skills</button>
+              <button type="button" class="agent-settings-tab" id="agentSettingsTabSecurity" role="tab" aria-controls="agentSettingsPageSecurity" aria-selected="false" tabindex="-1"><span aria-hidden="true">05</span> Security</button>
             </div>
 
             <section class="agent-settings-page" id="agentSettingsPageAgent" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabAgent">
@@ -307,6 +308,27 @@
                 </div>
               </section>
               <div class="agent-settings-page-footer"><span>Applies to this WebView profile.</span><button type="button" class="button primary" id="agentSaveSettings">Save agent settings</button></div>
+            </section>
+
+            <section class="agent-settings-page" id="agentSettingsPageTools" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabTools" hidden>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Agent Toolsets</h3><p>Choose a starting profile, then customize tool groups and individual tools. Changes affect model exposure, not native permissions.</p></div></div>
+                <div class="agent-settings-fields">
+                  <div class="setting-field"><label for="agentToolsetProfile">Active profile</label><select id="agentToolsetProfile"></select></div>
+                  <div class="setting-field"><label for="agentToolsetProfileName">Custom profile name</label><input id="agentToolsetProfileName" type="text" maxlength="50" placeholder="e.g. Backend development or rename selected profile"></div>
+                </div>
+                <div class="agent-settings-actions agent-settings-actions-wrap">
+                  <button type="button" class="button primary" id="agentToolsetSaveProfile">Save as custom profile</button>
+                  <button type="button" class="setting-reset danger-text" id="agentToolsetDeleteProfile">Delete custom profile</button>
+                  <button type="button" class="setting-reset" id="agentToolsetResetProfile">Restore General defaults</button>
+                </div>
+                <p class="agent-settings-status" id="agentToolsetReportSummary" aria-live="polite">Loading tool inventory…</p>
+              </section>
+              <section class="agent-settings-card">
+                <div class="agent-settings-card-heading"><div><h3>Tool availability</h3><p>Expand a group to inspect descriptions and toggle individual tools. System Manager's master switch and capabilities remain managed by its existing settings; workspace tools still require workspace access.</p></div></div>
+                <div class="setting-field"><label for="agentToolsetSearch">Find a tool</label><input id="agentToolsetSearch" type="search" placeholder="Search tool names or descriptions…" autocomplete="off"></div>
+                <div id="agentToolsetList" class="agent-toolset-list" aria-live="polite"></div>
+              </section>
             </section>
 
             <section class="agent-settings-page" id="agentSettingsPageProject" role="tabpanel" tabindex="0" aria-labelledby="agentSettingsTabProject" hidden>
@@ -790,6 +812,7 @@
   <script src="ChatWindow/scripts/agent/documents.js"></script>
   <script src="ChatWindow/scripts/agent/runtime.js"></script>
   <script src="ChatWindow/scripts/research.js"></script>
+  <script src="ChatWindow/scripts/agent/toolsets.js"></script>
   <script src="ChatWindow/scripts/conversations.js"></script>
   <script src="ChatWindow/scripts/application.js"></script>
 </body>

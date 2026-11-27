@@ -13,9 +13,13 @@ internal static class StandaloneLocator
 
     public static string? FindExecutable()
     {
-        // Prefer the binary built/deployed with this Runner over a potentially older
-        // process image. This matters during upgrades: an older Standalone instance may
-        // not yet understand the Runner handoff protocol.
+        // Prefer the private Standalone companion shipped with this Runner over a
+        // potentially older external installation. This keeps the handoff protocol in
+        // sync and lets the Runner release work without a separate Standalone install.
+        foreach (var bundled in FindBundledStandalonePaths())
+            if (IsRunMindExecutable(bundled)) return bundled;
+
+        // Development builds use the freshly published Standalone output.
         foreach (var development in FindDevelopmentPaths())
             if (IsRunMindExecutable(development)) return development;
 
@@ -32,6 +36,16 @@ internal static class StandaloneLocator
             if (IsRunMindExecutable(running)) return running;
 
         return null;
+    }
+
+    private static IEnumerable<string> FindBundledStandalonePaths()
+    {
+        yield return Path.Combine(
+            AppContext.BaseDirectory,
+            "Standalone",
+            "win-x64",
+            "publish",
+            ExecutableName);
     }
 
     private static IEnumerable<string> FindRunningExecutable()

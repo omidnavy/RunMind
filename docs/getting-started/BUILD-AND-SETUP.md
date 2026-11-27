@@ -1,6 +1,6 @@
 # Build and setup
 
-This guide describes the current RunMind 3.4.1 source tree. It is a **full source-project snapshot**, not a changed-files overlay.
+This guide describes the current RunMind 3.5.0 source tree. It is a **full source-project snapshot**, not a changed-files overlay.
 
 ## Supported environment
 
@@ -22,7 +22,7 @@ Run from the repository root in Windows Command Prompt or PowerShell:
 Build-Release-x64.bat
 ```
 
-The script performs eight steps: prepare PDF/OCR assets; clean; restore the solution for `win-x64`; build all four host projects; package/sign the Command Palette MSIX; publish Standalone; publish Runner; and verify the two published executables.
+The script performs nine steps: prepare PDF/OCR assets; clean; restore the solution for `win-x64`; build all four host projects; package/sign the Command Palette MSIX; publish Standalone; publish Runner; verify the host executables; and create four GitHub release ZIPs.
 
 The four host projects are:
 
@@ -41,8 +41,11 @@ The release script **does not install** any host. It also removes retired Runner
 | Standalone publish | `Release\Standalone\win-x64\publish\` |
 | Runner publish | `Release\Runner\win-x64\publish\` |
 | Command Palette MSIX and public certificate | `Release\CommandPalette\x64\` |
+| Four GitHub release ZIPs | `Release\GitHub-Releases\` |
 
 The published Standalone executable is `Release\Standalone\win-x64\publish\RunMind.exe`. Runner is `Release\Runner\win-x64\publish\RunMind.Runner.exe`.
+
+The builder creates `standalone-[version].zip`, `runner-[version].zip`, `powertoysrun-[version].zip`, and `commandpalette-[version].zip` in `Release\GitHub-Releases`. The PowerToys Run archive contains its installer BAT and plugin output; the Command Palette archive contains its installer BAT, deployment scripts, signed MSIX and public certificate; the Runner archive contains its install/uninstall scripts. Each archive is self-contained for its corresponding host installation workflow.
 
 ## Install or update a host
 
@@ -104,7 +107,7 @@ Portable tests do not replace manual WebView2, PowerToys, MSIX, process-manageme
 
 ## Version metadata
 
-The current source version is **3.4.1**. All four host projects declare `3.4.1`; the PowerToys Run plugin manifest, MCP client identification and Runner uninstall display metadata also use `3.4.1`. Command Palette uses the required four-part MSIX project/package identity `3.4.1.0`. A portable regression test checks these declarations together. Generated assembly/package metadata and install/update behavior still require validation on Windows.
+The current source version is **3.5.0**. All four host projects declare `3.5.0`; the PowerToys Run plugin manifest, MCP client identification and Runner uninstall display metadata also use `3.5.0`. Command Palette uses the required four-part MSIX project/package identity `3.5.0.0`. A portable regression test checks these declarations together. Generated assembly/package metadata and install/update behavior still require validation on Windows.
 
 ## Repository hygiene
 

@@ -51,14 +51,19 @@ try {
         if ($build.ExitCode -ne 0) { throw "Build-Release-x64.bat failed with exit code $($build.ExitCode)." }
     }
 
-    Write-Step 'Verifying all four host outputs and Command Palette package'
+    Write-Step 'Verifying all four host outputs, Command Palette package and GitHub release ZIPs'
     Assert-File 'Community.PowerToys.Run.Plugin.RunMind\bin\x64\Release\Community.PowerToys.Run.Plugin.RunMind.dll'
     Assert-File 'Release\Standalone\win-x64\publish\RunMind.exe'
     Assert-File 'Release\Runner\win-x64\publish\RunMind.Runner.exe'
     Assert-File 'Release\CommandPalette\x64\RunMind.CommandPalette.msix'
     Assert-File 'Release\CommandPalette\x64\RunMind.CommandPalette.cer'
+    [xml]$standaloneProject = Get-Content -LiteralPath (Join-Path $root 'RunMind.Standalone\RunMind.Standalone.csproj') -Raw
+    $releaseVersion = $standaloneProject.SelectSingleNode("//*[local-name()='Version']").InnerText.Trim()
+    foreach ($hostName in @('standalone', 'runner', 'powertoysrun', 'commandpalette')) {
+        Assert-File ("Release\GitHub-Releases\{0}-{1}.zip" -f $hostName, $releaseVersion)
+    }
 
-    Write-Host "`n[SUCCESS] Portable tests and Release x64 output checks completed. No host was installed." -ForegroundColor Green
+    Write-Host "`n[SUCCESS] Portable tests, Release x64 outputs and four GitHub release ZIP checks completed. No host was installed." -ForegroundColor Green
 }
 finally {
     Pop-Location

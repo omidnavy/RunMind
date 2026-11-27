@@ -282,6 +282,7 @@
     });
     const agentSettingsTabs = [
       ['agentSettingsTabAgent', 'agentSettingsPageAgent'],
+      ['agentSettingsTabTools', 'agentSettingsPageTools'],
       ['agentSettingsTabProject', 'agentSettingsPageProject'],
       ['agentSettingsTabSkills', 'agentSettingsPageSkills'],
       ['agentSettingsTabSecurity', 'agentSettingsPageSecurity']
@@ -312,6 +313,7 @@
       });
     });
     selectAgentSettingsTab(0);
+    if (typeof initializeAgentToolsetsUi === 'function') initializeAgentToolsetsUi();
     const projectIndexStatusElement = $('#projectIndexStatus');
     const projectMissionControlElement = $('#projectMissionControl');
     let projectIndexController = null;
@@ -704,6 +706,8 @@
       if (BOOT?.quickHostMode === true) return;
       mcpModeEnabled = !mcpModeEnabled;
       updateMcpModeButton();
+      if (typeof rebuildActiveToolDefinitions === 'function') rebuildActiveToolDefinitions(deepResearchEnabled);
+      if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
       const connected = [...mcpServers.values()].filter(server => server.enabled && server.connected).length;
       showToast(mcpModeEnabled ? (connected ? 'MCP access enabled for normal chat.' : 'MCP access enabled, but connect an MCP server to use it.') : 'MCP access disabled for normal chat.');
     });
@@ -1362,7 +1366,7 @@
           persistedDirectoryHandle = null; agentDirectoryHandle = null; workspaceContext.folderName = '';
           if (typeof projectIndexController !== 'undefined') projectIndexController?.abort();
           if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace cleared in another window');
-          updateAgentFolderButton(); rebuildActiveToolDefinitions(deepResearchEnabled);
+          updateAgentFolderButton(); rebuildActiveToolDefinitions(deepResearchEnabled); if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
           void refreshAgentSkillManager();
         } else workspaceRestorePromise = restoreAgentFolderHandle().then(() => refreshAgentSkillManager());
       } catch (_) {}

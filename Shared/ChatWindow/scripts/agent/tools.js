@@ -26,6 +26,12 @@
       const previousTool = activeAgentApprovalTool;
       activeAgentApprovalTool = name;
       try {
+        if (typeof isAgentToolEnabled === 'function' && !isAgentToolEnabled(name)) {
+          throw new Error(`The '${name}' tool is disabled by the active Agent Toolset profile or individual tool preference.`);
+        }
+        if (Array.isArray(taskContext?.tools) && !taskContext.tools.some(item => item?.function?.name === name)) {
+          throw new Error(`The '${name}' tool was not exposed to this Agent task and cannot be executed.`);
+        }
         const result = await executeAgentToolInternal(name, args, signal, assistantMessage, taskContext);
         return name.startsWith('system_manager_') ? normalizeSystemManagerOperationResult(result, name, args) : result;
       }
@@ -585,13 +591,16 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
                       : ['web_search','fetch_webpage','research_topic','extract_links','extract_metadata','extract_tables','read_sitemap','read_rss_feed','page_to_markdown','check_links','compare_webpages','crawl_website'].includes(name) ? 'Web'
                         : ['list_files','read_file','create_file','edit_file','delete_file','copy_file','move_file','rename_file','search_files','file_info','checksum_file','compare_files'].includes(name) ? 'Workspace'
                           : name.startsWith('image_') || name.startsWith('create_chart') || name.startsWith('create_diagram') ? 'Artifacts' : 'Agent';
-          return { name, category, availability: 'exposed-now', description: String(definition.description || '').slice(0, 1200), required: Array.isArray(definition.parameters?.required) ? definition.parameters.required : [], parameters: Object.keys(definition.parameters?.properties || {}) };
+          const group = typeof agentToolsetGroupForName === 'function' ? agentToolsetGroupForName(name) : 'core';
+          const execution = typeof getAgentToolExecutionSummary === 'function' ? getAgentToolExecutionSummary(name, taskContext?.toolExecutionLedger) : { executed: false, executionCount: 0, lastResult: 'not-executed', lastResultMessage: '' };
+          return { name, category, group, availability: 'exposed-now', ...execution, description: String(definition.description || '').slice(0, 1200), required: Array.isArray(definition.parameters?.required) ? definition.parameters.required : [], parameters: Object.keys(definition.parameters?.properties || {}) };
         }).filter(item => item.name).sort((a,b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
         const offset = Math.max(0, Math.min(10000, Math.floor(Number(args.offset) || 0)));
         const limit = Math.max(1, Math.min(200, Math.floor(Number(args.limit) || 100)));
         const tools = allTools.slice(offset, offset + limit);
         const nextOffset = offset + tools.length;
-        return { scope: 'current-agent-session', host: window.chrome?.webview ? 'native-desktop-host' : 'browser-preview', total: allTools.length, offset, limit, count: tools.length, hasMore: nextOffset < allTools.length, nextOffset: nextOffset < allTools.length ? nextOffset : null, tools, note: 'This is the exact tool-definition set currently exposed to this Agent session. Use offset=nextOffset to retrieve another page when hasMore is true. Tools omitted from the complete inventory are not currently available to the model. MCP entries reflect currently connected/enabled servers.' };
+        const report = typeof getAgentToolsetReport === 'function' ? getAgentToolsetReport(getAgentToolsetCatalog(), definitions, taskContext?.toolExecutionLedger) : null;
+        return { scope: 'current-agent-session', host: window.chrome?.webview ? 'native-desktop-host' : 'browser-preview', total: allTools.length, offset, limit, count: tools.length, hasMore: nextOffset < allTools.length, nextOffset: nextOffset < allTools.length ? nextOffset : null, tools, toolsets: report ? { profile: report.profileName, groups: report.groups, discoverable: report.total, exposed: report.exposed, disabledByPreference: report.disabled, executed: report.executed, failed: report.failed, unverified: report.unverified, cancelled: report.cancelled, excluded: report.tools.filter(item => !item.exposedNow).slice(0, 200) } : undefined, note: 'The tools array is the exact definition set exposed to this Agent task. executed/lastResult summarize recorded operations in this task ledger; unverified is distinct from failure. Toolset metadata summarizes current preferences and runtime availability; native permissions and host-side checks remain authoritative. Use offset=nextOffset to retrieve another page when hasMore is true.' };
       }
       if (name === 'list_agent_skills') {
         const skills = await discoverAgentSkills(signal);
@@ -609,6 +618,7 @@ Expected SHA-256: ${String(args.sha256 || '(not supplied)')}`, risky: true, perm
           if (access.granted) return { granted: true, folder: access.folder, message: 'Folder access granted for this WebView chat session. File tools are now available.' };
           folderAccessDeclinedForRun = true;
           rebuildActiveToolDefinitions(deepResearchEnabled);
+          if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
           return { granted: false, cancelled: !!access.cancelled, message: access.message || access.error || 'Folder access was not granted. Do not ask for it again in this response.' };
         }
         case 'update_plan': {

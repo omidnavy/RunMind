@@ -1,3 +1,11 @@
+## Agent Toolsets and tool inventory
+
+Agent Toolsets provide General Assistant, Developer, Researcher, System Administrator and Minimal starting profiles. Users can change group preferences, override individual tools, save custom profiles, and inspect the live tool inventory from Agent settings.
+
+The Workspace group includes workspace-scoped file, project, development and artifact tools; its definitions remain conditional on the selected workspace and access grant. The System Manager group is governed by the existing System Manager master switch, group/capability settings and native enforcement. Toolsets do not duplicate or bypass those controls. MCP tools remain conditional on connected/enabled server state, and Deep Research tools remain mode-dependent.
+
+The same eligibility function filters definitions before they are supplied to the model and rejects disabled or non-exposed tools at execution dispatch. `list_available_tools` preserves its paginated `tools` array as the exact set exposed to the current task and adds a provider-neutral summary of configured groups, disabled preferences and runtime availability. Provider-specific request formats and streaming remain inside the existing adapters.
+
 # Agent capabilities — architecture and operating guide
 
 ## MCP resource discovery

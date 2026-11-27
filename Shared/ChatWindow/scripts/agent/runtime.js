@@ -1,4 +1,4 @@
-﻿    'use strict';
+    'use strict';
 
     function canonicalToolName(name) {
       const wanted = String(name || '').toLowerCase().replace(/[_-]/g, '');
@@ -212,7 +212,10 @@
       return { text: finalCalls.length && !normalizedCalls.length ? '' : text, calls: finalCalls, raw };
     }
     async function requestAgentTurn(selection, conversation, signal, taskContext = null) {
-      const toolsForTask = taskContext?.tools ?? activeToolDefinitions;
+      const configuredTools = taskContext?.tools ?? activeToolDefinitions;
+      const toolsForTask = typeof filterAgentToolDefinitions === 'function'
+        ? filterAgentToolDefinitions(configuredTools) : configuredTools;
+      if (taskContext && Array.isArray(taskContext.tools)) taskContext.tools = toolsForTask;
       const ollamaBaseUrl = taskContext?.ollamaBaseUrl || selection.connection?.baseUrl || BOOT.ollamaBaseUrl;
       const lmStudioBaseUrl = taskContext?.lmStudioBaseUrl || selection.connection?.baseUrl || BOOT.lmStudioBaseUrl || 'http://localhost:1234/v1';
       const settingsForTask = taskContext?.generation || generationSettings();
@@ -265,11 +268,13 @@
     function rebuildActiveToolDefinitions(includeResearch = deepResearchEnabled) {
       const includeAgent = agentModeEnabled || includeResearch;
       const includeMcp = includeAgent || mcpModeEnabled;
-      activeToolDefinitions = [
+      const definitions = [
         ...(includeAgent ? getAgentToolDefinitions() : []),
         ...(includeMcp ? getMcpToolDefinitions() : []),
         ...(includeResearch ? researchToolDefinitions() : [])
       ];
+      activeToolDefinitions = typeof filterAgentToolDefinitions === 'function'
+        ? filterAgentToolDefinitions(definitions) : definitions;
       return activeToolDefinitions;
     }
 
@@ -370,14 +375,16 @@
         return '';
       };
       const toolExecutionLedger = [];
+      taskContext.toolExecutionLedger = toolExecutionLedger;
       const summarizeToolResult = (name, result) => {
         const failure = toolFailureMessage(result);
         const cancelled = result?.cancelled === true;
         const explicitFailure = result?.success === false || result?.startup_failure === true
           || (Array.isArray(result?.steps) && result.steps.some(item => item?.ok === false))
           || (Array.isArray(result?.results) && result.results.some(item => item?.ok === false));
-        const state = cancelled ? 'cancelled' : (failure || explicitFailure) ? 'failed' : 'completed';
-        const rawMessage = failure || result?.message || result?.note || (result?.success === true ? 'Tool reported success.' : 'Tool returned a result; inspect its details before claiming the requested outcome.');
+        const unverified = result?.verified === false && (result?.accepted === true || result?.handoffAccepted === true || result?.activationVerified === true || result?.completed === false);
+        const state = cancelled ? 'cancelled' : unverified ? 'unverified' : (failure || explicitFailure) ? 'failed' : 'completed';
+        const rawMessage = unverified ? (result?.activationVerified === true && result?.navigationVerified === false ? 'Application activation was verified; requested navigation was not verified.' : result?.message || result?.note || 'The operation was accepted, but its final outcome was not verified.') : failure || result?.message || result?.note || (result?.success === true ? 'Tool reported success.' : 'Tool returned a result; inspect its details before claiming the requested outcome.');
         return { name: String(name || 'unknown').slice(0, 100), state, message: String(rawMessage || '').replace(/[\r\n]+/g, ' ').slice(0, 360) };
       };
       const recordToolOutcome = (name, result) => {
@@ -391,6 +398,7 @@
         const completed = rows.filter(item => item.state === 'completed');
         const failed = rows.filter(item => item.state === 'failed');
         const cancelled = rows.filter(item => item.state === 'cancelled');
+        const unverified = rows.filter(item => item.state === 'unverified');
         const lines = ['## Task report', ''];
         lines.push(reason === 'tool-step-limit' ? 'RunMind reached its configured tool-step limit before a model-authored final summary was available.'
           : reason === 'repeated-tool-failure' ? 'RunMind stopped after a repeated tool failure; it did not repeat the same failed call again.'
@@ -398,6 +406,7 @@
         if (completed.length) { lines.push('', '### Tool operations completed'); for (const item of completed) lines.push(`- **${item.name}** — ${item.message}`); }
         if (failed.length) { lines.push('', '### Failed or blocked operations'); for (const item of failed) lines.push(`- **${item.name}** — ${item.message || 'Failed; see the tool result above.'}`); }
         if (cancelled.length) { lines.push('', '### Cancelled or declined operations'); for (const item of cancelled) lines.push(`- **${item.name}** — ${item.message || 'Cancelled or declined.'}`); }
+        if (unverified.length) { lines.push('', '### Accepted but unverified operations'); for (const item of unverified) lines.push(`- **${item.name}** — ${item.message || 'The final outcome remains unverified.'}`); }
         if (!rows.length) lines.push('', 'No tool execution result was available to verify the requested work.');
         lines.push('', '### Remaining work', '- Any requested action not explicitly confirmed by a successful tool result remains unverified.');
         return lines.join('\n');

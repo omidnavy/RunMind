@@ -19,12 +19,22 @@ function Test-IsAdministrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function Get-ProjectProperty([xml]$ProjectXml, [string]$Name) {
-    $node = $ProjectXml.SelectSingleNode("/*[local-name()='Project']/*[local-name()='PropertyGroup']/*[local-name()='$Name']")
-    if ($null -eq $node -or [string]::IsNullOrWhiteSpace($node.InnerText)) {
-        throw "The Command Palette project does not define the '$Name' property."
+function Get-PackageIdentity([xml]$ManifestXml) {
+    $identity = $ManifestXml.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Identity']")
+    if ($null -eq $identity) {
+        throw 'The Command Palette package manifest does not contain an Identity element.'
     }
-    return $node.InnerText.Trim()
+
+    $name = $identity.GetAttribute('Name')
+    $publisher = $identity.GetAttribute('Publisher')
+    if ([string]::IsNullOrWhiteSpace($name) -or [string]::IsNullOrWhiteSpace($publisher)) {
+        throw 'The Command Palette package manifest must define both Name and Publisher.'
+    }
+
+    return @{
+        Name = $name
+        Publisher = $publisher
+    }
 }
 
 function Get-InstalledRunMindPackages([string]$Name, [string]$PublisherName) {
@@ -98,13 +108,14 @@ try {
     }
 
     $root = Split-Path -Parent $PSCommandPath
-    $projectPath = Join-Path $root 'RunMind.CommandPalette\RunMind.CommandPalette.csproj'
-    if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
-        throw "Command Palette project not found: $projectPath"
+    $packageManifestPath = Join-Path $root 'Package.appxmanifest'
+    if (-not (Test-Path -LiteralPath $packageManifestPath -PathType Leaf)) {
+        throw "Command Palette package manifest not found: $packageManifestPath"
     }
-    [xml]$projectXml = Get-Content -LiteralPath $projectPath -Raw
-    $identityName = Get-ProjectProperty -ProjectXml $projectXml -Name 'AppxPackageIdentityName'
-    $expectedPublisher = Get-ProjectProperty -ProjectXml $projectXml -Name 'AppxPackagePublisher'
+    [xml]$sourceManifest = Get-Content -LiteralPath $packageManifestPath -Raw
+    $packageIdentity = Get-PackageIdentity -ManifestXml $sourceManifest
+    $identityName = $packageIdentity.Name
+    $expectedPublisher = $packageIdentity.Publisher
     $installedPackages = @(Get-InstalledRunMindPackages -Name $identityName -PublisherName $expectedPublisher)
 
     if ($Action -eq 'Uninstall') {

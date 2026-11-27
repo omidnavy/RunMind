@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -162,16 +162,16 @@ test('development-server metadata writes are serialized and orphan reconciliatio
   assert.match(serverManager, /ready = null/);
 });
 
-test('all four host projects, package identities, MCP client and installer metadata agree at 3.4.1', () => {
+test('all four host projects, package identities, MCP client and installer metadata agree at 3.5.0', () => {
   for (const project of [
     'RunMind.Standalone/RunMind.Standalone.csproj',
     'Community.PowerToys.Run.Plugin.RunMind/Community.PowerToys.Run.Plugin.RunMind.csproj',
     'RunMind.CommandPalette/RunMind.CommandPalette.csproj',
     'RunMind.Runner/RunMind.Runner.csproj'
-  ]) assert.match(read(project), /<Version>3\.4\.1<\/Version>/);
-  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>3\.4\.1\.0<\/AppxPackageVersion>/);
-  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="3\.4\.1\.0"/);
-  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"3\.4\.1"/);
-  assert.equal((read('Shared/ChatWindow/scripts/agent/mcp.js').match(/clientInfo: \{ name: 'RunMind', version: '3\.4\.1' \}/g) || []).length, 2);
-  assert.match(read('Install-RunMind-Runner.ps1'), /-Name DisplayVersion -Value '3\.4\.1'/);
+  ]) assert.match(read(project), /<Version>3\.5\.0<\/Version>/);
+  assert.match(read('RunMind.CommandPalette/RunMind.CommandPalette.csproj'), /<AppxPackageVersion>3\.5\.0\.0<\/AppxPackageVersion>/);
+  assert.match(read('RunMind.CommandPalette/Package.appxmanifest'), /Version="3\.5\.0\.0"/);
+  assert.match(read('Community.PowerToys.Run.Plugin.RunMind/plugin.json'), /"Version":\s*"3\.5\.0"/);
+  assert.equal((read('Shared/ChatWindow/scripts/agent/mcp.js').match(/clientInfo: \{ name: 'RunMind', version: '3\.5\.0' \}/g) || []).length, 2);
+  assert.match(read('Install-RunMind-Runner.ps1'), /-Name DisplayVersion -Value '3\.5\.0'/);
 });

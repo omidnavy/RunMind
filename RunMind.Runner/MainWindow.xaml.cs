@@ -458,9 +458,9 @@ public partial class MainWindow : Window
         var executable = StandaloneLocator.FindExecutable();
         if (string.IsNullOrWhiteSpace(executable))
         {
-            StatusText.Text = "RunMind Standalone was not found. Install or launch Standalone, then try again.";
+            StatusText.Text = "The bundled RunMind chat host was not found. Reinstall RunMind Runner, then try again.";
             System.Windows.MessageBox.Show(this,
-                "RunMind Standalone could not be found. Runner is an optional quick host; full chat and Full Agent capabilities belong to the separate RunMind Standalone application.",
+                "The RunMind chat host bundled with Runner could not be found. Reinstall the Runner release so its matching chat host is restored.",
                 "RunMind Standalone not found", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -478,15 +478,15 @@ public partial class MainWindow : Window
             startInfo.ArgumentList.Add(handoffFile);
             var process = Process.Start(startInfo);
             if (process is null)
-                throw new InvalidOperationException("Windows did not start RunMind Standalone.");
+                throw new InvalidOperationException("Windows did not start the bundled RunMind chat host.");
             Hide();
         }
         catch (Exception exception)
         {
             RunnerHandoffStore.TryDelete(handoffFile);
-            StatusText.Text = "RunMind Standalone could not be opened.";
+            StatusText.Text = "The RunMind chat window could not be opened.";
             System.Windows.MessageBox.Show(this,
-                "RunMind Standalone could not be opened. " + exception.Message,
+                "The RunMind chat window could not be opened. " + exception.Message,
                 "RunMind Runner", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

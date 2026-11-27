@@ -1,4 +1,4 @@
-﻿    'use strict';
+    'use strict';
 
     // Shared Agent runtime for both desktop hosts. Web-capable tools stay in this page; AgentHostBridge exposes only named Windows-native capabilities.
     function loadMcpServerConfigs() {
@@ -192,7 +192,7 @@
         // Never replay tools/call: a write or other side effect could be duplicated.
         runtime.sessionId = null;
         runtime.initialized = false;
-        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '3.4.1' } }, signal, false);
+        const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '3.5.0' } }, signal, false);
         if (!init?.protocolVersion) throw new Error('MCP session expired and reinitialization returned no protocolVersion.');
         runtime.protocolVersion = init.protocolVersion;
         runtime.initialized = true;
@@ -212,7 +212,7 @@
       const savedToken = String(token || config.token || '').trim();
       const runtime = { url: normalizeMcpEndpoint(config.url), token: savedToken, sessionId: null, protocolVersion: '2025-03-26', tools: [], resources: [], resourceTemplates: [], prompts: [], serverInfo: null, serverCapabilities: null, discovery: {} };
       config.url = runtime.url;
-      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '3.4.1' } });
+      const init = await mcpRpc(runtime, 'initialize', { protocolVersion: runtime.protocolVersion, capabilities: {}, clientInfo: { name: 'RunMind', version: '3.5.0' } });
       if (!init?.protocolVersion) throw new Error('MCP initialize response did not include protocolVersion.');
       runtime.protocolVersion = init.protocolVersion;
       runtime.serverInfo = init.serverInfo && typeof init.serverInfo === 'object' ? { name: String(init.serverInfo.name || '').slice(0, 160), version: String(init.serverInfo.version || '').slice(0, 80) } : null;
@@ -249,9 +249,10 @@
     function renderMcpServers() {
       if (!mcpServerList) return;
       const rows = [...mcpServers.values()];
-      if (!rows.length) { mcpServerList.innerHTML = '<p class="setting-note">No MCP servers configured.</p>'; updateMcpModeButton(); return; }
+      if (!rows.length) { mcpServerList.innerHTML = '<p class="setting-note">No MCP servers configured.</p>'; updateMcpModeButton(); if (typeof renderAgentToolsets === 'function') renderAgentToolsets(); return; }
       mcpServerList.innerHTML = rows.map(row => `<div class="capability-item"><strong>${escapeHtml(row.name)}</strong><span>${escapeHtml(row.url)}</span><span>${row.connected ? 'Connected' : 'Disconnected'} · ${row.toolCount || 0} tools · ${row.resourceCount || 0} resources · ${row.promptCount || 0} prompts · ${row.token ? 'Token saved' : 'No token'}</span><div class="context-actions"><button type="button" data-mcp-action="toggle" data-mcp-id="${escapeHtml(row.id)}">${row.enabled ? 'Disable' : 'Enable'}</button><button type="button" data-mcp-action="reconnect" data-mcp-id="${escapeHtml(row.id)}">Reconnect</button>${row.token ? `<button type="button" data-mcp-action="clear-token" data-mcp-id="${escapeHtml(row.id)}">Clear token</button>` : ''}<button type="button" data-mcp-action="disconnect" data-mcp-id="${escapeHtml(row.id)}">Disconnect</button><button type="button" data-mcp-action="remove" data-mcp-id="${escapeHtml(row.id)}">Remove</button></div></div>`).join('');
       updateMcpModeButton();
+      if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
     }
     function stableToolNameHash(value) {
       let hash = 0xcbf29ce484222325n;
@@ -261,9 +262,9 @@
       }
       return hash.toString(16).padStart(16, '0');
     }
-    function getMcpToolDefinitions() {
+    function getMcpToolDefinitions({ updateRoutes = true } = {}) {
       const definitions = [];
-      mcpToolRoutes.clear();
+      if (updateRoutes) mcpToolRoutes.clear();
       const enabledRuntimes = [...mcpRuntime.entries()].filter(([serverId]) => mcpServers.get(serverId)?.enabled);
       for (const [serverId, runtime] of enabledRuntimes) {
         const config = mcpServers.get(serverId);
@@ -272,7 +273,7 @@
           const safeTool = String(tool.name).replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 8) || 'tool';
           const name = `mcp_${safeServer}_${stableToolNameHash(serverId)}_${safeTool}_${stableToolNameHash(`${serverId}::${tool.name}`)}`;
           definitions.push({ type: 'function', function: { name, description: `[MCP: ${config.name}] ${String(tool.description || tool.name).slice(0, 900)}`, parameters: tool.inputSchema || { type: 'object', properties: {} } } });
-          mcpToolRoutes.set(name, { serverId, toolName: tool.name });
+          if (updateRoutes) mcpToolRoutes.set(name, { serverId, toolName: tool.name });
         }
       }
       if (enabledRuntimes.length) {
@@ -569,4 +570,5 @@
       workspaceContext.mcpServers = [...mcpServers.values()].map(({ id, name, url, enabled }) => ({ id, name, url, enabled }));
       renderMcpServers();
       rebuildActiveToolDefinitions(deepResearchEnabled);
+      if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
     }

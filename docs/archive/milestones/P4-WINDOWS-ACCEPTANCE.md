@@ -2,9 +2,7 @@
 
 # RunMind 3.4.0 — P4 Change Impact Explorer v2 Windows acceptance checklist
 
-> **Historical checklist:** This checklist targets the 3.4.0 feature implementation and its original version metadata. It is not a 3.4.1 acceptance result. Use the current [P7 Windows acceptance checklist](../../P7-WINDOWS-ACCEPTANCE.md), [Process Intelligence checklist](../../system/PROCESS-INTELLIGENCE-WINDOWS-ACCEPTANCE.md), and [build status](../../project/BUILD-STATUS.md) for current release work.
-
-Run against a 3.4.0 source tree on Windows with Node.js 24+ and .NET 10. Repeat interactive checks in Standalone, PowerToys Run and PowerToys Command Palette.
+Run after extracting the latest 3.4.0 source on Windows with Node.js 24+ and .NET 10. Repeat interactive checks in Standalone, PowerToys Run and PowerToys Command Palette.
 
 ## Build and version
 

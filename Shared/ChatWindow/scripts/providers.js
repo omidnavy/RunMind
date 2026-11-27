@@ -1071,6 +1071,9 @@
         { type: 'function', function: { name: 'compare_webpages', description: 'Fetch two webpages and compare their readable text. Returns metadata, overlapping text, and bounded lines unique to each page; this is a textual comparison, not a claim of semantic equivalence.', parameters: { type: 'object', properties: { url_a: { type: 'string' }, url_b: { type: 'string' }, max_lines: { type: 'integer' } }, required: ['url_a','url_b'], additionalProperties: false } } },
         { type: 'function', function: { name: 'crawl_website', description: 'Crawl a website breadth-first from one URL, same-origin only, with bounded depth and page count. Obeys Deep Research domain and page budgets when used there. Maximum 20 pages and depth 3.', parameters: { type: 'object', properties: { url: { type: 'string' }, max_pages: { type: 'integer' }, max_depth: { type: 'integer' } }, required: ['url'], additionalProperties: false } } }
       );
+      // Everything added from this point belongs to the selected-workspace tool group.
+      // The marker is non-enumerable so provider adapters never serialize it into API schemas.
+      const workspaceToolStart = tools.length;
       // Ask for folder access through a themed in-app card; the actual folder picker remains OS-provided.
       if (!agentDirectoryHandle && !folderAccessDeclinedForRun) {
         tools.push({ type: 'function', function: { name: 'request_folder_access', description: 'Ask the user to choose a workspace folder before any local file operation. This opens a styled in-chat request; the user must click Choose folder. Call this when the user asks you to create, read, save, or download local files and no folder is selected.', parameters: { type: 'object', properties: {}, additionalProperties: false } } });
@@ -1201,6 +1204,9 @@
         gitTool('git_restore', 'Destructive: restore selected working-tree paths from HEAD, discarding local changes in those paths. Always asks for fresh approval.', { paths: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'string' } } }, ['paths']);
         gitTool('git_delete_branch', 'Destructive: delete a local branch using Git safe-delete semantics. Always asks for fresh approval.', { branch: { type: 'string' } }, ['branch']);
         gitTool('download_file', 'Download original HTTP/HTTPS response bytes. With an authorized browser workspace, RunMind first attempts a direct browser fetch capped at 10 MB; without a browser folder or when CORS/size restrictions prevent it, the native streaming downloader uses HTTP Range resume (when validators are available), ETag/Last-Modified validation, SHA-256, a .part file, progress, and atomic finalization. Native download uses a Save dialog. Never overwrites.', { url: { type: 'string' }, filename: { type: 'string' }, sha256: { type: 'string', description: 'Optional expected SHA-256 hex digest.' } }, ['url']);
+      }
+      for (const definition of tools.slice(workspaceToolStart)) {
+        Object.defineProperty(definition, '__runMindToolsetGroup', { value: 'workspace', enumerable: false });
       }
       return tools;
     }

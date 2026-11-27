@@ -302,6 +302,8 @@
       deepResearchButton.title = deepResearchEnabled ? 'Deep Research mode is on · Agent Mode is off' : 'Deep Research mode is off';
       deepResearchButton.setAttribute('aria-label', deepResearchButton.title);
       promptInput.placeholder = deepResearchEnabled ? 'Describe the question to investigate in depth…' : 'Message the selected local model…';
+      if (typeof rebuildActiveToolDefinitions === 'function') rebuildActiveToolDefinitions(deepResearchEnabled);
+      if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
       if (deepResearchEnabled) {
         setResearchPanelOpen(true);
         showToast('Deep Research enabled. The next message starts a research task.');
@@ -1482,6 +1484,7 @@
         selection,
         deepResearch: true,
         tools: activeToolDefinitions.map(tool => JSON.parse(JSON.stringify(tool))),
+        toolExecutionLedger: task.toolOperationLedger || [],
         generation: { ...generationSettings(), keepAliveSeconds: Number(BOOT.keepAliveSeconds ?? 300) },
         userSystemPrompt: requestMessages.find(item => item.role === 'system' && String(item.content || '').startsWith('User-configured response preferences')) || null,
         connection: selection.connection ? { ...selection.connection } : null,
@@ -1512,6 +1515,7 @@
       try {
         while (task.toolCalls < task.callBudget && task.pagesFetched < task.pageBudget && !task.pageBudgetReached && !researchDeadlineReached(task)) {
           await researchCheckpoint(signal, conversation);
+          researchContext.toolExecutionLedger = task.toolOperationLedger || [];
           task.status = 'running';
           setStatus(`Deep Research · ${task.toolCalls}/${task.callBudget} tool calls · ${task.sources.length} sources`);
           // Keep a committed, protocol-valid transcript snapshot while the provider is in flight.
@@ -1585,6 +1589,8 @@
                 // Persist intent before executing the operation. Independent read-only calls can share this batch.
                 await persistResearchTask();
                 try {
+                  if (typeof isAgentToolEnabled === 'function' && !isAgentToolEnabled(call.name)) throw new Error(`The '${call.name}' tool is disabled or unavailable under the active Agent Toolset and runtime context.`);
+                  if (!researchContext.tools.some(tool => tool?.function?.name === call.name)) throw new Error(`The '${call.name}' tool was not exposed to this Deep Research task.`);
                   if (unavailableSearch) result = { error: 'Web search is not configured. Do not call web_search again. Continue with URLs supplied by the user and links found on retrieved pages. If more discovery is essential, explain that SearXNG is not configured.' };
                   else if (call.name === 'research_update_plan') result = updateResearchPlanFromModel(call.arguments || {});
                   else if (call.name === 'research_record_evidence') result = recordResearchEvidence(call.arguments || {});

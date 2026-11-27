@@ -32,4 +32,4 @@ Write-Host 'RunMind Runner has been removed for the current Windows user.' -Fore
 if ($KeepSettings) {
     Write-Host 'Runner settings were retained.'
 }
-Write-Host 'RunMind Standalone, PowerToys Run and Command Palette were not changed.'
+Write-Host 'A separately installed RunMind Standalone, PowerToys Run and Command Palette were not changed.'

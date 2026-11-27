@@ -365,5 +365,5 @@ test('Runner-to-Standalone handoff is bounded, current-user-only, and opens a fu
   assert.match(app, /new MainWindow\(payload\.Prompt, payload\.Response, payload\.IsError, "Standalone"\)/);
   assert.match(runner, /RunnerHandoffStore\.Write\(payload\)/);
   assert.match(runner, /startInfo\.ArgumentList\.Add\("--runner-handoff-file"\)/);
-  assert.match(runner, /RunMind Standalone was not found/);
+  assert.match(runner, /bundled RunMind chat host was not found/i);
 });

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -90,7 +90,7 @@ test('P4 MCP discovery safely bounds pagination and detects repeated cursors', a
   assert.match(mcp, /mcp_search_knowledge/);
   assert.match(mcp, /mcp_read_resource_template/);
   assert.match(mcp, /page < 20/);
-  assert.match(mcp, /version: '3\.4\.1'/);
+  assert.match(mcp, /version: '3\.5\.0'/);
   const discovery = extractFunction(mcp, 'function mcpDiscoveryIsComplete(', '\n    function searchMcpKnowledge');
   const discoveryContext = vm.createContext({});
   vm.runInContext(`${discovery}\nglobalThis.isComplete = mcpDiscoveryIsComplete;`, discoveryContext);
@@ -198,7 +198,7 @@ test('P4 assets, tools and versions are deployed consistently to all three hosts
   ];
   for (const project of hosts) {
     const xml = read(project);
-    assert.match(xml, /<Version>3\.4\.1<\/Version>/, project);
+    assert.match(xml, /<Version>3\.5\.0<\/Version>/, project);
     assert.match(xml, /ChatWindow\\\*\*/, 'shared ChatWindow assets must be included');
   }
   const html = read('Shared/ChatWindow.html');

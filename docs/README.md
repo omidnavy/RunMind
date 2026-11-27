@@ -51,14 +51,14 @@ This index is the map for the maintained RunMind guides. Start with the [reposit
 
 - [Build and validation status](project/BUILD-STATUS.md) — current source-level checks, Windows certification status, and open release gates.
 - [Roadmap](../ROADMAP.md) — remaining priorities and future candidates.
+- [RunMind 3.5.0 release notes](releases/3.5.0-RELEASE-NOTES.md)
 - [RunMind 3.4.1 release notes](releases/3.4.1-RELEASE-NOTES.md)
 - [RunMind 3.4.0 release notes](releases/3.4.0-RELEASE-NOTES.md) — previous feature release.
-- [Changelog](../CHANGELOG.md) — the single maintained, product-level release history.
+- [Changelog](../CHANGELOG.md) — product-level milestone history.
 
 ## Historical records
 
 - [Archive index](archive/README.md) — milestone implementation audits, Windows acceptance checklists, validation reports, old release notes, and intermediate build notes.
-- [Development history archive](archive/development-history/DEVELOPMENT-HISTORY.md) — detailed legacy implementation entries; historical context only, not a second changelog.
 - [Validation report index](archive/validation-reports/README.md) — archived validation snapshots grouped by project phase and capability.
 
 Historical documents describe the code and behavior at the time they were written. They are retained for context and are not current setup instructions or proof that the current source has passed Windows validation.

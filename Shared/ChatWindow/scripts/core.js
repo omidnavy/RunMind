@@ -581,6 +581,7 @@
             workspaceContext.folderName = String(nativeStatus.folder || nativeHandle.name || '').slice(0, 256);
             updateAgentFolderButton();
             rebuildActiveToolDefinitions(deepResearchEnabled);
+            if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
             if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('native workspace restored');
             return;
           }
@@ -639,6 +640,7 @@
       updateAgentFolderButton();
       if (agentDirectoryHandle) {
         rebuildActiveToolDefinitions(deepResearchEnabled);
+        if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
         if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace restored');
       } else if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace access unavailable');
     }
@@ -659,6 +661,7 @@
         workspaceContext.folderName = String(handle.name || '').slice(0, 256);
         updateAgentFolderButton();
         rebuildActiveToolDefinitions(deepResearchEnabled);
+        if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
         if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('unified native workspace selected');
         return;
       }
@@ -677,6 +680,7 @@
       agentDirectoryHandle = handle;
       updateAgentFolderButton();
       rebuildActiveToolDefinitions(deepResearchEnabled);
+      if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
       if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace selected');
     }
     async function clearPersistedAgentFolderHandle() {
@@ -693,6 +697,7 @@
       if (typeof scheduleProjectIndexAutoRefresh === 'function') scheduleProjectIndexAutoRefresh('workspace cleared');
       updateAgentFolderButton();
       rebuildActiveToolDefinitions(deepResearchEnabled);
+      if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
     }
     function notifyWorkspaceHandleChanged(action) {
       try { localStorage.setItem('local-llm.workspace-handle-event', JSON.stringify({ action, workspaceContextId: workspaceContext.id, at: Date.now(), nonce: crypto.randomUUID() })); } catch (_) {}
@@ -812,6 +817,7 @@
       }
       updateAgentFolderButton();
       rebuildActiveToolDefinitions(deepResearchEnabled);
+      if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
       await refreshAgentSkillManager();
       showToast(`Project Profile '${profile.name}' applied to this conversation. Folder access must be reconnected separately.`);
     }
@@ -830,6 +836,7 @@
       } catch (_) { systemManagerSettingsCache = null; }
       if (typeof rebuildActiveToolDefinitions === 'function') rebuildActiveToolDefinitions(deepResearchEnabled);
       renderSystemManagerSettings();
+      if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
     }
     function renderSystemManagerSettings() {
       const settings = systemManagerSettingsCache;
@@ -1364,5 +1371,7 @@
       promptInput.placeholder = agentModeEnabled ? 'Ask the agent to research, calculate, or work with a selected folder…' : 'Message the selected local model…';
       updateAgentFolderButton();
       if (typeof updateMcpModeButton === 'function') updateMcpModeButton();
+      if (typeof rebuildActiveToolDefinitions === 'function') rebuildActiveToolDefinitions(deepResearchEnabled);
+      if (typeof renderAgentToolsets === 'function') renderAgentToolsets();
     }
 

@@ -74,3 +74,10 @@ test('StandaloneLocator explicitly imports System.IO for filesystem path discove
   assert.match(locator, /new DirectoryInfo\(/);
   assert.match(locator, /File\.Exists\(/);
 });
+
+
+test('Runner treats its bundled Standalone application as its chat companion', async () => {
+  const main = await read('RunMind.Runner/MainWindow.xaml.cs');
+  assert.match(main, /bundled RunMind chat host/i);
+  assert.doesNotMatch(main, /full chat and Full Agent capabilities belong to the separate RunMind Standalone application/);
+});

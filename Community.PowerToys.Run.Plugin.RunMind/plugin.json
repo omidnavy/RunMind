@@ -1,10 +1,10 @@
-﻿{
+{
 	"ID": "550A34D0CFA845449989D581149B3D9C",
 	"ActionKeyword": "llm",
 	"IsGlobal": true,
 	"Name": "RunMind",
 	"Author": "Omid Navy",
-	"Version": "3.4.1",
+	"Version": "3.5.0",
 	"Language": "csharp",
 	"Website": "https://omid.navy",
 	"ExecuteFileName": "Community.PowerToys.Run.Plugin.RunMind.dll",

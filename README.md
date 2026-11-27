@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../main/Assets/Brand/Icon.png" width="104" alt="RunMind logo" />
+  <img src="./Assets/Brand/Icon.png" width="104" alt="RunMind logo" />
 </p>
 
 <h1 align="center">RunMind</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <strong>Version 3.4.1</strong> · Windows 11 x64 · .NET 10 · C# and JavaScript · MIT License
+  <strong>Version 3.5.0</strong> · Windows 11 x64 · .NET 10 · C# and JavaScript · MIT License
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@ RunMind connects the model provider you choose — local or remote — to a shar
 
 It is designed to work with local model servers such as **Ollama** and **LM Studio**, while remaining compatible with configured OpenAI-compatible endpoints and remote integrations. RunMind itself is a Windows desktop application; local inference does not make every optional integration offline.
 
-> **Release status — 3.4.1:** Host and package version metadata is aligned across all four hosts. This is a source release snapshot, not a claim of completed Windows certification. Build, install, WebView2, PowerToys, MSIX and native-action acceptance must still be completed on the target Windows installation. See [Build and validation status](./docs/project/BUILD-STATUS.md).
+> **Release status — 3.5.0:** Host and package version metadata is aligned across all four hosts. This is a source release snapshot, not a claim of completed Windows certification. Build, install, WebView2, PowerToys, MSIX and native-action acceptance must still be completed on the target Windows installation. See [Build and validation status](./docs/project/BUILD-STATUS.md).
 
 ## At a glance
 
@@ -42,13 +42,13 @@ It is designed to work with local model servers such as **Ollama** and **LM Stud
 
 ## See RunMind
 
-The repository includes real product captures from earlier development iterations. They are kept here as visual references rather than represented as pixel-current 3.4.1 screenshots; some launcher captures still show the predecessor **LocalLLM** label. The source archive does not contain a fresh, Windows-captured 3.4.1 screenshot set.
+The repository includes real product captures from earlier development iterations. They are kept here as visual references rather than represented as pixel-current 3.5.0 screenshots; some launcher captures still show the predecessor **LocalLLM** label. The source archive does not contain a fresh, Windows-captured 3.5.0 screenshot set.
 
 ### Workspace and Agent
 
 ![RunMind workspace with an Agent conversation, tool activity and research results](./screenshots/README-Workspace.png)
 
-*Earlier workspace capture. The 3.4.1 codebase continues the shared workspace and Agent experience; exact layout and labels may differ.*
+*Earlier workspace capture. The 3.5.0 codebase continues the shared workspace and Agent experience; exact layout and labels may differ.*
 
 ### Launcher and quick-answer experience — historical captures
 
@@ -58,7 +58,7 @@ The repository includes real product captures from earlier development iteration
 
 ![Historical launcher result over a twilight desktop background](./screenshots/Screenshot-3.png)
 
-*These three captures predate the RunMind rebrand and are included for historical UI context. They are not screenshots of a verified 3.4.1 Windows installation.*
+*These three captures predate the RunMind rebrand and are included for historical UI context. They are not screenshots of a verified 3.5.0 Windows installation.*
 
 ## The four Windows hosts
 
@@ -82,6 +82,10 @@ Select a local workspace and ask the Agent to inspect and work with project cont
 Change Impact Explorer correlates Git changes with supported symbols, imports, reverse dependencies, local asset references, candidate tests and available coverage evidence. Its risk and confidence output is evidence-based and heuristic: it cannot discover every runtime dependency, execute the suggested tests, or prove that a change is safe. Review its evidence and limitations in the [Change Impact Explorer guide](./docs/product/CHANGE-IMPACT-EXPLORER-V2.md).
 
 Agent workflows can use installed Skills, connected MCP servers, native Windows capabilities and supported developer integrations. Task checkpoints and the Development Session Timeline preserve local progress evidence; uncertain side effects are not automatically replayed.
+
+### Agent Toolsets
+
+Choose an editable starting profile (General Assistant, Developer, Researcher, System Administrator or Minimal), then enable/disable tool groups and individual tools. The live inventory distinguishes configured preferences from tools actually exposed to the current Agent task. System Manager's existing master switch/capabilities and selected-workspace access remain authoritative; Toolsets can reduce exposure but cannot grant permissions. Tool reporting is provider-neutral and leaves protocol-specific tool calling inside the selected adapter.
 
 ### Deep Research
 
@@ -150,6 +154,8 @@ Build-Release-x64.bat
 
 The script prepares PDF/OCR runtime assets, restores and builds all four x64 host projects, publishes the framework-dependent Standalone and Runner applications, and packages/signs the Command Palette MSIX using the local development certificate. It does **not** install the hosts. The initial PDF.js/Tesseract preparation downloads packages and English/Persian language data, so the first build requires internet access. Those downloads are not yet fully pinned and hash-verified for reproducible offline builds.
 
+After a successful build, it also creates `standalone-[version].zip`, `runner-[version].zip`, `powertoysrun-[version].zip`, and `commandpalette-[version].zip` under `Release\GitHub-Releases`. The PowerToys Run and Command Palette archives include their installer BAT files.
+
 After a successful build:
 
 - Run Standalone from `Release\Standalone\win-x64\publish\RunMind.exe`.
@@ -177,7 +183,7 @@ The validation script builds and checks release outputs; it does not install hos
 
 ## Versioning
 
-**Current source version: `3.4.1`.** The four host projects use `3.4.1`; the PowerToys Run plugin and Runner installer metadata use `3.4.1`; MCP client identification reports `3.4.1`; and the Command Palette MSIX project/package identity uses `3.4.1.0`. The MSIX's four-part format is the Windows package equivalent of the three-part product version.
+**Current source version: `3.5.0`.** The four host projects use `3.5.0`; the PowerToys Run plugin and Runner installer metadata use `3.5.0`; MCP client identification reports `3.5.0`; and the Command Palette MSIX project/package identity uses `3.5.0.0`. The MSIX's four-part format is the Windows package equivalent of the three-part product version.
 
 Version metadata alignment is covered by a regression test. Generated assembly/package metadata and actual Windows installation/update behavior still require verification on Windows.
 
@@ -193,7 +199,7 @@ Version metadata alignment is covered by a regression test. Generated assembly/p
 - [Runner implementation](./docs/runner/RUNNER-IMPLEMENTATION.md) — restricted host scope, search pipeline and Standalone handoff.
 - [Security and privacy](./docs/security/SECURITY-AND-PRIVACY.md) — credential storage, data flows and execution boundaries.
 - [Build and validation status](./docs/project/BUILD-STATUS.md) — current checks and outstanding Windows release gates.
-- [RunMind 3.4.1 release notes](./docs/releases/3.4.1-RELEASE-NOTES.md) · [3.4.0 release notes](./docs/releases/3.4.0-RELEASE-NOTES.md) · [Changelog](./CHANGELOG.md).
+- [RunMind 3.5.0 release notes](./docs/releases/3.5.0-RELEASE-NOTES.md) · [3.4.0 release notes](./docs/releases/3.4.0-RELEASE-NOTES.md) · [Changelog](./CHANGELOG.md).
 - [Roadmap](./ROADMAP.md) — remaining priorities and future candidates.
 - [Historical archive](./docs/archive/README.md) — milestone audits, acceptance checklists and historical validation reports.
 
